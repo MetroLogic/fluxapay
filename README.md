@@ -111,3 +111,7 @@ Make stablecoin payments simple, practical, and accessible so merchants can sell
 
 Contributions are welcome!  
 Open an issue or submit a PR to help build Fluxapay.
+
+## Telegram link
+
+https://t.me/+m23gN14007w0ZmQ0
