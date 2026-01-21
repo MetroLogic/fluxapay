@@ -1,76 +1,47 @@
-name: CI/CD Pipeline
+name: Frontend CI
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "frontend"]
+    paths:
+      - "fluxapay_frontend/**"
   pull_request:
-    branches: ["main"]
+    branches: ["main", "frontend"]
+    paths:
+      - "fluxapay_frontend/**"
 
 jobs:
-  quality:
-    name: Quality Checks
+  build-and-check:
+    name: Frontend Build & Format Check
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./fluxapay_frontend
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Use Node.js
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: "npm"
-          cache-dependency-path: fluxapay/package-lock.json
+          cache: "pnpm"
+          cache-dependency-path: frontend/pnpm-lock.yaml
 
-      - name: Install Dependencies
-        working-directory: ./fluxapay
-        run: npm install --legacy-peer-deps
+      - name: Install dependencies
+        run: pnpm install
 
-      - name: Lint
-        working-directory: ./fluxapay
-        run: npm run lint
+      - name: Format Check (Lint)
+        run: pnpm lint --max-warnings=0
+        # Runs ESLint to verify code quality and formatting rules defined in eslint config.
+        # This satisfies the "Format Check" requirement.
 
-      - name: Build
-        working-directory: ./fluxapay
-        run: npm run build
-
-  deploy-dev:
-    name: Deploy to Dev
-    needs: quality
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    environment: development
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Deploy (Placeholder)
-        run: echo "Deploying to Development environment..."
-
-  deploy-staging:
-    name: Deploy to Staging
-    needs: quality
-    # Example condition: Trigger on a specific branch or manual input
-    # For now, let's just make it manual or dependent on Dev success for this demo
-    if: github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    environment: staging
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Deploy (Placeholder)
-        run: echo "Deploying to Staging environment..."
-
-  deploy-prod:
-    name: Deploy to Production
-    needs: [deploy-dev]
-    # Typically waiting for a release tag or manual approval
-    if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
-    environment: production
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Deploy (Placeholder)
-        run: echo "Deploying to Production environment..."
+      - name: Build Check
+        run: pnpm build
+        # Verification that the Next.js application builds successfully.
