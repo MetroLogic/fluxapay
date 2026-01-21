@@ -1,0 +1,7 @@
+
+> fluxapay-backend@1.0.0 start
+> node dist/index.js
+
+[dotenv@17.2.3] injecting env (2) from .env -- tip: ⚙️  load multiple .env files with { path: ['.env.local', '.env'] }
+Server is running on port 3000
+Swagger docs available at http://localhost:3000/api-docs
