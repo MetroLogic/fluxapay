@@ -4,11 +4,11 @@ on:
   push:
     branches: ["main", "frontend"]
     paths:
-      - "fluxapay/**"
+      - "fluxapay_frontend/**"
   pull_request:
     branches: ["main", "frontend"]
     paths:
-      - "fluxapay/**"
+      - "fluxapay_frontend/**"
 
 jobs:
   build-and-check:
@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: ./frontend
+        working-directory: ./fluxapay_frontend
 
     steps:
       - name: Checkout repository
