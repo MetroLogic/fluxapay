@@ -4,4 +4,5 @@ dist
 .DS_Store
 coverage
 
-/src/generated/prisma
+/src/generated/
+/prisma/migrations/
