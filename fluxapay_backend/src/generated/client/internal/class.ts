@@ -23,7 +23,7 @@ const config: runtime.GetPrismaClientConfig = {
       "value": "prisma-client"
     },
     "output": {
-      "value": "/Users/macbook/fluxapay-backend/src/generated/client",
+      "value": "/home/knights/Documents/Project/Drips/fluxapay/fluxapay_backend/src/generated/client",
       "fromEnvVar": null
     },
     "config": {
@@ -32,12 +32,12 @@ const config: runtime.GetPrismaClientConfig = {
     "binaryTargets": [
       {
         "fromEnvVar": null,
-        "value": "darwin-arm64",
+        "value": "debian-openssl-3.0.x",
         "native": true
       }
     ],
     "previewFeatures": [],
-    "sourceFilePath": "/Users/macbook/fluxapay-backend/prisma/schema.prisma",
+    "sourceFilePath": "/home/knights/Documents/Project/Drips/fluxapay/fluxapay_backend/prisma/schema.prisma",
     "isCustomOutput": true
   },
   "relativePath": "../../../prisma",
@@ -47,7 +47,7 @@ const config: runtime.GetPrismaClientConfig = {
     "db"
   ],
   "activeProvider": "postgresql",
-  "postinstall": false,
+  "postinstall": true,
   "inlineDatasources": {
     "db": {
       "url": {
