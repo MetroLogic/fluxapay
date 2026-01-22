@@ -23,8 +23,6 @@ export function DashboardShell({ children }: DashboardShellProps) {
                     onClick={() => setIsMobileMenuOpen(false)}
                 />
             )}
-
-            {/* Sidebar Component handles its own responsive visibility via CSS classes passed to it, but we also control state here */}
             <Sidebar
                 isOpen={isMobileMenuOpen}
                 onClose={() => setIsMobileMenuOpen(false)}
