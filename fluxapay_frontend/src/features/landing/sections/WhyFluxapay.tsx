@@ -22,11 +22,17 @@ export const WhyFluxapay = () => {
           </span>
           <h2 className="text-5xl md:text-6xl font-black text-[#2E3539] leading-[1.1] max-w-2xl">
             Crypto Adoption Is Growing. <br />
-            <span className="text-[#5F44EC]">Commerce</span> Isn&apos;t Keeping Up.
+            <span className="text-[#5F44EC] font-caveat font-normal">Commerce</span> Isn&apos;t Keeping Up.
           </h2>
-          <p className="mt-8 text-xl text-[#8A8A8A] max-w-2xl leading-relaxed">
+          <p className="mt-8 text-xl text-[#8A8A8A] max-w-2xl leading-relaxed relative">
             Despite growing crypto adoption, everyday commerce is still mostly fiat-based. 
             Crypto users are forced to offramp every time they want to pay, causing:
+            
+            {/* Dotted Arrow */}
+            <svg className="absolute -bottom-16 left-0 w-24 h-16 text-[#5F44EC]" viewBox="0 0 100 60" fill="none">
+              <path d="M10 10 Q 50 60 90 10" stroke="currentColor" strokeWidth="2" strokeDasharray="4 4" fill="none" />
+              <path d="M85 15 L 90 10 L 85 5" stroke="currentColor" strokeWidth="2" fill="none" />
+            </svg>
           </p>
         </div>
 

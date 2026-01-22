@@ -35,7 +35,7 @@ export const GlobalReach = () => {
             </h2>
           </div>
 
-          <div className="relative w-full lg:w-1/2 h-[400px] pointer-events-none">
+          <div className="relative w-full lg:w-1/2 h-[300px] pointer-events-none">
             {/* Top and Bottom Fading Masks */}
             <div className="absolute top-0 left-0 right-0 h-24 bg-gradient-to-b from-[#FFFBEE] to-transparent z-10"></div>
             <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-[#FFFBEE] to-transparent z-10"></div>

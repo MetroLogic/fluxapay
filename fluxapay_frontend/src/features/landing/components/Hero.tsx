@@ -1,9 +1,9 @@
-"use client";
-
+import Image from "next/image";
 import { Button } from "@/components/Button";
+import heroBg from "@/assets/herobg.svg";
 
 const FloatingBadge = ({ flag, currency, amount, className }: any) => (
-  <div className={`absolute bg-white rounded-2xl p-4 shadow-2xl flex items-center gap-3 animate-bounce-slow ${className}`}>
+  <div className={`absolute bg-white rounded-2xl p-4 shadow-2xl flex items-center gap-3 animate-bounce-slow z-20 ${className}`}>
     <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center bg-gray-100 font-bold text-xs">
       {flag}
     </div>
@@ -17,11 +17,19 @@ const FloatingBadge = ({ flag, currency, amount, className }: any) => (
 export const Hero = () => {
   return (
     <section className="relative min-h-screen bg-[#0F0A1E] overflow-hidden flex items-center justify-center pt-20">
-      {/* Background Sphere/Glow */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] rounded-full bg-gradient-to-b from-[#5F44EC]/30 to-transparent blur-[120px] opacity-40"></div>
+      {/* Background Image */}
+      <div className="absolute inset-0 z-0">
+        <Image 
+          src={heroBg} 
+          alt="Hero Background" 
+          fill 
+          className="object-cover opacity-60"
+          priority
+        />
+      </div>
       
       {/* Grid Pattern (Subtle) */}
-      <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#ffffff_1px,transparent_1px)] [background-size:40px_40px]"></div>
+      <div className="absolute inset-0 opacity-5 bg-[radial-gradient(#ffffff_1px,transparent_1px)] [background-size:40px_40px] z-0"></div>
 
       <div className="container mx-auto px-4 relative z-10">
         <div className="max-w-4xl mx-auto text-center">

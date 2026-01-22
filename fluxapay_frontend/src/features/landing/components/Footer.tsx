@@ -12,7 +12,7 @@ export const Footer = () => {
           <div className="lg:col-span-2">
             <div className="flex items-center gap-2 mb-6">
               <Image src={logo} alt="Fluxapay Logo" width={29} height={30} className="brightness-0 invert opacity-80" />
-              <span className="text-2xl font-bold text-white tracking-tight">fluxapay</span>
+              <span className="text-3xl font-normal text-white tracking-tight font-caveat">fluxapay</span>
             </div>
             <p className="max-w-xs text-sm leading-relaxed">
               Bridging the gap between crypto adoption and real-world commerce.
