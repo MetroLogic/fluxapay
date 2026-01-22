@@ -1,4 +1,4 @@
-import { Navbar, Hero, WhyFluxapay, Bridges } from "@/features/landing";
+import { Navbar, Hero, WhyFluxapay, Bridges, GlobalReach, DailyUsage } from "@/features/landing";
 
 export default function Home() {
   return (
@@ -7,6 +7,8 @@ export default function Home() {
       <Hero />
       <WhyFluxapay />
       <Bridges />
+      <GlobalReach />
+      <DailyUsage />
       
       <footer className="py-12 border-t border-border bg-white">
         <div className="container mx-auto px-4 flex flex-col md:flex-row justify-between items-center gap-6">
