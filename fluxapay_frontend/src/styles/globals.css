@@ -44,6 +44,18 @@
   --radius-2xl: calc(var(--radius) + 8px);
   --radius-3xl: calc(var(--radius) + 12px);
   --radius-4xl: calc(var(--radius) + 16px);
+
+  @keyframes bounce-slow {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+  }
+  @keyframes fade-in {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  --animate-bounce-slow: bounce-slow 3s ease-in-out infinite;
+  --animate-fade-in: fade-in 0.8s ease-out forwards;
 }
 
 :root {

@@ -1,45 +1,69 @@
 "use client";
 
 import { Button } from "@/components/Button";
-import { ArrowRight } from "lucide-react";
+
+const FloatingBadge = ({ flag, currency, amount, className }: any) => (
+  <div className={`absolute bg-white rounded-2xl p-4 shadow-2xl flex items-center gap-3 animate-bounce-slow ${className}`}>
+    <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center bg-gray-100 font-bold text-xs">
+      {flag}
+    </div>
+    <div>
+      <p className="text-[10px] text-gray-500 font-medium leading-tight">Transfer</p>
+      <p className="text-sm font-bold text-[#2E3539]">{amount} {currency}</p>
+    </div>
+  </div>
+);
 
 export const Hero = () => {
   return (
-    <section className="relative pt-32 pb-20 md:pt-48 md:pb-32 overflow-hidden">
+    <section className="relative min-h-screen bg-[#0F0A1E] overflow-hidden flex items-center justify-center pt-20">
+      {/* Background Sphere/Glow */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] rounded-full bg-gradient-to-b from-[#5F44EC]/30 to-transparent blur-[120px] opacity-40"></div>
+      
+      {/* Grid Pattern (Subtle) */}
+      <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#ffffff_1px,transparent_1px)] [background-size:40px_40px]"></div>
+
       <div className="container mx-auto px-4 relative z-10">
         <div className="max-w-4xl mx-auto text-center">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-semibold mb-6 animate-fade-in">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
-            </span>
-            New: Stablecoin settlements in 3 minutes
+          <div className="relative mb-12">
+            <h1 className="text-5xl md:text-8xl font-black tracking-tight text-white mb-6 leading-[1.1]">
+              Accept <span className="text-[#FED449] font-serif italic font-normal tracking-normal">Crypto</span> <br />
+              Get Paid in Fiat Instantly
+            </h1>
+            
+            {/* Floating Badges */}
+            <FloatingBadge 
+              flag="🇳🇬" 
+              currency="NGN" 
+              amount="20,000" 
+              className="top-0 -left-12 md:-left-20 hidden sm:flex" 
+            />
+            <FloatingBadge 
+              flag="🇰🇪" 
+              currency="KHS" 
+              amount="5,000" 
+              className="-top-24 left-1/2 -translate-x-1/2 hidden md:flex" 
+            />
+            <FloatingBadge 
+              flag="🇬🇭" 
+              currency="GHS" 
+              amount="5,000" 
+              className="top-0 -right-12 md:-right-20 hidden sm:flex" 
+            />
           </div>
-          
-          <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight mb-6 bg-clip-text text-transparent bg-gradient-to-b from-foreground to-foreground/70">
-            Accept Global Payments <br className="hidden md:block" /> with Zero Friction
-          </h1>
-          
-          <p className="text-xl text-muted-foreground mb-10 max-w-2xl mx-auto">
-            FluxaPay empowers businesses to accept crypto and fiat payments globally. 
-            Instant settlements, low fees, and enterprise-grade security.
+
+          <p className="text-lg md:text-xl text-white/80 mb-12 max-w-2xl mx-auto leading-relaxed">
+            Fluxapay lets merchants accept USDC payments on Stellar and get settled in local fiat with a Stripe-like API and no on-chain complexity.
           </p>
-          
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Button size="lg" className="h-14 px-8 text-lg gap-2">
-              Start Building Now <ArrowRight className="w-5 h-5" />
-            </Button>
-            <Button variant="outline" size="lg" className="h-14 px-8 text-lg">
-              Contact Sales
-            </Button>
-          </div>
+
+          <Button size="lg" className="bg-white text-[#2E3539] hover:bg-white/90 rounded-2xl px-12 h-[60px] text-lg font-bold transition-all hover:scale-105 active:scale-95">
+            Join Fluxapay
+          </Button>
         </div>
       </div>
-      
-      {/* Background decoration */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full -z-10">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[500px] bg-primary/20 blur-[120px] rounded-full opacity-50"></div>
-      </div>
+
+      {/* Decorative Planet Edge at Bottom */}
+      <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[1200px] h-[500px] bg-gradient-to-t from-[#5F44EC]/20 to-transparent rounded-full blur-[100px] -mb-[400px]"></div>
     </section>
   );
 };
