@@ -45,6 +45,10 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+  --color-error: #B62619;
+  --color-black: #2E3539;
+  --color-grey: #6C747D;
+  --color-yellow: #FED449;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
@@ -115,6 +119,10 @@
 }
 
 :root {
+  --color-error: #B62619;
+  --color-black: #2E3539;
+  --color-grey: #6C747D;
+  --color-yellow: #FED449;
   --radius: 0.625rem;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
@@ -150,6 +158,10 @@
 }
 
 .dark {
+  --color-error: #B62619;
+  --color-black: #2E3539;
+  --color-grey: #6C747D;
+  --color-yellow: #FED449;
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);

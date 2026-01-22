@@ -3,11 +3,11 @@ import Hero from "@/features/landing/sections/Hero";
 
 export default function Home() {
   return (
-    <main className="min-h-screen">
+    <div className="">
       <Hero />
       <WhyFluxapay />
       <Bridges />
       <GlobalReach />
-    </main>
+    </div>
   );
 }
