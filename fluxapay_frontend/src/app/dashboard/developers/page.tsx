@@ -1,7 +1,8 @@
+
 'use client';
 
 import { useState, useRef } from 'react';
-import { Copy, Check, Code, FileJson, Eye, EyeOff, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Copy, Check, Code, FileJson, Eye, EyeOff, ToggleLeft, ToggleRight, Terminal, Braces, OptionIcon as PythonIcon } from 'lucide-react';
 
 export default function DevelopersPage() {
   const [copied, setCopied] = useState<string | null>(null);
@@ -115,11 +116,11 @@ data = response.json()
 print(data)`;
 
   return (
-    <div style={{ backgroundColor: '#1a1a3e', color: '#ffffff' }} className="min-h-screen">
+    <div style={{ backgroundColor: '#ffffff', color: '#1a1a3e' }} className="min-h-screen">
       {/* Header */}
       <header style={{ 
-        backgroundImage: 'linear-gradient(to right, #2d2d5f, #1a1a3e)', 
-        borderBottomColor: '#3d3d6b',
+        backgroundImage: 'linear-gradient(to right, #ffffff, #f9fafb)', 
+        borderBottomColor: '#e5e7eb',
         borderBottomWidth: '1px',
         position: 'sticky',
         top: 0,
@@ -136,7 +137,7 @@ print(data)`;
           }}>
             Developer Portal
           </h1>
-          <p style={{ color: '#c4b5fd', fontSize: '1.125rem' }}>
+          <p style={{ color: '#6b7280', fontSize: '1.125rem' }}>
             Integrate with our API in minutes. Get started with comprehensive documentation and examples.
           </p>
         </div>
@@ -552,9 +553,9 @@ print(data)`;
           {/* Tabs */}
           <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', borderBottomColor: '#e5e7eb', borderBottomWidth: '1px', overflowX: 'auto' }}>
             {[
-              { id: 'rest', label: 'cURL', icon: '📌' },
-              { id: 'js', label: 'JavaScript', icon: '⚛️' },
-              { id: 'python', label: 'Python', icon: '🐍' }
+              { id: 'rest', label: 'cURL', Icon: Terminal },
+              { id: 'js', label: 'JavaScript', Icon: Braces },
+              { id: 'python', label: 'Python', Icon: Code }
             ].map(tab => (
               <button
                 key={tab.id}
@@ -591,19 +592,19 @@ print(data)`;
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '2rem' }}>
             {/* Request */}
             <div>
-              <h3 style={{ fontSize: '1.125rem', fontWeight: '600', color: '#e2e8f0', marginBottom: '1rem' }}>
+              <h3 style={{ fontSize: '1.125rem', fontWeight: '600', color: '#1a1a3e', marginBottom: '1rem' }}>
                 Request
               </h3>
               <div style={{
-                backgroundColor: '#0f172a',
-                borderColor: '#1e293b',
+                backgroundColor: '#1a1a3e',
+                borderColor: '#3d3d6b',
                 borderWidth: '1px',
                 borderRadius: '0.5rem',
                 padding: '1rem',
                 overflowX: 'auto'
               }}>
                 <pre style={{
-                  color: '#cbd5e1',
+                  color: '#e0e0ff',
                   fontFamily: 'monospace',
                   fontSize: '0.875rem',
                   lineHeight: '1.5',
@@ -625,22 +626,22 @@ print(data)`;
                   marginTop: '0.75rem',
                   padding: '0.5rem 1rem',
                   borderRadius: '0.375rem',
-                  backgroundColor: '#1e40af',
-                  color: '#f1f5f9',
+                  backgroundColor: '#fbbf24',
+                  color: '#1a1a3e',
                   border: 'none',
                   cursor: 'pointer',
                   fontSize: '0.875rem',
-                  fontWeight: '500',
+                  fontWeight: '600',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '0.5rem',
                   transition: 'all 0.2s'
                 }}
                 onMouseEnter={(e) => {
-                  (e.target as HTMLElement).style.backgroundColor = '#1e3a8a';
+                  (e.target as HTMLElement).style.backgroundColor = '#f59e0b';
                 }}
                 onMouseLeave={(e) => {
-                  (e.target as HTMLElement).style.backgroundColor = '#1e40af';
+                  (e.target as HTMLElement).style.backgroundColor = '#fbbf24';
                 }}
               >
                 {copied === `request-${activeTab}` ? (
@@ -659,19 +660,19 @@ print(data)`;
 
             {/* Response */}
             <div>
-              <h3 style={{ fontSize: '1.125rem', fontWeight: '600', color: '#e2e8f0', marginBottom: '1rem' }}>
+              <h3 style={{ fontSize: '1.125rem', fontWeight: '600', color: '#1a1a3e', marginBottom: '1rem' }}>
                 Response
               </h3>
               <div style={{
-                backgroundColor: '#0f172a',
-                borderColor: '#1e293b',
+                backgroundColor: '#1a1a3e',
+                borderColor: '#3d3d6b',
                 borderWidth: '1px',
                 borderRadius: '0.5rem',
                 padding: '1rem',
                 overflowX: 'auto'
               }}>
                 <pre style={{
-                  color: '#cbd5e1',
+                  color: '#e0e0ff',
                   fontFamily: 'monospace',
                   fontSize: '0.875rem',
                   lineHeight: '1.5',
@@ -688,22 +689,22 @@ print(data)`;
                   marginTop: '0.75rem',
                   padding: '0.5rem 1rem',
                   borderRadius: '0.375rem',
-                  backgroundColor: '#1e40af',
-                  color: '#f1f5f9',
+                  backgroundColor: '#fbbf24',
+                  color: '#1a1a3e',
                   border: 'none',
                   cursor: 'pointer',
                   fontSize: '0.875rem',
-                  fontWeight: '500',
+                  fontWeight: '600',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '0.5rem',
                   transition: 'all 0.2s'
                 }}
                 onMouseEnter={(e) => {
-                  (e.target as HTMLElement).style.backgroundColor = '#1e3a8a';
+                  (e.target as HTMLElement).style.backgroundColor = '#f59e0b';
                 }}
                 onMouseLeave={(e) => {
-                  (e.target as HTMLElement).style.backgroundColor = '#1e40af';
+                  (e.target as HTMLElement).style.backgroundColor = '#fbbf24';
                 }}
               >
                 {copied === 'response' ? (
@@ -725,34 +726,34 @@ print(data)`;
         {/* Additional Resources */}
         <section style={{
           marginTop: '3rem',
-          borderColor: '#1e293b',
+          borderColor: '#3d3d6b',
           borderWidth: '1px',
           borderRadius: '0.5rem',
-          backgroundColor: 'rgba(15, 23, 42, 0.5)',
+          backgroundColor: '#ffffff',
           padding: '1.5rem',
           backdropFilter: 'blur(10px)'
         }}>
-          <h2 style={{ fontSize: '1.875rem', fontWeight: 'bold', color: '#e2e8f0', marginBottom: '1.5rem' }}>
+          <h2 style={{ fontSize: '1.875rem', fontWeight: 'bold', color: '#1a1a3e', marginBottom: '1.5rem' }}>
             Need Help?
           </h2>
           
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1.5rem' }}>
             <div style={{
-              backgroundColor: 'rgba(30, 41, 59, 0.5)',
-              borderColor: '#334155',
+              backgroundColor: '#f9fafb',
+              borderColor: '#e5e7eb',
               borderWidth: '1px',
               borderRadius: '0.5rem',
               padding: '1.5rem'
             }}>
               <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>📖</div>
-              <h3 style={{ fontSize: '1.125rem', fontWeight: '600', color: '#e2e8f0', marginBottom: '0.5rem' }}>
+              <h3 style={{ fontSize: '1.125rem', fontWeight: '600', color: '#1a1a3e', marginBottom: '0.5rem' }}>
                 Full Documentation
               </h3>
-              <p style={{ fontSize: '0.875rem', color: '#94a3b8', marginBottom: '1rem', lineHeight: '1.5' }}>
+              <p style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: '1rem', lineHeight: '1.5' }}>
                 Explore comprehensive API documentation with detailed examples and use cases.
               </p>
               <a href="#" style={{
-                color: '#60a5fa',
+                color: '#fbbf24',
                 textDecoration: 'none',
                 fontSize: '0.875rem',
                 fontWeight: '600'
@@ -762,21 +763,21 @@ print(data)`;
             </div>
 
             <div style={{
-              backgroundColor: 'rgba(30, 41, 59, 0.5)',
-              borderColor: '#334155',
+              backgroundColor: '#f9fafb',
+              borderColor: '#e5e7eb',
               borderWidth: '1px',
               borderRadius: '0.5rem',
               padding: '1.5rem'
             }}>
               <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>💬</div>
-              <h3 style={{ fontSize: '1.125rem', fontWeight: '600', color: '#e2e8f0', marginBottom: '0.5rem' }}>
+              <h3 style={{ fontSize: '1.125rem', fontWeight: '600', color: '#1a1a3e', marginBottom: '0.5rem' }}>
                 Community Support
               </h3>
-              <p style={{ fontSize: '0.875rem', color: '#94a3b8', marginBottom: '1rem', lineHeight: '1.5' }}>
+              <p style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: '1rem', lineHeight: '1.5' }}>
                 Join our community forums and chat with other developers.
               </p>
               <a href="#" style={{
-                color: '#60a5fa',
+                color: '#fbbf24',
                 textDecoration: 'none',
                 fontSize: '0.875rem',
                 fontWeight: '600'
@@ -786,21 +787,21 @@ print(data)`;
             </div>
 
             <div style={{
-              backgroundColor: 'rgba(30, 41, 59, 0.5)',
-              borderColor: '#334155',
+              backgroundColor: '#f9fafb',
+              borderColor: '#e5e7eb',
               borderWidth: '1px',
               borderRadius: '0.5rem',
               padding: '1.5rem'
             }}>
               <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>⚙️</div>
-              <h3 style={{ fontSize: '1.125rem', fontWeight: '600', color: '#e2e8f0', marginBottom: '0.5rem' }}>
+              <h3 style={{ fontSize: '1.125rem', fontWeight: '600', color: '#1a1a3e', marginBottom: '0.5rem' }}>
                 Status & Support
               </h3>
-              <p style={{ fontSize: '0.875rem', color: '#94a3b8', marginBottom: '1rem', lineHeight: '1.5' }}>
+              <p style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: '1rem', lineHeight: '1.5' }}>
                 Check system status and get technical support from our team.
               </p>
               <a href="#" style={{
-                color: '#60a5fa',
+                color: '#fbbf24',
                 textDecoration: 'none',
                 fontSize: '0.875rem',
                 fontWeight: '600'
