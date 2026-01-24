@@ -2,44 +2,38 @@
 
 import React, { useState } from "react";
 import Image from "next/image";
+import * as yup from "yup";
+
+const loginSchema = yup.object({
+  email: yup
+    .string()
+    .email("Please enter a valid email address")
+    .required("Email is required"),
+  password: yup
+    .string()
+    .min(6, "Password must be at least 6 characters")
+    .required("Password is required"),
+  keepLoggedIn: yup.boolean(),
+});
+
+type LoginFormData = yup.InferType<typeof loginSchema>;
 
 const LoginForm = () => {
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<LoginFormData>({
     email: "",
     password: "",
     keepLoggedIn: false,
   });
 
-  const [errors, setErrors] = useState({
-    email: "",
-    password: "",
-  });
+  const [errors, setErrors] = useState<{ email?: string; password?: string }>(
+    {
+      email: "",
+      password: "",
+    }
+  );
 
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Email validation
-  const validateEmail = (email: string) => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!email) {
-      return "Email is required";
-    }
-    if (!emailRegex.test(email)) {
-      return "Please enter a valid email address";
-    }
-    return "";
-  };
-
-  // Password validation
-  const validatePassword = (password: string) => {
-    if (!password) {
-      return "Password is required";
-    }
-    if (password.length < 6) {
-      return "Password must be at least 6 characters";
-    }
-    return "";
-  };
 
   // Handle input changes
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -60,31 +54,39 @@ const LoginForm = () => {
     }
   };
 
-  // Handle form submission
+  // Handle form submission using Yup
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
-    // Validate all fields
-    const emailError = validateEmail(formData.email);
-    const passwordError = validatePassword(formData.password);
-
-    if (emailError || passwordError) {
-      setErrors({
-        email: emailError,
-        password: passwordError,
+    try {
+      // Validate against schema
+      const validData = await loginSchema.validate(formData, {
+        abortEarly: false,
       });
-      return;
+
+      // Clear previous errors
+      setErrors({});
+      setIsSubmitting(true);
+
+      // Simulate API call
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+
+      console.log("Login data:", validData);
+      alert("Login successful! Check console for form data.");
+    } catch (err) {
+      if (err instanceof yup.ValidationError) {
+        const fieldErrors: { email?: string; password?: string } = {};
+        err.inner.forEach((issue) => {
+          if (issue.path && !fieldErrors[issue.path as "email" | "password"]) {
+            fieldErrors[issue.path as "email" | "password"] = issue.message;
+          }
+        });
+        setErrors(fieldErrors);
+        return;
+      }
+    } finally {
+      setIsSubmitting(false);
     }
-
-    setIsSubmitting(true);
-
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-
-    console.log("Login data:", formData);
-    alert("Login successful! Check console for form data.");
-
-    setIsSubmitting(false);
   };
 
   return (
