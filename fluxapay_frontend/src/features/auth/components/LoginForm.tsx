@@ -3,6 +3,8 @@
 import React, { useState } from "react";
 import Image from "next/image";
 import * as yup from "yup";
+import Input from "@/components/Input";
+import { Button } from "@/components/Button";
 
 const loginSchema = yup.object({
   email: yup
@@ -104,7 +106,6 @@ const LoginForm = () => {
         {/* Card: 40% width */}
         <div className="flex h-full w-full md:w-[40%] items-center justify-center bg-transparent ">
           <div className="w-full max-w-md rounded-none lg:rounded-r-2xl bg-white p-8 shadow-none animate-slide-in-left">
-
             {/* Form header */}
             <div className="space-y-2 mb-8 animate-fade-in [animation-delay:200ms]">
               <h1 className="text-2xl md:text-[40px] font-bold text-[#232323] tracking-tight">
@@ -122,35 +123,27 @@ const LoginForm = () => {
             >
               {/* Email */}
               <div>
-                <input
+                <Input
                   type="email"
                   name="email"
                   value={formData.email}
                   onChange={handleChange}
                   placeholder="test@gmail.com"
-                  className={`w-full rounded-[10px] border px-4 py-3 text-sm text-slate-900 outline-none transition focus:ring-2 focus:ring-[#5649DF] focus:border-[#5649DF] bg-white placeholder:text-slate-400 ${
-                    errors.email ? "border-red-500" : "border-[#D9D9D9]"
-                  }`}
+                  error={errors.email}
                 />
-                {errors.email && (
-                  <span className="mt-2 block text-xs text-red-500 animate-slide-down">
-                    {errors.email}
-                  </span>
-                )}
               </div>
 
               {/* Password */}
               <div>
                 <div className="relative">
-                  <input
+                  <Input
                     type={showPassword ? "text" : "password"}
                     name="password"
                     value={formData.password}
                     onChange={handleChange}
                     placeholder="Password"
-                    className={`w-full rounded-[10px] border px-4 py-3 text-sm text-slate-900 outline-none transition focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white placeholder:text-slate-400 ${
-                      errors.password ? "border-red-500" : "border-[#D9D9D9]"
-                    }`}
+                    error={errors.password}
+                    className="pr-10 focus:ring-indigo-500 focus:border-indigo-500"
                   />
                   <button
                     type="button"
@@ -184,11 +177,6 @@ const LoginForm = () => {
                     )}
                   </button>
                 </div>
-                {errors.password && (
-                  <span className="mt-2 block text-xs text-red-500 animate-slide-down">
-                    {errors.password}
-                  </span>
-                )}
               </div>
 
               {/* Keep me logged in */}
@@ -206,7 +194,7 @@ const LoginForm = () => {
               </div>
 
               {/* Submit button */}
-              <button
+              <Button
                 type="submit"
                 disabled={isSubmitting}
                 className="flex w-full items-center justify-center gap-2 rounded-xl bg-linear-to-r from-[#5649DF] to-violet-500 px-6 py-3 text-sm md:text-[16px] font-semibold text-[#FFFFFF] shadow-md transition hover:shadow-lg hover:from-indigo-600 hover:to-violet-600 disabled:cursor-not-allowed disabled:opacity-70"
@@ -229,7 +217,7 @@ const LoginForm = () => {
                   </svg>
                 )}
                 <span>{isSubmitting ? "Signing in..." : "Sign in"}</span>
-              </button>
+              </Button>
 
               {/* Create account */}
               <div className="pt-2 text-center text-xs md:text-[18px] text-[#6C6C6C] font-semibold">
