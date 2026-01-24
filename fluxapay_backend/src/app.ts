@@ -4,6 +4,7 @@ import swaggerUi from "swagger-ui-express";
 import { specs } from "./docs/swagger";
 import { PrismaClient } from "./generated/client/client";
 import merchantRoutes from "./routes/merchant.route";
+import dashboardRoutes from './routes/dashboard.route'
 
 const app = express();
 const prisma = new PrismaClient();
@@ -15,6 +16,7 @@ app.use(express.json());
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(specs));
 
 app.use("/api/merchants", merchantRoutes);
+app.use("/api/dashboard", dashboardRoutes);
 // Basic health check
 app.get("/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date() });
