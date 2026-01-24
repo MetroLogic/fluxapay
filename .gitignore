@@ -36,6 +36,8 @@ Thumbs.db
 *.swp
 *.swo
 
+
+
 # Prisma
 fluxapay_backend/prisma/*.db
 fluxapay_backend/prisma/*.db-journal
