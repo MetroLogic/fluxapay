@@ -3,7 +3,13 @@
 import Image from "next/image";
 import animationSvg from "@/assets/animationsvg.svg";
 
-const WhyCard = ({ title, description, active = false }: any) => (
+interface WhyCardProps {
+  title: string;
+  description: string;
+  active?: boolean;
+}
+
+const WhyCard = ({ title, description, active = false }: WhyCardProps) => (
   <div className={`p-8 rounded-3xl transition-all duration-300 ${active ? 'bg-[#F1EFFF] border-transparent' : 'bg-white border border-gray-100'}`}>
     <h3 className="text-xl font-bold text-[#2E3539] mb-3">{title}</h3>
     <p className="text-[#8A8A8A] leading-relaxed text-sm">
