@@ -1,6 +1,5 @@
 import bcrypt from 'bcrypt';
-import { PrismaClient } from '../generated/client/client';
-const prisma = new PrismaClient();
+import prisma from '../lib/prisma';
 
 export async function createOtp(merchantId: string, channel: 'email' | 'phone') {
   const otp = Math.floor(100000 + Math.random() * 900000).toString();

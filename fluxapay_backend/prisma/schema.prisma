@@ -1,17 +1,13 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
-  provider = "prisma-client"
+  provider = "prisma-client-js"
   output   = "../src/generated/client"
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 
@@ -27,6 +23,7 @@ model Merchant {
   created_at         DateTime @default(now())
   updated_at         DateTime @updatedAt
   otps               OTP[]
+  payments           Payment[]
 }
 
 model OTP {
@@ -49,4 +46,79 @@ enum MerchantStatus {
 enum OTPChannel {
   email
   phone
+}
+
+model Payment {
+  id                    String   @id @default(uuid())
+  merchant              Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  merchantId            String
+  payment_id            String   @unique
+  order_id              String
+  customer              Customer @relation(fields: [customerId], references: [id])
+  customerId            String
+  amount                Float
+  currency              String
+  status                PaymentStatus
+  description           String?
+  created_at            DateTime @default(now())
+  updated_at            DateTime @updatedAt
+  transaction_hash      String?
+  transactions          Transaction[]
+  timeline_events       TimelineEvent[]
+
+  @@index([merchantId])
+  @@index([customerId])
+  @@index([status])
+  @@index([created_at])
+}
+
+model Customer {
+  id        String   @id @default(cuid())
+  email     String
+  name      String
+  phone     String?
+  created_at DateTime @default(now())
+  payments  Payment[]
+
+  @@unique([email])
+}
+
+model Transaction {
+  id              String   @id @default(cuid())
+  payment         Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  paymentId       String
+  transaction_hash String
+  amount          Float
+  currency        String
+  source_account  String
+  destination_account String
+  status          TransactionStatus
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  @@index([paymentId])
+}
+
+model TimelineEvent {
+  id        String   @id @default(cuid())
+  payment   Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  paymentId String
+  event_type String
+  description String?
+  created_at DateTime @default(now())
+
+  @@index([paymentId])
+}
+
+enum PaymentStatus {
+  pending
+  completed
+  failed
+  cancelled
+}
+
+enum TransactionStatus {
+  pending
+  confirmed
+  failed
 }

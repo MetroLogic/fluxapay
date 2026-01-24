@@ -1,12 +1,9 @@
-import { PrismaClient } from "../generated/client/client";
+import prisma from "../lib/prisma";
 import bcrypt from "bcrypt";
 import { createOtp, verifyOtp as verifyOtpService } from "./otp.service";
 import { sendOtpEmail } from "./email.service";
 import { isDevEnv } from "../helpers/env.helper";
 import { generateToken } from "../helpers/jwt.helper";
-
-
-const prisma = new PrismaClient();
 
 export async function signupMerchantService(data: {
   business_name: string;
