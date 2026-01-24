@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { Navbar } from "../components/Navbar";
 
 import transfer_icon_1 from "@/assets/transfer-icon-ngn.svg";
@@ -16,10 +17,12 @@ const Hero = () => {
                         <div className="w-full hidden lg:block">
                             <div className="bg-white rounded-lg py-3 px-6 flex items-center gap-3 absolute top-1/3 left-0">
                                 <div className="img-icon w-10 h-10 rounded-full overflow-hidden">
-                                    <img
-                                        src={transfer_icon_1.src}
+                                    <Image
+                                        src={transfer_icon_1}
                                         className="w-full h-full"
                                         alt="Transfer Icon NGN"
+                                        width={40}
+                                        height={40}
                                     />
                                 </div>
                                 <div className="">
@@ -33,10 +36,12 @@ const Hero = () => {
                             </div>
                             <div className="bg-white rounded-lg py-3 px-6 flex items-center gap-3 absolute top-1/6 left-1/2 -translate-x-1/2">
                                 <div className="img-icon w-10 h-10 rounded-full overflow-hidden">
-                                    <img
-                                        src={transfer_icon_2.src}
+                                    <Image
+                                        src={transfer_icon_2}
                                         className="w-full h-full"
                                         alt="Transfer Icon KHS"
+                                        width={40}
+                                        height={40}
                                     />
                                 </div>
                                 <div className="">
@@ -50,10 +55,12 @@ const Hero = () => {
                             </div>
                             <div className="bg-white rounded-lg py-3 px-6 flex items-center gap-3 absolute top-1/3 right-0">
                                 <div className="img-icon w-10 h-10 rounded-full overflow-hidden">
-                                    <img
-                                        src={transfer_icon_3.src}
+                                    <Image
+                                        src={transfer_icon_3}
                                         className="w-full h-full"
                                         alt="Transfer Icon GHS"
+                                        width={40}
+                                        height={40}
                                     />
                                 </div>
                                 <div className="">

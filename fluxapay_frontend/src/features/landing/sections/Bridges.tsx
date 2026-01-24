@@ -2,16 +2,20 @@
 
 import { 
   PaperPlaneIcon, 
-  ArchiveIcon, 
   FileTextIcon, 
   UpdateIcon, 
   GlobeIcon, 
   CodeIcon,
-  BackpackIcon,
-  HandIcon
+  BackpackIcon
 } from "@radix-ui/react-icons";
 
-const FeatureCard = ({ icon: Icon, title, description }: any) => (
+interface FeatureCardProps {
+  icon: React.ComponentType<{ className?: string }>;
+  title: string;
+  description: string;
+}
+
+const FeatureCard = ({ icon: Icon, title, description }: FeatureCardProps) => (
   <div className="relative pl-8 py-4 group">
     {/* Left accent line */}
     <div className="absolute left-0 top-0 bottom-0 w-[2px] bg-gray-100 group-hover:bg-gray-200 transition-colors">

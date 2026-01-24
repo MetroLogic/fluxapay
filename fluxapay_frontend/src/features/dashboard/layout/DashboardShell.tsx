@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { Sidebar } from "../components/Sidebar";
 import { TopNav } from "../components/TopNav";
-import { cn } from "@/lib/utils";
 
 interface DashboardShellProps {
     children: React.ReactNode;
