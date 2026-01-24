@@ -17,4 +17,23 @@ import * as Prisma from './internal/prismaNamespaceBrowser'
 export { Prisma }
 export * as $Enums from './enums'
 export * from './enums';
-
+/**
+ * Model Merchant
+ * 
+ */
+export type Merchant = Prisma.MerchantModel
+/**
+ * Model MerchantKYC
+ * 
+ */
+export type MerchantKYC = Prisma.MerchantKYCModel
+/**
+ * Model KYCDocument
+ * 
+ */
+export type KYCDocument = Prisma.KYCDocumentModel
+/**
+ * Model OTP
+ * 
+ */
+export type OTP = Prisma.OTPModel

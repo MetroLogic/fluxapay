@@ -11,32 +11,108 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  // url      = env("DATABASE_URL")
 }
 
-
 model Merchant {
-  id                 String   @id @default(cuid())
-  business_name      String
-  email              String   @unique
-  phone_number       String   @unique
-  country            String
+  id                  String         @id @default(cuid())
+  business_name       String
+  email               String         @unique
+  phone_number        String         @unique
+  country             String
   settlement_currency String
-  password           String
-  status             MerchantStatus @default(pending_verification)
-  created_at         DateTime @default(now())
-  updated_at         DateTime @updatedAt
-  otps               OTP[]
+  password            String
+  status              MerchantStatus @default(pending_verification)
+  created_at          DateTime       @default(now())
+  updated_at          DateTime       @updatedAt
+  otps                OTP[]
+  kyc                 MerchantKYC?
+}
+
+model MerchantKYC {
+  id         String   @id @default(cuid())
+  merchant   Merchant @relation(fields: [merchantId], references: [id])
+  merchantId String   @unique
+
+  // Business Information
+  business_type                BusinessType
+  legal_business_name          String
+  business_registration_number String?
+  country_of_registration      String
+  business_address             String
+
+  // Director Information
+  director_full_name String
+  director_email     String
+  director_phone     String
+
+  // Government ID
+  government_id_type   GovernmentIdType
+  government_id_number String
+
+  // KYC Status
+  kyc_status       KYCStatus @default(not_submitted)
+  rejection_reason String?
+  reviewed_at      DateTime?
+  reviewed_by      String?
+
+  // Documents
+  documents KYCDocument[]
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+}
+
+model KYCDocument {
+  id    String      @id @default(cuid())
+  kyc   MerchantKYC @relation(fields: [kycId], references: [id])
+  kycId String
+
+  document_type DocumentType
+  file_name     String
+  file_url      String // Cloudinary URL
+  public_id     String // Cloudinary public_id for management
+  file_size     Int
+  mime_type     String
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@unique([kycId, document_type])
+}
+
+enum BusinessType {
+  individual
+  registered_business
+}
+
+enum GovernmentIdType {
+  passport
+  national_id
+  driver_license
+}
+
+enum KYCStatus {
+  not_submitted
+  pending_review
+  approved
+  rejected
+}
+
+enum DocumentType {
+  government_id
+  proof_of_business_registration
+  proof_of_address
 }
 
 model OTP {
-  id          String   @id @default(cuid())
-  merchant    Merchant @relation(fields: [merchantId], references: [id])
-  merchantId  String
-  channel     OTPChannel
-  code        String
-  expires_at  DateTime
-  created_at  DateTime @default(now())
+  id         String     @id @default(cuid())
+  merchant   Merchant   @relation(fields: [merchantId], references: [id])
+  merchantId String
+  channel    OTPChannel
+  code       String
+  expires_at DateTime
+  created_at DateTime   @default(now())
 
   @@unique([merchantId, channel])
 }

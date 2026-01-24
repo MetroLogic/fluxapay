@@ -9,7 +9,53 @@
 * 🟢 You can import this file directly.
 */
 
+export const BusinessType = {
+  individual: 'individual',
+  registered_business: 'registered_business'
+} as const
+
+export type BusinessType = (typeof BusinessType)[keyof typeof BusinessType]
 
 
-// This file is empty because there are no enums in the schema.
-export {}
+export const GovernmentIdType = {
+  passport: 'passport',
+  national_id: 'national_id',
+  driver_license: 'driver_license'
+} as const
+
+export type GovernmentIdType = (typeof GovernmentIdType)[keyof typeof GovernmentIdType]
+
+
+export const KYCStatus = {
+  not_submitted: 'not_submitted',
+  pending_review: 'pending_review',
+  approved: 'approved',
+  rejected: 'rejected'
+} as const
+
+export type KYCStatus = (typeof KYCStatus)[keyof typeof KYCStatus]
+
+
+export const DocumentType = {
+  government_id: 'government_id',
+  proof_of_business_registration: 'proof_of_business_registration',
+  proof_of_address: 'proof_of_address'
+} as const
+
+export type DocumentType = (typeof DocumentType)[keyof typeof DocumentType]
+
+
+export const MerchantStatus = {
+  pending_verification: 'pending_verification',
+  active: 'active'
+} as const
+
+export type MerchantStatus = (typeof MerchantStatus)[keyof typeof MerchantStatus]
+
+
+export const OTPChannel = {
+  email: 'email',
+  phone: 'phone'
+} as const
+
+export type OTPChannel = (typeof OTPChannel)[keyof typeof OTPChannel]
