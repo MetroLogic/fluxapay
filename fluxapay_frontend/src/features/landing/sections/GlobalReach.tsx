@@ -4,7 +4,7 @@ import React from "react";
 import * as Flags from "country-flag-icons/react/3x2";
 
 const FlagItem = ({ country }: { country: string }) => {
-  const Flag = (Flags as any)[country];
+  const Flag = (Flags as Record<string, React.ComponentType<{ title?: string; className?: string }>>)[country];
   if (!Flag) return null;
   return (
     <div className="w-16 h-12 md:w-20 md:h-14 rounded-lg overflow-hidden shadow-sm flex-shrink-0">
