@@ -1,4 +1,4 @@
-import { WhyFluxapay, Bridges, GlobalReach } from "@/features/landing";
+import { WhyFluxapay, Bridges, GlobalReach, UseCases, FAQ, Footer } from "@/features/landing";
 
 export default function Home() {
   return (
@@ -6,6 +6,9 @@ export default function Home() {
       <WhyFluxapay />
       <Bridges />
       <GlobalReach />
+      <UseCases />
+      <FAQ />
+      <Footer />
     </main>
   );
 }
