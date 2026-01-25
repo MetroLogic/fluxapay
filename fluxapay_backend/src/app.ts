@@ -1,8 +1,9 @@
-import express from 'express';
-import cors from 'cors';
-import swaggerUi from 'swagger-ui-express';
-import { specs } from './docs/swagger';
-import { PrismaClient } from './generated/client/client';
+import express from "express";
+import cors from "cors";
+import swaggerUi from "swagger-ui-express";
+import { specs } from "./docs/swagger";
+import { PrismaClient } from "./generated/client/client";
+import merchantRoutes from "./routes/merchant.route";
 
 const app = express();
 const prisma = new PrismaClient();
@@ -11,11 +12,12 @@ app.use(cors());
 app.use(express.json());
 
 // Swagger UI
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(specs));
 
+app.use("/api/merchants", merchantRoutes);
 // Basic health check
-app.get('/health', (req, res) => {
-    res.json({ status: 'ok', timestamp: new Date() });
+app.get("/health", (req, res) => {
+  res.json({ status: "ok", timestamp: new Date() });
 });
 
 // Example route

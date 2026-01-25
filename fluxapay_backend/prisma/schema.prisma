@@ -13,3 +13,40 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+
+model Merchant {
+  id                 String   @id @default(cuid())
+  business_name      String
+  email              String   @unique
+  phone_number       String   @unique
+  country            String
+  settlement_currency String
+  password           String
+  status             MerchantStatus @default(pending_verification)
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+  otps               OTP[]
+}
+
+model OTP {
+  id          String   @id @default(cuid())
+  merchant    Merchant @relation(fields: [merchantId], references: [id])
+  merchantId  String
+  channel     OTPChannel
+  code        String
+  expires_at  DateTime
+  created_at  DateTime @default(now())
+
+  @@unique([merchantId, channel])
+}
+
+enum MerchantStatus {
+  pending_verification
+  active
+}
+
+enum OTPChannel {
+  email
+  phone
+}
