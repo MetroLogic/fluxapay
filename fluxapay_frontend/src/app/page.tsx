@@ -1,4 +1,11 @@
-import { WhyFluxapay, Bridges, GlobalReach, UseCases, FAQ, Footer } from "@/features/landing";
+import {
+  WhyFluxapay,
+  Bridges,
+  GlobalReach,
+  UseCases,
+  FAQ,
+  Footer,
+} from "@/features/landing";
 import Hero from "@/features/landing/sections/Hero";
 
 export default function Home() {
@@ -11,7 +18,6 @@ export default function Home() {
       <UseCases />
       <FAQ />
       <Footer />
-    </main>
     </div>
   );
 }
