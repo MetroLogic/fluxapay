@@ -9,7 +9,41 @@
 * 🟢 You can import this file directly.
 */
 
+export const MerchantStatus = {
+  pending_verification: 'pending_verification',
+  active: 'active'
+} as const
+
+export type MerchantStatus = (typeof MerchantStatus)[keyof typeof MerchantStatus]
 
 
-// This file is empty because there are no enums in the schema.
-export {}
+export const OTPChannel = {
+  email: 'email',
+  phone: 'phone'
+} as const
+
+export type OTPChannel = (typeof OTPChannel)[keyof typeof OTPChannel]
+
+
+export const WebhookEventType = {
+  payment_completed: 'payment_completed',
+  payment_failed: 'payment_failed',
+  payment_pending: 'payment_pending',
+  refund_completed: 'refund_completed',
+  refund_failed: 'refund_failed',
+  subscription_created: 'subscription_created',
+  subscription_cancelled: 'subscription_cancelled',
+  subscription_renewed: 'subscription_renewed'
+} as const
+
+export type WebhookEventType = (typeof WebhookEventType)[keyof typeof WebhookEventType]
+
+
+export const WebhookStatus = {
+  pending: 'pending',
+  delivered: 'delivered',
+  failed: 'failed',
+  retrying: 'retrying'
+} as const
+
+export type WebhookStatus = (typeof WebhookStatus)[keyof typeof WebhookStatus]

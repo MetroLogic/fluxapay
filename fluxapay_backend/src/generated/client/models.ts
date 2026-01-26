@@ -8,4 +8,8 @@
  *
  * 🟢 You can import this file directly.
  */
+export type * from './models/Merchant'
+export type * from './models/OTP'
+export type * from './models/WebhookLog'
+export type * from './models/WebhookRetryAttempt'
 export type * from './commonInputTypes'
