@@ -1,11 +1,11 @@
-export type PaymentStatus = 
-  | 'pending'
-  | 'processing'
-  | 'completed'
-  | 'failed'
-  | 'refunded';
+export type PaymentStatus =
+  | "pending"
+  | "processing"
+  | "completed"
+  | "failed"
+  | "refunded";
 
-export type PaymentEventType = 'on-chain' | 'off-chain' | 'system';
+export type PaymentEventType = "on-chain" | "off-chain" | "system";
 
 export interface PaymentEvent {
   id: string;
@@ -14,7 +14,7 @@ export interface PaymentEvent {
   description: string;
   type: PaymentEventType;
   txHash?: string;
-  meta?: Record<string, any>;
+  meta?: Record<string, unknown>;
 }
 
 export interface Payment {
@@ -33,7 +33,7 @@ export interface Payment {
 
 export interface PaymentFilterState {
   merchant?: string;
-  status?: PaymentStatus | 'all';
+  status?: PaymentStatus | "all";
   dateRange?: {
     from: Date | undefined;
     to: Date | undefined;
