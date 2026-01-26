@@ -32,6 +32,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Format Check (Lint)
+        run: npm run lint
+
       - name: Build Check
         run: npm run build
         # Verification that the backend TypeScript application builds successfully.
