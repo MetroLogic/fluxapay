@@ -1,0 +1,47 @@
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Logs
+logs
+*.log
+
+# Dependency directories
+fluxapay_backend/node_modules/
+fluxapay_frontend/node_modules/
+
+# Build outputs
+.dist/
+dist/
+.next/
+out/
+coverage/
+
+# TypeScript
+*.tsbuildinfo
+
+# Env files
+.env
+.env.*
+!.env.example
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+
+
+# Prisma
+fluxapay_backend/prisma/*.db
+fluxapay_backend/prisma/*.db-journal
+
+# Misc
+.cache/
+.vercel/
