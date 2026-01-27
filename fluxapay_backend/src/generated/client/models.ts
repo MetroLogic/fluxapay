@@ -8,4 +8,7 @@
  *
  * 🟢 You can import this file directly.
  */
+export type * from './models/Merchant'
+export type * from './models/OTP'
+export type * from './models/Settlement'
 export type * from './commonInputTypes'

@@ -9,7 +9,27 @@
 * 🟢 You can import this file directly.
 */
 
+export const MerchantStatus = {
+  pending_verification: 'pending_verification',
+  active: 'active'
+} as const
+
+export type MerchantStatus = (typeof MerchantStatus)[keyof typeof MerchantStatus]
 
 
-// This file is empty because there are no enums in the schema.
-export {}
+export const OTPChannel = {
+  email: 'email',
+  phone: 'phone'
+} as const
+
+export type OTPChannel = (typeof OTPChannel)[keyof typeof OTPChannel]
+
+
+export const SettlementStatus = {
+  pending: 'pending',
+  processing: 'processing',
+  completed: 'completed',
+  failed: 'failed'
+} as const
+
+export type SettlementStatus = (typeof SettlementStatus)[keyof typeof SettlementStatus]

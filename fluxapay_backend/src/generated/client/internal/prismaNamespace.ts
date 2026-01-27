@@ -390,7 +390,9 @@ type FieldRefInputType<Model, FieldType> = Model extends never ? never : FieldRe
 
 
 export const ModelName = {
-
+  Merchant: 'Merchant',
+  OTP: 'OTP',
+  Settlement: 'Settlement'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -406,10 +408,233 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: never
+    modelProps: "merchant" | "oTP" | "settlement"
     txIsolationLevel: TransactionIsolationLevel
   }
-  model: {}
+  model: {
+    Merchant: {
+      payload: Prisma.$MerchantPayload<ExtArgs>
+      fields: Prisma.MerchantFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.MerchantFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MerchantPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.MerchantFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MerchantPayload>
+        }
+        findFirst: {
+          args: Prisma.MerchantFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MerchantPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.MerchantFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MerchantPayload>
+        }
+        findMany: {
+          args: Prisma.MerchantFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MerchantPayload>[]
+        }
+        create: {
+          args: Prisma.MerchantCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MerchantPayload>
+        }
+        createMany: {
+          args: Prisma.MerchantCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.MerchantCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MerchantPayload>[]
+        }
+        delete: {
+          args: Prisma.MerchantDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MerchantPayload>
+        }
+        update: {
+          args: Prisma.MerchantUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MerchantPayload>
+        }
+        deleteMany: {
+          args: Prisma.MerchantDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.MerchantUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.MerchantUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MerchantPayload>[]
+        }
+        upsert: {
+          args: Prisma.MerchantUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MerchantPayload>
+        }
+        aggregate: {
+          args: Prisma.MerchantAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateMerchant>
+        }
+        groupBy: {
+          args: Prisma.MerchantGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.MerchantGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.MerchantCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.MerchantCountAggregateOutputType> | number
+        }
+      }
+    }
+    OTP: {
+      payload: Prisma.$OTPPayload<ExtArgs>
+      fields: Prisma.OTPFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.OTPFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$OTPPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.OTPFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$OTPPayload>
+        }
+        findFirst: {
+          args: Prisma.OTPFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$OTPPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.OTPFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$OTPPayload>
+        }
+        findMany: {
+          args: Prisma.OTPFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$OTPPayload>[]
+        }
+        create: {
+          args: Prisma.OTPCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$OTPPayload>
+        }
+        createMany: {
+          args: Prisma.OTPCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.OTPCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$OTPPayload>[]
+        }
+        delete: {
+          args: Prisma.OTPDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$OTPPayload>
+        }
+        update: {
+          args: Prisma.OTPUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$OTPPayload>
+        }
+        deleteMany: {
+          args: Prisma.OTPDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.OTPUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.OTPUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$OTPPayload>[]
+        }
+        upsert: {
+          args: Prisma.OTPUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$OTPPayload>
+        }
+        aggregate: {
+          args: Prisma.OTPAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateOTP>
+        }
+        groupBy: {
+          args: Prisma.OTPGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.OTPGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.OTPCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.OTPCountAggregateOutputType> | number
+        }
+      }
+    }
+    Settlement: {
+      payload: Prisma.$SettlementPayload<ExtArgs>
+      fields: Prisma.SettlementFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.SettlementFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SettlementPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.SettlementFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SettlementPayload>
+        }
+        findFirst: {
+          args: Prisma.SettlementFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SettlementPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.SettlementFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SettlementPayload>
+        }
+        findMany: {
+          args: Prisma.SettlementFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SettlementPayload>[]
+        }
+        create: {
+          args: Prisma.SettlementCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SettlementPayload>
+        }
+        createMany: {
+          args: Prisma.SettlementCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.SettlementCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SettlementPayload>[]
+        }
+        delete: {
+          args: Prisma.SettlementDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SettlementPayload>
+        }
+        update: {
+          args: Prisma.SettlementUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SettlementPayload>
+        }
+        deleteMany: {
+          args: Prisma.SettlementDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.SettlementUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.SettlementUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SettlementPayload>[]
+        }
+        upsert: {
+          args: Prisma.SettlementUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SettlementPayload>
+        }
+        aggregate: {
+          args: Prisma.SettlementAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateSettlement>
+        }
+        groupBy: {
+          args: Prisma.SettlementGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.SettlementGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.SettlementCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.SettlementCountAggregateOutputType> | number
+        }
+      }
+    }
+  }
 } & {
   other: {
     payload: any
@@ -448,7 +673,209 @@ export const TransactionIsolationLevel = runtime.makeStrictEnum({
 export type TransactionIsolationLevel = (typeof TransactionIsolationLevel)[keyof typeof TransactionIsolationLevel]
 
 
+export const MerchantScalarFieldEnum = {
+  id: 'id',
+  business_name: 'business_name',
+  email: 'email',
+  phone_number: 'phone_number',
+  country: 'country',
+  settlement_currency: 'settlement_currency',
+  password: 'password',
+  status: 'status',
+  created_at: 'created_at',
+  updated_at: 'updated_at'
+} as const
 
+export type MerchantScalarFieldEnum = (typeof MerchantScalarFieldEnum)[keyof typeof MerchantScalarFieldEnum]
+
+
+export const OTPScalarFieldEnum = {
+  id: 'id',
+  merchantId: 'merchantId',
+  channel: 'channel',
+  code: 'code',
+  expires_at: 'expires_at',
+  created_at: 'created_at'
+} as const
+
+export type OTPScalarFieldEnum = (typeof OTPScalarFieldEnum)[keyof typeof OTPScalarFieldEnum]
+
+
+export const SettlementScalarFieldEnum = {
+  id: 'id',
+  merchantId: 'merchantId',
+  amount: 'amount',
+  currency: 'currency',
+  status: 'status',
+  fees: 'fees',
+  breakdown: 'breakdown',
+  bank_transfer_id: 'bank_transfer_id',
+  scheduled_date: 'scheduled_date',
+  processed_date: 'processed_date',
+  created_at: 'created_at',
+  updated_at: 'updated_at'
+} as const
+
+export type SettlementScalarFieldEnum = (typeof SettlementScalarFieldEnum)[keyof typeof SettlementScalarFieldEnum]
+
+
+export const SortOrder = {
+  asc: 'asc',
+  desc: 'desc'
+} as const
+
+export type SortOrder = (typeof SortOrder)[keyof typeof SortOrder]
+
+
+export const NullableJsonNullValueInput = {
+  DbNull: DbNull,
+  JsonNull: JsonNull
+} as const
+
+export type NullableJsonNullValueInput = (typeof NullableJsonNullValueInput)[keyof typeof NullableJsonNullValueInput]
+
+
+export const QueryMode = {
+  default: 'default',
+  insensitive: 'insensitive'
+} as const
+
+export type QueryMode = (typeof QueryMode)[keyof typeof QueryMode]
+
+
+export const JsonNullValueFilter = {
+  DbNull: DbNull,
+  JsonNull: JsonNull,
+  AnyNull: AnyNull
+} as const
+
+export type JsonNullValueFilter = (typeof JsonNullValueFilter)[keyof typeof JsonNullValueFilter]
+
+
+export const NullsOrder = {
+  first: 'first',
+  last: 'last'
+} as const
+
+export type NullsOrder = (typeof NullsOrder)[keyof typeof NullsOrder]
+
+
+
+/**
+ * Field references
+ */
+
+
+/**
+ * Reference to a field of type 'String'
+ */
+export type StringFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'String'>
+    
+
+
+/**
+ * Reference to a field of type 'String[]'
+ */
+export type ListStringFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'String[]'>
+    
+
+
+/**
+ * Reference to a field of type 'MerchantStatus'
+ */
+export type EnumMerchantStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'MerchantStatus'>
+    
+
+
+/**
+ * Reference to a field of type 'MerchantStatus[]'
+ */
+export type ListEnumMerchantStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'MerchantStatus[]'>
+    
+
+
+/**
+ * Reference to a field of type 'DateTime'
+ */
+export type DateTimeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'DateTime'>
+    
+
+
+/**
+ * Reference to a field of type 'DateTime[]'
+ */
+export type ListDateTimeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'DateTime[]'>
+    
+
+
+/**
+ * Reference to a field of type 'OTPChannel'
+ */
+export type EnumOTPChannelFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'OTPChannel'>
+    
+
+
+/**
+ * Reference to a field of type 'OTPChannel[]'
+ */
+export type ListEnumOTPChannelFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'OTPChannel[]'>
+    
+
+
+/**
+ * Reference to a field of type 'Decimal'
+ */
+export type DecimalFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Decimal'>
+    
+
+
+/**
+ * Reference to a field of type 'Decimal[]'
+ */
+export type ListDecimalFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Decimal[]'>
+    
+
+
+/**
+ * Reference to a field of type 'SettlementStatus'
+ */
+export type EnumSettlementStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'SettlementStatus'>
+    
+
+
+/**
+ * Reference to a field of type 'SettlementStatus[]'
+ */
+export type ListEnumSettlementStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'SettlementStatus[]'>
+    
+
+
+/**
+ * Reference to a field of type 'Json'
+ */
+export type JsonFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Json'>
+    
+
+
+/**
+ * Reference to a field of type 'QueryMode'
+ */
+export type EnumQueryModeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'QueryMode'>
+    
+
+
+/**
+ * Reference to a field of type 'Int'
+ */
+export type IntFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Int'>
+    
+
+
+/**
+ * Reference to a field of type 'Int[]'
+ */
+export type ListIntFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Int[]'>
+    
 
 /**
  * Batch Payload for updateMany & deleteMany & createMany
@@ -536,7 +963,11 @@ export interface PrismaClientOptions {
    */
   omit?: GlobalOmitConfig
 }
-export type GlobalOmitConfig = {}
+export type GlobalOmitConfig = {
+  merchant?: Prisma.MerchantOmit
+  oTP?: Prisma.OTPOmit
+  settlement?: Prisma.SettlementOmit
+}
 
 /* Types for Logging */
 export type LogLevel = 'info' | 'query' | 'warn' | 'error'
