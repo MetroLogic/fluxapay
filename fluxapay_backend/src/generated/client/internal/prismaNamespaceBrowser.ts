@@ -52,7 +52,11 @@ export const ModelName = {
   Merchant: 'Merchant',
   MerchantKYC: 'MerchantKYC',
   KYCDocument: 'KYCDocument',
-  OTP: 'OTP'
+  OTP: 'OTP',
+  Merchant: 'Merchant',
+  OTP: 'OTP',
+  WebhookLog: 'WebhookLog',
+  WebhookRetryAttempt: 'WebhookRetryAttempt'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -153,6 +157,107 @@ export const QueryMode = {
 } as const
 
 export type QueryMode = (typeof QueryMode)[keyof typeof QueryMode]
+
+
+export const NullsOrder = {
+  first: 'first',
+  last: 'last'
+} as const
+
+export type NullsOrder = (typeof NullsOrder)[keyof typeof NullsOrder]
+
+
+export const MerchantScalarFieldEnum = {
+  id: 'id',
+  business_name: 'business_name',
+  email: 'email',
+  phone_number: 'phone_number',
+  country: 'country',
+  settlement_currency: 'settlement_currency',
+  password: 'password',
+  status: 'status',
+  created_at: 'created_at',
+  updated_at: 'updated_at'
+} as const
+
+export type MerchantScalarFieldEnum = (typeof MerchantScalarFieldEnum)[keyof typeof MerchantScalarFieldEnum]
+
+
+export const OTPScalarFieldEnum = {
+  id: 'id',
+  merchantId: 'merchantId',
+  channel: 'channel',
+  code: 'code',
+  expires_at: 'expires_at',
+  created_at: 'created_at'
+} as const
+
+export type OTPScalarFieldEnum = (typeof OTPScalarFieldEnum)[keyof typeof OTPScalarFieldEnum]
+
+
+export const WebhookLogScalarFieldEnum = {
+  id: 'id',
+  merchantId: 'merchantId',
+  event_type: 'event_type',
+  endpoint_url: 'endpoint_url',
+  request_payload: 'request_payload',
+  response_body: 'response_body',
+  http_status: 'http_status',
+  status: 'status',
+  payment_id: 'payment_id',
+  retry_count: 'retry_count',
+  max_retries: 'max_retries',
+  next_retry_at: 'next_retry_at',
+  created_at: 'created_at',
+  updated_at: 'updated_at'
+} as const
+
+export type WebhookLogScalarFieldEnum = (typeof WebhookLogScalarFieldEnum)[keyof typeof WebhookLogScalarFieldEnum]
+
+
+export const WebhookRetryAttemptScalarFieldEnum = {
+  id: 'id',
+  webhookLogId: 'webhookLogId',
+  attempt_number: 'attempt_number',
+  http_status: 'http_status',
+  response_body: 'response_body',
+  error_message: 'error_message',
+  created_at: 'created_at'
+} as const
+
+export type WebhookRetryAttemptScalarFieldEnum = (typeof WebhookRetryAttemptScalarFieldEnum)[keyof typeof WebhookRetryAttemptScalarFieldEnum]
+
+
+export const SortOrder = {
+  asc: 'asc',
+  desc: 'desc'
+} as const
+
+export type SortOrder = (typeof SortOrder)[keyof typeof SortOrder]
+
+
+export const JsonNullValueInput = {
+  JsonNull: JsonNull
+} as const
+
+export type JsonNullValueInput = (typeof JsonNullValueInput)[keyof typeof JsonNullValueInput]
+
+
+export const QueryMode = {
+  default: 'default',
+  insensitive: 'insensitive'
+} as const
+
+export type QueryMode = (typeof QueryMode)[keyof typeof QueryMode]
+
+
+export const JsonNullValueFilter = {
+  DbNull: DbNull,
+  JsonNull: JsonNull,
+  AnyNull: AnyNull
+} as const
+
+export type JsonNullValueFilter = (typeof JsonNullValueFilter)[keyof typeof JsonNullValueFilter]
 
 
 export const NullsOrder = {

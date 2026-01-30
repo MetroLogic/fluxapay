@@ -5,6 +5,7 @@ import { specs } from "./docs/swagger";
 import { PrismaClient } from "./generated/client/client";
 import merchantRoutes from "./routes/merchant.route";
 import kycRoutes from "./routes/kyc.route";
+import webhookRoutes from "./routes/webhook.route";
 
 const app = express();
 const prisma = new PrismaClient();
@@ -17,6 +18,7 @@ app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(specs));
 
 app.use("/api/merchants", merchantRoutes);
 app.use("/api/merchants/kyc", kycRoutes);
+app.use("/api/webhooks", webhookRoutes);
 // Basic health check
 app.get("/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date() });

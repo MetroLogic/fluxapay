@@ -393,7 +393,11 @@ export const ModelName = {
   Merchant: 'Merchant',
   MerchantKYC: 'MerchantKYC',
   KYCDocument: 'KYCDocument',
-  OTP: 'OTP'
+  OTP: 'OTP',
+  Merchant: 'Merchant',
+  OTP: 'OTP',
+  WebhookLog: 'WebhookLog',
+  WebhookRetryAttempt: 'WebhookRetryAttempt'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -410,6 +414,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
   }
   meta: {
     modelProps: "merchant" | "merchantKYC" | "kYCDocument" | "oTP"
+    modelProps: "merchant" | "oTP" | "webhookLog" | "webhookRetryAttempt"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -710,6 +715,304 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
       }
     }
   }
+  model: {
+    Merchant: {
+      payload: Prisma.$MerchantPayload<ExtArgs>
+      fields: Prisma.MerchantFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.MerchantFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MerchantPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.MerchantFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MerchantPayload>
+        }
+        findFirst: {
+          args: Prisma.MerchantFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MerchantPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.MerchantFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MerchantPayload>
+        }
+        findMany: {
+          args: Prisma.MerchantFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MerchantPayload>[]
+        }
+        create: {
+          args: Prisma.MerchantCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MerchantPayload>
+        }
+        createMany: {
+          args: Prisma.MerchantCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.MerchantCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MerchantPayload>[]
+        }
+        delete: {
+          args: Prisma.MerchantDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MerchantPayload>
+        }
+        update: {
+          args: Prisma.MerchantUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MerchantPayload>
+        }
+        deleteMany: {
+          args: Prisma.MerchantDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.MerchantUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.MerchantUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MerchantPayload>[]
+        }
+        upsert: {
+          args: Prisma.MerchantUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MerchantPayload>
+        }
+        aggregate: {
+          args: Prisma.MerchantAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateMerchant>
+        }
+        groupBy: {
+          args: Prisma.MerchantGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.MerchantGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.MerchantCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.MerchantCountAggregateOutputType> | number
+        }
+      }
+    }
+    OTP: {
+      payload: Prisma.$OTPPayload<ExtArgs>
+      fields: Prisma.OTPFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.OTPFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$OTPPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.OTPFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$OTPPayload>
+        }
+        findFirst: {
+          args: Prisma.OTPFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$OTPPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.OTPFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$OTPPayload>
+        }
+        findMany: {
+          args: Prisma.OTPFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$OTPPayload>[]
+        }
+        create: {
+          args: Prisma.OTPCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$OTPPayload>
+        }
+        createMany: {
+          args: Prisma.OTPCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.OTPCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$OTPPayload>[]
+        }
+        delete: {
+          args: Prisma.OTPDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$OTPPayload>
+        }
+        update: {
+          args: Prisma.OTPUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$OTPPayload>
+        }
+        deleteMany: {
+          args: Prisma.OTPDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.OTPUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.OTPUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$OTPPayload>[]
+        }
+        upsert: {
+          args: Prisma.OTPUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$OTPPayload>
+        }
+        aggregate: {
+          args: Prisma.OTPAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateOTP>
+        }
+        groupBy: {
+          args: Prisma.OTPGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.OTPGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.OTPCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.OTPCountAggregateOutputType> | number
+        }
+      }
+    }
+    WebhookLog: {
+      payload: Prisma.$WebhookLogPayload<ExtArgs>
+      fields: Prisma.WebhookLogFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.WebhookLogFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WebhookLogPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.WebhookLogFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WebhookLogPayload>
+        }
+        findFirst: {
+          args: Prisma.WebhookLogFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WebhookLogPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.WebhookLogFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WebhookLogPayload>
+        }
+        findMany: {
+          args: Prisma.WebhookLogFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WebhookLogPayload>[]
+        }
+        create: {
+          args: Prisma.WebhookLogCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WebhookLogPayload>
+        }
+        createMany: {
+          args: Prisma.WebhookLogCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.WebhookLogCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WebhookLogPayload>[]
+        }
+        delete: {
+          args: Prisma.WebhookLogDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WebhookLogPayload>
+        }
+        update: {
+          args: Prisma.WebhookLogUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WebhookLogPayload>
+        }
+        deleteMany: {
+          args: Prisma.WebhookLogDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.WebhookLogUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.WebhookLogUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WebhookLogPayload>[]
+        }
+        upsert: {
+          args: Prisma.WebhookLogUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WebhookLogPayload>
+        }
+        aggregate: {
+          args: Prisma.WebhookLogAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateWebhookLog>
+        }
+        groupBy: {
+          args: Prisma.WebhookLogGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.WebhookLogGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.WebhookLogCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.WebhookLogCountAggregateOutputType> | number
+        }
+      }
+    }
+    WebhookRetryAttempt: {
+      payload: Prisma.$WebhookRetryAttemptPayload<ExtArgs>
+      fields: Prisma.WebhookRetryAttemptFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.WebhookRetryAttemptFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WebhookRetryAttemptPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.WebhookRetryAttemptFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WebhookRetryAttemptPayload>
+        }
+        findFirst: {
+          args: Prisma.WebhookRetryAttemptFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WebhookRetryAttemptPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.WebhookRetryAttemptFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WebhookRetryAttemptPayload>
+        }
+        findMany: {
+          args: Prisma.WebhookRetryAttemptFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WebhookRetryAttemptPayload>[]
+        }
+        create: {
+          args: Prisma.WebhookRetryAttemptCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WebhookRetryAttemptPayload>
+        }
+        createMany: {
+          args: Prisma.WebhookRetryAttemptCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.WebhookRetryAttemptCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WebhookRetryAttemptPayload>[]
+        }
+        delete: {
+          args: Prisma.WebhookRetryAttemptDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WebhookRetryAttemptPayload>
+        }
+        update: {
+          args: Prisma.WebhookRetryAttemptUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WebhookRetryAttemptPayload>
+        }
+        deleteMany: {
+          args: Prisma.WebhookRetryAttemptDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.WebhookRetryAttemptUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.WebhookRetryAttemptUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WebhookRetryAttemptPayload>[]
+        }
+        upsert: {
+          args: Prisma.WebhookRetryAttemptUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WebhookRetryAttemptPayload>
+        }
+        aggregate: {
+          args: Prisma.WebhookRetryAttemptAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateWebhookRetryAttempt>
+        }
+        groupBy: {
+          args: Prisma.WebhookRetryAttemptGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.WebhookRetryAttemptGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.WebhookRetryAttemptCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.WebhookRetryAttemptCountAggregateOutputType> | number
+        }
+      }
+    }
+  }
 } & {
   other: {
     payload: any
@@ -984,6 +1287,237 @@ export type FloatFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, '
  */
 export type ListFloatFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Float[]'>
     
+export const MerchantScalarFieldEnum = {
+  id: 'id',
+  business_name: 'business_name',
+  email: 'email',
+  phone_number: 'phone_number',
+  country: 'country',
+  settlement_currency: 'settlement_currency',
+  password: 'password',
+  status: 'status',
+  created_at: 'created_at',
+  updated_at: 'updated_at'
+} as const
+
+export type MerchantScalarFieldEnum = (typeof MerchantScalarFieldEnum)[keyof typeof MerchantScalarFieldEnum]
+
+
+export const OTPScalarFieldEnum = {
+  id: 'id',
+  merchantId: 'merchantId',
+  channel: 'channel',
+  code: 'code',
+  expires_at: 'expires_at',
+  created_at: 'created_at'
+} as const
+
+export type OTPScalarFieldEnum = (typeof OTPScalarFieldEnum)[keyof typeof OTPScalarFieldEnum]
+
+
+export const WebhookLogScalarFieldEnum = {
+  id: 'id',
+  merchantId: 'merchantId',
+  event_type: 'event_type',
+  endpoint_url: 'endpoint_url',
+  request_payload: 'request_payload',
+  response_body: 'response_body',
+  http_status: 'http_status',
+  status: 'status',
+  payment_id: 'payment_id',
+  retry_count: 'retry_count',
+  max_retries: 'max_retries',
+  next_retry_at: 'next_retry_at',
+  created_at: 'created_at',
+  updated_at: 'updated_at'
+} as const
+
+export type WebhookLogScalarFieldEnum = (typeof WebhookLogScalarFieldEnum)[keyof typeof WebhookLogScalarFieldEnum]
+
+
+export const WebhookRetryAttemptScalarFieldEnum = {
+  id: 'id',
+  webhookLogId: 'webhookLogId',
+  attempt_number: 'attempt_number',
+  http_status: 'http_status',
+  response_body: 'response_body',
+  error_message: 'error_message',
+  created_at: 'created_at'
+} as const
+
+export type WebhookRetryAttemptScalarFieldEnum = (typeof WebhookRetryAttemptScalarFieldEnum)[keyof typeof WebhookRetryAttemptScalarFieldEnum]
+
+
+export const SortOrder = {
+  asc: 'asc',
+  desc: 'desc'
+} as const
+
+export type SortOrder = (typeof SortOrder)[keyof typeof SortOrder]
+
+
+export const JsonNullValueInput = {
+  JsonNull: JsonNull
+} as const
+
+export type JsonNullValueInput = (typeof JsonNullValueInput)[keyof typeof JsonNullValueInput]
+
+
+export const QueryMode = {
+  default: 'default',
+  insensitive: 'insensitive'
+} as const
+
+export type QueryMode = (typeof QueryMode)[keyof typeof QueryMode]
+
+
+export const JsonNullValueFilter = {
+  DbNull: DbNull,
+  JsonNull: JsonNull,
+  AnyNull: AnyNull
+} as const
+
+export type JsonNullValueFilter = (typeof JsonNullValueFilter)[keyof typeof JsonNullValueFilter]
+
+
+export const NullsOrder = {
+  first: 'first',
+  last: 'last'
+} as const
+
+export type NullsOrder = (typeof NullsOrder)[keyof typeof NullsOrder]
+
+
+
+/**
+ * Field references
+ */
+
+
+/**
+ * Reference to a field of type 'String'
+ */
+export type StringFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'String'>
+    
+
+
+/**
+ * Reference to a field of type 'String[]'
+ */
+export type ListStringFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'String[]'>
+    
+
+
+/**
+ * Reference to a field of type 'MerchantStatus'
+ */
+export type EnumMerchantStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'MerchantStatus'>
+    
+
+
+/**
+ * Reference to a field of type 'MerchantStatus[]'
+ */
+export type ListEnumMerchantStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'MerchantStatus[]'>
+    
+
+
+/**
+ * Reference to a field of type 'DateTime'
+ */
+export type DateTimeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'DateTime'>
+    
+
+
+/**
+ * Reference to a field of type 'DateTime[]'
+ */
+export type ListDateTimeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'DateTime[]'>
+    
+
+
+/**
+ * Reference to a field of type 'OTPChannel'
+ */
+export type EnumOTPChannelFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'OTPChannel'>
+    
+
+
+/**
+ * Reference to a field of type 'OTPChannel[]'
+ */
+export type ListEnumOTPChannelFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'OTPChannel[]'>
+    
+
+
+/**
+ * Reference to a field of type 'WebhookEventType'
+ */
+export type EnumWebhookEventTypeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'WebhookEventType'>
+    
+
+
+/**
+ * Reference to a field of type 'WebhookEventType[]'
+ */
+export type ListEnumWebhookEventTypeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'WebhookEventType[]'>
+    
+
+
+/**
+ * Reference to a field of type 'Json'
+ */
+export type JsonFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Json'>
+    
+
+
+/**
+ * Reference to a field of type 'QueryMode'
+ */
+export type EnumQueryModeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'QueryMode'>
+    
+
+
+/**
+ * Reference to a field of type 'Int'
+ */
+export type IntFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Int'>
+    
+
+
+/**
+ * Reference to a field of type 'Int[]'
+ */
+export type ListIntFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Int[]'>
+    
+
+
+/**
+ * Reference to a field of type 'WebhookStatus'
+ */
+export type EnumWebhookStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'WebhookStatus'>
+    
+
+
+/**
+ * Reference to a field of type 'WebhookStatus[]'
+ */
+export type ListEnumWebhookStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'WebhookStatus[]'>
+    
+
+
+/**
+ * Reference to a field of type 'Float'
+ */
+export type FloatFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Float'>
+    
+
+
+/**
+ * Reference to a field of type 'Float[]'
+ */
+export type ListFloatFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Float[]'>
+    
 
 /**
  * Batch Payload for updateMany & deleteMany & createMany
@@ -1076,6 +1610,12 @@ export type GlobalOmitConfig = {
   merchantKYC?: Prisma.MerchantKYCOmit
   kYCDocument?: Prisma.KYCDocumentOmit
   oTP?: Prisma.OTPOmit
+}
+export type GlobalOmitConfig = {
+  merchant?: Prisma.MerchantOmit
+  oTP?: Prisma.OTPOmit
+  webhookLog?: Prisma.WebhookLogOmit
+  webhookRetryAttempt?: Prisma.WebhookRetryAttemptOmit
 }
 
 /* Types for Logging */
