@@ -2,45 +2,51 @@
 
 import Image from "next/image";
 
+const FooterSection = ({
+  title,
+  links,
+}: {
+  title: string;
+  links: Array<{ label: string; href: string }>;
+}) => (
+  <div>
+    <h3 className="text-sm font-bold text-[#8A8A8A] mb-6 tracking-wide uppercase">
+      {title}
+    </h3>
+    <ul className="space-y-3">
+      {links.map((link, idx) => (
+        <li key={idx}>
+          <a
+            href={link.href}
+            className="text-[#A0A0A0] hover:text-white transition-colors duration-200 text-sm"
+          >
+            {link.label}
+          </a>
+        </li>
+      ))}
+    </ul>
+  </div>
+);
+
 export const Footer = () => {
   const currentYear = new Date().getFullYear();
 
   const footerLinks = {
     legal: [
       { label: "Privacy Policy", href: "#" },
-      { label: "Terms of Use", href: "#" }
+      { label: "Terms of Use", href: "#" },
     ],
     product: [
       { label: "Sign Up", href: "#" },
       { label: "Log In", href: "#" },
-      { label: "Pricing", href: "#" }
+      { label: "Pricing", href: "#" },
     ],
     resources: [
       { label: "Docs", href: "#" },
       { label: "FAQs / Support", href: "#" },
-      { label: "Contact us", href: "#" }
-    ]
+      { label: "Contact us", href: "#" },
+    ],
   };
-
-  const FooterSection = ({ title, links }: { title: string; links: Array<{ label: string; href: string }> }) => (
-    <div>
-      <h3 className="text-sm font-bold text-[#8A8A8A] mb-6 tracking-wide uppercase">
-        {title}
-      </h3>
-      <ul className="space-y-3">
-        {links.map((link, idx) => (
-          <li key={idx}>
-            <a 
-              href={link.href}
-              className="text-[#A0A0A0] hover:text-white transition-colors duration-200 text-sm"
-            >
-              {link.label}
-            </a>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
 
   return (
     <footer className="bg-[#0F0F1E] text-white py-24">

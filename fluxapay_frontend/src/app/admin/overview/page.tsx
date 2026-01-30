@@ -112,8 +112,6 @@ export default function AdminOverviewPage() {
     { name: "Failed", value: statusCounts["failed"] || 0, color: "#ef4444" }, // red-500
   ].filter((d) => d.value > 0);
 
-  const totalPayments = MOCK_PAYMENTS.length;
-
   return (
     <div className="p-6 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
       <div className="flex justify-between items-center">

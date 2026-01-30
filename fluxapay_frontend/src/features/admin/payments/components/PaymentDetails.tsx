@@ -6,7 +6,6 @@ import {
   XCircle,
   AlertCircle,
 } from "lucide-react";
-import { Button } from "@/components/Button";
 
 interface PaymentDetailsProps {
   payment: Payment;
@@ -89,7 +88,7 @@ export function PaymentDetails({ payment }: PaymentDetailsProps) {
           {/* Vertical Line */}
           <div className="absolute left-[7px] top-2 bottom-2 w-[2px] bg-border/60 -z-10" />
 
-          {payment.events.map((event, idx) => (
+          {payment.events.map((event) => (
             <div key={event.id} className="relative flex items-start gap-4">
               {/* Dot */}
               <div
