@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState } from "react";
 import {
   Copy,
   Check,
@@ -12,7 +12,6 @@ import {
   ToggleRight,
   Terminal,
   Braces,
-  OptionIcon as PythonIcon,
 } from "lucide-react";
 
 export default function DevelopersPage() {
@@ -29,46 +28,46 @@ export default function DevelopersPage() {
     setTimeout(() => setCopied(null), 2000);
   };
 
-  const styles = {
-    container: `min-h-screen bg-slate-950 text-slate-50`,
-    header: `bg-gradient-to-r from-slate-900 to-slate-800 border-b border-slate-800 sticky top-0 z-50`,
-    headerContent: `max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6`,
-    headerTitle: `text-3xl sm:text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-100 to-slate-300 mb-2`,
-    headerSubtitle: `text-slate-400 text-lg`,
+  // const styles = {
+  //   container: `min-h-screen bg-slate-950 text-slate-50`,
+  //   header: `bg-gradient-to-r from-slate-900 to-slate-800 border-b border-slate-800 sticky top-0 z-50`,
+  //   headerContent: `max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6`,
+  //   headerTitle: `text-3xl sm:text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-100 to-slate-300 mb-2`,
+  //   headerSubtitle: `text-slate-400 text-lg`,
 
-    mainContent: `max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12`,
-    gridContainer: `grid grid-cols-1 lg:grid-cols-3 gap-8`,
+  //   mainContent: `max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12`,
+  //   gridContainer: `grid grid-cols-1 lg:grid-cols-3 gap-8`,
 
-    section: `rounded-lg border border-slate-800 bg-slate-900/50 p-6 backdrop-blur`,
-    sectionTitle: `text-2xl font-bold text-slate-100 mb-6 flex items-center gap-3`,
-    sectionTitleIcon: `w-8 h-8 text-blue-400`,
+  //   section: `rounded-lg border border-slate-800 bg-slate-900/50 p-6 backdrop-blur`,
+  //   sectionTitle: `text-2xl font-bold text-slate-100 mb-6 flex items-center gap-3`,
+  //   sectionTitleIcon: `w-8 h-8 text-blue-400`,
 
-    card: `bg-slate-800/50 rounded-lg border border-slate-700 p-4 mb-4 hover:border-slate-600 transition`,
-    cardTitle: `text-lg font-semibold text-slate-100 mb-2`,
-    cardDesc: `text-slate-400 text-sm mb-4`,
+  //   card: `bg-slate-800/50 rounded-lg border border-slate-700 p-4 mb-4 hover:border-slate-600 transition`,
+  //   cardTitle: `text-lg font-semibold text-slate-100 mb-2`,
+  //   cardDesc: `text-slate-400 text-sm mb-4`,
 
-    button: `inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition`,
-    buttonPrimary: `bg-blue-600 text-white hover:bg-blue-700 active:scale-95`,
-    buttonSecondary: `bg-slate-700 text-slate-100 hover:bg-slate-600 active:scale-95`,
-    buttonIcon: `w-4 h-4`,
+  //   button: `inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition`,
+  //   buttonPrimary: `bg-blue-600 text-white hover:bg-blue-700 active:scale-95`,
+  //   buttonSecondary: `bg-slate-700 text-slate-100 hover:bg-slate-600 active:scale-95`,
+  //   buttonIcon: `w-4 h-4`,
 
-    toggleButton: `flex items-center gap-3 p-3 rounded-lg bg-slate-800/50 border border-slate-700 cursor-pointer hover:border-slate-600 transition`,
+  //   toggleButton: `flex items-center gap-3 p-3 rounded-lg bg-slate-800/50 border border-slate-700 cursor-pointer hover:border-slate-600 transition`,
 
-    badge: `inline-block px-3 py-1 rounded-full text-xs font-semibold bg-blue-600/20 text-blue-300 border border-blue-500/30`,
+  //   badge: `inline-block px-3 py-1 rounded-full text-xs font-semibold bg-blue-600/20 text-blue-300 border border-blue-500/30`,
 
-    input: `w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition font-mono text-sm`,
+  //   input: `w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition font-mono text-sm`,
 
-    codeBlock: `bg-slate-950 rounded-lg border border-slate-800 p-4 overflow-x-auto`,
-    codeText: `text-slate-300 font-mono text-sm leading-relaxed whitespace-pre-wrap break-words`,
+  //   codeBlock: `bg-slate-950 rounded-lg border border-slate-800 p-4 overflow-x-auto`,
+  //   codeText: `text-slate-300 font-mono text-sm leading-relaxed whitespace-pre-wrap break-words`,
 
-    tabContainer: `flex gap-2 mb-6 border-b border-slate-800 overflow-x-auto`,
-    tabButton: `px-4 py-2 font-medium text-sm border-b-2 transition whitespace-nowrap`,
-    tabButtonActive: `border-blue-500 text-blue-400`,
-    tabButtonInactive: `border-transparent text-slate-400 hover:text-slate-300`,
+  //   tabContainer: `flex gap-2 mb-6 border-b border-slate-800 overflow-x-auto`,
+  //   tabButton: `px-4 py-2 font-medium text-sm border-b-2 transition whitespace-nowrap`,
+  //   tabButtonActive: `border-blue-500 text-blue-400`,
+  //   tabButtonInactive: `border-transparent text-slate-400 hover:text-slate-300`,
 
-    docLink: `inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-800 text-slate-100 hover:bg-slate-700 transition border border-slate-700`,
-    docLinkText: `text-sm font-medium`,
-  };
+  //   docLink: `inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-800 text-slate-100 hover:bg-slate-700 transition border border-slate-700`,
+  //   docLinkText: `text-sm font-medium`,
+  // };
 
   const restRequest = `curl -X GET \\
   https://api.example.com/v1/users \\
