@@ -7,6 +7,7 @@ import {
   retryWebhookService,
   sendTestWebhookService,
 } from "../services/webhook.service";
+import { WebhookEventType, WebhookStatus } from "../generated/client/enums";
 import { AuthRequest } from "../types/express";
 import { validateUserId } from "../helpers/request.helper";
 
@@ -20,8 +21,8 @@ export async function getWebhookLogs(req: AuthRequest, res: Response) {
 
     const result = await getWebhookLogsService({
       merchantId,
-      event_type: query.event_type as any,
-      status: query.status as any,
+      event_type: query.event_type as WebhookEventType | undefined,
+      status: query.status as WebhookStatus | undefined,
       date_from: query.date_from,
       date_to: query.date_to,
       search: query.search,
@@ -30,9 +31,9 @@ export async function getWebhookLogs(req: AuthRequest, res: Response) {
     });
 
     res.status(200).json(result);
-  } catch (err: any) {
+  } catch (err) {
     console.error(err);
-    res.status(err.status || 500).json({ message: err.message || "Server error" });
+    res.status((err as any).status || 500).json({ message: (err as any).message || "Server error" });
   }
 }
 
@@ -85,14 +86,14 @@ export async function sendTestWebhook(req: AuthRequest, res: Response) {
 
     const result = await sendTestWebhookService({
       merchantId,
-      event_type: body.event_type as any,
+      event_type: body.event_type as WebhookEventType,
       endpoint_url: body.endpoint_url,
       payload_override: body.payload_override,
     });
 
     res.status(200).json(result);
-  } catch (err: any) {
+  } catch (err) {
     console.error(err);
-    res.status(err.status || 500).json({ message: err.message || "Server error" });
+    res.status((err as any).status || 500).json({ message: (err as any).message || "Server error" });
   }
 }

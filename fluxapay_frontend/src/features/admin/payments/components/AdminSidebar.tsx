@@ -3,10 +3,10 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { 
-  LayoutDashboard, Users, CreditCard, Wallet, 
-  Webhook, FileText, ClipboardList, Settings, 
-  ShieldCheck, Menu, X 
+import {
+  LayoutDashboard, Users, CreditCard, Wallet,
+  Webhook, FileText, ClipboardList, Settings,
+  ShieldCheck, Menu, X
 } from 'lucide-react';
 
 const navigation = [
@@ -25,13 +25,13 @@ export function AdminSidebar() {
   const [isOpen, setIsOpen] = useState(false);
 
   // Helper to check if link is active
-  const isActive = (href: string) => 
+  const isActive = (href: string) =>
     pathname === href || (href === '/admin/overview' && pathname === '/admin');
 
   return (
     <>
       {/* Mobile Toggle */}
-      <button 
+      <button
         className="lg:hidden fixed top-4 left-4 z-50 p-2 bg-white border border-slate-200 rounded-md"
         onClick={() => setIsOpen(!isOpen)}
       >
@@ -62,11 +62,10 @@ export function AdminSidebar() {
                   key={item.name}
                   href={item.href}
                   onClick={() => setIsOpen(false)}
-                  className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    active 
-                      ? 'bg-slate-100 text-slate-900' 
-                      : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
-                  }`}
+                  className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${active
+                    ? 'bg-slate-100 text-slate-900'
+                    : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
+                    }`}
                 >
                   <item.icon className={`w-5 h-5 ${active ? 'text-slate-900' : 'text-slate-400'}`} />
                   {item.name}
@@ -90,7 +89,7 @@ export function AdminSidebar() {
 
       {/* Backdrop for mobile */}
       {isOpen && (
-        <div 
+        <div
           className="fixed inset-0 bg-slate-900/20 backdrop-blur-sm z-30 lg:hidden"
           onClick={() => setIsOpen(false)}
         />

@@ -144,7 +144,7 @@ export async function getWebhookLogDetailsService(params: WebhookLogDetailsParam
       next_retry_at: log.next_retry_at,
       created_at: log.created_at,
       updated_at: log.updated_at,
-      retry_attempts: log.retryAttempts.map((attempt) => ({
+      retry_attempts: log.retryAttempts.map((attempt: any) => ({
         attempt_number: attempt.attempt_number,
         http_status: attempt.http_status,
         response_body: attempt.response_body,
@@ -326,8 +326,8 @@ async function deliverWebhook(
 }
 
 // Helper function to generate webhook signature
-function generateWebhookSignature(payload: Record<string, any>): string {
-  const crypto = require("crypto");
+import crypto from "crypto";
+function generateWebhookSignature(payload: Record<string, unknown>): string {
   const secret = process.env.WEBHOOK_SECRET || "webhook-secret";
   const hmac = crypto.createHmac("sha256", secret);
   hmac.update(JSON.stringify(payload));

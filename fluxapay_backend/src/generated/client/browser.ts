@@ -28,6 +28,21 @@ export type Merchant = Prisma.MerchantModel
  */
 export type OTP = Prisma.OTPModel
 /**
+ * Model Settlement
+ * 
+ */
+export type Settlement = Prisma.SettlementModel
+/**
+ * Model MerchantKYC
+ * 
+ */
+export type MerchantKYC = Prisma.MerchantKYCModel
+/**
+ * Model KYCDocument
+ * 
+ */
+export type KYCDocument = Prisma.KYCDocumentModel
+/**
  * Model WebhookLog
  * 
  */

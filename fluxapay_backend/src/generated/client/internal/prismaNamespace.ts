@@ -392,6 +392,9 @@ type FieldRefInputType<Model, FieldType> = Model extends never ? never : FieldRe
 export const ModelName = {
   Merchant: 'Merchant',
   OTP: 'OTP',
+  Settlement: 'Settlement',
+  MerchantKYC: 'MerchantKYC',
+  KYCDocument: 'KYCDocument',
   WebhookLog: 'WebhookLog',
   WebhookRetryAttempt: 'WebhookRetryAttempt'
 } as const
@@ -409,7 +412,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "merchant" | "oTP" | "webhookLog" | "webhookRetryAttempt"
+    modelProps: "merchant" | "oTP" | "settlement" | "merchantKYC" | "kYCDocument" | "webhookLog" | "webhookRetryAttempt"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -558,6 +561,228 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         count: {
           args: Prisma.OTPCountArgs<ExtArgs>
           result: runtime.Types.Utils.Optional<Prisma.OTPCountAggregateOutputType> | number
+        }
+      }
+    }
+    Settlement: {
+      payload: Prisma.$SettlementPayload<ExtArgs>
+      fields: Prisma.SettlementFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.SettlementFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SettlementPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.SettlementFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SettlementPayload>
+        }
+        findFirst: {
+          args: Prisma.SettlementFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SettlementPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.SettlementFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SettlementPayload>
+        }
+        findMany: {
+          args: Prisma.SettlementFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SettlementPayload>[]
+        }
+        create: {
+          args: Prisma.SettlementCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SettlementPayload>
+        }
+        createMany: {
+          args: Prisma.SettlementCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.SettlementCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SettlementPayload>[]
+        }
+        delete: {
+          args: Prisma.SettlementDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SettlementPayload>
+        }
+        update: {
+          args: Prisma.SettlementUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SettlementPayload>
+        }
+        deleteMany: {
+          args: Prisma.SettlementDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.SettlementUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.SettlementUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SettlementPayload>[]
+        }
+        upsert: {
+          args: Prisma.SettlementUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$SettlementPayload>
+        }
+        aggregate: {
+          args: Prisma.SettlementAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateSettlement>
+        }
+        groupBy: {
+          args: Prisma.SettlementGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.SettlementGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.SettlementCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.SettlementCountAggregateOutputType> | number
+        }
+      }
+    }
+    MerchantKYC: {
+      payload: Prisma.$MerchantKYCPayload<ExtArgs>
+      fields: Prisma.MerchantKYCFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.MerchantKYCFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MerchantKYCPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.MerchantKYCFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MerchantKYCPayload>
+        }
+        findFirst: {
+          args: Prisma.MerchantKYCFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MerchantKYCPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.MerchantKYCFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MerchantKYCPayload>
+        }
+        findMany: {
+          args: Prisma.MerchantKYCFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MerchantKYCPayload>[]
+        }
+        create: {
+          args: Prisma.MerchantKYCCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MerchantKYCPayload>
+        }
+        createMany: {
+          args: Prisma.MerchantKYCCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.MerchantKYCCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MerchantKYCPayload>[]
+        }
+        delete: {
+          args: Prisma.MerchantKYCDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MerchantKYCPayload>
+        }
+        update: {
+          args: Prisma.MerchantKYCUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MerchantKYCPayload>
+        }
+        deleteMany: {
+          args: Prisma.MerchantKYCDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.MerchantKYCUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.MerchantKYCUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MerchantKYCPayload>[]
+        }
+        upsert: {
+          args: Prisma.MerchantKYCUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MerchantKYCPayload>
+        }
+        aggregate: {
+          args: Prisma.MerchantKYCAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateMerchantKYC>
+        }
+        groupBy: {
+          args: Prisma.MerchantKYCGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.MerchantKYCGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.MerchantKYCCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.MerchantKYCCountAggregateOutputType> | number
+        }
+      }
+    }
+    KYCDocument: {
+      payload: Prisma.$KYCDocumentPayload<ExtArgs>
+      fields: Prisma.KYCDocumentFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.KYCDocumentFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$KYCDocumentPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.KYCDocumentFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$KYCDocumentPayload>
+        }
+        findFirst: {
+          args: Prisma.KYCDocumentFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$KYCDocumentPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.KYCDocumentFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$KYCDocumentPayload>
+        }
+        findMany: {
+          args: Prisma.KYCDocumentFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$KYCDocumentPayload>[]
+        }
+        create: {
+          args: Prisma.KYCDocumentCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$KYCDocumentPayload>
+        }
+        createMany: {
+          args: Prisma.KYCDocumentCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.KYCDocumentCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$KYCDocumentPayload>[]
+        }
+        delete: {
+          args: Prisma.KYCDocumentDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$KYCDocumentPayload>
+        }
+        update: {
+          args: Prisma.KYCDocumentUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$KYCDocumentPayload>
+        }
+        deleteMany: {
+          args: Prisma.KYCDocumentDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.KYCDocumentUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.KYCDocumentUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$KYCDocumentPayload>[]
+        }
+        upsert: {
+          args: Prisma.KYCDocumentUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$KYCDocumentPayload>
+        }
+        aggregate: {
+          args: Prisma.KYCDocumentAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateKYCDocument>
+        }
+        groupBy: {
+          args: Prisma.KYCDocumentGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.KYCDocumentGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.KYCDocumentCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.KYCDocumentCountAggregateOutputType> | number
         }
       }
     }
@@ -776,19 +1001,77 @@ export const OTPScalarFieldEnum = {
 export type OTPScalarFieldEnum = (typeof OTPScalarFieldEnum)[keyof typeof OTPScalarFieldEnum]
 
 
+export const SettlementScalarFieldEnum = {
+  id: 'id',
+  merchantId: 'merchantId',
+  amount: 'amount',
+  currency: 'currency',
+  status: 'status',
+  fees: 'fees',
+  breakdown: 'breakdown',
+  bank_transfer_id: 'bank_transfer_id',
+  scheduled_date: 'scheduled_date',
+  processed_date: 'processed_date',
+  created_at: 'created_at',
+  updated_at: 'updated_at'
+} as const
+
+export type SettlementScalarFieldEnum = (typeof SettlementScalarFieldEnum)[keyof typeof SettlementScalarFieldEnum]
+
+
+export const MerchantKYCScalarFieldEnum = {
+  id: 'id',
+  merchantId: 'merchantId',
+  business_type: 'business_type',
+  legal_business_name: 'legal_business_name',
+  business_registration_number: 'business_registration_number',
+  country_of_registration: 'country_of_registration',
+  business_address: 'business_address',
+  director_full_name: 'director_full_name',
+  director_email: 'director_email',
+  director_phone: 'director_phone',
+  government_id_type: 'government_id_type',
+  government_id_number: 'government_id_number',
+  kyc_status: 'kyc_status',
+  rejection_reason: 'rejection_reason',
+  reviewed_at: 'reviewed_at',
+  reviewed_by: 'reviewed_by',
+  created_at: 'created_at',
+  updated_at: 'updated_at'
+} as const
+
+export type MerchantKYCScalarFieldEnum = (typeof MerchantKYCScalarFieldEnum)[keyof typeof MerchantKYCScalarFieldEnum]
+
+
+export const KYCDocumentScalarFieldEnum = {
+  id: 'id',
+  kycId: 'kycId',
+  document_type: 'document_type',
+  file_name: 'file_name',
+  file_url: 'file_url',
+  public_id: 'public_id',
+  file_size: 'file_size',
+  mime_type: 'mime_type',
+  created_at: 'created_at',
+  updated_at: 'updated_at'
+} as const
+
+export type KYCDocumentScalarFieldEnum = (typeof KYCDocumentScalarFieldEnum)[keyof typeof KYCDocumentScalarFieldEnum]
+
+
 export const WebhookLogScalarFieldEnum = {
   id: 'id',
   merchantId: 'merchantId',
   event_type: 'event_type',
   endpoint_url: 'endpoint_url',
-  request_payload: 'request_payload',
-  response_body: 'response_body',
   http_status: 'http_status',
   status: 'status',
   payment_id: 'payment_id',
   retry_count: 'retry_count',
   max_retries: 'max_retries',
   next_retry_at: 'next_retry_at',
+  request_payload: 'request_payload',
+  response_body: 'response_body',
   created_at: 'created_at',
   updated_at: 'updated_at'
 } as const
@@ -817,11 +1100,12 @@ export const SortOrder = {
 export type SortOrder = (typeof SortOrder)[keyof typeof SortOrder]
 
 
-export const JsonNullValueInput = {
+export const NullableJsonNullValueInput = {
+  DbNull: DbNull,
   JsonNull: JsonNull
 } as const
 
-export type JsonNullValueInput = (typeof JsonNullValueInput)[keyof typeof JsonNullValueInput]
+export type NullableJsonNullValueInput = (typeof NullableJsonNullValueInput)[keyof typeof NullableJsonNullValueInput]
 
 
 export const QueryMode = {
@@ -912,16 +1196,30 @@ export type ListEnumOTPChannelFieldRefInput<$PrismaModel> = FieldRefInputType<$P
 
 
 /**
- * Reference to a field of type 'WebhookEventType'
+ * Reference to a field of type 'Decimal'
  */
-export type EnumWebhookEventTypeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'WebhookEventType'>
+export type DecimalFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Decimal'>
     
 
 
 /**
- * Reference to a field of type 'WebhookEventType[]'
+ * Reference to a field of type 'Decimal[]'
  */
-export type ListEnumWebhookEventTypeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'WebhookEventType[]'>
+export type ListDecimalFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Decimal[]'>
+    
+
+
+/**
+ * Reference to a field of type 'SettlementStatus'
+ */
+export type EnumSettlementStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'SettlementStatus'>
+    
+
+
+/**
+ * Reference to a field of type 'SettlementStatus[]'
+ */
+export type ListEnumSettlementStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'SettlementStatus[]'>
     
 
 
@@ -940,6 +1238,62 @@ export type EnumQueryModeFieldRefInput<$PrismaModel> = FieldRefInputType<$Prisma
 
 
 /**
+ * Reference to a field of type 'BusinessType'
+ */
+export type EnumBusinessTypeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'BusinessType'>
+    
+
+
+/**
+ * Reference to a field of type 'BusinessType[]'
+ */
+export type ListEnumBusinessTypeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'BusinessType[]'>
+    
+
+
+/**
+ * Reference to a field of type 'GovernmentIdType'
+ */
+export type EnumGovernmentIdTypeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'GovernmentIdType'>
+    
+
+
+/**
+ * Reference to a field of type 'GovernmentIdType[]'
+ */
+export type ListEnumGovernmentIdTypeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'GovernmentIdType[]'>
+    
+
+
+/**
+ * Reference to a field of type 'KYCStatus'
+ */
+export type EnumKYCStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'KYCStatus'>
+    
+
+
+/**
+ * Reference to a field of type 'KYCStatus[]'
+ */
+export type ListEnumKYCStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'KYCStatus[]'>
+    
+
+
+/**
+ * Reference to a field of type 'DocumentType'
+ */
+export type EnumDocumentTypeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'DocumentType'>
+    
+
+
+/**
+ * Reference to a field of type 'DocumentType[]'
+ */
+export type ListEnumDocumentTypeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'DocumentType[]'>
+    
+
+
+/**
  * Reference to a field of type 'Int'
  */
 export type IntFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Int'>
@@ -950,6 +1304,20 @@ export type IntFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'In
  * Reference to a field of type 'Int[]'
  */
 export type ListIntFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Int[]'>
+    
+
+
+/**
+ * Reference to a field of type 'WebhookEventType'
+ */
+export type EnumWebhookEventTypeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'WebhookEventType'>
+    
+
+
+/**
+ * Reference to a field of type 'WebhookEventType[]'
+ */
+export type ListEnumWebhookEventTypeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'WebhookEventType[]'>
     
 
 
@@ -1069,6 +1437,9 @@ export interface PrismaClientOptions {
 export type GlobalOmitConfig = {
   merchant?: Prisma.MerchantOmit
   oTP?: Prisma.OTPOmit
+  settlement?: Prisma.SettlementOmit
+  merchantKYC?: Prisma.MerchantKYCOmit
+  kYCDocument?: Prisma.KYCDocumentOmit
   webhookLog?: Prisma.WebhookLogOmit
   webhookRetryAttempt?: Prisma.WebhookRetryAttemptOmit
 }

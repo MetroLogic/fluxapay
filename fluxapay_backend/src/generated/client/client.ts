@@ -39,8 +39,8 @@ export { Prisma }
 
 
 // file annotations for bundling tools to include these files
-path.join(__dirname, "libquery_engine-darwin-arm64.dylib.node")
-path.join(process.cwd(), "src/generated/client/libquery_engine-darwin-arm64.dylib.node")
+path.join(__dirname, "libquery_engine-darwin.dylib.node")
+path.join(process.cwd(), "src/generated/client/libquery_engine-darwin.dylib.node")
 
 /**
  * Model Merchant
@@ -52,6 +52,21 @@ export type Merchant = Prisma.MerchantModel
  * 
  */
 export type OTP = Prisma.OTPModel
+/**
+ * Model Settlement
+ * 
+ */
+export type Settlement = Prisma.SettlementModel
+/**
+ * Model MerchantKYC
+ * 
+ */
+export type MerchantKYC = Prisma.MerchantKYCModel
+/**
+ * Model KYCDocument
+ * 
+ */
+export type KYCDocument = Prisma.KYCDocumentModel
 /**
  * Model WebhookLog
  * 
