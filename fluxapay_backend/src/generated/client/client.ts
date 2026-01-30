@@ -29,6 +29,8 @@ export * from "./enums"
  * const prisma = new PrismaClient()
  * // Fetch zero or more Merchants
  * const merchants = await prisma.merchant.findMany()
+ * // Fetch zero or more Merchants
+ * const merchants = await prisma.merchant.findMany()
  * ```
  * 
  * Read more in our [docs](https://www.prisma.io/docs/reference/tools-and-interfaces/prisma-client).
@@ -39,6 +41,29 @@ export { Prisma }
 
 
 // file annotations for bundling tools to include these files
+path.join(__dirname, "libquery_engine-darwin-arm64.dylib.node")
+path.join(process.cwd(), "src/generated/client/libquery_engine-darwin-arm64.dylib.node")
+
+/**
+ * Model Merchant
+ * 
+ */
+export type Merchant = Prisma.MerchantModel
+/**
+ * Model MerchantKYC
+ * 
+ */
+export type MerchantKYC = Prisma.MerchantKYCModel
+/**
+ * Model KYCDocument
+ * 
+ */
+export type KYCDocument = Prisma.KYCDocumentModel
+/**
+ * Model OTP
+ * 
+ */
+export type OTP = Prisma.OTPModel
 path.join(__dirname, "libquery_engine-darwin-arm64.dylib.node")
 path.join(process.cwd(), "src/generated/client/libquery_engine-darwin-arm64.dylib.node")
 

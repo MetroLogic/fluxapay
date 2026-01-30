@@ -50,6 +50,10 @@ export const AnyNull = runtime.objectEnumValues.instances.AnyNull
 
 export const ModelName = {
   Merchant: 'Merchant',
+  MerchantKYC: 'MerchantKYC',
+  KYCDocument: 'KYCDocument',
+  OTP: 'OTP',
+  Merchant: 'Merchant',
   OTP: 'OTP',
   WebhookLog: 'WebhookLog',
   WebhookRetryAttempt: 'WebhookRetryAttempt'
@@ -69,6 +73,98 @@ export const TransactionIsolationLevel = runtime.makeStrictEnum({
 } as const)
 
 export type TransactionIsolationLevel = (typeof TransactionIsolationLevel)[keyof typeof TransactionIsolationLevel]
+
+
+export const MerchantScalarFieldEnum = {
+  id: 'id',
+  business_name: 'business_name',
+  email: 'email',
+  phone_number: 'phone_number',
+  country: 'country',
+  settlement_currency: 'settlement_currency',
+  password: 'password',
+  status: 'status',
+  created_at: 'created_at',
+  updated_at: 'updated_at'
+} as const
+
+export type MerchantScalarFieldEnum = (typeof MerchantScalarFieldEnum)[keyof typeof MerchantScalarFieldEnum]
+
+
+export const MerchantKYCScalarFieldEnum = {
+  id: 'id',
+  merchantId: 'merchantId',
+  business_type: 'business_type',
+  legal_business_name: 'legal_business_name',
+  business_registration_number: 'business_registration_number',
+  country_of_registration: 'country_of_registration',
+  business_address: 'business_address',
+  director_full_name: 'director_full_name',
+  director_email: 'director_email',
+  director_phone: 'director_phone',
+  government_id_type: 'government_id_type',
+  government_id_number: 'government_id_number',
+  kyc_status: 'kyc_status',
+  rejection_reason: 'rejection_reason',
+  reviewed_at: 'reviewed_at',
+  reviewed_by: 'reviewed_by',
+  created_at: 'created_at',
+  updated_at: 'updated_at'
+} as const
+
+export type MerchantKYCScalarFieldEnum = (typeof MerchantKYCScalarFieldEnum)[keyof typeof MerchantKYCScalarFieldEnum]
+
+
+export const KYCDocumentScalarFieldEnum = {
+  id: 'id',
+  kycId: 'kycId',
+  document_type: 'document_type',
+  file_name: 'file_name',
+  file_url: 'file_url',
+  public_id: 'public_id',
+  file_size: 'file_size',
+  mime_type: 'mime_type',
+  created_at: 'created_at',
+  updated_at: 'updated_at'
+} as const
+
+export type KYCDocumentScalarFieldEnum = (typeof KYCDocumentScalarFieldEnum)[keyof typeof KYCDocumentScalarFieldEnum]
+
+
+export const OTPScalarFieldEnum = {
+  id: 'id',
+  merchantId: 'merchantId',
+  channel: 'channel',
+  code: 'code',
+  expires_at: 'expires_at',
+  created_at: 'created_at'
+} as const
+
+export type OTPScalarFieldEnum = (typeof OTPScalarFieldEnum)[keyof typeof OTPScalarFieldEnum]
+
+
+export const SortOrder = {
+  asc: 'asc',
+  desc: 'desc'
+} as const
+
+export type SortOrder = (typeof SortOrder)[keyof typeof SortOrder]
+
+
+export const QueryMode = {
+  default: 'default',
+  insensitive: 'insensitive'
+} as const
+
+export type QueryMode = (typeof QueryMode)[keyof typeof QueryMode]
+
+
+export const NullsOrder = {
+  first: 'first',
+  last: 'last'
+} as const
+
+export type NullsOrder = (typeof NullsOrder)[keyof typeof NullsOrder]
 
 
 export const MerchantScalarFieldEnum = {

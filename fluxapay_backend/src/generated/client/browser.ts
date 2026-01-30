@@ -23,6 +23,26 @@ export * from './enums';
  */
 export type Merchant = Prisma.MerchantModel
 /**
+ * Model MerchantKYC
+ * 
+ */
+export type MerchantKYC = Prisma.MerchantKYCModel
+/**
+ * Model KYCDocument
+ * 
+ */
+export type KYCDocument = Prisma.KYCDocumentModel
+/**
+ * Model OTP
+ * 
+ */
+export type OTP = Prisma.OTPModel
+/**
+ * Model Merchant
+ * 
+ */
+export type Merchant = Prisma.MerchantModel
+/**
  * Model OTP
  * 
  */
