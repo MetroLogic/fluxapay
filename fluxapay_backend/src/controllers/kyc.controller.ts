@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { KYCStatus } from "../generated/client/enums";
 import { AuthRequest } from "../types/express";
 import { validateUserId } from "../helpers/request.helper";
 import { DocumentType } from "../generated/client/client";
@@ -93,14 +94,14 @@ export async function getAllKycSubmissions(req: AuthRequest, res: Response) {
   try {
     const { status, page = "1", limit = "10" } = req.query;
     const result = await getAllKycSubmissionsService(
-      status as any,
+      status as KYCStatus | undefined,
       parseInt(page as string),
       parseInt(limit as string)
     );
     res.status(200).json(result);
-  } catch (err: any) {
+  } catch (err) {
     console.error(err);
-    res.status(err.status || 500).json({ message: err.message || "Server error" });
+    res.status((err as any).status || 500).json({ message: (err as any).message || "Server error" });
   }
 }
 
