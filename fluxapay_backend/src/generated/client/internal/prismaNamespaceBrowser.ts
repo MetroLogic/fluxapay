@@ -50,11 +50,10 @@ export const AnyNull = runtime.objectEnumValues.instances.AnyNull
 
 export const ModelName = {
   Merchant: 'Merchant',
+  OTP: 'OTP',
+  Settlement: 'Settlement',
   MerchantKYC: 'MerchantKYC',
   KYCDocument: 'KYCDocument',
-  OTP: 'OTP',
-  Merchant: 'Merchant',
-  OTP: 'OTP',
   WebhookLog: 'WebhookLog',
   WebhookRetryAttempt: 'WebhookRetryAttempt'
 } as const
@@ -89,6 +88,36 @@ export const MerchantScalarFieldEnum = {
 } as const
 
 export type MerchantScalarFieldEnum = (typeof MerchantScalarFieldEnum)[keyof typeof MerchantScalarFieldEnum]
+
+
+export const OTPScalarFieldEnum = {
+  id: 'id',
+  merchantId: 'merchantId',
+  channel: 'channel',
+  code: 'code',
+  expires_at: 'expires_at',
+  created_at: 'created_at'
+} as const
+
+export type OTPScalarFieldEnum = (typeof OTPScalarFieldEnum)[keyof typeof OTPScalarFieldEnum]
+
+
+export const SettlementScalarFieldEnum = {
+  id: 'id',
+  merchantId: 'merchantId',
+  amount: 'amount',
+  currency: 'currency',
+  status: 'status',
+  fees: 'fees',
+  breakdown: 'breakdown',
+  bank_transfer_id: 'bank_transfer_id',
+  scheduled_date: 'scheduled_date',
+  processed_date: 'processed_date',
+  created_at: 'created_at',
+  updated_at: 'updated_at'
+} as const
+
+export type SettlementScalarFieldEnum = (typeof SettlementScalarFieldEnum)[keyof typeof SettlementScalarFieldEnum]
 
 
 export const MerchantKYCScalarFieldEnum = {
@@ -131,83 +160,19 @@ export const KYCDocumentScalarFieldEnum = {
 export type KYCDocumentScalarFieldEnum = (typeof KYCDocumentScalarFieldEnum)[keyof typeof KYCDocumentScalarFieldEnum]
 
 
-export const OTPScalarFieldEnum = {
-  id: 'id',
-  merchantId: 'merchantId',
-  channel: 'channel',
-  code: 'code',
-  expires_at: 'expires_at',
-  created_at: 'created_at'
-} as const
-
-export type OTPScalarFieldEnum = (typeof OTPScalarFieldEnum)[keyof typeof OTPScalarFieldEnum]
-
-
-export const SortOrder = {
-  asc: 'asc',
-  desc: 'desc'
-} as const
-
-export type SortOrder = (typeof SortOrder)[keyof typeof SortOrder]
-
-
-export const QueryMode = {
-  default: 'default',
-  insensitive: 'insensitive'
-} as const
-
-export type QueryMode = (typeof QueryMode)[keyof typeof QueryMode]
-
-
-export const NullsOrder = {
-  first: 'first',
-  last: 'last'
-} as const
-
-export type NullsOrder = (typeof NullsOrder)[keyof typeof NullsOrder]
-
-
-export const MerchantScalarFieldEnum = {
-  id: 'id',
-  business_name: 'business_name',
-  email: 'email',
-  phone_number: 'phone_number',
-  country: 'country',
-  settlement_currency: 'settlement_currency',
-  password: 'password',
-  status: 'status',
-  created_at: 'created_at',
-  updated_at: 'updated_at'
-} as const
-
-export type MerchantScalarFieldEnum = (typeof MerchantScalarFieldEnum)[keyof typeof MerchantScalarFieldEnum]
-
-
-export const OTPScalarFieldEnum = {
-  id: 'id',
-  merchantId: 'merchantId',
-  channel: 'channel',
-  code: 'code',
-  expires_at: 'expires_at',
-  created_at: 'created_at'
-} as const
-
-export type OTPScalarFieldEnum = (typeof OTPScalarFieldEnum)[keyof typeof OTPScalarFieldEnum]
-
-
 export const WebhookLogScalarFieldEnum = {
   id: 'id',
   merchantId: 'merchantId',
   event_type: 'event_type',
   endpoint_url: 'endpoint_url',
-  request_payload: 'request_payload',
-  response_body: 'response_body',
   http_status: 'http_status',
   status: 'status',
   payment_id: 'payment_id',
   retry_count: 'retry_count',
   max_retries: 'max_retries',
   next_retry_at: 'next_retry_at',
+  request_payload: 'request_payload',
+  response_body: 'response_body',
   created_at: 'created_at',
   updated_at: 'updated_at'
 } as const
@@ -236,11 +201,12 @@ export const SortOrder = {
 export type SortOrder = (typeof SortOrder)[keyof typeof SortOrder]
 
 
-export const JsonNullValueInput = {
+export const NullableJsonNullValueInput = {
+  DbNull: DbNull,
   JsonNull: JsonNull
 } as const
 
-export type JsonNullValueInput = (typeof JsonNullValueInput)[keyof typeof JsonNullValueInput]
+export type NullableJsonNullValueInput = (typeof NullableJsonNullValueInput)[keyof typeof NullableJsonNullValueInput]
 
 
 export const QueryMode = {

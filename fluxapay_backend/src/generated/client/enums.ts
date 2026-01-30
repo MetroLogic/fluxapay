@@ -9,6 +9,32 @@
 * 🟢 You can import this file directly.
 */
 
+export const MerchantStatus = {
+  pending_verification: 'pending_verification',
+  active: 'active'
+} as const
+
+export type MerchantStatus = (typeof MerchantStatus)[keyof typeof MerchantStatus]
+
+
+export const OTPChannel = {
+  email: 'email',
+  phone: 'phone'
+} as const
+
+export type OTPChannel = (typeof OTPChannel)[keyof typeof OTPChannel]
+
+
+export const SettlementStatus = {
+  pending: 'pending',
+  processing: 'processing',
+  completed: 'completed',
+  failed: 'failed'
+} as const
+
+export type SettlementStatus = (typeof SettlementStatus)[keyof typeof SettlementStatus]
+
+
 export const BusinessType = {
   individual: 'individual',
   registered_business: 'registered_business'
@@ -43,36 +69,6 @@ export const DocumentType = {
 } as const
 
 export type DocumentType = (typeof DocumentType)[keyof typeof DocumentType]
-
-
-export const MerchantStatus = {
-  pending_verification: 'pending_verification',
-  active: 'active'
-} as const
-
-export type MerchantStatus = (typeof MerchantStatus)[keyof typeof MerchantStatus]
-
-
-export const OTPChannel = {
-  email: 'email',
-  phone: 'phone'
-} as const
-
-export type OTPChannel = (typeof OTPChannel)[keyof typeof OTPChannel]
-export const MerchantStatus = {
-  pending_verification: 'pending_verification',
-  active: 'active'
-} as const
-
-export type MerchantStatus = (typeof MerchantStatus)[keyof typeof MerchantStatus]
-
-
-export const OTPChannel = {
-  email: 'email',
-  phone: 'phone'
-} as const
-
-export type OTPChannel = (typeof OTPChannel)[keyof typeof OTPChannel]
 
 
 export const WebhookEventType = {
