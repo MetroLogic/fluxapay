@@ -129,7 +129,7 @@ export async function uploadKycDocumentService(
 
   // Check if document type already exists
   const existingDocument = kyc.documents.find(
-    (doc) => doc.document_type === documentType
+    (doc: { document_type: DocumentType; id: string; public_id: string }) => doc.document_type === documentType
   );
 
   // Upload to Cloudinary
@@ -219,7 +219,7 @@ export async function getKycStatusService(merchantId: string) {
   }
 
   // Check which documents are missing
-  const uploadedDocTypes = kyc.documents.map((doc) => doc.document_type);
+  const uploadedDocTypes = kyc.documents.map((doc: { document_type: DocumentType }) => doc.document_type);
   const missingDocuments = requiredDocs.filter(
     (docType) => !uploadedDocTypes.includes(docType)
   );
