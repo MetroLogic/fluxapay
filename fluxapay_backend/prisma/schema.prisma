@@ -14,13 +14,12 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-
 model Merchant {
-  id                 String   @id @default(cuid())
-  business_name      String
-  email              String   @unique
-  phone_number       String   @unique
-  country            String
+  id                  String         @id @default(cuid())
+  business_name       String
+  email               String         @unique
+  phone_number        String         @unique
+  country             String
   settlement_currency String
   password           String
   status             MerchantStatus @default(pending_verification)
@@ -28,16 +27,18 @@ model Merchant {
   updated_at         DateTime @updatedAt
   otps               OTP[]
   settlements        Settlement[]
+  kyc                MerchantKYC?
+  webhookLogs        WebhookLog[]
 }
 
 model OTP {
-  id          String   @id @default(cuid())
-  merchant    Merchant @relation(fields: [merchantId], references: [id])
-  merchantId  String
-  channel     OTPChannel
-  code        String
-  expires_at  DateTime
-  created_at  DateTime @default(now())
+  id         String     @id @default(cuid())
+  merchant   Merchant   @relation(fields: [merchantId], references: [id])
+  merchantId String
+  channel    OTPChannel
+  code       String
+  expires_at DateTime
+  created_at DateTime   @default(now())
 
   @@unique([merchantId, channel])
 }
@@ -58,6 +59,73 @@ model Settlement {
   updated_at       DateTime         @updatedAt
 }
 
+model MerchantKYC {
+  id                           String           @id @default(cuid())
+  merchant                     Merchant         @relation(fields: [merchantId], references: [id])
+  merchantId                   String           @unique
+  business_type                BusinessType
+  legal_business_name          String
+  business_registration_number String?
+  country_of_registration      String
+  business_address             String
+  director_full_name           String
+  director_email               String
+  director_phone               String
+  government_id_type           GovernmentIdType
+  government_id_number         String
+  kyc_status                   KYCStatus        @default(not_submitted)
+  rejection_reason             String?
+  reviewed_at                  DateTime?
+  reviewed_by                  String?
+  documents                    KYCDocument[]
+  created_at                   DateTime         @default(now())
+  updated_at                   DateTime         @updatedAt
+}
+
+model KYCDocument {
+  id            String       @id @default(cuid())
+  kyc           MerchantKYC  @relation(fields: [kycId], references: [id])
+  kycId         String
+  document_type DocumentType
+  file_name     String
+  file_url      String
+  public_id     String
+  file_size     Int
+  mime_type     String
+  created_at    DateTime     @default(now())
+  updated_at    DateTime     @updatedAt
+}
+
+model WebhookLog {
+  id              String                @id @default(cuid())
+  merchant        Merchant              @relation(fields: [merchantId], references: [id])
+  merchantId      String
+  event_type      WebhookEventType
+  endpoint_url    String
+  http_status     Int?
+  status          WebhookStatus
+  payment_id      String?
+  retry_count     Int                   @default(0)
+  max_retries     Int                   @default(5)
+  next_retry_at   DateTime?
+  request_payload Json?
+  response_body   String?
+  created_at      DateTime              @default(now())
+  updated_at      DateTime              @updatedAt
+  retryAttempts   WebhookRetryAttempt[]
+}
+
+model WebhookRetryAttempt {
+  id             String     @id @default(cuid())
+  webhookLog     WebhookLog @relation(fields: [webhookLogId], references: [id])
+  webhookLogId   String
+  attempt_number Int
+  http_status    Int?
+  response_body  String?
+  error_message  String?
+  created_at     DateTime   @default(now())
+}
+
 enum MerchantStatus {
   pending_verification
   active
@@ -73,4 +141,46 @@ enum SettlementStatus {
   processing
   completed
   failed
+}
+
+enum BusinessType {
+  individual
+  registered_business
+}
+
+enum GovernmentIdType {
+  passport
+  national_id
+  driver_license
+}
+
+enum KYCStatus {
+  not_submitted
+  pending_review
+  approved
+  rejected
+}
+
+enum DocumentType {
+  government_id
+  proof_of_business_registration
+  proof_of_address
+}
+
+enum WebhookEventType {
+  payment_completed
+  payment_failed
+  payment_pending
+  refund_completed
+  refund_failed
+  subscription_created
+  subscription_cancelled
+  subscription_renewed
+}
+
+enum WebhookStatus {
+  pending
+  delivered
+  failed
+  retrying
 }

@@ -33,3 +33,63 @@ export const SettlementStatus = {
 } as const
 
 export type SettlementStatus = (typeof SettlementStatus)[keyof typeof SettlementStatus]
+
+
+export const BusinessType = {
+  individual: 'individual',
+  registered_business: 'registered_business'
+} as const
+
+export type BusinessType = (typeof BusinessType)[keyof typeof BusinessType]
+
+
+export const GovernmentIdType = {
+  passport: 'passport',
+  national_id: 'national_id',
+  driver_license: 'driver_license'
+} as const
+
+export type GovernmentIdType = (typeof GovernmentIdType)[keyof typeof GovernmentIdType]
+
+
+export const KYCStatus = {
+  not_submitted: 'not_submitted',
+  pending_review: 'pending_review',
+  approved: 'approved',
+  rejected: 'rejected'
+} as const
+
+export type KYCStatus = (typeof KYCStatus)[keyof typeof KYCStatus]
+
+
+export const DocumentType = {
+  government_id: 'government_id',
+  proof_of_business_registration: 'proof_of_business_registration',
+  proof_of_address: 'proof_of_address'
+} as const
+
+export type DocumentType = (typeof DocumentType)[keyof typeof DocumentType]
+
+
+export const WebhookEventType = {
+  payment_completed: 'payment_completed',
+  payment_failed: 'payment_failed',
+  payment_pending: 'payment_pending',
+  refund_completed: 'refund_completed',
+  refund_failed: 'refund_failed',
+  subscription_created: 'subscription_created',
+  subscription_cancelled: 'subscription_cancelled',
+  subscription_renewed: 'subscription_renewed'
+} as const
+
+export type WebhookEventType = (typeof WebhookEventType)[keyof typeof WebhookEventType]
+
+
+export const WebhookStatus = {
+  pending: 'pending',
+  delivered: 'delivered',
+  failed: 'failed',
+  retrying: 'retrying'
+} as const
+
+export type WebhookStatus = (typeof WebhookStatus)[keyof typeof WebhookStatus]

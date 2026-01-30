@@ -51,7 +51,11 @@ export const AnyNull = runtime.objectEnumValues.instances.AnyNull
 export const ModelName = {
   Merchant: 'Merchant',
   OTP: 'OTP',
-  Settlement: 'Settlement'
+  Settlement: 'Settlement',
+  MerchantKYC: 'MerchantKYC',
+  KYCDocument: 'KYCDocument',
+  WebhookLog: 'WebhookLog',
+  WebhookRetryAttempt: 'WebhookRetryAttempt'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -114,6 +118,79 @@ export const SettlementScalarFieldEnum = {
 } as const
 
 export type SettlementScalarFieldEnum = (typeof SettlementScalarFieldEnum)[keyof typeof SettlementScalarFieldEnum]
+
+
+export const MerchantKYCScalarFieldEnum = {
+  id: 'id',
+  merchantId: 'merchantId',
+  business_type: 'business_type',
+  legal_business_name: 'legal_business_name',
+  business_registration_number: 'business_registration_number',
+  country_of_registration: 'country_of_registration',
+  business_address: 'business_address',
+  director_full_name: 'director_full_name',
+  director_email: 'director_email',
+  director_phone: 'director_phone',
+  government_id_type: 'government_id_type',
+  government_id_number: 'government_id_number',
+  kyc_status: 'kyc_status',
+  rejection_reason: 'rejection_reason',
+  reviewed_at: 'reviewed_at',
+  reviewed_by: 'reviewed_by',
+  created_at: 'created_at',
+  updated_at: 'updated_at'
+} as const
+
+export type MerchantKYCScalarFieldEnum = (typeof MerchantKYCScalarFieldEnum)[keyof typeof MerchantKYCScalarFieldEnum]
+
+
+export const KYCDocumentScalarFieldEnum = {
+  id: 'id',
+  kycId: 'kycId',
+  document_type: 'document_type',
+  file_name: 'file_name',
+  file_url: 'file_url',
+  public_id: 'public_id',
+  file_size: 'file_size',
+  mime_type: 'mime_type',
+  created_at: 'created_at',
+  updated_at: 'updated_at'
+} as const
+
+export type KYCDocumentScalarFieldEnum = (typeof KYCDocumentScalarFieldEnum)[keyof typeof KYCDocumentScalarFieldEnum]
+
+
+export const WebhookLogScalarFieldEnum = {
+  id: 'id',
+  merchantId: 'merchantId',
+  event_type: 'event_type',
+  endpoint_url: 'endpoint_url',
+  http_status: 'http_status',
+  status: 'status',
+  payment_id: 'payment_id',
+  retry_count: 'retry_count',
+  max_retries: 'max_retries',
+  next_retry_at: 'next_retry_at',
+  request_payload: 'request_payload',
+  response_body: 'response_body',
+  created_at: 'created_at',
+  updated_at: 'updated_at'
+} as const
+
+export type WebhookLogScalarFieldEnum = (typeof WebhookLogScalarFieldEnum)[keyof typeof WebhookLogScalarFieldEnum]
+
+
+export const WebhookRetryAttemptScalarFieldEnum = {
+  id: 'id',
+  webhookLogId: 'webhookLogId',
+  attempt_number: 'attempt_number',
+  http_status: 'http_status',
+  response_body: 'response_body',
+  error_message: 'error_message',
+  created_at: 'created_at'
+} as const
+
+export type WebhookRetryAttemptScalarFieldEnum = (typeof WebhookRetryAttemptScalarFieldEnum)[keyof typeof WebhookRetryAttemptScalarFieldEnum]
 
 
 export const SortOrder = {
