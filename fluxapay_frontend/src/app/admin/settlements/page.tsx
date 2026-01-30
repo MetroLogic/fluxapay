@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, JSX } from "react";
+import { useState, JSX } from "react";
 import {
   Search,
   AlertTriangle,
@@ -12,7 +12,6 @@ import {
   Download,
   MoreVertical,
   Building,
-  Calendar,
   DollarSign,
   RefreshCw,
   ExternalLink,
@@ -56,9 +55,9 @@ interface StatusConfig {
 }
 
 const AdminSettlementsPage = () => {
-  const primaryColor = "oklch(0.205 0 0)";
-  const primaryLight = "oklch(0.93 0 0)";
-  const accentPurple = "oklch(0.627 0.265 303.9)";
+  // const primaryColor = "oklch(0.205 0 0)";
+  // const primaryLight = "oklch(0.93 0 0)";
+  // const accentPurple = "oklch(0.627 0.265 303.9)";
 
   // Sample data
   const [settlements, setSettlements] = useState<Settlement[]>([
