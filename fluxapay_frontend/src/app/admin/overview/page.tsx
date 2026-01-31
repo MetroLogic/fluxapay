@@ -192,7 +192,7 @@ export default function AdminOverviewPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-        {/* Charts Section: Volume Over Time (Mocked Visual) */}
+        {/* Charts Section: Volume Over Time */}
         <Card className="col-span-4">
           <CardHeader>
             <CardTitle>Volume Over Time</CardTitle>
@@ -308,90 +308,13 @@ export default function AdminOverviewPage() {
                 </PieChart>
               </ResponsiveContainer>
             </div>
-            <div className="flex justify-center gap-4 text-xs mt-2">
-              {statusChartData.map((item) => (
-                <div key={item.name} className="flex items-center gap-1">
-                  <div
-                    className="w-2 h-2 rounded-full"
-                    style={{ backgroundColor: item.color }}
-                  />
-                  <span className="text-muted-foreground">
-                    {item.name} ({item.value})
-                  </span>
-                </div>
-              ))}
-            </div>
           </CardContent>
         </Card>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-        {/* Alerts Section */}
-        <Card className="col-span-3">
-          <CardHeader>
-            <CardTitle>Recent Alerts</CardTitle>
-            <CardDescription>
-              System health and risk notifications
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-start gap-4 p-3 border rounded-lg bg-orange-500/10 border-orange-200">
-                <div className="bg-orange-100 p-2 rounded-full text-orange-600">
-                  ⚠
-                </div>
-                <div>
-                  <h4 className="text-sm font-semibold text-orange-900">
-                    High Webhook Failure Rate
-                  </h4>
-                  <p className="text-xs text-orange-700">
-                    Webhook delivery failed for 5% of requests in the last hour.
-                  </p>
-                  <span className="text-[10px] text-orange-600 font-mono mt-1 block">
-                    2 mins ago
-                  </span>
-                </div>
-              </div>
-              <div className="flex items-start gap-4 p-3 border rounded-lg bg-red-500/10 border-red-200">
-                <div className="bg-red-100 p-2 rounded-full text-red-600">
-                  ⚠
-                </div>
-                <div>
-                  <h4 className="text-sm font-semibold text-red-900">
-                    Failed Payments Spike
-                  </h4>
-                  <p className="text-xs text-red-700">
-                    Unusual number of failed transactions detected in the last
-                    15 minutes.
-                  </p>
-                  <span className="text-[10px] text-red-600 font-mono mt-1 block">
-                    Just now
-                  </span>
-                </div>
-              </div>
-              <div className="flex items-start gap-4 p-3 border rounded-lg bg-yellow-500/10 border-yellow-200">
-                <div className="bg-yellow-100 p-2 rounded-full text-yellow-600">
-                  ⚠
-                </div>
-                <div>
-                  <h4 className="text-sm font-semibold text-yellow-900">
-                    Settlement Delays
-                  </h4>
-                  <p className="text-xs text-yellow-700">
-                    Batch #442 settlement processing is taking longer than
-                    expected.
-                  </p>
-                  <span className="text-[10px] text-yellow-600 font-mono mt-1 block">
-                    25 mins ago
-                  </span>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
         {/* Recent Activity Feed */}
-        <Card className="col-span-4">
+        <Card className="col-span-7">
           <CardHeader>
             <CardTitle>Recent Activity</CardTitle>
             <CardDescription>Latest transactions and events</CardDescription>
@@ -421,8 +344,9 @@ export default function AdminOverviewPage() {
                         <div className="font-bold text-sm">
                           {item.data.currency} {item.data.amount.toFixed(2)}
                         </div>
+                        {/* THE FIX: Fixed locale prevents hydration errors */}
                         <div className="text-xs text-muted-foreground">
-                          {new Date(item.data.createdAt).toLocaleDateString()}
+                          {new Date(item.data.createdAt).toLocaleDateString("en-US")}
                         </div>
                       </div>
                       <Badge
@@ -441,8 +365,9 @@ export default function AdminOverviewPage() {
                   ) : (
                     <div className="flex items-center gap-4">
                       <div className="text-right">
+                        {/* THE FIX: Fixed locale prevents hydration errors */}
                         <div className="text-xs text-muted-foreground">
-                          {new Date(item.createdAt).toLocaleDateString()}
+                          {new Date(item.createdAt).toLocaleDateString("en-US")}
                         </div>
                       </div>
                       <Badge
