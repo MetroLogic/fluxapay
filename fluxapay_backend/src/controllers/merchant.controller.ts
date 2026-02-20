@@ -9,6 +9,8 @@ import {
   getMerchantUserService,
   updateMerchantProfileService,
   updateMerchantWebhookService,
+  rotateApiKeyService,
+  rotateWebhookSecretService,
 } from "../services/merchant.service";
 import { AuthRequest } from "../types/express";
 import { validateUserId } from "../helpers/request.helper";
@@ -33,7 +35,6 @@ export const verifyOtp = createController<VerifyOtpRequest>(
 export const resendOtp = createController<ResendOtpRequest>(
   resendOtpMerchantService,
 );
-
 
 export const getLoggedInMerchant = createController(
   async (_, req: AuthRequest) => {
@@ -64,5 +65,17 @@ export const updateMerchantWebhook = createController(
       merchantId,
       webhook_url: body.webhook_url,
     });
+  },
+);
+
+export const rotateApiKey = createController(async (_, req: AuthRequest) => {
+  const merchantId = await validateUserId(req);
+  return rotateApiKeyService({ merchantId });
+});
+
+export const rotateWebhookSecret = createController(
+  async (_, req: AuthRequest) => {
+    const merchantId = await validateUserId(req);
+    return rotateWebhookSecretService({ merchantId });
   },
 );
