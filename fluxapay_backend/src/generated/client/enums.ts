@@ -93,3 +93,36 @@ export const WebhookStatus = {
 } as const
 
 export type WebhookStatus = (typeof WebhookStatus)[keyof typeof WebhookStatus]
+
+
+export const ReconciliationStatus = {
+  pending: 'pending',
+  matched: 'matched',
+  discrepancy: 'discrepancy',
+  reviewed: 'reviewed',
+  resolved: 'resolved'
+} as const
+
+export type ReconciliationStatus = (typeof ReconciliationStatus)[keyof typeof ReconciliationStatus]
+
+
+export const ReconciliationAlertType = {
+  amount_mismatch: 'amount_mismatch',
+  missing_settlement: 'missing_settlement',
+  duplicate_payment: 'duplicate_payment',
+  fee_discrepancy: 'fee_discrepancy',
+  timing_anomaly: 'timing_anomaly',
+  threshold_exceeded: 'threshold_exceeded'
+} as const
+
+export type ReconciliationAlertType = (typeof ReconciliationAlertType)[keyof typeof ReconciliationAlertType]
+
+
+export const AlertSeverity = {
+  low: 'low',
+  medium: 'medium',
+  high: 'high',
+  critical: 'critical'
+} as const
+
+export type AlertSeverity = (typeof AlertSeverity)[keyof typeof AlertSeverity]

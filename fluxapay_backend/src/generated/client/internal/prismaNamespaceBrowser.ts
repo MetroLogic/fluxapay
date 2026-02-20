@@ -56,7 +56,9 @@ export const ModelName = {
   KYCDocument: 'KYCDocument',
   WebhookLog: 'WebhookLog',
   WebhookRetryAttempt: 'WebhookRetryAttempt',
-  Payment: 'Payment'
+  Payment: 'Payment',
+  ReconciliationRecord: 'ReconciliationRecord',
+  ReconciliationAlert: 'ReconciliationAlert'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -208,6 +210,46 @@ export const PaymentScalarFieldEnum = {
 } as const
 
 export type PaymentScalarFieldEnum = (typeof PaymentScalarFieldEnum)[keyof typeof PaymentScalarFieldEnum]
+
+
+export const ReconciliationRecordScalarFieldEnum = {
+  id: 'id',
+  period_start: 'period_start',
+  period_end: 'period_end',
+  total_usdc_swept: 'total_usdc_swept',
+  total_fiat_payouts: 'total_fiat_payouts',
+  total_fees: 'total_fees',
+  expected_balance: 'expected_balance',
+  actual_balance: 'actual_balance',
+  discrepancy: 'discrepancy',
+  discrepancy_percent: 'discrepancy_percent',
+  status: 'status',
+  settlements_count: 'settlements_count',
+  payments_count: 'payments_count',
+  notes: 'notes',
+  reviewed_by: 'reviewed_by',
+  reviewed_at: 'reviewed_at',
+  created_at: 'created_at',
+  updated_at: 'updated_at'
+} as const
+
+export type ReconciliationRecordScalarFieldEnum = (typeof ReconciliationRecordScalarFieldEnum)[keyof typeof ReconciliationRecordScalarFieldEnum]
+
+
+export const ReconciliationAlertScalarFieldEnum = {
+  id: 'id',
+  reconciliationId: 'reconciliationId',
+  alert_type: 'alert_type',
+  severity: 'severity',
+  message: 'message',
+  details: 'details',
+  acknowledged: 'acknowledged',
+  acknowledged_by: 'acknowledged_by',
+  acknowledged_at: 'acknowledged_at',
+  created_at: 'created_at'
+} as const
+
+export type ReconciliationAlertScalarFieldEnum = (typeof ReconciliationAlertScalarFieldEnum)[keyof typeof ReconciliationAlertScalarFieldEnum]
 
 
 export const SortOrder = {

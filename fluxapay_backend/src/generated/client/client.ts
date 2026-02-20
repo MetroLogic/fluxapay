@@ -39,8 +39,8 @@ export { Prisma }
 
 
 // file annotations for bundling tools to include these files
-path.join(__dirname, "libquery_engine-darwin-arm64.dylib.node")
-path.join(process.cwd(), "src/generated/client/libquery_engine-darwin-arm64.dylib.node")
+path.join(__dirname, "query_engine-windows.dll.node")
+path.join(process.cwd(), "src/generated/client/query_engine-windows.dll.node")
 
 /**
  * Model Merchant
@@ -82,3 +82,13 @@ export type WebhookRetryAttempt = Prisma.WebhookRetryAttemptModel
  * 
  */
 export type Payment = Prisma.PaymentModel
+/**
+ * Model ReconciliationRecord
+ * 
+ */
+export type ReconciliationRecord = Prisma.ReconciliationRecordModel
+/**
+ * Model ReconciliationAlert
+ * 
+ */
+export type ReconciliationAlert = Prisma.ReconciliationAlertModel

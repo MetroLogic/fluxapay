@@ -57,3 +57,13 @@ export type WebhookRetryAttempt = Prisma.WebhookRetryAttemptModel
  * 
  */
 export type Payment = Prisma.PaymentModel
+/**
+ * Model ReconciliationRecord
+ * 
+ */
+export type ReconciliationRecord = Prisma.ReconciliationRecordModel
+/**
+ * Model ReconciliationAlert
+ * 
+ */
+export type ReconciliationAlert = Prisma.ReconciliationAlertModel
