@@ -4,8 +4,7 @@ import {
   TransactionBuilder, 
   Networks, 
   Operation, 
-  Asset,
-  Account
+    Asset
 } from '@stellar/stellar-sdk';
 import { HDWalletService } from './HDWalletService';
 
@@ -133,8 +132,7 @@ export class StellarService {
         const balances = account.balances;
         
         for (const balance of balances) {
-            // @ts-ignore - types are sometimes incomplete in stellar-sdk for asset_code/asset_issuer
-            if (balance.asset_code === assetCode && balance.asset_issuer === assetIssuer) {
+            if ('asset_code' in balance && balance.asset_code === assetCode && 'asset_issuer' in balance && balance.asset_issuer === assetIssuer) {
                 return true;
             }
         }
