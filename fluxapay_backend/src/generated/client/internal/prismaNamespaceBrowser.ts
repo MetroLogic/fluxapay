@@ -50,6 +50,7 @@ export const AnyNull = runtime.objectEnumValues.instances.AnyNull
 
 export const ModelName = {
   Merchant: 'Merchant',
+  BankAccount: 'BankAccount',
   OTP: 'OTP',
   Settlement: 'Settlement',
   MerchantKYC: 'MerchantKYC',
@@ -84,11 +85,28 @@ export const MerchantScalarFieldEnum = {
   settlement_currency: 'settlement_currency',
   password: 'password',
   status: 'status',
+  webhook_url: 'webhook_url',
   created_at: 'created_at',
   updated_at: 'updated_at'
 } as const
 
 export type MerchantScalarFieldEnum = (typeof MerchantScalarFieldEnum)[keyof typeof MerchantScalarFieldEnum]
+
+
+export const BankAccountScalarFieldEnum = {
+  id: 'id',
+  merchantId: 'merchantId',
+  account_name: 'account_name',
+  account_number: 'account_number',
+  bank_name: 'bank_name',
+  bank_code: 'bank_code',
+  currency: 'currency',
+  country: 'country',
+  created_at: 'created_at',
+  updated_at: 'updated_at'
+} as const
+
+export type BankAccountScalarFieldEnum = (typeof BankAccountScalarFieldEnum)[keyof typeof BankAccountScalarFieldEnum]
 
 
 export const OTPScalarFieldEnum = {
@@ -106,14 +124,21 @@ export type OTPScalarFieldEnum = (typeof OTPScalarFieldEnum)[keyof typeof OTPSca
 export const SettlementScalarFieldEnum = {
   id: 'id',
   merchantId: 'merchantId',
+  usdc_amount: 'usdc_amount',
   amount: 'amount',
   currency: 'currency',
-  status: 'status',
   fees: 'fees',
+  net_amount: 'net_amount',
+  status: 'status',
   breakdown: 'breakdown',
+  exchange_partner: 'exchange_partner',
+  exchange_rate: 'exchange_rate',
+  exchange_ref: 'exchange_ref',
   bank_transfer_id: 'bank_transfer_id',
+  payment_ids: 'payment_ids',
   scheduled_date: 'scheduled_date',
   processed_date: 'processed_date',
+  failure_reason: 'failure_reason',
   created_at: 'created_at',
   updated_at: 'updated_at'
 } as const
@@ -204,6 +229,15 @@ export const PaymentScalarFieldEnum = {
   expiration: 'expiration',
   status: 'status',
   checkout_url: 'checkout_url',
+  swept: 'swept',
+  swept_at: 'swept_at',
+  sweep_tx_hash: 'sweep_tx_hash',
+  settled: 'settled',
+  settled_at: 'settled_at',
+  settlement_ref: 'settlement_ref',
+  settlement_fiat_amount: 'settlement_fiat_amount',
+  settlement_fiat_currency: 'settlement_fiat_currency',
+  settlementId: 'settlementId',
   createdAt: 'createdAt'
 } as const
 
@@ -241,6 +275,14 @@ export const QueryMode = {
 export type QueryMode = (typeof QueryMode)[keyof typeof QueryMode]
 
 
+export const NullsOrder = {
+  first: 'first',
+  last: 'last'
+} as const
+
+export type NullsOrder = (typeof NullsOrder)[keyof typeof NullsOrder]
+
+
 export const JsonNullValueFilter = {
   DbNull: DbNull,
   JsonNull: JsonNull,
@@ -248,12 +290,4 @@ export const JsonNullValueFilter = {
 } as const
 
 export type JsonNullValueFilter = (typeof JsonNullValueFilter)[keyof typeof JsonNullValueFilter]
-
-
-export const NullsOrder = {
-  first: 'first',
-  last: 'last'
-} as const
-
-export type NullsOrder = (typeof NullsOrder)[keyof typeof NullsOrder]
 
