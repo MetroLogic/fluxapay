@@ -55,7 +55,8 @@ export const ModelName = {
   MerchantKYC: 'MerchantKYC',
   KYCDocument: 'KYCDocument',
   WebhookLog: 'WebhookLog',
-  WebhookRetryAttempt: 'WebhookRetryAttempt'
+  WebhookRetryAttempt: 'WebhookRetryAttempt',
+  Payment: 'Payment'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -191,6 +192,33 @@ export const WebhookRetryAttemptScalarFieldEnum = {
 } as const
 
 export type WebhookRetryAttemptScalarFieldEnum = (typeof WebhookRetryAttemptScalarFieldEnum)[keyof typeof WebhookRetryAttemptScalarFieldEnum]
+
+
+export const PaymentScalarFieldEnum = {
+  id: 'id',
+  payment_id: 'payment_id',
+  merchant_id: 'merchant_id',
+  amount: 'amount',
+  currency: 'currency',
+  deposit_address: 'deposit_address',
+  status: 'status',
+  transaction_hash: 'transaction_hash',
+  payer_address: 'payer_address',
+  confirmed_at: 'confirmed_at',
+  expires_at: 'expires_at',
+  swept: 'swept',
+  swept_at: 'swept_at',
+  sweep_transaction_hash: 'sweep_transaction_hash',
+  settled: 'settled',
+  settled_at: 'settled_at',
+  settlement_reference: 'settlement_reference',
+  settlement_fiat_amount: 'settlement_fiat_amount',
+  settlement_fiat_currency: 'settlement_fiat_currency',
+  created_at: 'created_at',
+  updated_at: 'updated_at'
+} as const
+
+export type PaymentScalarFieldEnum = (typeof PaymentScalarFieldEnum)[keyof typeof PaymentScalarFieldEnum]
 
 
 export const SortOrder = {

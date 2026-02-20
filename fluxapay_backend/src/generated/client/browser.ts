@@ -52,3 +52,8 @@ export type WebhookLog = Prisma.WebhookLogModel
  * 
  */
 export type WebhookRetryAttempt = Prisma.WebhookRetryAttemptModel
+/**
+ * Model Payment
+ * 
+ */
+export type Payment = Prisma.PaymentModel

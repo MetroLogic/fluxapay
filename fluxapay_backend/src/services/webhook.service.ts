@@ -1,5 +1,6 @@
 import { PrismaClient, WebhookEventType, WebhookStatus } from "../generated/client/client";
 import { webhookEventTypes } from "../schemas/webhook.schema";
+import { eventBus, AppEvents } from "./EventService";
 
 const prisma = new PrismaClient();
 
@@ -180,7 +181,7 @@ export async function retryWebhookService(params: RetryWebhookParams) {
   );
 
   const newRetryCount = log.retry_count + 1;
-  const newStatus: WebhookStatus = result.success ? "delivered" : 
+  const newStatus: WebhookStatus = result.success ? "delivered" :
     newRetryCount >= log.max_retries ? "failed" : "retrying";
 
   // Create retry attempt record
@@ -195,7 +196,7 @@ export async function retryWebhookService(params: RetryWebhookParams) {
   });
 
   // Calculate next retry time with exponential backoff
-  const nextRetryAt = newStatus === "retrying" 
+  const nextRetryAt = newStatus === "retrying"
     ? new Date(Date.now() + Math.pow(2, newRetryCount) * 60 * 1000) // exponential backoff in minutes
     : null;
 
@@ -212,8 +213,8 @@ export async function retryWebhookService(params: RetryWebhookParams) {
   });
 
   return {
-    message: result.success 
-      ? "Webhook retry successful" 
+    message: result.success
+      ? "Webhook retry successful"
       : `Webhook retry failed${newStatus === "retrying" ? ", will retry again" : ""}`,
     data: {
       id: updatedLog.id,
@@ -267,8 +268,8 @@ export async function sendTestWebhookService(params: SendTestWebhookParams) {
   });
 
   return {
-    message: result.success 
-      ? "Test webhook delivered successfully" 
+    message: result.success
+      ? "Test webhook delivered successfully"
       : "Test webhook delivery failed",
     data: {
       id: updatedLog.id,
@@ -439,7 +440,7 @@ export async function createAndDeliverWebhook(
   const result = await deliverWebhook(endpointUrl, payload);
   const status: WebhookStatus = result.success ? "delivered" : "retrying";
 
-  const nextRetryAt = status === "retrying" 
+  const nextRetryAt = status === "retrying"
     ? new Date(Date.now() + 60 * 1000) // First retry in 1 minute
     : null;
 
@@ -455,3 +456,34 @@ export async function createAndDeliverWebhook(
 
   return webhookLog;
 }
+
+// Listen for internal events
+eventBus.on(AppEvents.PAYMENT_CONFIRMED, async (payment) => {
+  try {
+    const merchant = await prisma.merchant.findUnique({
+      where: { id: payment.merchant_id }
+    });
+
+    if (merchant && merchant.status === 'active') {
+      const webhookUrl = (merchant as any).webhook_url || 'https://example.com/webhook';
+
+      await createAndDeliverWebhook(
+        payment.merchant_id,
+        'payment_completed',
+        webhookUrl,
+        {
+          event: 'payment.confirmed',
+          payment_id: payment.payment_id,
+          amount: payment.amount.toString(),
+          currency: payment.currency,
+          status: 'confirmed',
+          transaction_hash: payment.transaction_hash,
+          confirmed_at: payment.confirmed_at
+        },
+        payment.payment_id
+      );
+    }
+  } catch (error) {
+    console.error('Error handling payment.confirmed event in Webhook Service:', error);
+  }
+});
