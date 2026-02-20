@@ -4,6 +4,7 @@ import { createOtp, verifyOtp as verifyOtpService } from "./otp.service";
 import { sendOtpEmail } from "./email.service";
 import { isDevEnv } from "../helpers/env.helper";
 import { generateToken } from "../helpers/jwt.helper";
+import { merchantRegistryService } from "./merchantRegistry.service";
 
 
 const prisma = new PrismaClient();
@@ -45,6 +46,13 @@ export async function signupMerchantService(data: {
       settlement_currency,
       password: hashedPassword,
     },
+  });
+
+  // On-chain registration (non-blocking)
+  merchantRegistryService.register_merchant(merchant.id, business_name, settlement_currency).catch(err => {
+    if (isDevEnv()) {
+      console.error("Non-blocking error during on-chain merchant registration:", err);
+    }
   });
 
   // Generate OTP

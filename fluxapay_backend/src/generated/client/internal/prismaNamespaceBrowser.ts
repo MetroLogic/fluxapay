@@ -55,7 +55,8 @@ export const ModelName = {
   MerchantKYC: 'MerchantKYC',
   KYCDocument: 'KYCDocument',
   WebhookLog: 'WebhookLog',
-  WebhookRetryAttempt: 'WebhookRetryAttempt'
+  WebhookRetryAttempt: 'WebhookRetryAttempt',
+  Payment: 'Payment'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -193,6 +194,22 @@ export const WebhookRetryAttemptScalarFieldEnum = {
 export type WebhookRetryAttemptScalarFieldEnum = (typeof WebhookRetryAttemptScalarFieldEnum)[keyof typeof WebhookRetryAttemptScalarFieldEnum]
 
 
+export const PaymentScalarFieldEnum = {
+  id: 'id',
+  merchantId: 'merchantId',
+  amount: 'amount',
+  currency: 'currency',
+  customer_email: 'customer_email',
+  metadata: 'metadata',
+  expiration: 'expiration',
+  status: 'status',
+  checkout_url: 'checkout_url',
+  createdAt: 'createdAt'
+} as const
+
+export type PaymentScalarFieldEnum = (typeof PaymentScalarFieldEnum)[keyof typeof PaymentScalarFieldEnum]
+
+
 export const SortOrder = {
   asc: 'asc',
   desc: 'desc'
@@ -207,6 +224,13 @@ export const NullableJsonNullValueInput = {
 } as const
 
 export type NullableJsonNullValueInput = (typeof NullableJsonNullValueInput)[keyof typeof NullableJsonNullValueInput]
+
+
+export const JsonNullValueInput = {
+  JsonNull: JsonNull
+} as const
+
+export type JsonNullValueInput = (typeof JsonNullValueInput)[keyof typeof JsonNullValueInput]
 
 
 export const QueryMode = {
