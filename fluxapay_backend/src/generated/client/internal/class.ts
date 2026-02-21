@@ -23,7 +23,6 @@ const config: runtime.GetPrismaClientConfig = {
       "value": "prisma-client"
     },
     "output": {
-      "value": "/home/caxton/Desktop/drips/fluxapay/fluxapay_backend/src/generated/client",
       "value": "/Users/iamtechhunter/Documents/workspace/fluxapay/fluxapay_backend/src/generated/client",
       "fromEnvVar": null
     },
@@ -33,13 +32,11 @@ const config: runtime.GetPrismaClientConfig = {
     "binaryTargets": [
       {
         "fromEnvVar": null,
-        "value": "debian-openssl-3.0.x",
         "value": "darwin-arm64",
         "native": true
       }
     ],
     "previewFeatures": [],
-    "sourceFilePath": "/home/caxton/Desktop/drips/fluxapay/fluxapay_backend/prisma/schema.prisma",
     "sourceFilePath": "/Users/iamtechhunter/Documents/workspace/fluxapay/fluxapay_backend/prisma/schema.prisma",
     "isCustomOutput": true
   },
