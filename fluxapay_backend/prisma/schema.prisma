@@ -21,14 +21,15 @@ model Merchant {
   phone_number        String         @unique
   country             String
   settlement_currency String
-  password           String
-  status             MerchantStatus @default(pending_verification)
-  created_at         DateTime @default(now())
-  updated_at         DateTime @updatedAt
-  otps               OTP[]
-  settlements        Settlement[]
-  kyc                MerchantKYC?
-  webhookLogs        WebhookLog[]
+  password            String
+  status              MerchantStatus @default(pending_verification)
+  created_at          DateTime       @default(now())
+  updated_at          DateTime       @updatedAt
+  otps                OTP[]
+  settlements         Settlement[]
+  kyc                 MerchantKYC?
+  webhookLogs         WebhookLog[]
+  payments            Payment[]
 }
 
 model OTP {
@@ -125,6 +126,22 @@ model WebhookRetryAttempt {
   error_message  String?
   created_at     DateTime   @default(now())
 }
+
+model Payment {
+  id             String   @id @default(cuid())
+  merchant       Merchant @relation(fields: [merchantId], references: [id])
+  merchantId     String
+  amount         Decimal
+  currency       String
+  customer_email String
+  metadata       Json
+  expiration     DateTime
+  status         String
+  checkout_url   String
+  createdAt      DateTime @default(now())
+}
+
+// ...existing code...
 
 enum MerchantStatus {
   pending_verification
