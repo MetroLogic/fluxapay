@@ -18,7 +18,7 @@ export default function NotFound() {
               Page Not Found
             </h2>
             <p className="pb-8 text-[#EFDBFC] text-xl font-medium max-w-2xl mx-auto">
-              Oops! We couldn't find that page.
+              Oops! We couldn&#39;t find that page.
             </p>
 
             <Link
