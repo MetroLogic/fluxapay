@@ -32,6 +32,7 @@ const config: runtime.GetPrismaClientConfig = {
     "binaryTargets": [
       {
         "fromEnvVar": null,
+        "value": "debian-openssl-3.0.x",
         "value": "darwin-arm64",
         "native": true
       }
@@ -78,26 +79,26 @@ export type LogOptions<ClientOptions extends Prisma.PrismaClientOptions> =
   'log' extends keyof ClientOptions ? ClientOptions['log'] extends Array<Prisma.LogLevel | Prisma.LogDefinition> ? Prisma.GetEvents<ClientOptions['log']> : never : never
 
 export interface PrismaClientConstructor {
-    /**
-   * ## Prisma Client
-   * 
-   * Type-safe database client for TypeScript
-   * @example
-   * ```
-   * const prisma = new PrismaClient()
-   * // Fetch zero or more Merchants
-   * const merchants = await prisma.merchant.findMany()
-   * ```
-   * 
-   * Read more in our [docs](https://www.prisma.io/docs/reference/tools-and-interfaces/prisma-client).
-   */
+  /**
+ * ## Prisma Client
+ * 
+ * Type-safe database client for TypeScript
+ * @example
+ * ```
+ * const prisma = new PrismaClient()
+ * // Fetch zero or more Merchants
+ * const merchants = await prisma.merchant.findMany()
+ * ```
+ * 
+ * Read more in our [docs](https://www.prisma.io/docs/reference/tools-and-interfaces/prisma-client).
+ */
 
   new <
     Options extends Prisma.PrismaClientOptions = Prisma.PrismaClientOptions,
     LogOpts extends LogOptions<Options> = LogOptions<Options>,
     OmitOpts extends Prisma.PrismaClientOptions['omit'] = Options extends { omit: infer U } ? U : Prisma.PrismaClientOptions['omit'],
     ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs
-  >(options?: Prisma.Subset<Options, Prisma.PrismaClientOptions> ): PrismaClient<LogOpts, OmitOpts, ExtArgs>
+  >(options?: Prisma.Subset<Options, Prisma.PrismaClientOptions>): PrismaClient<LogOpts, OmitOpts, ExtArgs>
 }
 
 /**
@@ -133,15 +134,15 @@ export interface PrismaClient<
    */
   $disconnect(): runtime.Types.Utils.JsPromise<void>;
 
-/**
-   * Executes a prepared raw query and returns the number of affected rows.
-   * @example
-   * ```
-   * const result = await prisma.$executeRaw`UPDATE User SET cool = ${true} WHERE email = ${'user@email.com'};`
-   * ```
-   *
-   * Read more in our [docs](https://www.prisma.io/docs/reference/tools-and-interfaces/prisma-client/raw-database-access).
-   */
+  /**
+     * Executes a prepared raw query and returns the number of affected rows.
+     * @example
+     * ```
+     * const result = await prisma.$executeRaw`UPDATE User SET cool = ${true} WHERE email = ${'user@email.com'};`
+     * ```
+     *
+     * Read more in our [docs](https://www.prisma.io/docs/reference/tools-and-interfaces/prisma-client/raw-database-access).
+     */
   $executeRaw<T = unknown>(query: TemplateStringsArray | Prisma.Sql, ...values: any[]): Prisma.PrismaPromise<number>;
 
   /**
@@ -202,14 +203,14 @@ export interface PrismaClient<
     extArgs: ExtArgs
   }>>
 
-      /**
-   * `prisma.merchant`: Exposes CRUD operations for the **Merchant** model.
-    * Example usage:
-    * ```ts
-    * // Fetch zero or more Merchants
-    * const merchants = await prisma.merchant.findMany()
-    * ```
-    */
+  /**
+* `prisma.merchant`: Exposes CRUD operations for the **Merchant** model.
+* Example usage:
+* ```ts
+* // Fetch zero or more Merchants
+* const merchants = await prisma.merchant.findMany()
+* ```
+*/
   get merchant(): Prisma.MerchantDelegate<ExtArgs, { omit: OmitOpts }>;
 
   /**
