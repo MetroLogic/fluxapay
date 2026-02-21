@@ -26,7 +26,9 @@ const Hero = () => {
                   />
                 </div>
                 <div className="">
-                  <p className="text-xs font-medium text-[#667085]">Transfer</p>
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Transfer
+                  </p>
                   <h4 className="text-sm font-bold text-gray-900">
                     20,000 NGN
                   </h4>
@@ -43,7 +45,9 @@ const Hero = () => {
                   />
                 </div>
                 <div className="">
-                  <p className="text-xs font-medium text-[#667085]">Transfer</p>
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Transfer
+                  </p>
                   <h4 className="text-sm font-bold text-gray-900">5,000 KHS</h4>
                 </div>
               </div>
@@ -58,7 +62,9 @@ const Hero = () => {
                   />
                 </div>
                 <div className="">
-                  <p className="text-xs font-medium text-[#667085]">Transfer</p>
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Transfer
+                  </p>
                   <h4 className="text-sm font-bold text-gray-900">5,000 GHS</h4>
                 </div>
               </div>

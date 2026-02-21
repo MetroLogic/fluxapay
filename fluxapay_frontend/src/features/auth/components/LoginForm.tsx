@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import toast from "react-hot-toast";
 import Image from "next/image";
 import Link from "next/link";
 import * as yup from "yup";
@@ -73,7 +74,7 @@ const LoginForm = () => {
       await new Promise((resolve) => setTimeout(resolve, 1500));
 
       console.log("Login data:", validData);
-      alert("Login successful! Check console for form data.");
+      toast.success("Login successful!");
     } catch (err) {
       if (err instanceof yup.ValidationError) {
         const fieldErrors: { email?: string; password?: string } = {};
@@ -107,10 +108,10 @@ const LoginForm = () => {
           <div className="w-full max-w-md rounded-none lg:rounded-r-2xl bg-white p-8 shadow-none animate-slide-in-left">
             {/* Form header */}
             <div className="space-y-2 mb-8 animate-fade-in [animation-delay:200ms]">
-              <h1 className="text-2xl md:text-[40px] font-bold text-[#232323] tracking-tight">
+              <h1 className="text-2xl md:text-[40px] font-bold text-black tracking-tight">
                 Sign in
               </h1>
-              <p className="text-sm md:text-[18px] font-normal text-[#969696]">
+              <p className="text-sm md:text-[18px] font-normal text-muted-foreground">
                 Please login to continue to your account.
               </p>
             </div>
@@ -188,7 +189,7 @@ const LoginForm = () => {
                     onChange={handleChange}
                     className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
                   />
-                  <span className="text-[#232323] font-medium text-[16px]">
+                  <span className="text-black font-medium text-[16px]">
                     Keep me logged in
                   </span>
                 </label>
@@ -216,7 +217,7 @@ const LoginForm = () => {
               </Button>
 
               {/* Create account */}
-              <div className="pt-2 text-center text-xs md:text-[18px] text-[#6C6C6C] font-semibold">
+              <div className="pt-2 text-center text-xs md:text-[18px] text-muted-foreground font-semibold">
                 Need an account?{" "}
                 <Link
                   href="/signup"

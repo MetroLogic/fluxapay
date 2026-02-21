@@ -46,7 +46,7 @@ export const Navbar = () => {
         <div className="hidden md:flex items-center gap-3">
           <Link
             href="/login"
-            className="px-5 py-2 text-lg font-semibold text-error rounded-full transition-all"
+            className="px-5 py-2 text-lg font-semibold text-grey hover:text-black rounded-full transition-all"
           >
             Login
           </Link>
@@ -122,7 +122,7 @@ export const Navbar = () => {
             <Link
               href="/login"
               onClick={() => setIsOpen(false)}
-              className="w-full py-3 text-center text-lg font-semibold text-error"
+              className="w-full py-3 text-center text-lg font-semibold text-grey"
             >
               Login
             </Link>

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import toast from "react-hot-toast";
 import Image from "next/image";
 import * as yup from "yup";
 import Input from "@/components/Input";
@@ -69,7 +70,7 @@ const SignUpForm = () => {
       await new Promise((resolve) => setTimeout(resolve, 1500));
 
       console.log("Signup data:", validData);
-      alert("Signup successful! Check console for form data.");
+      toast.success("Signup successful!");
     } catch (err) {
       if (err instanceof yup.ValidationError) {
         const fieldErrors: {
@@ -110,10 +111,10 @@ const SignUpForm = () => {
           <div className="w-full max-w-md rounded-none lg:rounded-r-2xl bg-white p-8 shadow-none animate-slide-in-left">
             {/* Form header */}
             <div className="space-y-2 mb-8 animate-fade-in [animation-delay:200ms]">
-              <h1 className="text-2xl md:text-[40px] font-bold text-[#232323] tracking-tight">
+              <h1 className="text-2xl md:text-[40px] font-bold text-black tracking-tight">
                 Get Started
               </h1>
-              <p className="text-sm md:text-[18px] font-normal text-[#969696]">
+              <p className="text-sm md:text-[18px] font-normal text-muted-foreground">
                 Please signup to get started.
               </p>
             </div>
@@ -219,12 +220,7 @@ const SignUpForm = () => {
                     stroke="currentColor"
                     strokeWidth="3"
                   >
-                    <circle
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      className="opacity-30"
-                    />
+                    <circle cx="12" cy="12" r="10" className="opacity-30" />
                     <path d="M22 12a10 10 0 0 1-10 10" />
                   </svg>
                 )}
@@ -234,7 +230,7 @@ const SignUpForm = () => {
               </Button>
 
               {/* Have account */}
-              <div className="pt-2 text-center text-xs md:text-[18px] text-[#6C6C6C] font-semibold">
+              <div className="pt-2 text-center text-xs md:text-[18px] text-muted-foreground font-semibold">
                 Already have an account?{" "}
                 <a
                   href="/login"
