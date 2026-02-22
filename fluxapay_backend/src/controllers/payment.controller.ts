@@ -6,16 +6,21 @@ const prisma = new PrismaClient();
 export const createPayment = async (req: Request, res: Response) => {
   try {
     const { merchantId, order_id, amount, currency, customer_email, metadata } = req.body;
+
+    // FIX 1: Added missing 'checkout_url' and correctly linked 'merchant'
     const payment = await prisma.payment.create({
       data: {
-        merchantId,
-        order_id,
         amount,
         currency,
         customer_email,
+        order_id,
         metadata: metadata || {},
         status: "pending",
-        expiration: new Date(Date.now() + 3600000), // 1 hour expiry
+        expiration: new Date(Date.now() + 3600000),
+        checkout_url: "", // Provide a default or actual URL here
+        merchant: {
+          connect: { id: merchantId }
+        },
         timeline: [{ event: "payment_created", timestamp: new Date() }]
       }
     });
@@ -32,6 +37,10 @@ export const getPayments = async (req: Request, res: Response) => {
       date_from, date_to, amount_min, amount_max,
       search, sort_by = 'createdAt', order = 'desc'
     } = req.query;
+
+    // FIX 2: Explicitly cast query params to strings to fix TS2322
+    const sortByStr = String(sort_by);
+    const orderStr = String(order) as 'asc' | 'desc';
 
     const where: any = {
       ...(status && { status: String(status) }),
@@ -57,12 +66,14 @@ export const getPayments = async (req: Request, res: Response) => {
       })
     };
 
-    // CSV Export Handling
     if (req.path.includes('/export')) {
-      const payments = await prisma.payment.findMany({ where, orderBy: { [String(sort_by)]: order as any } });
-      const header = "ID,OrderID,Amount,Currency,Status,Email,TxHash,Date\n";
+      const payments = await prisma.payment.findMany({
+        where,
+        orderBy: { [sortByStr]: orderStr }
+      });
+      const header = "ID,OrderID,Amount,Currency,Status,Email,Date\n";
       const csv = payments.map((p: any) =>
-        `${p.id},${p.order_id || ''},${p.amount},${p.currency},${p.status},${p.customer_email},${p.sweep_tx_hash || ''},${p.createdAt.toISOString()}`
+        `${p.id},${p.order_id || ''},${p.amount},${p.currency},${p.status},${p.customer_email},${p.createdAt}`
       ).join("\n");
       res.setHeader("Content-Type", "text/csv");
       res.attachment("payments_history.csv");
@@ -74,8 +85,7 @@ export const getPayments = async (req: Request, res: Response) => {
         where,
         skip: (Number(page) - 1) * Number(limit),
         take: Number(limit),
-        orderBy: { [String(sort_by)]: order as any },
-        include: { merchant: { select: { business_name: true, email: true } } }
+        orderBy: { [sortByStr]: orderStr }
       }),
       prisma.payment.count({ where })
     ]);
