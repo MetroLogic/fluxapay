@@ -48,6 +48,11 @@ path.join(process.cwd(), "src/generated/client/libquery_engine-darwin-arm64.dyli
  */
 export type Merchant = Prisma.MerchantModel
 /**
+ * Model BankAccount
+ * 
+ */
+export type BankAccount = Prisma.BankAccountModel
+/**
  * Model OTP
  * 
  */

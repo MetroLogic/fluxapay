@@ -79,7 +79,9 @@ export const WebhookEventType = {
   refund_failed: 'refund_failed',
   subscription_created: 'subscription_created',
   subscription_cancelled: 'subscription_cancelled',
-  subscription_renewed: 'subscription_renewed'
+  subscription_renewed: 'subscription_renewed',
+  settlement_completed: 'settlement_completed',
+  settlement_failed: 'settlement_failed'
 } as const
 
 export type WebhookEventType = (typeof WebhookEventType)[keyof typeof WebhookEventType]

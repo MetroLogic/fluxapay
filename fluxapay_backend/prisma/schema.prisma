@@ -23,6 +23,7 @@ model Merchant {
   settlement_currency String
   password            String
   status              MerchantStatus @default(pending_verification)
+  webhook_url         String?
   created_at          DateTime       @default(now())
   updated_at          DateTime       @updatedAt
   otps                OTP[]
@@ -30,6 +31,21 @@ model Merchant {
   kyc                 MerchantKYC?
   webhookLogs         WebhookLog[]
   payments            Payment[]
+  bankAccount         BankAccount?
+}
+
+model BankAccount {
+  id             String   @id @default(cuid())
+  merchant       Merchant @relation(fields: [merchantId], references: [id])
+  merchantId     String   @unique
+  account_name   String
+  account_number String
+  bank_name      String
+  bank_code      String?
+  currency       String
+  country        String
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
 }
 
 model OTP {
@@ -48,16 +64,31 @@ model Settlement {
   id               String           @id @default(cuid())
   merchant         Merchant         @relation(fields: [merchantId], references: [id])
   merchantId       String
+  // USDC gross amount received
+  usdc_amount      Decimal
+  // Fiat gross before fees
   amount           Decimal
   currency         String
-  status           SettlementStatus @default(pending)
+  // FluxaPay settlement fee (fiat)
   fees             Decimal
+  // Fiat net amount transferred to merchant
+  net_amount       Decimal
+  status           SettlementStatus @default(pending)
   breakdown        Json?
+  // Exchange / payout partner details
+  exchange_partner String?
+  exchange_rate    Decimal?
+  exchange_ref     String?
+  // Bank transfer / payout reference
   bank_transfer_id String?
+  // payment IDs included in this batch (JSON array of strings)
+  payment_ids      Json             @default("[]")
   scheduled_date   DateTime
   processed_date   DateTime?
+  failure_reason   String?
   created_at       DateTime         @default(now())
   updated_at       DateTime         @updatedAt
+  payments         Payment[]
 }
 
 model MerchantKYC {
@@ -128,17 +159,30 @@ model WebhookRetryAttempt {
 }
 
 model Payment {
-  id             String   @id @default(cuid())
-  merchant       Merchant @relation(fields: [merchantId], references: [id])
-  merchantId     String
-  amount         Decimal
-  currency       String
-  customer_email String
-  metadata       Json
-  expiration     DateTime
-  status         String
-  checkout_url   String
-  createdAt      DateTime @default(now())
+  id                   String      @id @default(cuid())
+  merchant             Merchant    @relation(fields: [merchantId], references: [id])
+  merchantId           String
+  amount               Decimal
+  currency             String
+  customer_email       String
+  metadata             Json
+  expiration           DateTime
+  status               String
+  checkout_url         String
+  // sweeping fields
+  swept                Boolean     @default(false)
+  swept_at             DateTime?
+  sweep_tx_hash        String?
+  // settlement fields
+  settled              Boolean     @default(false)
+  settled_at           DateTime?
+  settlement_ref       String?
+  settlement_fiat_amount Decimal?
+  settlement_fiat_currency String?
+  // link to settlement batch
+  settlement           Settlement? @relation(fields: [settlementId], references: [id])
+  settlementId         String?
+  createdAt            DateTime    @default(now())
 }
 
 // ...existing code...
@@ -193,6 +237,8 @@ enum WebhookEventType {
   subscription_created
   subscription_cancelled
   subscription_renewed
+  settlement_completed
+  settlement_failed
 }
 
 enum WebhookStatus {
