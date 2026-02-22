@@ -159,30 +159,39 @@ model WebhookRetryAttempt {
 }
 
 model Payment {
-  id                   String      @id @default(cuid())
-  merchant             Merchant    @relation(fields: [merchantId], references: [id])
-  merchantId           String
-  amount               Decimal
-  currency             String
-  customer_email       String
-  metadata             Json
-  expiration           DateTime
-  status               String
-  checkout_url         String
+  id                      String      @id @default(cuid())
+  merchant                Merchant    @relation(fields: [merchantId], references: [id])
+  merchantId              String
+  order_id                String?     @unique // Added for search/tracking
+  amount                  Decimal
+  currency                String
+  customer_email          String
+  metadata                Json
+  expiration              DateTime
+  status                  String
+  checkout_url            String
+  timeline                Json?       // Added to track payment events
+  
   // sweeping fields
-  swept                Boolean     @default(false)
-  swept_at             DateTime?
-  sweep_tx_hash        String?
+  swept                   Boolean     @default(false)
+  swept_at                DateTime?
+  sweep_tx_hash           String?     // This is your Stellar transaction hash
+  
   // settlement fields
-  settled              Boolean     @default(false)
-  settled_at           DateTime?
-  settlement_ref       String?
-  settlement_fiat_amount Decimal?
+  settled                 Boolean     @default(false)
+  settled_at              DateTime?
+  settlement_ref          String?
+  settlement_fiat_amount  Decimal?
   settlement_fiat_currency String?
+  
   // link to settlement batch
-  settlement           Settlement? @relation(fields: [settlementId], references: [id])
-  settlementId         String?
-  createdAt            DateTime    @default(now())
+  settlement              Settlement? @relation(fields: [settlementId], references: [id])
+  settlementId            String?
+  createdAt               DateTime    @default(now())
+
+  @@index([status])
+  @@index([customer_email])
+  @@index([createdAt])
 }
 
 // ...existing code...

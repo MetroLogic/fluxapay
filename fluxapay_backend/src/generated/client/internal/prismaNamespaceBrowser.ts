@@ -223,6 +223,8 @@ export const PaymentScalarFieldEnum = {
   id: 'id',
   payment_id: 'payment_id',
   merchant_id: 'merchant_id',
+  merchantId: 'merchantId',
+  order_id: 'order_id',
   amount: 'amount',
   currency: 'currency',
   deposit_address: 'deposit_address',
@@ -242,6 +244,7 @@ export const PaymentScalarFieldEnum = {
   created_at: 'created_at',
   updated_at: 'updated_at'
   checkout_url: 'checkout_url',
+  timeline: 'timeline',
   swept: 'swept',
   swept_at: 'swept_at',
   sweep_tx_hash: 'sweep_tx_hash',
