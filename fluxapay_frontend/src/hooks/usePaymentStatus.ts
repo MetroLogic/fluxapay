@@ -18,37 +18,6 @@ export function usePaymentStatus(paymentId: string): UsePaymentStatusReturn {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchPayment = useCallback(async () => {
-    try {
-      const response = await fetch(`/api/payments/${paymentId}`);
-      
-      if (!response.ok) {
-        if (response.status === 404) {
-          setError('Payment not found');
-        } else {
-          setError('Failed to fetch payment details');
-        }
-        setLoading(false);
-        return;
-      }
-
-      const data = await response.json();
-      
-      // Convert expiresAt string to Date object
-      const paymentData: Payment = {
-        ...data,
-        expiresAt: new Date(data.expiresAt),
-      };
-      
-      setPayment(paymentData);
-      setError(null);
-      setLoading(false);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
-      setLoading(false);
-    }
-  }, [paymentId]);
-
   const pollStatus = useCallback(async () => {
     // Don't poll if payment is already confirmed, expired, or failed
     if (payment && ['confirmed', 'expired', 'failed'].includes(payment.status)) {
@@ -83,10 +52,52 @@ export function usePaymentStatus(paymentId: string): UsePaymentStatusReturn {
     }
   }, [paymentId, payment]);
 
-  // Initial fetch
+  // Initial fetch - moved inline to avoid setState-in-effect lint error
   useEffect(() => {
+    let isMounted = true;
+
+    async function fetchPayment() {
+      try {
+        const response = await fetch(`/api/payments/${paymentId}`);
+        
+        if (!isMounted) return;
+        
+        if (!response.ok) {
+          if (response.status === 404) {
+            setError('Payment not found');
+          } else {
+            setError('Failed to fetch payment details');
+          }
+          setLoading(false);
+          return;
+        }
+
+        const data = await response.json();
+        
+        if (!isMounted) return;
+        
+        // Convert expiresAt string to Date object
+        const paymentData: Payment = {
+          ...data,
+          expiresAt: new Date(data.expiresAt),
+        };
+        
+        setPayment(paymentData);
+        setError(null);
+        setLoading(false);
+      } catch (err) {
+        if (!isMounted) return;
+        setError(err instanceof Error ? err.message : 'An error occurred');
+        setLoading(false);
+      }
+    }
+
     fetchPayment();
-  }, [fetchPayment]);
+
+    return () => {
+      isMounted = false;
+    };
+  }, [paymentId]);
 
   // Polling interval
   useEffect(() => {
