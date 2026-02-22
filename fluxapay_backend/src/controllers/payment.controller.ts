@@ -32,36 +32,41 @@ export const createPayment = async (req: Request, res: Response) => {
 
 export const getPayments = async (req: Request, res: Response) => {
   try {
-    const {
-      page = 1, limit = 10, status, currency,
-      date_from, date_to, amount_min, amount_max,
-      search, sort_by = 'createdAt', order = 'desc'
-    } = req.query;
+    // 1. Force everything to be a string or a default value
+    const page = Number(req.query.page) || 1;
+    const limit = Number(req.query.limit) || 10;
+    const status = req.query.status ? String(req.query.status) : undefined;
+    const currency = req.query.currency ? String(req.query.currency) : undefined;
+    const date_from = req.query.date_from ? String(req.query.date_from) : undefined;
+    const date_to = req.query.date_to ? String(req.query.date_to) : undefined;
+    const amount_min = req.query.amount_min ? Number(req.query.amount_min) : undefined;
+    const amount_max = req.query.amount_max ? Number(req.query.amount_max) : undefined;
+    const search = req.query.search ? String(req.query.search) : undefined;
 
-    // FIX 2: Explicitly cast query params to strings to fix TS2322
-    const sortByStr = String(sort_by);
-    const orderStr = String(order) as 'asc' | 'desc';
+    // 2. These specifically were causing the TS2322 error
+    const sort_by = typeof req.query.sort_by === 'string' ? req.query.sort_by : 'createdAt';
+    const order = req.query.order === 'asc' ? 'asc' : 'desc';
 
     const where: any = {
-      ...(status && { status: String(status) }),
-      ...(currency && { currency: String(currency) }),
+      ...(status && { status }),
+      ...(currency && { currency }),
       ...((date_from || date_to) && {
         createdAt: {
-          ...(date_from && { gte: new Date(String(date_from)) }),
-          ...(date_to && { lte: new Date(String(date_to)) }),
+          ...(date_from && { gte: new Date(date_from) }),
+          ...(date_to && { lte: new Date(date_to) }),
         }
       }),
       ...((amount_min || amount_max) && {
         amount: {
-          ...(amount_min && { gte: Number(amount_min) }),
-          ...(amount_max && { lte: Number(amount_max) }),
+          ...(amount_min !== undefined && { gte: amount_min }),
+          ...(amount_max !== undefined && { lte: amount_max }),
         }
       }),
       ...(search && {
         OR: [
-          { id: { contains: String(search) } },
-          { order_id: { contains: String(search) } },
-          { customer_email: { contains: String(search), mode: 'insensitive' } }
+          { id: { contains: search } },
+          { order_id: { contains: search } },
+          { customer_email: { contains: search, mode: 'insensitive' } }
         ]
       })
     };
@@ -69,7 +74,7 @@ export const getPayments = async (req: Request, res: Response) => {
     if (req.path.includes('/export')) {
       const payments = await prisma.payment.findMany({
         where,
-        orderBy: { [sortByStr]: orderStr }
+        orderBy: { [sort_by]: order }
       });
       const header = "ID,OrderID,Amount,Currency,Status,Email,Date\n";
       const csv = payments.map((p: any) =>
@@ -83,14 +88,14 @@ export const getPayments = async (req: Request, res: Response) => {
     const [data, total] = await Promise.all([
       prisma.payment.findMany({
         where,
-        skip: (Number(page) - 1) * Number(limit),
-        take: Number(limit),
-        orderBy: { [sortByStr]: orderStr }
+        skip: (page - 1) * limit,
+        take: limit,
+        orderBy: { [sort_by]: order }
       }),
       prisma.payment.count({ where })
     ]);
 
-    res.json({ data, meta: { total, page: Number(page), limit: Number(limit) } });
+    res.json({ data, meta: { total, page, limit } });
   } catch (error) {
     res.status(500).json({ error: "Internal Server Error" });
   }
