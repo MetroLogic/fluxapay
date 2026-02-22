@@ -23,6 +23,11 @@ export * from './enums';
  */
 export type Merchant = Prisma.MerchantModel
 /**
+ * Model BankAccount
+ * 
+ */
+export type BankAccount = Prisma.BankAccountModel
+/**
  * Model OTP
  * 
  */
