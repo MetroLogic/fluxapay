@@ -1269,6 +1269,7 @@ export type WebhookRetryAttemptScalarFieldEnum = (typeof WebhookRetryAttemptScal
 export const PaymentScalarFieldEnum = {
   id: 'id',
   merchantId: 'merchantId',
+  order_id: 'order_id',
   amount: 'amount',
   currency: 'currency',
   customer_email: 'customer_email',
@@ -1276,6 +1277,7 @@ export const PaymentScalarFieldEnum = {
   expiration: 'expiration',
   status: 'status',
   checkout_url: 'checkout_url',
+  timeline: 'timeline',
   swept: 'swept',
   swept_at: 'swept_at',
   sweep_tx_hash: 'sweep_tx_hash',
