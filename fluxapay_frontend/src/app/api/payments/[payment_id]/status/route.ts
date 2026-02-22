@@ -10,9 +10,9 @@ const paymentStatusStore = new Map<string, { status: string; createdAt: number }
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { payment_id: string } }
+  { params }: { params: Promise<{ payment_id: string }> }
 ) {
-  const paymentId = params.payment_id;
+  const { payment_id: paymentId } = await params;
 
   // Simulate network delay
   await new Promise((resolve) => setTimeout(resolve, 200));
