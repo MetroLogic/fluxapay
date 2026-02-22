@@ -8,6 +8,7 @@ import settlementRoutes from "./routes/settlement.route";
 import kycRoutes from "./routes/kyc.route";
 import webhookRoutes from "./routes/webhook.route";
 import settlementBatchRoutes from "./routes/settlementBatch.route";
+import paymentRoutes from "./routes/payment.route"; // New import
 
 const app = express();
 const prisma = new PrismaClient();
@@ -18,27 +19,17 @@ app.use(express.json());
 // Swagger UI
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(specs));
 
+// API Routes
 app.use("/api/merchants", merchantRoutes);
 app.use("/api/settlements", settlementRoutes);
 app.use("/api/merchants/kyc", kycRoutes);
 app.use("/api/webhooks", webhookRoutes);
 app.use("/api/admin/settlement", settlementBatchRoutes);
+app.use("/api/payments", paymentRoutes); // Added this line
 
 // Basic health check
 app.get("/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date() });
 });
-
-// Example route
-/**
- * @swagger
- * /health:
- *   get:
- *     summary: Health check
- *     description: Check if the server is running
- *     responses:
- *       200:
- *         description: Server is up
- */
 
 export { app, prisma };
