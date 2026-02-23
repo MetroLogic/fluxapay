@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 
 const FooterSection = ({
   title,
@@ -16,12 +17,12 @@ const FooterSection = ({
     <ul className="space-y-3">
       {links.map((link, idx) => (
         <li key={idx}>
-          <a
+          <Link
             href={link.href}
             className="text-[#A0A0A0] hover:text-white transition-colors duration-200 text-sm"
           >
             {link.label}
-          </a>
+          </Link>
         </li>
       ))}
     </ul>
@@ -33,18 +34,18 @@ export const Footer = () => {
 
   const footerLinks = {
     legal: [
-      { label: "Privacy Policy", href: "#" },
-      { label: "Terms of Use", href: "#" },
+      { label: "Privacy Policy", href: "/privacy" },
+      { label: "Terms of Use", href: "/terms" },
     ],
     product: [
-      { label: "Sign Up", href: "#" },
-      { label: "Log In", href: "#" },
-      { label: "Pricing", href: "#" },
+      { label: "Sign Up", href: "/signup" },
+      { label: "Log In", href: "/login" },
+      { label: "Pricing", href: "/pricing" },
     ],
     resources: [
-      { label: "Docs", href: "#" },
-      { label: "FAQs / Support", href: "#" },
-      { label: "Contact us", href: "#" },
+      { label: "Docs", href: "/docs" },
+      { label: "FAQs / Support", href: "/faq" },
+      { label: "Contact us", href: "/contact" },
     ],
   };
 
