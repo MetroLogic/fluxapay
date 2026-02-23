@@ -122,7 +122,7 @@ export const getPaymentById = async (req: Request, res: Response) => {
 
     const responseData = {
       ...payment,
-      stellar_expert_url: (payment as any).transaction_hash ? `${explorerBase}${(payment as any).transaction_hash}` : null
+      stellar_expert_url: payment.transaction_hash ? `${explorerBase}${payment.transaction_hash}` : null
     };
 
     res.json(responseData);
