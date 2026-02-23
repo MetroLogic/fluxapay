@@ -36,7 +36,7 @@ describe('StellarService', () => {
         
         const mockHDWallet = new HDWalletService('test-seed');
         // Override regenerateKeypair to return predictable keys
-        mockHDWallet.regenerateKeypair = jest.fn().mockReturnValue({
+        mockHDWallet.regenerateKeypair = jest.fn().mockResolvedValue({
             publicKey: 'G_MOCK_PUB',
             secretKey: 'S_MOCK_SEC'
         });
