@@ -13,6 +13,9 @@ router.get('/', getPayments);
 // Endpoint: GET /api/payments/export
 router.get('/export', getPayments);
 
+// Endpoint: GET /api/payments/v1/payments/:id
+router.get('/v1/payments/:id', getPaymentById);
+
 // Endpoint: GET /api/payments/:payment_id
 router.get('/:payment_id', getPaymentById);
 

@@ -14,14 +14,8 @@ import {
 
 const prisma = new PrismaClient();
 
-function generateApiKey(): string {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  let apiKey = "fluxapay_live_";
-  for (let i = 0; i < 32; i++) {
-    apiKey += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return apiKey;
-}
+// Local generateApiKey removed to resolve conflict with import from crypto.helper
+
 
 export async function signupMerchantService(data: {
   business_name: string;
@@ -164,10 +158,8 @@ export async function getMerchantUserService(data: { merchantId: string }) {
   });
 
   if (!merchant) throw { status: 404, message: "Merchant not found" };
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { password, api_key_hashed, ...merchantData } = merchant;
 
-  return { message: "Merchant found", merchant: merchantData };
+  return { message: "Merchant found", merchant: merchant };
 }
 
 export async function rotateApiKeyService(data: { merchantId: string }) {
@@ -268,9 +260,9 @@ export async function regenerateApiKeyService(data: {
     where: { id: merchantId },
     data: { api_key: apiKey },
   });
-  
-  return { 
-    message: "API key regenerated successfully", 
-    api_key: apiKey 
+
+  return {
+    message: "API key regenerated successfully",
+    api_key: apiKey
   };
 }

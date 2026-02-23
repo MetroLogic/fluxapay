@@ -16,7 +16,7 @@ export const createPayment = async (req: Request, res: Response) => {
       customer_email,
       metadata: metadata || {},
     });
-    
+
     // Update with order_id and timeline if provided
     const updatedPayment = await prisma.payment.update({
       where: { id: payment.id },
@@ -25,7 +25,7 @@ export const createPayment = async (req: Request, res: Response) => {
         timeline: [{ event: "payment_created", timestamp: new Date() }]
       }
     });
-    
+
     res.status(201).json(updatedPayment);
   } catch (error) {
     console.error('Error creating payment:', error);
@@ -104,8 +104,9 @@ export const getPayments = async (req: Request, res: Response) => {
 
 export const getPaymentById = async (req: Request, res: Response) => {
   try {
-    // Force payment_id to be a single string
-    const payment_id = String(req.params.payment_id);
+    // Endpoint: GET /api/payments/v1/payments/:id
+    // Support both 'id' and 'payment_id' parameters
+    const payment_id = String(req.params.id || req.params.payment_id);
 
     const payment = await prisma.payment.findUnique({
       where: { id: payment_id }, // This is line 106 that was failing!
@@ -113,8 +114,18 @@ export const getPaymentById = async (req: Request, res: Response) => {
     });
 
     if (!payment) return res.status(404).json({ error: "Payment not found" });
-    
-    res.json(payment);
+
+    // Add explorer link if transaction_hash exists
+    const explorerBase = (process.env.STELLAR_HORIZON_URL || "").includes("testnet")
+      ? "https://stellar.expert/explorer/testnet/tx/"
+      : "https://stellar.expert/explorer/public/tx/";
+
+    const responseData = {
+      ...payment,
+      stellar_expert_url: payment.transaction_hash ? `${explorerBase}${payment.transaction_hash}` : null
+    };
+
+    res.json(responseData);
   } catch (error) {
     res.status(500).json({ error: "Error fetching details" });
   }

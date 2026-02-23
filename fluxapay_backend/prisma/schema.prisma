@@ -184,6 +184,8 @@ model Payment {
   swept                   Boolean     @default(false)
   swept_at                DateTime?
   sweep_tx_hash           String?     // This is your Stellar transaction hash
+  transaction_hash        String?     // The on-chain hash for the incoming payment
+
   
   // settlement fields
   settled                 Boolean     @default(false)
