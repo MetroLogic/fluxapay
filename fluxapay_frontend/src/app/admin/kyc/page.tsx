@@ -575,20 +575,31 @@ const AdminKycPage = () => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200 bg-white">
-                      {selectedApplication.beneficialOwners.map(
-                        (owner, idx) => (
-                          <tr key={idx}>
-                            <td className="px-4 py-3 text-sm text-slate-900">
-                              {owner.name}
-                            </td>
-                            <td className="px-4 py-3 text-sm text-slate-600">
-                              {owner.role}
-                            </td>
-                            <td className="px-4 py-3 text-sm text-slate-900">
-                              {owner.ownership}%
-                            </td>
-                          </tr>
-                        ),
+                      {selectedApplication.beneficialOwners.length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan={3}
+                            className="px-4 py-8 text-center text-sm text-slate-500"
+                          >
+                            No beneficial owners provided.
+                          </td>
+                        </tr>
+                      ) : (
+                        selectedApplication.beneficialOwners.map(
+                          (owner, idx) => (
+                            <tr key={idx}>
+                              <td className="px-4 py-3 text-sm text-slate-900">
+                                {owner.name}
+                              </td>
+                              <td className="px-4 py-3 text-sm text-slate-600">
+                                {owner.role}
+                              </td>
+                              <td className="px-4 py-3 text-sm text-slate-900">
+                                {owner.ownership}%
+                              </td>
+                            </tr>
+                          ),
+                        )
                       )}
                     </tbody>
                   </table>
