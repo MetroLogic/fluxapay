@@ -57,7 +57,8 @@ export const ModelName = {
   KYCDocument: 'KYCDocument',
   WebhookLog: 'WebhookLog',
   WebhookRetryAttempt: 'WebhookRetryAttempt',
-  Payment: 'Payment'
+  Payment: 'Payment',
+  Refund: 'Refund'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -246,6 +247,27 @@ export const PaymentScalarFieldEnum = {
 } as const
 
 export type PaymentScalarFieldEnum = (typeof PaymentScalarFieldEnum)[keyof typeof PaymentScalarFieldEnum]
+
+
+export const RefundScalarFieldEnum = {
+  id: 'id',
+  payment_id: 'payment_id',
+  merchant_id: 'merchant_id',
+  amount: 'amount',
+  currency: 'currency',
+  customer_address: 'customer_address',
+  reason: 'reason',
+  reason_note: 'reason_note',
+  status: 'status',
+  stellar_tx_hash: 'stellar_tx_hash',
+  error_message: 'error_message',
+  error_code: 'error_code',
+  initiated_by: 'initiated_by',
+  created_at: 'created_at',
+  updated_at: 'updated_at'
+} as const
+
+export type RefundScalarFieldEnum = (typeof RefundScalarFieldEnum)[keyof typeof RefundScalarFieldEnum]
 
 
 export const SortOrder = {

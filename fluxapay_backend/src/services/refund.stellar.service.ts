@@ -54,11 +54,16 @@ export class StellarRefundService {
     this.baseFee = process.env.STELLAR_BASE_FEE || "100";
     this.txTimeout = parseInt(process.env.STELLAR_TX_TIMEOUT || "30", 10);
 
+    // Initialize HDWalletService with KMS support
+    // For backward compatibility, still support direct seed injection in tests
     const masterSeed = process.env.HD_WALLET_MASTER_SEED;
-    if (!masterSeed) {
-      throw new Error("HD_WALLET_MASTER_SEED is required");
+    if (masterSeed) {
+      // Legacy mode: direct seed injection (for tests)
+      this.hdWalletService = new HDWalletService(masterSeed);
+    } else {
+      // Production mode: use KMS
+      this.hdWalletService = new HDWalletService();
     }
-    this.hdWalletService = new HDWalletService(masterSeed);
   }
 
   async executeRefund(params: RefundParams): Promise<RefundResult> {
@@ -72,7 +77,7 @@ export class StellarRefundService {
     } = params;
 
     // 1. Regenerate keypair for the payment address
-    const { publicKey, secretKey } = this.hdWalletService.regenerateKeypair(
+    const { publicKey, secretKey } = await this.hdWalletService.regenerateKeypair(
       merchantId,
       paymentId,
     );
