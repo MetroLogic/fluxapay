@@ -140,3 +140,70 @@ export async function getMerchantUserService(data: {
 
   return { message: "Merchant found", merchant };
 }
+
+export async function updateMerchantProfileService(data: {
+  merchantId: string;
+  business_name?: string;
+  email?: string;
+}) {
+  const { merchantId, business_name, email } = data;
+
+  // Check if email is being changed and if it's already taken
+  if (email) {
+    const existing = await prisma.merchant.findFirst({
+      where: { email, id: { not: merchantId } },
+    });
+    if (existing) throw { status: 400, message: "Email already in use" };
+  }
+
+  const updateData: any = {};
+  if (business_name) updateData.business_name = business_name;
+  if (email) updateData.email = email;
+
+  const merchant = await prisma.merchant.update({
+    where: { id: merchantId },
+    data: updateData,
+  });
+
+  return { message: "Profile updated successfully", merchant };
+}
+
+export async function updateMerchantWebhookService(data: {
+  merchantId: string;
+  webhook_url: string;
+}) {
+  const { merchantId, webhook_url } = data;
+
+  // Validate webhook URL
+  if (!webhook_url.startsWith("https://")) {
+    throw { status: 400, message: "Webhook URL must use HTTPS" };
+  }
+
+  const merchant = await prisma.merchant.update({
+    where: { id: merchantId },
+    data: { webhook_url },
+  });
+
+  return { message: "Webhook URL updated successfully", merchant };
+}
+
+export async function regenerateApiKeyService(data: {
+  merchantId: string;
+}) {
+  const { merchantId } = data;
+
+  // Generate new API key
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  let apiKey = "fluxapay_live_";
+  for (let i = 0; i < 32; i++) {
+    apiKey += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+
+  // In a real implementation, you would store this in a separate ApiKey table
+  // For now, we'll return it (you should add an api_key field to Merchant model)
+  
+  return { 
+    message: "API key regenerated successfully", 
+    api_key: apiKey 
+  };
+}

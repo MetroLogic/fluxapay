@@ -9,6 +9,7 @@ import kycRoutes from "./routes/kyc.route";
 import webhookRoutes from "./routes/webhook.route";
 import settlementBatchRoutes from "./routes/settlementBatch.route";
 import paymentRoutes from "./routes/payment.route"; // New import
+import keysRoutes from "./routes/keys.route";
 
 const app = express();
 const prisma = new PrismaClient();
@@ -26,6 +27,7 @@ app.use("/api/merchants/kyc", kycRoutes);
 app.use("/api/webhooks", webhookRoutes);
 app.use("/api/admin/settlement", settlementBatchRoutes);
 app.use("/api/payments", paymentRoutes); // Added this line
+app.use("/api/v1/keys", keysRoutes);
 
 // Basic health check
 app.get("/health", (req, res) => {
