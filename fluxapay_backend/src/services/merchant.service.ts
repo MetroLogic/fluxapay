@@ -9,6 +9,15 @@ import { merchantRegistryService } from "./merchantRegistry.service";
 
 const prisma = new PrismaClient();
 
+function generateApiKey(): string {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  let apiKey = "fluxapay_live_";
+  for (let i = 0; i < 32; i++) {
+    apiKey += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return apiKey;
+}
+
 export async function signupMerchantService(data: {
   business_name: string;
   email: string;
@@ -36,6 +45,9 @@ export async function signupMerchantService(data: {
   // Hash password
   const hashedPassword = await bcrypt.hash(password, 10);
 
+  // Generate API key
+  const apiKey = generateApiKey();
+
   // Create merchant
   const merchant = await prisma.merchant.create({
     data: {
@@ -45,6 +57,7 @@ export async function signupMerchantService(data: {
       country,
       settlement_currency,
       password: hashedPassword,
+      api_key: apiKey,
     },
   });
 
@@ -133,10 +146,22 @@ export async function getMerchantUserService(data: {
   const { merchantId } = data;
   const merchant = await prisma.merchant.findUnique({
     where: { id: merchantId },
+    select: {
+      id: true,
+      business_name: true,
+      email: true,
+      phone_number: true,
+      country: true,
+      settlement_currency: true,
+      status: true,
+      api_key: true,
+      webhook_url: true,
+      created_at: true,
+      updated_at: true,
+    },
   });
 
   if (!merchant) throw { status: 404, message: "Merchant not found" };
-
 
   return { message: "Merchant found", merchant };
 }
@@ -193,14 +218,13 @@ export async function regenerateApiKeyService(data: {
   const { merchantId } = data;
 
   // Generate new API key
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  let apiKey = "fluxapay_live_";
-  for (let i = 0; i < 32; i++) {
-    apiKey += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
+  const apiKey = generateApiKey();
 
-  // In a real implementation, you would store this in a separate ApiKey table
-  // For now, we'll return it (you should add an api_key field to Merchant model)
+  // Update merchant with new API key
+  await prisma.merchant.update({
+    where: { id: merchantId },
+    data: { api_key: apiKey },
+  });
   
   return { 
     message: "API key regenerated successfully", 

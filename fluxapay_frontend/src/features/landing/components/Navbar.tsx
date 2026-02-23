@@ -4,6 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import logo from "@/assets/logo.svg";
+import { DOCS_URLS } from "@/lib/docs";
 
 export const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -11,8 +12,8 @@ export const Navbar = () => {
   const navLinks = [
     { name: "Home", href: "/" },
     { name: "Features", href: "#features" },
-    { name: "Pricing", href: "#pricing" },
-    { name: "Documentation", href: "#docs" },
+    { name: "Pricing", href: DOCS_URLS.PRICING },
+    { name: "Documentation", href: DOCS_URLS.FULL_DOCS },
   ];
 
   return (
