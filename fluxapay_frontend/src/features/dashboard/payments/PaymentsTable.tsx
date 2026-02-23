@@ -1,4 +1,5 @@
 import { Badge } from "@/components/Badge";
+import EmptyState from "@/components/EmptyState";
 import { Payment, PaymentStatus } from "./payments-mock";
 import { ChevronDown, ChevronUp, Copy, Eye } from "lucide-react";
 import { useState } from "react";
@@ -110,14 +111,11 @@ export const PaymentsTable = ({ payments, onRowClick }: PaymentsTableProps) => {
           </thead>
           <tbody className="divide-y">
             {sortedPayments.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={7}
-                  className="px-4 py-12 text-center text-muted-foreground"
-                >
-                  No payments found matching your filters.
-                </td>
-              </tr>
+              <EmptyState
+                colSpan={7}
+                className="px-4 py-12 text-muted-foreground"
+                message="No payments found matching your filters."
+              />
             ) : (
               sortedPayments.map((payment) => (
                 <tr

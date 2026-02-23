@@ -23,6 +23,7 @@ import {
     FileText
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import EmptyState from '@/components/EmptyState';
 
 // Type definitions
 interface Merchant {
@@ -304,8 +305,7 @@ const AdminMerchantsPage = () => {
 
             await simulateExportProgress();
             toast.success(message);
-        } catch (error) {
-            console.error('Export error:', error);
+        } catch {
             toast.error('Failed to export merchants. Please try again.');
             setIsExporting(false);
             setExportProgress(0);
@@ -602,102 +602,94 @@ const AdminMerchantsPage = () => {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-200">
-                                {filteredMerchants.map((merchant, index) => {
-                                    const kycConfig = getKycStatusConfig(merchant.kycStatus);
-                                    const accountConfig = getAccountStatusConfig(merchant.accountStatus);
+                                {filteredMerchants.length === 0 ? (
+                                    <EmptyState colSpan={8} className="py-12" message="No merchants found. Try adjusting your search or filter criteria." />
+                                ) : (
+                                    filteredMerchants.map((merchant, index) => {
+                                        const kycConfig = getKycStatusConfig(merchant.kycStatus);
+                                        const accountConfig = getAccountStatusConfig(merchant.accountStatus);
 
-                                    return (
-                                        <tr key={merchant.id} className="hover:bg-slate-50/50 transition-colors">
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <span className="text-sm font-medium text-slate-900 font-mono">
-                                                    {index + 1}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <span className="text-sm font-medium text-slate-900 font-mono">
-                                                    {merchant.id}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <div className="flex items-center gap-3">
-                                                    <div
-                                                        className="w-8 h-8 rounded-lg flex items-center justify-center"
-                                                        style={{ backgroundColor: primaryLight }}
-                                                    >
-                                                        <Building className="w-4 h-4" style={{ color: primaryColor }} />
+                                        return (
+                                            <tr key={merchant.id} className="hover:bg-slate-50/50 transition-colors">
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <span className="text-sm font-medium text-slate-900 font-mono">
+                                                        {index + 1}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <span className="text-sm font-medium text-slate-900 font-mono">
+                                                        {merchant.id}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <div className="flex items-center gap-3">
+                                                        <div
+                                                            className="w-8 h-8 rounded-lg flex items-center justify-center"
+                                                            style={{ backgroundColor: primaryLight }}
+                                                        >
+                                                            <Building className="w-4 h-4" style={{ color: primaryColor }} />
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-sm font-medium text-slate-900">{merchant.businessName}</p>
+                                                            <p className="text-xs text-slate-500 mt-0.5">
+                                                                Joined {merchant.dateJoined}
+                                                            </p>
+                                                        </div>
                                                     </div>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <div className="flex items-center gap-2 text-sm text-slate-600">
+                                                        <Mail className="w-4 h-4 text-slate-400" />
+                                                        {merchant.email}
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <span
+                                                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium ${kycConfig.bg} ${kycConfig.color} ${kycConfig.border}`}
+                                                    >
+                                                        {kycConfig.icon}
+                                                        {merchant.kycStatus.charAt(0).toUpperCase() + merchant.kycStatus.slice(1)}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <span
+                                                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium ${accountConfig.bg} ${accountConfig.color} ${accountConfig.border}`}
+                                                    >
+                                                        {accountConfig.icon}
+                                                        {merchant.accountStatus.charAt(0).toUpperCase() + merchant.accountStatus.slice(1)}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
                                                     <div>
-                                                        <p className="text-sm font-medium text-slate-900">{merchant.businessName}</p>
-                                                        <p className="text-xs text-slate-500 mt-0.5">
-                                                            Joined {merchant.dateJoined}
+                                                        <p className="text-sm font-medium text-slate-900">
+                                                            ${(merchant.volume / 1000).toFixed(1)}k volume
+                                                        </p>
+                                                        <p className="text-xs text-slate-500">
+                                                            ${merchant.revenue.toLocaleString()} revenue
                                                         </p>
                                                     </div>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="flex items-center gap-2 text-sm text-slate-600">
-                                                    <Mail className="w-4 h-4 text-slate-400" />
-                                                    {merchant.email}
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <span
-                                                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium ${kycConfig.bg} ${kycConfig.color} ${kycConfig.border}`}
-                                                >
-                                                    {kycConfig.icon}
-                                                    {merchant.kycStatus.charAt(0).toUpperCase() + merchant.kycStatus.slice(1)}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <span
-                                                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium ${accountConfig.bg} ${accountConfig.color} ${accountConfig.border}`}
-                                                >
-                                                    {accountConfig.icon}
-                                                    {merchant.accountStatus.charAt(0).toUpperCase() + merchant.accountStatus.slice(1)}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <div>
-                                                    <p className="text-sm font-medium text-slate-900">
-                                                        ${(merchant.volume / 1000).toFixed(1)}k volume
-                                                    </p>
-                                                    <p className="text-xs text-slate-500">
-                                                        ${merchant.revenue.toLocaleString()} revenue
-                                                    </p>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="flex items-center gap-2">
-                                                    <button
-                                                        onClick={() => setSelectedMerchant(merchant)}
-                                                        className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
-                                                        title="View Details"
-                                                    >
-                                                        <Eye className="w-4 h-4" />
-                                                    </button>
-                                                    <button className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors">
-                                                        <MoreVertical className="w-4 h-4" />
-                                                    </button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <div className="flex items-center gap-2">
+                                                        <button
+                                                            onClick={() => setSelectedMerchant(merchant)}
+                                                            className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
+                                                            title="View Details"
+                                                        >
+                                                            <Eye className="w-4 h-4" />
+                                                        </button>
+                                                        <button className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors">
+                                                            <MoreVertical className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })
+                                )}
                             </tbody>
                         </table>
                     </div>
-
-                    {filteredMerchants.length === 0 && (
-                        <div className="text-center py-12">
-                            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-100 mb-4">
-                                <Search className="w-8 h-8 text-slate-400" />
-                            </div>
-                            <h3 className="text-lg font-medium text-slate-900 mb-2">No merchants found</h3>
-                            <p className="text-sm text-slate-600 max-w-md mx-auto">
-                                Try adjusting your search or filter criteria to find what you&apos;re looking for.
-                            </p>
-                        </div>
-                    )}
                 </div>
             </div>
 
