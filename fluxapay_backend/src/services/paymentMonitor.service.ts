@@ -2,8 +2,9 @@
 import { Horizon, Asset } from '@stellar/stellar-sdk';
 import { PrismaClient } from '@prisma/client';
 
-const HORIZON_URL = 'https://horizon.stellar.org';
-const USDC_ASSET = new Asset('USDC', 'GA5ZSE7V3Y3TQ3Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5'); // Replace with actual issuer
+const HORIZON_URL = process.env.STELLAR_HORIZON_URL || 'https://horizon-testnet.stellar.org';
+const USDC_ISSUER = process.env.USDC_ISSUER_PUBLIC_KEY || 'GBBD47IF6LWK7P7MDEVSCWT73IQIGCEZHR7OMXMBZQ3ZONN2T4U6W23Y';
+const USDC_ASSET = new Asset('USDC', USDC_ISSUER);
 const POLL_INTERVAL = 3000;
 
 const prisma = new PrismaClient();
@@ -16,28 +17,64 @@ async function monitorPayments() {
       where: {
         status: 'pending',
         expiration: { gt: now },
+        stellar_address: { not: null },
       },
     });
 
     for (const payment of payments) {
-      const address = payment.metadata?.stellar_address;
+      const address = payment.stellar_address;
       if (!address) continue;
+      
       try {
-        const transactions = await server.payments().forAccount(address).order('desc').limit(10).call();
+        // Build the payments query with cursor support
+        let paymentsQuery = server.payments()
+          .forAccount(address)
+          .order('desc')
+          .limit(10);
+        
+        // If we have a last paging token, start from there to only get new transactions
+        if (payment.last_paging_token) {
+          paymentsQuery = paymentsQuery.cursor(payment.last_paging_token);
+        }
+        
+        const transactions = await paymentsQuery.call();
+        
+        // Track the latest paging token to avoid re-processing
+        let latestPagingToken = payment.last_paging_token;
+        
         for (const record of transactions.records) {
+          // Update the latest paging token
+          if (record.paging_token && (!latestPagingToken || record.paging_token > latestPagingToken)) {
+            latestPagingToken = record.paging_token;
+          }
+          
           if (record.type !== 'payment') continue;
           if (record.asset_type !== 'credit_alphanum4' || record.asset_code !== 'USDC') continue;
           if (record.asset_issuer !== USDC_ASSET.issuer) continue;
+          
           const amount = parseFloat(record.amount);
           if (amount >= payment.amount) {
             let status = 'paid';
             if (amount > payment.amount) status = 'overpaid';
             else if (amount < payment.amount) status = 'partially_paid';
+            
             await prisma.payment.update({
               where: { id: payment.id },
-              data: { status },
+              data: { 
+                status,
+                last_paging_token: latestPagingToken,
+              },
             });
+            break; // Payment processed, move to next payment
           }
+        }
+        
+        // Update the paging token even if no matching payment was found
+        if (latestPagingToken && latestPagingToken !== payment.last_paging_token) {
+          await prisma.payment.update({
+            where: { id: payment.id },
+            data: { last_paging_token: latestPagingToken },
+          });
         }
       } catch (e) {
         console.error('Error checking address', address, e);

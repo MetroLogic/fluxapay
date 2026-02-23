@@ -172,6 +172,10 @@ model Payment {
   checkout_url            String
   timeline                Json?       // Added to track payment events
   
+  // Stellar address for this payment
+  stellar_address         String?     // Derived HD wallet address
+  last_paging_token       String?     // Cursor for efficient transaction polling
+  
   // sweeping fields
   swept                   Boolean     @default(false)
   swept_at                DateTime?
@@ -192,6 +196,7 @@ model Payment {
   @@index([status])
   @@index([customer_email])
   @@index([createdAt])
+  @@index([stellar_address])
 }
 
 // ...existing code...
