@@ -5,6 +5,8 @@ import {
   verifyOtp,
   resendOtp,
   getLoggedInMerchant,
+  updateMerchantProfile,
+  updateMerchantWebhook,
 } from "../controllers/merchant.controller";
 import { validate } from "../middleware/validation.middleware";
 import * as merchantSchema from "../schemas/merchant.schema";
@@ -166,4 +168,59 @@ router.post("/resend-otp", validate(merchantSchema.resendOtpSchema), resendOtp);
  *         description: Merchant not found
  */
 router.get("/me", authenticateToken, getLoggedInMerchant);
+
+/**
+ * @swagger
+ * /api/merchants/me:
+ *   patch:
+ *     summary: Update merchant profile
+ *     tags: [Merchants]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               business_name:
+ *                 type: string
+ *               email:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Profile updated successfully
+ *       401:
+ *         description: Unauthorized
+ */
+router.patch("/me", authenticateToken, updateMerchantProfile);
+
+/**
+ * @swagger
+ * /api/merchants/me/webhook:
+ *   patch:
+ *     summary: Update merchant webhook URL
+ *     tags: [Merchants]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - webhook_url
+ *             properties:
+ *               webhook_url:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Webhook URL updated successfully
+ *       401:
+ *         description: Unauthorized
+ */
+router.patch("/me/webhook", authenticateToken, updateMerchantWebhook);
+
 export default router;
