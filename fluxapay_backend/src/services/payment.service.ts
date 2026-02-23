@@ -22,14 +22,9 @@ export class PaymentService {
     const paymentId = uuidv4();
     const expiration = new Date(Date.now() + 15 * 60 * 1000); // 15 min expiry
     
-    // Derive the Stellar address for this payment
-    const masterSeed = process.env.HD_WALLET_MASTER_SEED;
-    if (!masterSeed) {
-      throw new Error('HD_WALLET_MASTER_SEED is not configured');
-    }
-    
-    const hdWalletService = new HDWalletService(masterSeed);
-    const stellarAddress = hdWalletService.derivePaymentAddress(merchantId, paymentId);
+    // Derive the Stellar address for this payment using KMS-backed HDWalletService
+    const hdWalletService = new HDWalletService();
+    const stellarAddress = await hdWalletService.derivePaymentAddress(merchantId, paymentId);
     
     // Create payment with the derived Stellar address
     const payment = await prisma.payment.create({

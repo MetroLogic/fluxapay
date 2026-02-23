@@ -11,7 +11,8 @@
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
     "prisma:studio": "prisma studio",
-    "lint": "eslint src/**/*.ts"
+    "lint": "eslint src/**/*.ts",
+    "encrypt-seed": "ts-node src/scripts/encrypt-seed.ts"
   },
   "repository": {
     "type": "git",
