@@ -32,6 +32,9 @@ model Merchant {
   kyc                 MerchantKYC?
   webhookLogs         WebhookLog[]
   payments            Payment[]
+  api_key_hashed     String?        @unique
+  api_key_last_four  String?
+  webhook_secret     String?
   bankAccount         BankAccount?
 }
 

@@ -5,7 +5,12 @@ import { sendOtpEmail } from "./email.service";
 import { isDevEnv } from "../helpers/env.helper";
 import { generateToken } from "../helpers/jwt.helper";
 import { merchantRegistryService } from "./merchantRegistry.service";
-
+import {
+  generateApiKey,
+  generateWebhookSecret,
+  hashKey,
+  getLastFour,
+} from "../helpers/crypto.helper";
 
 const prisma = new PrismaClient();
 
@@ -133,16 +138,13 @@ export async function resendOtpMerchantService(data: {
 
   if (!merchant) throw { status: 404, message: "Merchant not found" };
 
-
   const otp = await createOtp(merchantId, channel);
   if (channel === "email") await sendOtpEmail(merchant.email, otp);
 
   return { message: "OTP resent" };
 }
 
-export async function getMerchantUserService(data: {
-  merchantId: string;
-}) {
+export async function getMerchantUserService(data: { merchantId: string }) {
   const { merchantId } = data;
   const merchant = await prisma.merchant.findUnique({
     where: { id: merchantId },
@@ -162,8 +164,49 @@ export async function getMerchantUserService(data: {
   });
 
   if (!merchant) throw { status: 404, message: "Merchant not found" };
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { password, api_key_hashed, ...merchantData } = merchant;
 
-  return { message: "Merchant found", merchant };
+  return { message: "Merchant found", merchant: merchantData };
+}
+
+export async function rotateApiKeyService(data: { merchantId: string }) {
+  const { merchantId } = data;
+  const rawKey = generateApiKey();
+  const hashedKey = await hashKey(rawKey);
+  const lastFour = getLastFour(rawKey);
+
+  await prisma.merchant.update({
+    where: { id: merchantId },
+    data: {
+      api_key_hashed: hashedKey,
+      api_key_last_four: lastFour,
+    },
+  });
+
+  return {
+    message:
+      "API key rotated successfully. Store this key securely as it will not be shown again.",
+    apiKey: rawKey,
+  };
+}
+
+export async function rotateWebhookSecretService(data: { merchantId: string }) {
+  const { merchantId } = data;
+  const secret = generateWebhookSecret();
+
+  await prisma.merchant.update({
+    where: { id: merchantId },
+    data: {
+      webhook_secret: secret,
+    },
+  });
+
+  return {
+    message:
+      "Webhook secret rotated successfully. Store this secret securely as it will not be shown again.",
+    webhookSecret: secret,
+  };
 }
 
 export async function updateMerchantProfileService(data: {
