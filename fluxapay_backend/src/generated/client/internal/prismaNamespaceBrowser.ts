@@ -231,6 +231,8 @@ export const PaymentScalarFieldEnum = {
   status: 'status',
   checkout_url: 'checkout_url',
   timeline: 'timeline',
+  stellar_address: 'stellar_address',
+  last_paging_token: 'last_paging_token',
   swept: 'swept',
   swept_at: 'swept_at',
   sweep_tx_hash: 'sweep_tx_hash',
