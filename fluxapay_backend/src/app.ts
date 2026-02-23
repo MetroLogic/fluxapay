@@ -10,6 +10,7 @@ import webhookRoutes from "./routes/webhook.route";
 import settlementBatchRoutes from "./routes/settlementBatch.route";
 import paymentRoutes from "./routes/payment.route"; // New import
 import keysRoutes from "./routes/keys.route";
+import refundRoutes from "./routes/refund.route";
 
 const app = express();
 const prisma = new PrismaClient();
@@ -28,6 +29,7 @@ app.use("/api/webhooks", webhookRoutes);
 app.use("/api/admin/settlement", settlementBatchRoutes);
 app.use("/api/payments", paymentRoutes); // Added this line
 app.use("/api/v1/keys", keysRoutes);
+app.use("/api/refunds", refundRoutes);
 
 // Basic health check
 app.get("/health", (req, res) => {

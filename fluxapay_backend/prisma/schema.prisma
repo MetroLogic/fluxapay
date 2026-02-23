@@ -261,3 +261,40 @@ enum WebhookStatus {
   failed
   retrying
 }
+
+enum RefundStatus {
+  initiated
+  processing
+  completed
+  failed
+}
+
+enum RefundReason {
+  customer_request
+  duplicate_payment
+  failed_delivery
+  merchant_request
+  dispute_resolution
+}
+
+model Refund {
+  id               String       @id @default(cuid())
+  payment_id       String
+  merchant_id      String
+  amount           Decimal      @db.Decimal(20, 7)
+  currency         String
+  customer_address String
+  reason           RefundReason
+  reason_note      String?
+  status           RefundStatus @default(initiated)
+  stellar_tx_hash  String?
+  error_message    String?
+  error_code       String?
+  initiated_by     String
+  created_at       DateTime     @default(now())
+  updated_at       DateTime     @updatedAt
+
+  @@index([payment_id])
+  @@index([merchant_id])
+  @@index([status])
+}
