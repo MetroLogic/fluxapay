@@ -15,6 +15,7 @@ import {
   Globe,
 } from "lucide-react";
 import toast from "react-hot-toast";
+import EmptyState from "@/components/EmptyState";
 
 // Type definitions
 interface KycApplication {
@@ -401,81 +402,76 @@ const AdminKycPage = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
-                {filteredApplications.map((app) => {
-                  const statusConfig = getStatusConfig(app.status);
-                  return (
-                    <tr
-                      key={app.id}
-                      className="hover:bg-slate-50/50 transition-colors"
-                    >
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-sm font-medium text-slate-900 font-mono">
-                          {app.id}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-slate-100">
-                            <User className="w-4 h-4 text-slate-600" />
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium text-slate-900">
-                              {app.merchantName}
-                            </p>
-                            <div className="flex items-center gap-1.5 mt-0.5">
-                              <Globe className="w-3 h-3 text-slate-400" />
-                              <p className="text-xs text-slate-500">
-                                {app.country}
+                {filteredApplications.length === 0 ? (
+                  <EmptyState
+                    colSpan={5}
+                    className="py-12"
+                    message="No applications found. No KYC applications match your search criteria."
+                  />
+                ) : (
+                  filteredApplications.map((app) => {
+                    const statusConfig = getStatusConfig(app.status);
+                    return (
+                      <tr
+                        key={app.id}
+                        className="hover:bg-slate-50/50 transition-colors"
+                      >
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="text-sm font-medium text-slate-900 font-mono">
+                            {app.id}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-slate-100">
+                              <User className="w-4 h-4 text-slate-600" />
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-slate-900">
+                                {app.merchantName}
                               </p>
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                <Globe className="w-3 h-3 text-slate-400" />
+                                <p className="text-xs text-slate-500">
+                                  {app.country}
+                                </p>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center gap-2 text-sm text-slate-600">
-                          <Calendar className="w-4 h-4 text-slate-400" />
-                          {app.submittedDate}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span
-                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium ${statusConfig.bg} ${statusConfig.color} ${statusConfig.border}`}
-                        >
-                          {statusConfig.icon}
-                          {statusConfig.label}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => setSelectedApplication(app)}
-                            className="px-3 py-1.5 text-sm font-medium text-white rounded-lg transition-colors hover:opacity-90 flex items-center gap-2"
-                            style={{ backgroundColor: primaryColor }}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center gap-2 text-sm text-slate-600">
+                            <Calendar className="w-4 h-4 text-slate-400" />
+                            {app.submittedDate}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span
+                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium ${statusConfig.bg} ${statusConfig.color} ${statusConfig.border}`}
                           >
-                            <Eye className="w-4 h-4" />
-                            Review
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
+                            {statusConfig.icon}
+                            {statusConfig.label}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => setSelectedApplication(app)}
+                              className="px-3 py-1.5 text-sm font-medium text-white rounded-lg transition-colors hover:opacity-90 flex items-center gap-2"
+                              style={{ backgroundColor: primaryColor }}
+                            >
+                              <Eye className="w-4 h-4" />
+                              Review
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>
-          {filteredApplications.length === 0 && (
-            <div className="text-center py-12">
-              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-100 mb-4">
-                <Search className="w-8 h-8 text-slate-400" />
-              </div>
-              <h3 className="text-lg font-medium text-slate-900 mb-2">
-                No applications found
-              </h3>
-              <p className="text-sm text-slate-600 max-w-md mx-auto">
-                No KYC applications match your search criteria.
-              </p>
-            </div>
-          )}
         </div>
       </div>
 
@@ -576,14 +572,11 @@ const AdminKycPage = () => {
                     </thead>
                     <tbody className="divide-y divide-slate-200 bg-white">
                       {selectedApplication.beneficialOwners.length === 0 ? (
-                        <tr>
-                          <td
-                            colSpan={3}
-                            className="px-4 py-8 text-center text-sm text-slate-500"
-                          >
-                            No beneficial owners provided.
-                          </td>
-                        </tr>
+                        <EmptyState
+                          colSpan={3}
+                          className="px-4 py-8 text-sm text-slate-500"
+                          message="No beneficial owners provided."
+                        />
                       ) : (
                         selectedApplication.beneficialOwners.map(
                           (owner, idx) => (

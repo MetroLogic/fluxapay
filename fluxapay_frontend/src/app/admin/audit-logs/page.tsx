@@ -5,7 +5,6 @@ import {
     Search,
     Filter,
     Download,
-    Shield,
     Calendar,
     CheckCircle,
     Activity,
@@ -13,6 +12,7 @@ import {
     AlertCircle
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import EmptyState from '@/components/EmptyState';
 
 // -- Type Definitions --
 
@@ -237,71 +237,64 @@ export default function AdminAuditLogsPage() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-200">
-                                {filteredLogs.map((log) => {
-                                    const statusConfig = getStatusConfig(log.status);
-                                    
-                                    return (
-                                        <tr key={log.id} className="hover:bg-slate-50/50 transition-colors">
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="flex items-center gap-2 text-sm text-slate-600">
-                                                    <Calendar className="w-4 h-4 text-slate-400" />
-                                                    {formatDate(log.timestamp)}
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="flex items-center gap-3">
-                                                    <div 
-                                                        className="w-8 h-8 rounded-full flex items-center justify-center bg-slate-100 text-slate-600 font-medium text-xs"
+                                {filteredLogs.length === 0 ? (
+                                    <EmptyState colSpan={6} className="py-12" message="No audit logs found. Try adjusting your search or filter criteria." />
+                                ) : (
+                                    filteredLogs.map((log) => {
+                                        const statusConfig = getStatusConfig(log.status);
+
+                                        return (
+                                            <tr key={log.id} className="hover:bg-slate-50/50 transition-colors">
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <div className="flex items-center gap-2 text-sm text-slate-600">
+                                                        <Calendar className="w-4 h-4 text-slate-400" />
+                                                        {formatDate(log.timestamp)}
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <div className="flex items-center gap-3">
+                                                        <div
+                                                            className="w-8 h-8 rounded-full flex items-center justify-center bg-slate-100 text-slate-600 font-medium text-xs"
+                                                        >
+                                                            {log.adminUser.charAt(0)}
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-sm font-medium text-slate-900">{log.adminUser}</p>
+                                                            <p className="text-xs text-slate-500">{log.email}</p>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <div className="flex items-center gap-2">
+                                                        <Activity className="w-4 h-4 text-slate-400" />
+                                                        <span className="text-sm text-slate-700 font-medium">{log.action.replace('_', ' ')}</span>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <span className="font-mono text-xs text-slate-600 bg-slate-100 px-2 py-1 rounded">
+                                                        {log.targetResource}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <span
+                                                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium ${statusConfig.bg} ${statusConfig.color} ${statusConfig.border}`}
                                                     >
-                                                        {log.adminUser.charAt(0)}
-                                                    </div>
-                                                    <div>
-                                                        <p className="text-sm font-medium text-slate-900">{log.adminUser}</p>
-                                                        <p className="text-xs text-slate-500">{log.email}</p>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="flex items-center gap-2">
-                                                    <Activity className="w-4 h-4 text-slate-400" />
-                                                    <span className="text-sm text-slate-700 font-medium">{log.action.replace('_', ' ')}</span>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                 <span className="font-mono text-xs text-slate-600 bg-slate-100 px-2 py-1 rounded">
-                                                    {log.targetResource}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <span
-                                                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium ${statusConfig.bg} ${statusConfig.color} ${statusConfig.border}`}
-                                                >
-                                                    {statusConfig.icon}
-                                                    {log.status.charAt(0).toUpperCase() + log.status.slice(1)}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <p className="text-sm text-slate-600 max-w-xs truncate" title={log.details}>
-                                                    {log.details}
-                                                </p>
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
+                                                        {statusConfig.icon}
+                                                        {log.status.charAt(0).toUpperCase() + log.status.slice(1)}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <p className="text-sm text-slate-600 max-w-xs truncate" title={log.details}>
+                                                        {log.details}
+                                                    </p>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })
+                                )}
                             </tbody>
                         </table>
                     </div>
-                     {filteredLogs.length === 0 && (
-                        <div className="text-center py-12">
-                            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-100 mb-4">
-                                <Shield className="w-8 h-8 text-slate-400" />
-                            </div>
-                            <h3 className="text-lg font-medium text-slate-900 mb-2">No audit logs found</h3>
-                            <p className="text-sm text-slate-600 max-w-md mx-auto">
-                                Try adjusting your search or filter criteria.
-                            </p>
-                        </div>
-                    )}
                 </div>
             </div>
         </div>
