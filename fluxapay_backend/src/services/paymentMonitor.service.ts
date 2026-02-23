@@ -63,6 +63,7 @@ async function monitorPayments() {
               data: { 
                 status,
                 last_paging_token: latestPagingToken,
+                transaction_hash: record.transaction_hash,
               },
             });
             break; // Payment processed, move to next payment
