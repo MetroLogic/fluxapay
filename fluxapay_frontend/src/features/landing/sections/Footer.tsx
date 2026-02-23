@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { DOCS_URLS } from "@/lib/docs";
 
 const FooterSection = ({
   title,
@@ -33,18 +34,18 @@ export const Footer = () => {
 
   const footerLinks = {
     legal: [
-      { label: "Privacy Policy", href: "#" },
-      { label: "Terms of Use", href: "#" },
+      { label: "Privacy Policy", href: "/privacy" },
+      { label: "Terms of Use", href: "/terms" },
     ],
     product: [
-      { label: "Sign Up", href: "#" },
-      { label: "Log In", href: "#" },
-      { label: "Pricing", href: "#" },
+      { label: "Sign Up", href: "/signup" },
+      { label: "Log In", href: "/login" },
+      { label: "Pricing", href: DOCS_URLS.PRICING },
     ],
     resources: [
-      { label: "Docs", href: "#" },
-      { label: "FAQs / Support", href: "#" },
-      { label: "Contact us", href: "#" },
+      { label: "Docs", href: DOCS_URLS.FULL_DOCS },
+      { label: "FAQs / Support", href: DOCS_URLS.FAQS },
+      { label: "Contact us", href: DOCS_URLS.CONTACT },
     ],
   };
 

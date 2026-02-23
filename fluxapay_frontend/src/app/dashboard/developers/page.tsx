@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Copy,
   Check,
@@ -13,14 +13,32 @@ import {
   Terminal,
   Braces,
 } from "lucide-react";
+import { api } from "@/lib/api";
+import { DOCS_URLS } from "@/lib/docs";
 
 export default function DevelopersPage() {
   const [copied, setCopied] = useState<string | null>(null);
   const [showApiKey, setShowApiKey] = useState(false);
   const [testMode, setTestMode] = useState(true);
   const [activeTab, setActiveTab] = useState("rest");
+  const [apiKey, setApiKey] = useState("Loading...");
+  const [isLoading, setIsLoading] = useState(true);
 
-  const apiKey = "sk_live_51234567890abcdefghijklmnop";
+  useEffect(() => {
+    const fetchApiKey = async () => {
+      try {
+        const response = await api.merchant.getMe();
+        setApiKey(response.merchant.api_key || "No API key generated");
+      } catch (error) {
+        console.error("Failed to fetch API key:", error);
+        setApiKey("Failed to load API key");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchApiKey();
+  }, []);
 
   const copyToClipboard = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
@@ -418,7 +436,7 @@ print(data)`;
               style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
             >
               <a
-                href="#"
+                href={DOCS_URLS.API_REFERENCE}
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -460,7 +478,7 @@ print(data)`;
               </a>
 
               <a
-                href="#"
+                href={DOCS_URLS.GETTING_STARTED}
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -502,7 +520,7 @@ print(data)`;
               </a>
 
               <a
-                href="#"
+                href={DOCS_URLS.AUTHENTICATION}
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -544,7 +562,7 @@ print(data)`;
               </a>
 
               <a
-                href="#"
+                href={DOCS_URLS.RATE_LIMITS}
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -1065,7 +1083,7 @@ print(data)`;
                 and use cases.
               </p>
               <a
-                href="#"
+                href={DOCS_URLS.FULL_DOCS}
                 style={{
                   color: "#fbbf24",
                   textDecoration: "none",
@@ -1110,7 +1128,7 @@ print(data)`;
                 Join our community forums and chat with other developers.
               </p>
               <a
-                href="#"
+                href={DOCS_URLS.COMMUNITY}
                 style={{
                   color: "#fbbf24",
                   textDecoration: "none",
@@ -1155,7 +1173,7 @@ print(data)`;
                 Check system status and get technical support from our team.
               </p>
               <a
-                href="#"
+                href={DOCS_URLS.STATUS}
                 style={{
                   color: "#fbbf24",
                   textDecoration: "none",

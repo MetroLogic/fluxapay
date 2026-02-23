@@ -17,9 +17,7 @@ export default function SettingsPage() {
   const [accountError, setAccountError] = useState("");
 
   // API Key State
-  const [apiKey, setApiKey] = useState(
-    "fluxapay_live_xxxxxxxxxxxxxxxxxxxxxxxx",
-  );
+  const [apiKey, setApiKey] = useState("Loading...");
   const [showRegenerateModal, setShowRegenerateModal] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [keyRegenerated, setKeyRegenerated] = useState(false);
@@ -50,9 +48,7 @@ export default function SettingsPage() {
       setBusinessName(merchant.business_name || "");
       setContactEmail(merchant.email || "");
       setWebhookUrl(merchant.webhook_url || "");
-      
-      // In a real implementation, you'd fetch the actual API key
-      // For now, we'll keep the placeholder
+      setApiKey(merchant.api_key || "No API key generated");
     } catch (error) {
       console.error("Failed to load merchant data:", error);
     } finally {

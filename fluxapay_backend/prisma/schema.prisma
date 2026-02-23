@@ -23,6 +23,7 @@ model Merchant {
   settlement_currency String
   password            String
   status              MerchantStatus @default(pending_verification)
+  api_key             String?        @unique
   webhook_url         String?
   created_at          DateTime       @default(now())
   updated_at          DateTime       @updatedAt
