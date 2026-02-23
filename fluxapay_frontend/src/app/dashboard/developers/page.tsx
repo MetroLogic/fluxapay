@@ -22,7 +22,6 @@ export default function DevelopersPage() {
   const [testMode, setTestMode] = useState(true);
   const [activeTab, setActiveTab] = useState("rest");
   const [apiKey, setApiKey] = useState("Loading...");
-  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const fetchApiKey = async () => {
@@ -32,8 +31,6 @@ export default function DevelopersPage() {
       } catch (error) {
         console.error("Failed to fetch API key:", error);
         setApiKey("Failed to load API key");
-      } finally {
-        setIsLoading(false);
       }
     };
 
