@@ -1,4 +1,5 @@
 import { Badge } from "@/components/Badge";
+import EmptyState from "@/components/EmptyState";
 import { WebhookEvent, WebhookStatus } from "./webhooks-mock";
 import { ChevronDown, ChevronUp, Copy, Eye } from "lucide-react";
 import { useState } from "react";
@@ -112,14 +113,11 @@ export const WebhooksTable = ({ webhooks, onRowClick }: WebhooksTableProps) => {
                     </thead>
                     <tbody className="divide-y">
                         {sortedWebhooks.length === 0 ? (
-                            <tr>
-                                <td
-                                    colSpan={7}
-                                    className="px-4 py-12 text-center text-muted-foreground"
-                                >
-                                    No webhooks found matching your filters.
-                                </td>
-                            </tr>
+                            <EmptyState
+                                colSpan={7}
+                                className="px-4 py-12 text-muted-foreground"
+                                message="No webhooks found matching your filters."
+                            />
                         ) : (
                             sortedWebhooks.map((webhook) => (
                                 <tr

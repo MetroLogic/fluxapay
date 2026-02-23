@@ -89,6 +89,8 @@ const SignUpForm = () => {
         setErrors(fieldErrors);
         return;
       }
+
+      toast.error("Unable to create your account right now. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
