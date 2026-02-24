@@ -56,7 +56,12 @@ export const api = {
   merchant: {
     getMe: () => fetchWithAuth("/api/v1/merchants/me"),
 
-    updateProfile: (data: { business_name?: string; email?: string }) =>
+    updateProfile: (data: {
+      business_name?: string;
+      email?: string;
+      settlement_schedule?: "daily" | "weekly";
+      settlement_day?: number;
+    }) =>
       fetchWithAuth("/api/v1/merchants/me", {
         method: "PATCH",
         body: JSON.stringify(data),
@@ -128,13 +133,15 @@ export const api = {
         if (params?.status) sp.set("status", params.status);
         if (params?.page != null) sp.set("page", String(params.page));
         if (params?.limit != null) sp.set("limit", String(params.limit));
-        return fetchWithAuth(`/api/merchants/kyc/admin/submissions?${sp.toString()}`);
+        return fetchWithAuth(
+          `/api/merchants/kyc/admin/submissions?${sp.toString()}`,
+        );
       },
       getByMerchantId: (merchantId: string) =>
         fetchWithAuth(`/api/merchants/kyc/admin/${merchantId}`),
       updateStatus: (
         merchantId: string,
-        body: { status: "approved" | "rejected"; rejection_reason?: string }
+        body: { status: "approved" | "rejected"; rejection_reason?: string },
       ) =>
         fetchWithAuth(`/api/merchants/kyc/admin/${merchantId}/status`, {
           method: "PATCH",
@@ -181,7 +188,8 @@ export const api = {
         if (params?.page != null) sp.set("page", String(params.page));
         if (params?.limit != null) sp.set("limit", String(params.limit));
         if (params?.kycStatus) sp.set("kycStatus", params.kycStatus);
-        if (params?.accountStatus) sp.set("accountStatus", params.accountStatus);
+        if (params?.accountStatus)
+          sp.set("accountStatus", params.accountStatus);
         return fetchWithAuth(`/api/admin/merchants?${sp.toString()}`);
       },
       updateStatus: (merchantId: string, status: "active" | "suspended") =>
@@ -191,11 +199,7 @@ export const api = {
         }),
     },
     settlements: {
-      list: (params?: {
-        page?: number;
-        limit?: number;
-        status?: string;
-      }) => {
+      list: (params?: { page?: number; limit?: number; status?: string }) => {
         const sp = new URLSearchParams();
         if (params?.page != null) sp.set("page", String(params.page));
         if (params?.limit != null) sp.set("limit", String(params.limit));
