@@ -30,6 +30,8 @@ model Merchant {
   kyc                 MerchantKYC?
   webhookLogs         WebhookLog[]
   payments            Payment[]
+  webhook_url         String?
+  webhook_secret      String? @default(cuid())
 }
 
 model OTP {
@@ -136,9 +138,13 @@ model Payment {
   customer_email String
   metadata       Json
   expiration     DateTime
-  status         String
-  checkout_url   String
-  createdAt      DateTime @default(now())
+  status           String
+  checkout_url     String
+  transaction_hash String?
+  payer_address    String?
+  confirmed_at     DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 }
 
 // ...existing code...
@@ -188,6 +194,7 @@ enum WebhookEventType {
   payment_completed
   payment_failed
   payment_pending
+  payment_confirmed
   refund_completed
   refund_failed
   subscription_created

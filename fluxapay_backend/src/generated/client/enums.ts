@@ -75,6 +75,7 @@ export const WebhookEventType = {
   payment_completed: 'payment_completed',
   payment_failed: 'payment_failed',
   payment_pending: 'payment_pending',
+  payment_confirmed: 'payment_confirmed',
   refund_completed: 'refund_completed',
   refund_failed: 'refund_failed',
   subscription_created: 'subscription_created',

@@ -174,13 +174,19 @@ export async function retryWebhookService(params: RetryWebhookParams) {
   }
 
   // Attempt to deliver the webhook
+  const merchant = await prisma.merchant.findUnique({
+    where: { id: merchantId },
+  });
+  const secret = merchant?.webhook_secret || process.env.WEBHOOK_SECRET || "webhook-secret";
+
   const result = await deliverWebhook(
     log.endpoint_url,
-    log.request_payload as Record<string, any>
+    log.request_payload as Record<string, any>,
+    secret
   );
 
   const newRetryCount = log.retry_count + 1;
-  const newStatus: WebhookStatus = result.success ? "delivered" : 
+  const newStatus: WebhookStatus = result.success ? "delivered" :
     newRetryCount >= log.max_retries ? "failed" : "retrying";
 
   // Create retry attempt record
@@ -194,9 +200,11 @@ export async function retryWebhookService(params: RetryWebhookParams) {
     },
   });
 
-  // Calculate next retry time with exponential backoff
-  const nextRetryAt = newStatus === "retrying" 
-    ? new Date(Date.now() + Math.pow(2, newRetryCount) * 60 * 1000) // exponential backoff in minutes
+  // Calculate next retry time with exponential backoff (5^n seconds)
+  // Immediate (0) -> 5s (1) -> 25s (2) -> 125s (3)
+  const backoffSeconds = [0, 5, 25, 125];
+  const nextRetryAt = newStatus === "retrying"
+    ? new Date(Date.now() + (backoffSeconds[newRetryCount] || 120) * 1000)
     : null;
 
   // Update the webhook log
@@ -212,8 +220,8 @@ export async function retryWebhookService(params: RetryWebhookParams) {
   });
 
   return {
-    message: result.success 
-      ? "Webhook retry successful" 
+    message: result.success
+      ? "Webhook retry successful"
       : `Webhook retry failed${newStatus === "retrying" ? ", will retry again" : ""}`,
     data: {
       id: updatedLog.id,
@@ -252,7 +260,8 @@ export async function sendTestWebhookService(params: SendTestWebhookParams) {
   });
 
   // Attempt to deliver the webhook
-  const result = await deliverWebhook(endpoint_url, testPayload);
+  const secret = merchant.webhook_secret || process.env.WEBHOOK_SECRET || "webhook-secret";
+  const result = await deliverWebhook(endpoint_url, testPayload, secret);
 
   const status: WebhookStatus = result.success ? "delivered" : "failed";
 
@@ -267,8 +276,8 @@ export async function sendTestWebhookService(params: SendTestWebhookParams) {
   });
 
   return {
-    message: result.success 
-      ? "Test webhook delivered successfully" 
+    message: result.success
+      ? "Test webhook delivered successfully"
       : "Test webhook delivery failed",
     data: {
       id: updatedLog.id,
@@ -286,7 +295,8 @@ export async function sendTestWebhookService(params: SendTestWebhookParams) {
 // Helper function to deliver webhook
 async function deliverWebhook(
   endpointUrl: string,
-  payload: Record<string, any>
+  payload: Record<string, any>,
+  secret: string
 ): Promise<{
   success: boolean;
   httpStatus?: number;
@@ -301,8 +311,8 @@ async function deliverWebhook(
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-Webhook-Signature": generateWebhookSignature(payload),
-        "X-Webhook-Timestamp": new Date().toISOString(),
+        "X-FluxaPay-Signature": generateWebhookSignature(payload, secret),
+        "X-FluxaPay-Timestamp": new Date().toISOString(),
       },
       body: JSON.stringify(payload),
       signal: controller.signal,
@@ -327,8 +337,7 @@ async function deliverWebhook(
 
 // Helper function to generate webhook signature
 import crypto from "crypto";
-function generateWebhookSignature(payload: Record<string, unknown>): string {
-  const secret = process.env.WEBHOOK_SECRET || "webhook-secret";
+function generateWebhookSignature(payload: Record<string, unknown>, secret: string): string {
   const hmac = crypto.createHmac("sha256", secret);
   hmac.update(JSON.stringify(payload));
   return hmac.digest("hex");
@@ -347,6 +356,13 @@ function generateTestPayload(
   };
 
   const eventPayloads: Record<string, Record<string, any>> = {
+    payment_confirmed: {
+      payment_id: `pay_test_${Date.now()}`,
+      amount: 100.00,
+      currency: "USDC",
+      status: "confirmed",
+      customer_email: "test@example.com",
+    },
     payment_completed: {
       payment_id: `pay_test_${Date.now()}`,
       amount: 100.00,
@@ -417,6 +433,22 @@ function generateTestPayload(
   };
 }
 
+export function generateMerchantPayload(payment: any): Record<string, any> {
+  return {
+    event: "payment.confirmed",
+    payment_id: payment.id,
+    merchant_id: payment.merchantId,
+    order_id: payment.metadata?.order_id || null,
+    amount: payment.amount,
+    currency: payment.currency,
+    status: payment.status,
+    transaction_hash: payment.transaction_hash,
+    payer_address: payment.payer_address,
+    confirmed_at: payment.confirmed_at,
+    metadata: payment.metadata,
+  };
+}
+
 // Export for use in other services (e.g., payment service to trigger webhooks)
 export async function createAndDeliverWebhook(
   merchantId: string,
@@ -436,11 +468,16 @@ export async function createAndDeliverWebhook(
     },
   });
 
-  const result = await deliverWebhook(endpointUrl, payload);
+  const merchant = await prisma.merchant.findUnique({
+    where: { id: merchantId },
+  });
+  const secret = merchant?.webhook_secret || process.env.WEBHOOK_SECRET || "webhook-secret";
+
+  const result = await deliverWebhook(endpointUrl, payload, secret);
   const status: WebhookStatus = result.success ? "delivered" : "retrying";
 
-  const nextRetryAt = status === "retrying" 
-    ? new Date(Date.now() + 60 * 1000) // First retry in 1 minute
+  const nextRetryAt = status === "retrying"
+    ? new Date(Date.now() + 5 * 1000) // First retry in 5 seconds
     : null;
 
   await prisma.webhookLog.update({
@@ -450,6 +487,8 @@ export async function createAndDeliverWebhook(
       http_status: result.httpStatus,
       response_body: result.responseBody,
       next_retry_at: nextRetryAt,
+      retry_count: status === "retrying" ? 0 : 0, // initial was attempt 0
+      max_retries: 4, // Immediate + 3 retries
     },
   });
 
