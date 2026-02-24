@@ -272,6 +272,8 @@ export const PaymentScalarFieldEnum = {
   expiration: 'expiration',
   status: 'status',
   checkout_url: 'checkout_url',
+  success_url: 'success_url',
+  cancel_url: 'cancel_url',
   timeline: 'timeline',
   stellar_address: 'stellar_address',
   last_paging_token: 'last_paging_token',

@@ -1703,6 +1703,8 @@ export const PaymentScalarFieldEnum = {
   created_at: 'created_at',
   updated_at: 'updated_at',
   checkout_url: 'checkout_url',
+  success_url: 'success_url',
+  cancel_url: 'cancel_url',
   timeline: 'timeline',
   stellar_address: 'stellar_address',
   last_paging_token: 'last_paging_token',
