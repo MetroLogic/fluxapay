@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { subDays, startOfDay } from 'date-fns';
+import { ReconciliationRecord } from '../../../types/reconciliation';
 import { ReconciliationSummary } from '../../../components/reconciliation/ReconciliationSummary';
 import { ReconciliationTable } from '../../../components/reconciliation/ReconciliationTable';
 import { StatementDownload } from '../../../components/reconciliation/StatementDownload';
@@ -50,7 +51,7 @@ export default function ReconciliationPage() {
         setDiscrepancies(prev => prev.map(a => a.id === id ? { ...a, resolved: true } : a));
     };
 
-    const handleDownloadRecord = async (record: any) => {
+    const handleDownloadRecord = async (record: ReconciliationRecord) => {
         // Helper to download single record
         if (!summary) return;
         const singleSummary = {
@@ -92,7 +93,7 @@ export default function ReconciliationPage() {
                     <div className="flex flex-col sm:flex-row items-center gap-4">
                         <select
                             value={dateRangeFilter}
-                            onChange={(e) => setDateRangeFilter(e.target.value as any)}
+                            onChange={(e) => setDateRangeFilter(e.target.value as 'today' | '7days' | '30days')}
                             className="w-full sm:w-auto block rounded-md border-gray-300 py-2 pl-3 pr-10 text-base focus:border-indigo-500 focus:outline-none focus:ring-indigo-500 sm:text-sm border shadow-sm bg-white"
                         >
                             <option value="today">Today</option>

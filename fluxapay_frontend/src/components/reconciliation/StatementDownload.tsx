@@ -14,7 +14,7 @@ export function StatementDownload({ onDownloadPDF, onDownloadCSV, disabled }: Pr
             setIsPdfLoading(true);
             await onDownloadPDF();
             alert('PDF statement downloaded successfully!');
-        } catch (err) {
+        } catch {
             alert('Failed to generate PDF. Please try again.');
         } finally {
             setIsPdfLoading(false);
@@ -25,7 +25,7 @@ export function StatementDownload({ onDownloadPDF, onDownloadCSV, disabled }: Pr
         try {
             onDownloadCSV();
             alert('CSV statement downloaded successfully!');
-        } catch (err) {
+        } catch {
             alert('Failed to generate CSV. Please try again.');
         }
     };

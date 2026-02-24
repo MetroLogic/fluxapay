@@ -56,6 +56,10 @@ export function useReconciliation(dateRange: { start: Date; end: Date }) {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<Error | null>(null);
 
+    // Extract primitive timestamps so the effect dep array can be statically analysed
+    const startTime = dateRange.start.getTime();
+    const endTime = dateRange.end.getTime();
+
     useEffect(() => {
         let isMounted = true;
 
@@ -66,7 +70,10 @@ export function useReconciliation(dateRange: { start: Date; end: Date }) {
             try {
                 await new Promise(resolve => setTimeout(resolve, 800));
 
-                const { records: mockRecords, alerts: mockAlerts } = generateMockData(dateRange.start, dateRange.end);
+                const { records: mockRecords, alerts: mockAlerts } = generateMockData(
+                    new Date(startTime),
+                    new Date(endTime)
+                );
 
                 if (!isMounted) return;
 
@@ -83,8 +90,8 @@ export function useReconciliation(dateRange: { start: Date; end: Date }) {
                 });
 
                 const calcSummary: ReconciliationPeriod = {
-                    startDate: dateRange.start,
-                    endDate: dateRange.end,
+                    startDate: new Date(startTime),
+                    endDate: new Date(endTime),
                     totalUSDCReceived: totalUSDC,
                     totalFiatPayout: totalFiat,
                     totalFees: totalFees,
@@ -107,7 +114,7 @@ export function useReconciliation(dateRange: { start: Date; end: Date }) {
         fetchData();
 
         return () => { isMounted = false; };
-    }, [dateRange.start.getTime(), dateRange.end.getTime()]);
+    }, [startTime, endTime]);
 
     return { records, summary, discrepancies, loading, error, setDiscrepancies };
 }

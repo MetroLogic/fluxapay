@@ -4,6 +4,11 @@ import Papa from 'papaparse';
 import { format } from 'date-fns';
 import { ReconciliationRecord, ReconciliationPeriod } from '../types/reconciliation';
 
+// jspdf-autotable extends the jsPDF instance but doesn't export this type
+interface JsPDFWithAutoTable extends jsPDF {
+    lastAutoTable: { finalY: number };
+}
+
 export async function exportToPDF(
     records: ReconciliationRecord[],
     summary: ReconciliationPeriod,
@@ -43,7 +48,7 @@ export async function exportToPDF(
 
     // Transactions Table
     doc.setFontSize(14);
-    doc.text('Transactions', 14, (doc as any).lastAutoTable.finalY + 15);
+    doc.text('Transactions', 14, (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 15);
 
     const tableData = records.map(record => [
         format(record.date, 'MMM d, yyyy HH:mm'),
@@ -55,7 +60,7 @@ export async function exportToPDF(
     ]);
 
     autoTable(doc, {
-        startY: (doc as any).lastAutoTable.finalY + 20,
+        startY: (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 20,
         head: [['Date', 'Settlement ID', 'USDC Received', 'Fiat Payout', 'Fees', 'Discrepancy']],
         body: tableData,
         theme: 'striped',
