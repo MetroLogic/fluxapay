@@ -143,6 +143,31 @@ export const api = {
     },
   },
 
+  // Dashboard overview (metrics, charts, activity)
+  dashboard: {
+    overviewMetrics: (params?: { from?: string; to?: string }) => {
+      const sp = new URLSearchParams();
+      if (params?.from) sp.set("from", params.from);
+      if (params?.to) sp.set("to", params.to);
+      const q = sp.toString();
+      return fetchWithAuth(`/api/dashboard/overview/metrics${q ? `?${q}` : ""}`);
+    },
+    charts: (params?: { from?: string; to?: string }) => {
+      const sp = new URLSearchParams();
+      if (params?.from) sp.set("from", params.from);
+      if (params?.to) sp.set("to", params.to);
+      const q = sp.toString();
+      return fetchWithAuth(`/api/dashboard/overview/charts${q ? `?${q}` : ""}`);
+    },
+    activity: (params?: { from?: string; to?: string }) => {
+      const sp = new URLSearchParams();
+      if (params?.from) sp.set("from", params.from);
+      if (params?.to) sp.set("to", params.to);
+      const q = sp.toString();
+      return fetchWithAuth(`/api/dashboard/overview/activity${q ? `?${q}` : ""}`);
+    },
+  },
+
   // Admin: merchants & settlements
   admin: {
     merchants: {
