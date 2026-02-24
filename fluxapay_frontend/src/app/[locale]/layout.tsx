@@ -3,9 +3,9 @@ import { Inter, Caveat } from "next/font/google";
 import "@/styles/globals.css";
 import { Providers } from "../providers";
 import { Toaster } from "react-hot-toast";
-import { NextIntlClientProvider } from 'next-intl';
-import { notFound } from 'next/navigation';
-import { routing } from '@/i18n/routing';
+import { NextIntlClientProvider } from "next-intl";
+import { notFound } from "next/navigation";
+import { routing } from "@/i18n/routing";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -19,7 +19,8 @@ const caveat = Caveat({
 
 export const metadata: Metadata = {
   title: "FluxaPay | Global Payment Infrastructure",
-  description: "The next generation of global payments. Accept crypto and fiat seamlessly.",
+  description:
+    "The next generation of global payments. Accept crypto and fiat seamlessly.",
 };
 
 export function generateStaticParams() {
@@ -36,7 +37,7 @@ export default async function LocaleLayout({
   const { locale } = await params;
 
   // Ensure that the incoming `locale` is valid
-  if (!routing.locales.includes(locale as any)) {
+  if (!(routing.locales as ReadonlyArray<string>).includes(locale)) {
     notFound();
   }
 
@@ -44,7 +45,9 @@ export default async function LocaleLayout({
 
   return (
     <html lang={locale} suppressHydrationWarning>
-      <body className={`${inter.variable} ${caveat.variable} font-sans antialiased`}>
+      <body
+        className={`${inter.variable} ${caveat.variable} font-sans antialiased`}
+      >
         <NextIntlClientProvider locale={locale} messages={messages}>
           <Providers>{children}</Providers>
           <Toaster position="top-right" />

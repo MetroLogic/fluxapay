@@ -20,7 +20,7 @@ export default function SettlementsPage() {
   const [date, setDate] = useState({ from: "", to: "" });
   const [selected, setSelected] = useState<MerchantSettlement | null>(null);
 
-  const { settlements, isLoading } = useSettlements({
+  const { isLoading } = useSettlements({
     status: status !== "all" ? status : undefined,
     currency: currency !== "all" ? currency : undefined,
     date_from: date.from || undefined,

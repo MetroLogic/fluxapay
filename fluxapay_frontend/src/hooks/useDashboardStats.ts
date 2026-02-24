@@ -24,8 +24,18 @@ export interface UseDashboardStatsParams {
 }
 
 export function useDashboardStats(params: UseDashboardStatsParams = {}) {
-  const { summary, isLoading: summaryLoading, error: summaryError, mutate: mutateSummary } = useSettlementSummary();
-  const { settlements, isLoading: listLoading, error: listError, mutate: mutateList } = useSettlements({
+  const {
+    summary,
+    isLoading: summaryLoading,
+    error: summaryError,
+    mutate: mutateSummary,
+  } = useSettlementSummary();
+  const {
+    settlements,
+    isLoading: listLoading,
+    error: listError,
+    mutate: mutateList,
+  } = useSettlements({
     limit: 500,
     date_from: params.dateFrom,
     date_to: params.dateTo,
@@ -34,13 +44,14 @@ export function useDashboardStats(params: UseDashboardStatsParams = {}) {
   const stats = useMemo((): DashboardStats | null => {
     if (summaryError || listError) return null;
     const totalSettled = Number(summary?.total_settled_this_month ?? 0);
-    const totalFees = Number(summary?.total_fees_paid ?? 0);
     const completed = settlements.filter((s) => s.status === "completed");
     const pending = settlements.filter((s) => s.status === "pending");
     const failed = settlements.filter((s) => s.status === "failed");
     const totalPayments = settlements.length;
     const successRate =
-      totalPayments > 0 ? Math.round((completed.length / totalPayments) * 1000) / 10 : 0;
+      totalPayments > 0
+        ? Math.round((completed.length / totalPayments) * 1000) / 10
+        : 0;
     const sumAmount = completed.reduce((acc, s) => acc + s.fiatAmount, 0);
     const avgTransaction = totalPayments > 0 ? sumAmount / totalPayments : 0;
 
@@ -74,8 +85,16 @@ export function useDashboardStats(params: UseDashboardStatsParams = {}) {
     }
 
     const statusDistribution = [
-      { name: "Successful", value: completed.length, color: "var(--color-chart-1)" },
-      { name: "Failed", value: failed.length, color: "var(--color-destructive)" },
+      {
+        name: "Successful",
+        value: completed.length,
+        color: "var(--color-chart-1)",
+      },
+      {
+        name: "Failed",
+        value: failed.length,
+        color: "var(--color-destructive)",
+      },
       { name: "Pending", value: pending.length, color: "var(--color-chart-2)" },
     ].filter((d) => d.value > 0);
     const defaultStatus = [
@@ -93,7 +112,9 @@ export function useDashboardStats(params: UseDashboardStatsParams = {}) {
       totalSettled,
       volumeByDay,
       revenueByWeek,
-      statusDistribution: statusDistribution.length ? statusDistribution : defaultStatus,
+      statusDistribution: statusDistribution.length
+        ? statusDistribution
+        : defaultStatus,
     };
   }, [summary, settlements, summaryError, listError]);
 
