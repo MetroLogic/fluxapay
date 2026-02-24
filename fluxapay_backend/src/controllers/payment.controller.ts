@@ -1,12 +1,19 @@
 import { Request, Response } from "express";
 import { PrismaClient } from "../generated/client/client";
 import { PaymentService } from "../services/payment.service";
+import { AuthRequest } from "../types/express";
 
 const prisma = new PrismaClient();
 
 export const createPayment = async (req: Request, res: Response) => {
   try {
-    const { merchantId, order_id, amount, currency, customer_email, metadata } = req.body;
+    const { order_id, amount, currency, customer_email, metadata } = req.body;
+    const authReq = req as AuthRequest;
+    const merchantId = authReq.merchantId;
+
+    if (!merchantId) {
+      return res.status(401).json({ error: "Unauthorized: Merchant ID missing" });
+    }
 
     // Use PaymentService to create payment with derived Stellar address
     const payment = await PaymentService.createPayment({
@@ -35,6 +42,9 @@ export const createPayment = async (req: Request, res: Response) => {
 
 export const getPayments = async (req: Request, res: Response) => {
   try {
+    const authReq = req as AuthRequest;
+    const merchantId = authReq.merchantId;
+
     // 1. Destructure with explicit type casting immediately
     const query = req.query as Record<string, any>;
 
@@ -53,6 +63,7 @@ export const getPayments = async (req: Request, res: Response) => {
     const sortOrder: 'asc' | 'desc' = query.order === 'asc' ? 'asc' : 'desc';
 
     const where: any = {
+      merchantId: merchantId,
       ...(status && { status }),
       ...(currency && { currency }),
       ...((date_from || date_to) && {
@@ -104,12 +115,18 @@ export const getPayments = async (req: Request, res: Response) => {
 
 export const getPaymentById = async (req: Request, res: Response) => {
   try {
+    const authReq = req as AuthRequest;
+    const merchantId = authReq.merchantId;
+
     // Endpoint: GET /api/payments/v1/payments/:id
     // Support both 'id' and 'payment_id' parameters
     const payment_id = String(req.params.id || req.params.payment_id);
 
-    const payment = await prisma.payment.findUnique({
-      where: { id: payment_id }, // This is line 106 that was failing!
+    const payment = await prisma.payment.findFirst({
+      where: {
+        id: payment_id,
+        merchantId: merchantId
+      },
       include: { merchant: true, settlement: true }
     });
 
