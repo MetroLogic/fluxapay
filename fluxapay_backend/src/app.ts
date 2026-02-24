@@ -25,6 +25,7 @@ app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(specs));
 
 // API Routes
 app.use("/api/merchants", merchantRoutes);
+app.use("/api/v1/merchants", merchantRoutes); // Alias for frontend consistency
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/settlements", settlementRoutes);
 app.use("/api/merchants/kyc", kycRoutes);
