@@ -9,6 +9,8 @@
  * 🟢 You can import this file directly.
  */
 export type * from './models/Merchant'
+export type * from './models/Plan'
+export type * from './models/MerchantSubscription'
 export type * from './models/BankAccount'
 export type * from './models/OTP'
 export type * from './models/Settlement'
