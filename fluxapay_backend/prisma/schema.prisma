@@ -308,28 +308,7 @@ enum PaymentStatus {
   expired
 }
 
-model Payment {
-  id                      String        @id @default(cuid())
-  payment_id              String        @unique
-  merchant_id             String
-  amount                  Decimal
-  currency                String
-  deposit_address         String
-  status                  PaymentStatus @default(pending)
-  transaction_hash        String?
-  payer_address           String?
-  confirmed_at            DateTime?
-  expires_at              DateTime
-  swept                   Boolean       @default(false)
-  swept_at                DateTime?
-  sweep_transaction_hash  String?
-  settled                 Boolean       @default(false)
-  settled_at              DateTime?
-  settlement_reference    String?
-  settlement_fiat_amount  Decimal?
-  settlement_fiat_currency String?
-  created_at              DateTime      @default(now())
-  updated_at              DateTime      @updatedAt
+
 enum RefundStatus {
   initiated
   processing

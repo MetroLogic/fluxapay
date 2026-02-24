@@ -105,6 +105,8 @@ export const PaymentStatus = {
 } as const
 
 export type PaymentStatus = (typeof PaymentStatus)[keyof typeof PaymentStatus]
+
+
 export const RefundStatus = {
   initiated: 'initiated',
   processing: 'processing',
