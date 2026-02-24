@@ -7,6 +7,10 @@ import {
   signupMerchantService,
   verifyOtpMerchantService,
   getMerchantUserService,
+  updateMerchantProfileService,
+  updateMerchantWebhookService,
+  rotateApiKeyService,
+  rotateWebhookSecretService,
 } from "../services/merchant.service";
 import { AuthRequest } from "../types/express";
 import { validateUserId } from "../helpers/request.helper";
@@ -32,7 +36,6 @@ export const resendOtp = createController<ResendOtpRequest>(
   resendOtpMerchantService,
 );
 
-
 export const getLoggedInMerchant = createController(
   async (_, req: AuthRequest) => {
     const merchantId = await validateUserId(req);
@@ -40,5 +43,39 @@ export const getLoggedInMerchant = createController(
     return getMerchantUserService({
       merchantId,
     });
+  },
+);
+
+export const updateMerchantProfile = createController(
+  async (body: { business_name?: string; email?: string }, req: AuthRequest) => {
+    const merchantId = await validateUserId(req);
+    
+    return updateMerchantProfileService({
+      merchantId,
+      ...body,
+    });
+  },
+);
+
+export const updateMerchantWebhook = createController(
+  async (body: { webhook_url: string }, req: AuthRequest) => {
+    const merchantId = await validateUserId(req);
+    
+    return updateMerchantWebhookService({
+      merchantId,
+      webhook_url: body.webhook_url,
+    });
+  },
+);
+
+export const rotateApiKey = createController(async (_, req: AuthRequest) => {
+  const merchantId = await validateUserId(req);
+  return rotateApiKeyService({ merchantId });
+});
+
+export const rotateWebhookSecret = createController(
+  async (_, req: AuthRequest) => {
+    const merchantId = await validateUserId(req);
+    return rotateWebhookSecretService({ merchantId });
   },
 );

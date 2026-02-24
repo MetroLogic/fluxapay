@@ -1,30 +1,30 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Input from "@/components/Input";
 import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
+import { api, ApiError } from "@/lib/api";
 
 import { Copy, Key, Webhook, Shield, CheckCircle2 } from "lucide-react";
 
 export default function SettingsPage() {
   // Account Details State
-  const [businessName, setBusinessName] = useState("Acme Corporation");
-  const [contactEmail, setContactEmail] = useState("contact@acme.com");
+  const [businessName, setBusinessName] = useState("");
+  const [contactEmail, setContactEmail] = useState("");
   const [accountSaved, setAccountSaved] = useState(false);
   const [isSavingAccount, setIsSavingAccount] = useState(false);
+  const [accountError, setAccountError] = useState("");
 
   // API Key State
-  const [apiKey, setApiKey] = useState(
-    "fluxapay_live_xxxxxxxxxxxxxxxxxxxxxxxx",
-  );
+  const [apiKey, setApiKey] = useState("Loading...");
   const [showRegenerateModal, setShowRegenerateModal] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [keyRegenerated, setKeyRegenerated] = useState(false);
   const [copied, setCopied] = useState(false);
 
   // Webhook State
-  const [webhookUrl, setWebhookUrl] = useState("https://api.acme.com/webhooks");
+  const [webhookUrl, setWebhookUrl] = useState("");
   const [webhookError, setWebhookError] = useState("");
   const [webhookSaved, setWebhookSaved] = useState(false);
   const [isSavingWebhook, setIsSavingWebhook] = useState(false);
@@ -32,26 +32,50 @@ export default function SettingsPage() {
   // Security State
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
 
-  // Generate random API key
-  const generateApiKey = () => {
-    const chars =
-      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-    let key = "fluxapay_live_";
-    for (let i = 0; i < 24; i++) {
-      key += chars.charAt(Math.floor(Math.random() * chars.length));
+  // Loading state
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Load merchant data on mount
+  useEffect(() => {
+    loadMerchantData();
+  }, []);
+
+  const loadMerchantData = async () => {
+    try {
+      const response = await api.merchant.getMe();
+      const merchant = response.merchant;
+      
+      setBusinessName(merchant.business_name || "");
+      setContactEmail(merchant.email || "");
+      setWebhookUrl(merchant.webhook_url || "");
+      setApiKey(merchant.api_key || "No API key generated");
+    } catch (error) {
+      console.error("Failed to load merchant data:", error);
+    } finally {
+      setIsLoading(false);
     }
-    return key;
   };
 
   // Handle Account Details Save
   const handleAccountSave = async () => {
     setIsSavingAccount(true);
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 800));
-    console.log("Saving account details:", { businessName, contactEmail });
-    setIsSavingAccount(false);
-    setAccountSaved(true);
-    setTimeout(() => setAccountSaved(false), 3000);
+    setAccountError("");
+    
+    try {
+      await api.merchant.updateProfile({
+        business_name: businessName,
+        email: contactEmail,
+      });
+      
+      setAccountSaved(true);
+      setTimeout(() => setAccountSaved(false), 3000);
+    } catch (error) {
+      const message = error instanceof ApiError ? error.message : "Failed to save changes";
+      setAccountError(message);
+      console.error("Failed to save account details:", error);
+    } finally {
+      setIsSavingAccount(false);
+    }
   };
 
   // Handle API Key Copy
@@ -64,20 +88,20 @@ export default function SettingsPage() {
   // Handle API Key Regeneration
   const handleRegenerateApiKey = async () => {
     setIsRegenerating(true);
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-
-    // Generate new API key
-    const newKey = generateApiKey();
-    setApiKey(newKey);
-    console.log("API Key regenerated:", newKey);
-
-    setIsRegenerating(false);
-    setShowRegenerateModal(false);
-
-    // Show success message
-    setKeyRegenerated(true);
-    setTimeout(() => setKeyRegenerated(false), 5000);
+    
+    try {
+      const response = await api.keys.regenerate();
+      setApiKey(response.api_key);
+      
+      setShowRegenerateModal(false);
+      setKeyRegenerated(true);
+      setTimeout(() => setKeyRegenerated(false), 5000);
+    } catch (error) {
+      console.error("Failed to regenerate API key:", error);
+      alert("Failed to regenerate API key. Please try again.");
+    } finally {
+      setIsRegenerating(false);
+    }
   };
 
   // Handle Webhook URL Change
@@ -97,13 +121,40 @@ export default function SettingsPage() {
   const handleWebhookSave = async () => {
     if (webhookError) return;
     setIsSavingWebhook(true);
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 800));
-    console.log("Saving webhook URL:", webhookUrl);
-    setIsSavingWebhook(false);
-    setWebhookSaved(true);
-    setTimeout(() => setWebhookSaved(false), 3000);
+    
+    try {
+      await api.merchant.updateWebhook(webhookUrl);
+      
+      setWebhookSaved(true);
+      setTimeout(() => setWebhookSaved(false), 3000);
+    } catch (error) {
+      const message = error instanceof ApiError ? error.message : "Failed to save webhook URL";
+      setWebhookError(message);
+      console.error("Failed to save webhook URL:", error);
+    } finally {
+      setIsSavingWebhook(false);
+    }
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <svg
+            className="h-8 w-8 animate-spin mx-auto mb-4"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="3"
+          >
+            <circle cx="12" cy="12" r="10" className="opacity-30" />
+            <path d="M22 12a10 10 0 0 1-10 10" />
+          </svg>
+          <p className="text-muted-foreground">Loading settings...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -176,6 +227,12 @@ export default function SettingsPage() {
                   : "Save Changes"}
             </Button>
           </div>
+
+          {accountError && (
+            <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-800">
+              <p className="text-sm">{accountError}</p>
+            </div>
+          )}
         </div>
       </div>
 
@@ -294,6 +351,12 @@ export default function SettingsPage() {
                   : "Save Webhook URL"}
             </Button>
           </div>
+
+          {webhookError && !webhookError.includes("https://") && (
+            <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-800">
+              <p className="text-sm">{webhookError}</p>
+            </div>
+          )}
         </div>
       </div>
 
