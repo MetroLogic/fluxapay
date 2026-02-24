@@ -1,0 +1,40 @@
+name: Backend CI
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "fluxapay_backend/**"
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "fluxapay_backend/**"
+
+jobs:
+  build-and-check:
+    name: Backend Build Check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./fluxapay_backend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: ./fluxapay_backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Format Check (Lint)
+        run: npm run lint
+
+      - name: Build Check
+        run: npm run build
+        # Verification that the backend TypeScript application builds successfully.

@@ -4,9 +4,18 @@ import { createOtp, verifyOtp as verifyOtpService } from "./otp.service";
 import { sendOtpEmail } from "./email.service";
 import { isDevEnv } from "../helpers/env.helper";
 import { generateToken } from "../helpers/jwt.helper";
-
+import { merchantRegistryService } from "./merchantRegistry.service";
+import {
+  generateApiKey,
+  generateWebhookSecret,
+  hashKey,
+  getLastFour,
+} from "../helpers/crypto.helper";
 
 const prisma = new PrismaClient();
+
+// Local generateApiKey removed to resolve conflict with import from crypto.helper
+
 
 export async function signupMerchantService(data: {
   business_name: string;
@@ -35,6 +44,9 @@ export async function signupMerchantService(data: {
   // Hash password
   const hashedPassword = await bcrypt.hash(password, 10);
 
+  // Generate API key
+  const apiKey = generateApiKey();
+
   // Create merchant
   const merchant = await prisma.merchant.create({
     data: {
@@ -44,7 +56,15 @@ export async function signupMerchantService(data: {
       country,
       settlement_currency,
       password: hashedPassword,
+      api_key: apiKey,
     },
+  });
+
+  // On-chain registration (non-blocking)
+  merchantRegistryService.register_merchant(merchant.id, business_name, settlement_currency).catch(err => {
+    if (isDevEnv()) {
+      console.error("Non-blocking error during on-chain merchant registration:", err);
+    }
   });
 
   // Generate OTP
@@ -112,23 +132,137 @@ export async function resendOtpMerchantService(data: {
 
   if (!merchant) throw { status: 404, message: "Merchant not found" };
 
-
   const otp = await createOtp(merchantId, channel);
   if (channel === "email") await sendOtpEmail(merchant.email, otp);
 
   return { message: "OTP resent" };
 }
 
-export async function getMerchantUserService(data: {
-  merchantId: string;
-}) {
+export async function getMerchantUserService(data: { merchantId: string }) {
   const { merchantId } = data;
   const merchant = await prisma.merchant.findUnique({
     where: { id: merchantId },
+    select: {
+      id: true,
+      business_name: true,
+      email: true,
+      phone_number: true,
+      country: true,
+      settlement_currency: true,
+      status: true,
+      api_key: true,
+      webhook_url: true,
+      created_at: true,
+      updated_at: true,
+    },
   });
 
   if (!merchant) throw { status: 404, message: "Merchant not found" };
 
+  return { message: "Merchant found", merchant: merchant };
+}
 
-  return { message: "Merchant found", merchant };
+export async function rotateApiKeyService(data: { merchantId: string }) {
+  const { merchantId } = data;
+  const rawKey = generateApiKey();
+  const hashedKey = await hashKey(rawKey);
+  const lastFour = getLastFour(rawKey);
+
+  await prisma.merchant.update({
+    where: { id: merchantId },
+    data: {
+      api_key_hashed: hashedKey,
+      api_key_last_four: lastFour,
+    },
+  });
+
+  return {
+    message:
+      "API key rotated successfully. Store this key securely as it will not be shown again.",
+    apiKey: rawKey,
+  };
+}
+
+export async function rotateWebhookSecretService(data: { merchantId: string }) {
+  const { merchantId } = data;
+  const secret = generateWebhookSecret();
+
+  await prisma.merchant.update({
+    where: { id: merchantId },
+    data: {
+      webhook_secret: secret,
+    },
+  });
+
+  return {
+    message:
+      "Webhook secret rotated successfully. Store this secret securely as it will not be shown again.",
+    webhookSecret: secret,
+  };
+}
+
+export async function updateMerchantProfileService(data: {
+  merchantId: string;
+  business_name?: string;
+  email?: string;
+}) {
+  const { merchantId, business_name, email } = data;
+
+  // Check if email is being changed and if it's already taken
+  if (email) {
+    const existing = await prisma.merchant.findFirst({
+      where: { email, id: { not: merchantId } },
+    });
+    if (existing) throw { status: 400, message: "Email already in use" };
+  }
+
+  const updateData: any = {};
+  if (business_name) updateData.business_name = business_name;
+  if (email) updateData.email = email;
+
+  const merchant = await prisma.merchant.update({
+    where: { id: merchantId },
+    data: updateData,
+  });
+
+  return { message: "Profile updated successfully", merchant };
+}
+
+export async function updateMerchantWebhookService(data: {
+  merchantId: string;
+  webhook_url: string;
+}) {
+  const { merchantId, webhook_url } = data;
+
+  // Validate webhook URL
+  if (!webhook_url.startsWith("https://")) {
+    throw { status: 400, message: "Webhook URL must use HTTPS" };
+  }
+
+  const merchant = await prisma.merchant.update({
+    where: { id: merchantId },
+    data: { webhook_url },
+  });
+
+  return { message: "Webhook URL updated successfully", merchant };
+}
+
+export async function regenerateApiKeyService(data: {
+  merchantId: string;
+}) {
+  const { merchantId } = data;
+
+  // Generate new API key
+  const apiKey = generateApiKey();
+
+  // Update merchant with new API key
+  await prisma.merchant.update({
+    where: { id: merchantId },
+    data: { api_key: apiKey },
+  });
+
+  return {
+    message: "API key regenerated successfully",
+    api_key: apiKey
+  };
 }
