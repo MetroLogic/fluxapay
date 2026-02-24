@@ -33,6 +33,9 @@ export const PrismaClient = $Class.getPrismaClientClass(__dirname)
 export type PrismaClient<LogOpts extends Prisma.LogLevel = never, OmitOpts extends Prisma.PrismaClientOptions["omit"] = Prisma.PrismaClientOptions["omit"], ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = $Class.PrismaClient<LogOpts, OmitOpts, ExtArgs>
 export { Prisma }
 // file annotations for bundling tools to include these files
+path.join(__dirname, "query_engine-windows.dll.node")
+path.join(process.cwd(), "src/generated/client/query_engine-windows.dll.node")
+
 path.join(__dirname, "libquery_engine-darwin-arm64.dylib.node")
 path.join(process.cwd(), "src/generated/client/libquery_engine-darwin-arm64.dylib.node")
 /**

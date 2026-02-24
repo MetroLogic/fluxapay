@@ -1,3 +1,7 @@
+// Payment Monitor Oracle
+import { Horizon, Asset } from '@stellar/stellar-sdk';
+import { PrismaClient } from '../generated/client/client';
+import { paymentContractService } from './paymentContract.service';
 /**
  * paymentMonitor.service.ts
  *
@@ -35,6 +39,64 @@ export async function runPaymentMonitorTick(): Promise<void> {
     },
   });
 
+    for (const payment of payments) {
+      const address = payment.stellar_address;
+      if (!address) continue;
+
+      try {
+        // Build the payments query with cursor support
+        let paymentsQuery = server.payments()
+          .forAccount(address)
+          .order('desc')
+          .limit(10);
+
+        // If we have a last paging token, start from there to only get new transactions
+        if (payment.last_paging_token) {
+          paymentsQuery = paymentsQuery.cursor(payment.last_paging_token);
+        }
+
+        const transactions = await paymentsQuery.call();
+
+        // Track the latest paging token to avoid re-processing
+        let latestPagingToken = payment.last_paging_token;
+
+        for (const record of transactions.records) {
+          // Update the latest paging token
+          if (record.paging_token && (!latestPagingToken || record.paging_token > latestPagingToken)) {
+            latestPagingToken = record.paging_token;
+          }
+
+          if (record.type !== 'payment') continue;
+          if (record.asset_type !== 'credit_alphanum4' || record.asset_code !== 'USDC') continue;
+          if (record.asset_issuer !== USDC_ASSET.issuer) continue;
+
+          const amount = parseFloat(record.amount);
+          if (amount >= payment.amount) {
+            let status = 'paid';
+            if (amount > payment.amount) status = 'overpaid';
+            else if (amount < payment.amount) status = 'partially_paid';
+
+            await prisma.payment.update({
+              where: { id: payment.id },
+              data: {
+                status,
+                last_paging_token: latestPagingToken,
+                transaction_hash: record.transaction_hash,
+              },
+            });
+
+            // Trigger on-chain verification via Soroban contract
+            if (status === 'paid' || status === 'overpaid') {
+              // Using record.amount (string decimal) - handled by paymentContractService conversion
+              paymentContractService.verify_payment(payment.id, record.transaction_hash, record.amount)
+                .catch(err => console.error(`Failed to initiate on-chain verification for payment ${payment.id}:`, err));
+            }
+            break; // Payment processed, move to next payment
+          }
+        }
+
+        // Update the paging token even if no matching payment was found
+        if (latestPagingToken && latestPagingToken !== payment.last_paging_token) {
   for (const payment of payments) {
     const address = payment.stellar_address;
     if (!address) continue;
