@@ -24,6 +24,8 @@ export async function signupMerchantService(data: {
   country: string;
   settlement_currency: string;
   password: string;
+  settlement_schedule?: 'daily' | 'weekly';
+  settlement_day?: number;
 }) {
   const {
     email,
@@ -32,6 +34,8 @@ export async function signupMerchantService(data: {
     business_name,
     country,
     settlement_currency,
+    settlement_schedule,
+    settlement_day
   } = data;
 
   // Check duplicates
@@ -57,6 +61,8 @@ export async function signupMerchantService(data: {
       settlement_currency,
       password: hashedPassword,
       api_key: apiKey,
+      settlement_schedule: settlement_schedule ?? 'daily',
+      settlement_day: settlement_schedule === 'weekly' ? (settlement_day ?? null) : null,
     },
   });
 
@@ -154,6 +160,8 @@ export async function getMerchantUserService(data: { merchantId: string }) {
       webhook_url: true,
       created_at: true,
       updated_at: true,
+      settlement_schedule: true,
+      settlement_day: true,
     },
   });
 
@@ -264,5 +272,36 @@ export async function regenerateApiKeyService(data: {
   return {
     message: "API key regenerated successfully",
     api_key: apiKey
+  };
+}
+
+export async function updateSettlementScheduleService(data: {
+  merchantId: string;
+  settlement_schedule: 'daily' | 'weekly';
+  settlement_day?: number;
+}) {
+  const { merchantId, settlement_schedule, settlement_day } = data;
+
+  const merchant = await prisma.merchant.findUnique({ where: { id: merchantId } });
+  if (!merchant) throw { status: 404, message: 'Merchant not found' };
+
+  const updated = await prisma.merchant.update({
+    where: { id: merchantId },
+    data: {
+      settlement_schedule,
+      // Clear settlement_day when switching back to daily
+      settlement_day: settlement_schedule === 'weekly' ? (settlement_day ?? null) : null,
+    },
+    select: {
+      id: true,
+      business_name: true,
+      settlement_schedule: true,
+      settlement_day: true,
+    },
+  });
+
+  return {
+    message: 'Settlement schedule updated successfully',
+    merchant: updated,
   };
 }
