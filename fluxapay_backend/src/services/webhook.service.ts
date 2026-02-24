@@ -1,5 +1,6 @@
-import { PrismaClient, WebhookEventType, WebhookStatus } from "../generated/client/client";
-import { webhookEventTypes } from "../schemas/webhook.schema";
+import { PrismaClient, WebhookEventType, WebhookStatus } from "../generated/client";
+
+import { eventBus, AppEvents } from "./EventService";
 
 const prisma = new PrismaClient();
 
@@ -169,14 +170,14 @@ export async function retryWebhookService(params: RetryWebhookParams) {
     throw { status: 404, message: "Webhook log not found" };
   }
 
+  const merchant = await prisma.merchant.findUnique({
+    where: { id: merchantId },
+  });
+
   if (log.status === "delivered") {
     throw { status: 400, message: "Webhook already delivered successfully" };
   }
 
-  // Attempt to deliver the webhook
-  const merchant = await prisma.merchant.findUnique({
-    where: { id: merchantId },
-  });
   const secret = merchant?.webhook_secret || process.env.WEBHOOK_SECRET || "webhook-secret";
 
   const result = await deliverWebhook(
@@ -453,27 +454,37 @@ export function generateMerchantPayload(payment: any): Record<string, any> {
 export async function createAndDeliverWebhook(
   merchantId: string,
   eventType: WebhookEventType,
-  endpointUrl: string,
   payload: Record<string, any>,
   paymentId?: string
 ) {
+  // Fetch merchant to get webhook URL and secret
+  const merchant = await prisma.merchant.findUnique({
+    where: { id: merchantId },
+    select: { webhook_url: true, webhook_secret: true },
+  });
+
+  if (!merchant || !merchant.webhook_url) {
+    console.warn(`Webhook not sent: Merchant ${merchantId} has no webhook URL.`);
+    return null;
+  }
+
   const webhookLog = await prisma.webhookLog.create({
     data: {
       merchantId,
       event_type: eventType,
-      endpoint_url: endpointUrl,
+      endpoint_url: merchant.webhook_url,
       request_payload: payload,
       payment_id: paymentId,
       status: "pending",
     },
   });
 
-  const merchant = await prisma.merchant.findUnique({
+  const m = await prisma.merchant.findUnique({
     where: { id: merchantId },
   });
-  const secret = merchant?.webhook_secret || process.env.WEBHOOK_SECRET || "webhook-secret";
+  const secret = m?.webhook_secret || process.env.WEBHOOK_SECRET || "webhook-secret";
 
-  const result = await deliverWebhook(endpointUrl, payload, secret);
+  const result = await deliverWebhook(merchant.webhook_url, payload, secret);
   const status: WebhookStatus = result.success ? "delivered" : "retrying";
 
   const nextRetryAt = status === "retrying"
@@ -494,3 +505,31 @@ export async function createAndDeliverWebhook(
 
   return webhookLog;
 }
+
+// Listen for internal events
+eventBus.on(AppEvents.PAYMENT_CONFIRMED, async (payment) => {
+  try {
+    const merchant = await prisma.merchant.findUnique({
+      where: { id: payment.merchant_id }
+    });
+
+    if (merchant && merchant.status === 'active') {
+      await createAndDeliverWebhook(
+        payment.merchant_id,
+        'payment_completed',
+        {
+          event: 'payment.confirmed',
+          payment_id: payment.payment_id,
+          amount: payment.amount.toString(),
+          currency: payment.currency,
+          status: 'confirmed',
+          transaction_hash: payment.transaction_hash,
+          confirmed_at: payment.confirmed_at
+        },
+        payment.payment_id
+      );
+    }
+  } catch (error) {
+    console.error('Error handling payment.confirmed event in Webhook Service:', error);
+  }
+});

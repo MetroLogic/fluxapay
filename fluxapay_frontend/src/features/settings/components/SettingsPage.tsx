@@ -1,30 +1,43 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Input from "@/components/Input";
 import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
+import { api, ApiError } from "@/lib/api";
 
-import { Copy, Key, Webhook, Shield, CheckCircle2 } from "lucide-react";
+import {
+  Copy,
+  Key,
+  Webhook,
+  Shield,
+  CheckCircle2,
+  CalendarClock,
+  Clock,
+} from "lucide-react";
 
 export default function SettingsPage() {
   // Account Details State
-  const [businessName, setBusinessName] = useState("Acme Corporation");
-  const [contactEmail, setContactEmail] = useState("contact@acme.com");
+  const [businessName, setBusinessName] = useState("");
+  const [contactEmail, setContactEmail] = useState("");
   const [accountSaved, setAccountSaved] = useState(false);
   const [isSavingAccount, setIsSavingAccount] = useState(false);
+  const [accountError, setAccountError] = useState("");
+  const [settlementSchedule, setSettlementSchedule] = useState<
+    "daily" | "weekly"
+  >("daily");
+  const [settlementDay, setSettlementDay] = useState<number>(1); // Default to Monday
+  const [nextSettlementDate, setNextSettlementDate] = useState<string>("");
 
   // API Key State
-  const [apiKey, setApiKey] = useState(
-    "fluxapay_live_xxxxxxxxxxxxxxxxxxxxxxxx",
-  );
+  const [apiKey, setApiKey] = useState("Loading...");
   const [showRegenerateModal, setShowRegenerateModal] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [keyRegenerated, setKeyRegenerated] = useState(false);
   const [copied, setCopied] = useState(false);
 
   // Webhook State
-  const [webhookUrl, setWebhookUrl] = useState("https://api.acme.com/webhooks");
+  const [webhookUrl, setWebhookUrl] = useState("");
   const [webhookError, setWebhookError] = useState("");
   const [webhookSaved, setWebhookSaved] = useState(false);
   const [isSavingWebhook, setIsSavingWebhook] = useState(false);
@@ -32,26 +45,66 @@ export default function SettingsPage() {
   // Security State
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
 
-  // Generate random API key
-  const generateApiKey = () => {
-    const chars =
-      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-    let key = "fluxapay_live_";
-    for (let i = 0; i < 24; i++) {
-      key += chars.charAt(Math.floor(Math.random() * chars.length));
+  // Loading state
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Load merchant data on mount
+  useEffect(() => {
+    loadMerchantData();
+  }, []);
+
+  const loadMerchantData = async () => {
+    try {
+      const response = await api.merchant.getMe();
+      const merchant = response.merchant;
+      
+      setBusinessName(merchant.business_name || "");
+      setContactEmail(merchant.email || "");
+      setWebhookUrl(merchant.webhook_url || "");
+      setApiKey(merchant.api_key || "No API key generated");
+      setSettlementSchedule(merchant.settlement_schedule || "daily");
+      setSettlementDay(merchant.settlement_day ?? 1);
+
+      // Fetch settlement summary for next settlement date
+      try {
+        const summary = await api.settlements.summary();
+        if (summary.next_settlement_date) {
+          setNextSettlementDate(summary.next_settlement_date);
+        }
+      } catch (err) {
+        console.error("Failed to load settlement summary:", err);
+      }
+    } catch (error) {
+      console.error("Failed to load merchant data:", error);
+    } finally {
+      setIsLoading(false);
     }
-    return key;
   };
 
   // Handle Account Details Save
   const handleAccountSave = async () => {
     setIsSavingAccount(true);
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 800));
-    console.log("Saving account details:", { businessName, contactEmail });
-    setIsSavingAccount(false);
-    setAccountSaved(true);
-    setTimeout(() => setAccountSaved(false), 3000);
+    setAccountError("");
+    
+    try {
+      await api.merchant.updateProfile({
+        business_name: businessName,
+        email: contactEmail,
+        settlement_schedule: settlementSchedule,
+        settlement_day:
+          settlementSchedule === "weekly" ? settlementDay : undefined,
+      });
+      
+      setAccountSaved(true);
+      setTimeout(() => setAccountSaved(false), 3000);
+    } catch (error) {
+      const message =
+        error instanceof ApiError ? error.message : "Failed to save changes";
+      setAccountError(message);
+      console.error("Failed to save account details:", error);
+    } finally {
+      setIsSavingAccount(false);
+    }
   };
 
   // Handle API Key Copy
@@ -64,20 +117,20 @@ export default function SettingsPage() {
   // Handle API Key Regeneration
   const handleRegenerateApiKey = async () => {
     setIsRegenerating(true);
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-
-    // Generate new API key
-    const newKey = generateApiKey();
-    setApiKey(newKey);
-    console.log("API Key regenerated:", newKey);
-
-    setIsRegenerating(false);
-    setShowRegenerateModal(false);
-
-    // Show success message
-    setKeyRegenerated(true);
-    setTimeout(() => setKeyRegenerated(false), 5000);
+    
+    try {
+      const response = await api.keys.regenerate();
+      setApiKey(response.api_key);
+      
+      setShowRegenerateModal(false);
+      setKeyRegenerated(true);
+      setTimeout(() => setKeyRegenerated(false), 5000);
+    } catch (error) {
+      console.error("Failed to regenerate API key:", error);
+      alert("Failed to regenerate API key. Please try again.");
+    } finally {
+      setIsRegenerating(false);
+    }
   };
 
   // Handle Webhook URL Change
@@ -97,13 +150,43 @@ export default function SettingsPage() {
   const handleWebhookSave = async () => {
     if (webhookError) return;
     setIsSavingWebhook(true);
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 800));
-    console.log("Saving webhook URL:", webhookUrl);
-    setIsSavingWebhook(false);
-    setWebhookSaved(true);
-    setTimeout(() => setWebhookSaved(false), 3000);
+    
+    try {
+      await api.merchant.updateWebhook(webhookUrl);
+      
+      setWebhookSaved(true);
+      setTimeout(() => setWebhookSaved(false), 3000);
+    } catch (error) {
+      const message =
+        error instanceof ApiError
+          ? error.message
+          : "Failed to save webhook URL";
+      setWebhookError(message);
+      console.error("Failed to save webhook URL:", error);
+    } finally {
+      setIsSavingWebhook(false);
+    }
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <svg
+            className="h-8 w-8 animate-spin mx-auto mb-4"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="3"
+          >
+            <circle cx="12" cy="12" r="10" className="opacity-30" />
+            <path d="M22 12a10 10 0 0 1-10 10" />
+          </svg>
+          <p className="text-muted-foreground">Loading settings...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -174,6 +257,102 @@ export default function SettingsPage() {
                 : accountSaved
                   ? "Saved!"
                   : "Save Changes"}
+            </Button>
+          </div>
+
+          {accountError && (
+            <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-800">
+              <p className="text-sm">{accountError}</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Settlement Schedule Section */}
+      <div className="space-y-4 p-6 rounded-2xl border bg-muted/20">
+        <div className="flex items-center gap-2 text-primary font-semibold mb-4">
+          <CalendarClock className="h-5 w-5" />
+          <h3 className="text-lg">Settlement Schedule</h3>
+        </div>
+
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-2">
+                Schedule Frequency
+              </label>
+              <select
+                value={settlementSchedule}
+                onChange={(e) =>
+                  setSettlementSchedule(e.target.value as "daily" | "weekly")
+                }
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly</option>
+              </select>
+            </div>
+
+            {settlementSchedule === "weekly" && (
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Settlement Day
+                </label>
+                <select
+                  value={settlementDay}
+                  onChange={(e) => setSettlementDay(parseInt(e.target.value))}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <option value={0}>Sunday</option>
+                  <option value={1}>Monday</option>
+                  <option value={2}>Tuesday</option>
+                  <option value={3}>Wednesday</option>
+                  <option value={4}>Thursday</option>
+                  <option value={5}>Friday</option>
+                  <option value={6}>Saturday</option>
+                </select>
+              </div>
+            )}
+          </div>
+
+          {nextSettlementDate && (
+            <div className="p-4 rounded-xl bg-primary/5 border border-primary/10">
+              <div className="flex items-center gap-2 text-sm text-primary font-medium">
+                <Clock className="h-4 w-4" />
+                <span>
+                  Next Scheduled Settlement:{" "}
+                  {new Date(nextSettlementDate).toLocaleDateString(undefined, {
+                    weekday: "long",
+                    year: "numeric",
+                    month: "long",
+                    day: "numeric",
+                  })}
+                </span>
+              </div>
+            </div>
+          )}
+
+          <div className="flex items-center gap-3 pt-2">
+            <Button
+              variant="dark"
+              onClick={handleAccountSave}
+              disabled={isSavingAccount}
+              className="gap-2"
+            >
+              {isSavingAccount && (
+                <svg
+                  className="h-4 w-4 animate-spin"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="3"
+                >
+                  <circle cx="12" cy="12" r="10" className="opacity-30" />
+                  <path d="M22 12a10 10 0 0 1-10 10" />
+                </svg>
+              )}
+              {accountSaved && <CheckCircle2 className="h-4 w-4" />}
+              {isSavingAccount ? "Saving..." : "Update Schedule"}
             </Button>
           </div>
         </div>
@@ -294,6 +473,12 @@ export default function SettingsPage() {
                   : "Save Webhook URL"}
             </Button>
           </div>
+
+          {webhookError && !webhookError.includes("https://") && (
+            <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-800">
+              <p className="text-sm">{webhookError}</p>
+            </div>
+          )}
         </div>
       </div>
 

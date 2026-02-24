@@ -5,7 +5,9 @@ import {
   Clock,
   XCircle,
   AlertCircle,
+  Copy,
 } from "lucide-react";
+import toast from "react-hot-toast";
 
 interface PaymentDetailsProps {
   payment: Payment;
@@ -14,6 +16,11 @@ interface PaymentDetailsProps {
 const STELLAR_EXPLORER_BASE = "https://stellar.expert/explorer/public/tx";
 
 export function PaymentDetails({ payment }: PaymentDetailsProps) {
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    toast.success("Copied to clipboard!");
+  };
+
   const getStatusIcon = (status: string) => {
     switch (status) {
       case "completed":
@@ -72,8 +79,11 @@ export function PaymentDetails({ payment }: PaymentDetailsProps) {
         {payment.settlementId && (
           <div className="space-y-1">
             <p className="text-muted-foreground">Settlement ID</p>
-            <p className="font-mono text-primary cursor-pointer hover:underline">
-              {payment.settlementId}
+            <p
+              onClick={() => copyToClipboard(payment.settlementId!)}
+              className="font-mono text-primary cursor-pointer hover:underline flex items-center gap-1"
+            >
+              {payment.settlementId} <Copy className="h-3 w-3" />
             </p>
           </div>
         )}
