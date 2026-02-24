@@ -1,6 +1,5 @@
 "use client";
 
-
 import React, { useState, useRef, JSX } from 'react';
 import {
     Search,
@@ -24,21 +23,8 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import EmptyState from '@/components/EmptyState';
-
-// Type definitions
-interface Merchant {
-    id: string;
-    businessName: string;
-    email: string;
-    kycStatus: 'approved' | 'pending' | 'rejected' | 'unverified';
-    accountStatus: 'active' | 'suspended';
-    volume: number;
-    revenue: number;
-    dateJoined: string;
-    transactionCount: number;
-    avgTransaction: number;
-}
-
+import { useAdminMerchants, type AdminMerchant } from '@/hooks/useAdminMerchants';
+import { api } from '@/lib/api';
 
 interface StatusConfig {
     color: string;
@@ -51,74 +37,10 @@ const AdminMerchantsPage = () => {
     const primaryColor = 'oklch(0.205 0 0)';
     const primaryLight = 'oklch(0.93 0 0)';
 
-    // Sample merchant data
-    const [merchants, setMerchants] = useState<Merchant[]>([
-        {
-            id: 'M001',
-            businessName: 'TechStore Inc',
-            email: 'contact@techstore.com',
-            kycStatus: 'approved',
-            accountStatus: 'active',
-            volume: 245000,
-            revenue: 4900,
-            dateJoined: '2024-01-15',
-            transactionCount: 156,
-            avgTransaction: 1570.51
-        },
-        {
-            id: 'M002',
-            businessName: 'Fashion Hub',
-            email: 'info@fashionhub.com',
-            kycStatus: 'pending',
-            accountStatus: 'active',
-            volume: 125000,
-            revenue: 2500,
-            dateJoined: '2024-02-20',
-            transactionCount: 89,
-            avgTransaction: 1404.49
-        },
-        {
-            id: 'M003',
-            businessName: 'Global Imports',
-            email: 'admin@globalimports.com',
-            kycStatus: 'rejected',
-            accountStatus: 'suspended',
-            volume: 0,
-            revenue: 0,
-            dateJoined: '2024-03-10',
-            transactionCount: 0,
-            avgTransaction: 0
-        },
-        {
-            id: 'M004',
-            businessName: 'Digital Services Co',
-            email: 'hello@digitalservices.com',
-            kycStatus: 'unverified',
-            accountStatus: 'active',
-            volume: 50000,
-            revenue: 1000,
-            dateJoined: '2024-03-25',
-            transactionCount: 34,
-            avgTransaction: 1470.59
-        },
-        {
-            id: 'M005',
-            businessName: 'E-Commerce Plus',
-            email: 'support@ecommerceplus.com',
-            kycStatus: 'approved',
-            accountStatus: 'active',
-            volume: 380000,
-            revenue: 7600,
-            dateJoined: '2024-01-05',
-            transactionCount: 243,
-            avgTransaction: 1563.79
-        }
-    ]);
-
     const [searchTerm, setSearchTerm] = useState<string>('');
     const [kycFilter, setKycFilter] = useState<string>('all');
     const [accountFilter, setAccountFilter] = useState<string>('all');
-    const [selectedMerchant, setSelectedMerchant] = useState<Merchant | null>(null);
+    const [selectedMerchant, setSelectedMerchant] = useState<AdminMerchant | null>(null);
     const [showResetKeyModal, setShowResetKeyModal] = useState<string | null>(null);
     const [showExportMenu, setShowExportMenu] = useState<boolean>(false);
     const [isExporting, setIsExporting] = useState<boolean>(false);
@@ -126,8 +48,14 @@ const AdminMerchantsPage = () => {
     const exportMenuRef = useRef<HTMLDivElement>(null);
     const exportButtonRef = useRef<HTMLButtonElement>(null);
 
+    const { merchants, isLoading, mutate } = useAdminMerchants({
+        limit: 200,
+        kycStatus: kycFilter !== 'all' ? kycFilter : undefined,
+        accountStatus: accountFilter !== 'all' ? accountFilter : undefined,
+    });
 
-    const getKycStatusConfig = (status: Merchant['kycStatus']): StatusConfig => {
+
+    const getKycStatusConfig = (status: AdminMerchant['kycStatus']): StatusConfig => {
         switch (status) {
             case 'approved':
                 return {
@@ -160,7 +88,7 @@ const AdminMerchantsPage = () => {
         }
     };
 
-    const getAccountStatusConfig = (status: Merchant['accountStatus']): StatusConfig => {
+    const getAccountStatusConfig = (status: string): StatusConfig => {
         return status === 'active'
             ? {
                 color: 'text-emerald-700',
@@ -195,31 +123,36 @@ const AdminMerchantsPage = () => {
 
     const filteredMerchants = merchants.filter(merchant => {
         const matchesSearch =
+            !searchTerm ||
             merchant.businessName.toLowerCase().includes(searchTerm.toLowerCase()) ||
             merchant.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
             merchant.id.toLowerCase().includes(searchTerm.toLowerCase());
-
-        const matchesKyc = kycFilter === 'all' || merchant.kycStatus === kycFilter;
-        const matchesAccount = accountFilter === 'all' || merchant.accountStatus === accountFilter;
-
-        return matchesSearch && matchesKyc && matchesAccount;
+        return matchesSearch;
     });
 
-    const updateMerchantKyc = (id: string, status: Merchant['kycStatus']) => {
-        setMerchants(merchants.map(m =>
-            m.id === id ? { ...m, kycStatus: status } : m
-        ));
-        setSelectedMerchant(null);
+    const updateMerchantKyc = async (id: string, status: 'approved' | 'rejected') => {
+        try {
+            await api.kyc.admin.updateStatus(id, { status });
+            toast.success(`KYC ${status} successfully`);
+            setSelectedMerchant(null);
+            void mutate();
+        } catch {
+            toast.error('Failed to update KYC status');
+        }
     };
 
-    const toggleAccountStatus = (id: string) => {
-        setMerchants(merchants.map(m =>
-            m.id === id ? {
-                ...m,
-                accountStatus: m.accountStatus === 'active' ? 'suspended' : 'active'
-            } : m
-        ));
-        setSelectedMerchant(null);
+    const toggleAccountStatus = async (id: string) => {
+        const m = merchants.find(x => x.id === id);
+        if (!m) return;
+        const next = m.accountStatus === 'active' ? 'suspended' : 'active';
+        try {
+            await api.admin.merchants.updateStatus(id, next as 'active' | 'suspended');
+            toast.success(`Account ${next}`);
+            setSelectedMerchant(null);
+            void mutate();
+        } catch {
+            toast.error('Failed to update account status');
+        }
     };
 
     const resetApiKeys = (id: string) => {
@@ -236,7 +169,7 @@ const AdminMerchantsPage = () => {
         return { total, active, approved, totalVolume };
     };
 
-    const formatMerchantForExport = (merchant: Merchant) => {
+    const formatMerchantForExport = (merchant: AdminMerchant) => {
         return {
             'Merchant ID': merchant.id,
             'Business Name': merchant.businessName,
@@ -271,7 +204,7 @@ const AdminMerchantsPage = () => {
         });
     };
 
-    const exportToCSV = async (data: Merchant[], filename: string, message: string) => {
+    const exportToCSV = async (data: AdminMerchant[], filename: string, message: string) => {
         setIsExporting(true);
         setShowExportMenu(false);
 
@@ -329,6 +262,14 @@ const AdminMerchantsPage = () => {
     };
 
     const stats = getStats();
+
+    if (isLoading && merchants.length === 0) {
+        return (
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+                <div className="text-slate-600">Loading merchants...</div>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-slate-50">
