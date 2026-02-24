@@ -16,6 +16,7 @@ import {
     Legend,
 } from "recharts";
 import { cn } from "@/lib/utils";
+import { useDashboardDateRange } from "@/features/dashboard/context/DashboardDateRangeContext";
 import { useDashboardStats } from "@/hooks/useDashboardStats";
 
 const COLORS = ["#10b981", "#ef4444", "#f59e0b", "#3b82f6"];
@@ -38,7 +39,11 @@ const ChartCard = ({
 };
 
 export const ChartsSection = () => {
-    const { stats, isLoading, error } = useDashboardStats();
+    const { dateRange } = useDashboardDateRange();
+    const { stats, isLoading, error } = useDashboardStats({
+        dateFrom: dateRange.from,
+        dateTo: dateRange.to,
+    });
 
     const volumeData = stats?.volumeByDay ?? [
         { name: "Mon", value: 0 },
