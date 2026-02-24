@@ -32,39 +32,39 @@ model Merchant {
   kyc                 MerchantKYC?
   webhookLogs         WebhookLog[]
   payments            Payment[]
-  api_key_hashed     String?        @unique
-  api_key_last_four  String?
-  webhook_secret     String?
+  api_key_hashed      String?        @unique
+  api_key_last_four   String?
+  webhook_secret      String?
   bankAccount         BankAccount?
   subscriptions       MerchantSubscription[]
 }
 
 model Plan {
-  id          String   @id @default(cuid())
-  name        String
-  slug        String   @unique
-  description String?
-  amount      Decimal  @db.Decimal(20, 7)
-  currency    String   @default("USD")
-  interval    BillingInterval
-  created_at  DateTime @default(now())
-  updated_at  DateTime @updatedAt
+  id            String               @id @default(cuid())
+  name          String
+  slug          String               @unique
+  description   String?
+  amount        Decimal              @db.Decimal(20, 7)
+  currency      String               @default("USD")
+  interval      BillingInterval
+  created_at    DateTime             @default(now())
+  updated_at    DateTime             @updatedAt
   subscriptions MerchantSubscription[]
 }
 
 model MerchantSubscription {
-  id                String            @id @default(cuid())
-  merchant          Merchant          @relation(fields: [merchantId], references: [id])
-  merchantId        String
-  plan              Plan              @relation(fields: [planId], references: [id])
-  planId            String
-  status            SubscriptionStatus @default(active)
-  billing_cycle     BillingInterval
+  id                   String             @id @default(cuid())
+  merchant             Merchant           @relation(fields: [merchantId], references: [id])
+  merchantId           String
+  plan                 Plan               @relation(fields: [planId], references: [id])
+  planId               String
+  status               SubscriptionStatus @default(active)
+  billing_cycle        BillingInterval
   current_period_start DateTime
   current_period_end   DateTime
-  next_billing_date   DateTime
-  created_at        DateTime          @default(now())
-  updated_at        DateTime          @updatedAt
+  next_billing_date    DateTime
+  created_at           DateTime           @default(now())
+  updated_at           DateTime           @updatedAt
 
   @@unique([merchantId, planId])
   @@index([next_billing_date])
@@ -196,6 +196,40 @@ model WebhookRetryAttempt {
 }
 
 model Payment {
+  id                       String      @id @default(cuid())
+  merchant                 Merchant    @relation(fields: [merchantId], references: [id])
+  merchantId               String
+  order_id                 String?     @unique
+  amount                   Decimal
+  currency                 String
+  customer_email           String
+  metadata                 Json
+  expiration               DateTime
+  status                   String
+  checkout_url             String
+  timeline                 Json?
+
+  // Stellar address for this payment
+  stellar_address          String?
+  last_paging_token        String?
+
+  // Sweeping fields
+  swept                    Boolean     @default(false)
+  swept_at                 DateTime?
+  sweep_tx_hash            String?
+  transaction_hash         String?
+
+  // Settlement fields
+  settled                  Boolean     @default(false)
+  settled_at               DateTime?
+  settlement_ref           String?
+  settlement_fiat_amount   Decimal?
+  settlement_fiat_currency String?
+
+  // Link to settlement batch
+  settlement               Settlement? @relation(fields: [settlementId], references: [id])
+  settlementId             String?
+  createdAt                DateTime    @default(now())
   id                      String      @id @default(cuid())
   merchant                Merchant    @relation(fields: [merchantId], references: [id])
   merchantId              String
@@ -241,7 +275,65 @@ model Payment {
   @@index([stellar_address])
 }
 
-// ...existing code...
+model Refund {
+  id               String       @id @default(cuid())
+  payment_id       String
+  merchant_id      String
+  amount           Decimal      @db.Decimal(20, 7)
+  currency         String
+  customer_address String
+  reason           RefundReason
+  reason_note      String?
+  status           RefundStatus @default(initiated)
+  stellar_tx_hash  String?
+  error_message    String?
+  error_code       String?
+  initiated_by     String
+  created_at       DateTime     @default(now())
+  updated_at       DateTime     @updatedAt
+
+  @@index([payment_id])
+  @@index([merchant_id])
+  @@index([status])
+}
+
+model ReconciliationRecord {
+  id                  String                @id @default(cuid())
+  period_start        DateTime
+  period_end          DateTime
+  total_usdc_swept    Decimal
+  total_fiat_payouts  Decimal
+  total_fees          Decimal
+  expected_balance    Decimal
+  actual_balance      Decimal
+  discrepancy         Decimal
+  discrepancy_percent Float
+  status              ReconciliationStatus  @default(pending)
+  settlements_count   Int
+  payments_count      Int
+  notes               String?
+  reviewed_by         String?
+  reviewed_at         DateTime?
+  alerts              ReconciliationAlert[]
+  created_at          DateTime              @default(now())
+  updated_at          DateTime              @updatedAt
+}
+
+model ReconciliationAlert {
+  id               String                  @id @default(cuid())
+  reconciliation   ReconciliationRecord    @relation(fields: [reconciliationId], references: [id])
+  reconciliationId String
+  alert_type       ReconciliationAlertType
+  severity         AlertSeverity
+  message          String
+  details          Json?
+  acknowledged     Boolean                 @default(false)
+  acknowledged_by  String?
+  acknowledged_at  DateTime?
+  created_at       DateTime                @default(now())
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
 
 enum MerchantStatus {
   pending_verification
@@ -304,6 +396,17 @@ enum WebhookStatus {
   retrying
 }
 
+enum BillingInterval {
+  monthly
+  yearly
+}
+
+enum SubscriptionStatus {
+  active
+  cancelled
+  past_due
+}
+
 enum PaymentStatus {
   pending
   paid
@@ -330,35 +433,26 @@ enum RefundReason {
   dispute_resolution
 }
 
-enum BillingInterval {
-  monthly
-  yearly
+enum ReconciliationStatus {
+  pending
+  matched
+  discrepancy
+  reviewed
+  resolved
 }
 
-enum SubscriptionStatus {
-  active
-  cancelled
-  past_due
+enum ReconciliationAlertType {
+  amount_mismatch
+  missing_settlement
+  duplicate_payment
+  fee_discrepancy
+  timing_anomaly
+  threshold_exceeded
 }
 
-model Refund {
-  id               String       @id @default(cuid())
-  payment_id       String
-  merchant_id      String
-  amount           Decimal      @db.Decimal(20, 7)
-  currency         String
-  customer_address String
-  reason           RefundReason
-  reason_note      String?
-  status           RefundStatus @default(initiated)
-  stellar_tx_hash  String?
-  error_message    String?
-  error_code       String?
-  initiated_by     String
-  created_at       DateTime     @default(now())
-  updated_at       DateTime     @updatedAt
-
-  @@index([payment_id])
-  @@index([merchant_id])
-  @@index([status])
+enum AlertSeverity {
+  low
+  medium
+  high
+  critical
 }
