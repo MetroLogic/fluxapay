@@ -97,6 +97,14 @@ export const WebhookStatus = {
 export type WebhookStatus = (typeof WebhookStatus)[keyof typeof WebhookStatus]
 
 
+export const PaymentStatus = {
+  pending: 'pending',
+  confirmed: 'confirmed',
+  failed: 'failed',
+  expired: 'expired'
+} as const
+
+export type PaymentStatus = (typeof PaymentStatus)[keyof typeof PaymentStatus]
 export const RefundStatus = {
   initiated: 'initiated',
   processing: 'processing',

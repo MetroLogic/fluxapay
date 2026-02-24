@@ -32,6 +32,7 @@ const config: runtime.GetPrismaClientConfig = {
     "binaryTargets": [
       {
         "fromEnvVar": null,
+        "value": "debian-openssl-3.0.x",
         "value": "darwin-arm64",
         "native": true
       }
