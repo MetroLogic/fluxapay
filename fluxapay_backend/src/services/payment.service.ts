@@ -7,7 +7,10 @@ const prisma = new PrismaClient();
 
 export class PaymentService {
   static async checkRateLimit(merchantId: string) {
-    // Example: allow max 5 payments per minute
+    const configuredLimit = Number(process.env.PAYMENT_RATE_LIMIT_PER_MINUTE);
+    const maxPaymentsPerMinute =
+      Number.isFinite(configuredLimit) && configuredLimit > 0 ? configuredLimit : 5;
+
     const oneMinuteAgo = new Date(Date.now() - 60 * 1000);
     const count = await prisma.payment.count({
       where: {
@@ -15,7 +18,7 @@ export class PaymentService {
         createdAt: { gte: oneMinuteAgo },
       },
     });
-    return count < 5;
+    return count < maxPaymentsPerMinute;
   }
 
   static async createPayment({ amount, currency, customer_email, merchantId, metadata }: any) {

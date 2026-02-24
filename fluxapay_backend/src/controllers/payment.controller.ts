@@ -8,6 +8,12 @@ export const createPayment = async (req: Request, res: Response) => {
   try {
     const { merchantId, order_id, amount, currency, customer_email, metadata } = req.body;
 
+    const isWithinRateLimit = await PaymentService.checkRateLimit(merchantId);
+    if (!isWithinRateLimit) {
+      res.setHeader("Retry-After", "60");
+      return res.status(429).json({ error: "Rate limit exceeded. Please try again later." });
+    }
+
     // Use PaymentService to create payment with derived Stellar address
     const payment = await PaymentService.createPayment({
       merchantId,
