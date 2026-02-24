@@ -40,6 +40,10 @@ describe('PaymentService', () => {
   });
 
   describe('checkRateLimit', () => {
+    afterEach(() => {
+      delete process.env.PAYMENT_RATE_LIMIT_PER_MINUTE;
+    });
+
     it('should return true if under rate limit', async () => {
       mockPrisma.payment.count.mockResolvedValue(3);
       const result = await PaymentService.checkRateLimit('merchant_1');
@@ -50,6 +54,18 @@ describe('PaymentService', () => {
       mockPrisma.payment.count.mockResolvedValue(5);
       const result = await PaymentService.checkRateLimit('merchant_1');
       expect(result).toBe(false);
+    });
+
+    it('should use PAYMENT_RATE_LIMIT_PER_MINUTE when set', async () => {
+      process.env.PAYMENT_RATE_LIMIT_PER_MINUTE = '10';
+
+      mockPrisma.payment.count.mockResolvedValue(9);
+      const underLimit = await PaymentService.checkRateLimit('merchant_1');
+      expect(underLimit).toBe(true);
+
+      mockPrisma.payment.count.mockResolvedValue(10);
+      const atLimit = await PaymentService.checkRateLimit('merchant_1');
+      expect(atLimit).toBe(false);
     });
   });
 

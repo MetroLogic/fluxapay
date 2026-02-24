@@ -148,7 +148,7 @@ type SelectAndOmit = {
  * From T, pick a set of properties whose keys are in the union K
  */
 type Prisma__Pick<T, K extends keyof T> = {
-    [P in K]: T[P];
+  [P in K]: T[P];
 };
 
 export type Enumerable<T> = T | Array<T>;
@@ -172,8 +172,8 @@ export type SelectSubset<T, U> = {
   (T extends SelectAndInclude
     ? 'Please either choose `select` or `include`.'
     : T extends SelectAndOmit
-      ? 'Please either choose `select` or `omit`.'
-      : {})
+    ? 'Please either choose `select` or `omit`.'
+    : {})
 
 /**
  * Subset + Intersection
@@ -193,7 +193,7 @@ type Without<T, U> = { [P in Exclude<keyof T, keyof U>]?: never };
 export type XOR<T, U> =
   T extends object ?
   U extends object ?
-    (Without<T, U> & U) | (Without<U, T> & T)
+  (Without<T, U> & U) | (Without<U, T> & T)
   : U : T
 
 
@@ -201,16 +201,16 @@ export type XOR<T, U> =
  * Is T a Record?
  */
 type IsObject<T extends any> = T extends Array<any>
-? False
-: T extends Date
-? False
-: T extends Uint8Array
-? False
-: T extends BigInt
-? False
-: T extends object
-? True
-: False
+  ? False
+  : T extends Date
+  ? False
+  : T extends Uint8Array
+  ? False
+  : T extends BigInt
+  ? False
+  : T extends object
+  ? True
+  : False
 
 
 /**
@@ -261,19 +261,19 @@ export type IntersectOf<U extends Union> = (
   : never
 
 export type Overwrite<O extends object, O1 extends object> = {
-    [K in keyof O]: K extends keyof O1 ? O1[K] : O[K];
+  [K in keyof O]: K extends keyof O1 ? O1[K] : O[K];
 } & {};
 
 type _Merge<U extends object> = IntersectOf<Overwrite<U, {
-    [K in keyof U]-?: At<U, K>;
+  [K in keyof U]-?: At<U, K>;
 }>>;
 
 type Key = string | number | symbol;
 type AtStrict<O extends object, K extends Key> = O[K & keyof O];
 type AtLoose<O extends object, K extends Key> = O extends unknown ? AtStrict<O, K> : never;
 export type At<O extends object, K extends Key, strict extends Boolean = 1> = {
-    1: AtStrict<O, K>;
-    0: AtLoose<O, K>;
+  1: AtStrict<O, K>;
+  0: AtLoose<O, K>;
 }[strict];
 
 export type ComputeRaw<A extends any> = A extends Function ? A : {
@@ -295,7 +295,7 @@ type NoExpand<T> = T extends unknown ? T : never;
 export type AtLeast<O extends object, K extends string> = NoExpand<
   O extends unknown
   ? | (K extends keyof O ? { [P in K]: O[P] } & O : O)
-    | {[P in keyof O as P extends K ? P : never]-?: O[P]} & O
+  | { [P in keyof O as P extends K ? P : never]-?: O[P] } & O
   : never>;
 
 type _Strict<U, _U = U> = U extends unknown ? U & OptionalFlat<_Record<Exclude<Keys<_U>, keyof U>, never>> : never;
@@ -341,8 +341,8 @@ export type Keys<U extends Union> = U extends unknown ? keyof U : never
 
 export type GetScalarType<T, O> = O extends object ? {
   [P in keyof T]: P extends keyof O
-    ? O[P]
-    : never
+  ? O[P]
+  : never
 } : never
 
 type FieldPaths<
@@ -355,15 +355,15 @@ export type GetHavingFields<T> = {
     Or<Extends<'OR', K>, Extends<'AND', K>>,
     Extends<'NOT', K>
   > extends True
-    ? // infer is only needed to not hit TS limit
-      // based on the brilliant idea of Pierre-Antoine Mills
-      // https://github.com/microsoft/TypeScript/issues/30188#issuecomment-478938437
-      T[K] extends infer TK
-      ? GetHavingFields<UnEnumerate<TK> extends object ? Merge<UnEnumerate<TK>> : never>
-      : never
-    : {} extends FieldPaths<T[K]>
-    ? never
-    : K
+  ? // infer is only needed to not hit TS limit
+  // based on the brilliant idea of Pierre-Antoine Mills
+  // https://github.com/microsoft/TypeScript/issues/30188#issuecomment-478938437
+  T[K] extends infer TK
+  ? GetHavingFields<UnEnumerate<TK> extends object ? Merge<UnEnumerate<TK>> : never>
+  : never
+  : {} extends FieldPaths<T[K]>
+  ? never
+  : K
 }[keyof T]
 
 /**
@@ -391,6 +391,8 @@ type FieldRefInputType<Model, FieldType> = Model extends never ? never : FieldRe
 
 export const ModelName = {
   Merchant: 'Merchant',
+  Plan: 'Plan',
+  MerchantSubscription: 'MerchantSubscription',
   BankAccount: 'BankAccount',
   OTP: 'OTP',
   Settlement: 'Settlement',
@@ -406,7 +408,7 @@ export type ModelName = (typeof ModelName)[keyof typeof ModelName]
 
 
 
-export interface TypeMapCb<GlobalOmitOptions = {}> extends runtime.Types.Utils.Fn<{extArgs: runtime.Types.Extensions.InternalArgs }, runtime.Types.Utils.Record<string, any>> {
+export interface TypeMapCb<GlobalOmitOptions = {}> extends runtime.Types.Utils.Fn<{ extArgs: runtime.Types.Extensions.InternalArgs }, runtime.Types.Utils.Record<string, any>> {
   returns: TypeMap<this['params']['extArgs'], GlobalOmitOptions>
 }
 
@@ -415,7 +417,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "merchant" | "bankAccount" | "oTP" | "settlement" | "merchantKYC" | "kYCDocument" | "webhookLog" | "webhookRetryAttempt" | "payment" | "refund"
+    modelProps: "merchant" | "plan" | "merchantSubscription" | "bankAccount" | "oTP" | "settlement" | "merchantKYC" | "kYCDocument" | "webhookLog" | "webhookRetryAttempt" | "payment" | "refund"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -490,6 +492,154 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         count: {
           args: Prisma.MerchantCountArgs<ExtArgs>
           result: runtime.Types.Utils.Optional<Prisma.MerchantCountAggregateOutputType> | number
+        }
+      }
+    }
+    Plan: {
+      payload: Prisma.$PlanPayload<ExtArgs>
+      fields: Prisma.PlanFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.PlanFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PlanPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.PlanFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PlanPayload>
+        }
+        findFirst: {
+          args: Prisma.PlanFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PlanPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.PlanFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PlanPayload>
+        }
+        findMany: {
+          args: Prisma.PlanFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PlanPayload>[]
+        }
+        create: {
+          args: Prisma.PlanCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PlanPayload>
+        }
+        createMany: {
+          args: Prisma.PlanCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.PlanCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PlanPayload>[]
+        }
+        delete: {
+          args: Prisma.PlanDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PlanPayload>
+        }
+        update: {
+          args: Prisma.PlanUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PlanPayload>
+        }
+        deleteMany: {
+          args: Prisma.PlanDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.PlanUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.PlanUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PlanPayload>[]
+        }
+        upsert: {
+          args: Prisma.PlanUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$PlanPayload>
+        }
+        aggregate: {
+          args: Prisma.PlanAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregatePlan>
+        }
+        groupBy: {
+          args: Prisma.PlanGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.PlanGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.PlanCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.PlanCountAggregateOutputType> | number
+        }
+      }
+    }
+    MerchantSubscription: {
+      payload: Prisma.$MerchantSubscriptionPayload<ExtArgs>
+      fields: Prisma.MerchantSubscriptionFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.MerchantSubscriptionFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MerchantSubscriptionPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.MerchantSubscriptionFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MerchantSubscriptionPayload>
+        }
+        findFirst: {
+          args: Prisma.MerchantSubscriptionFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MerchantSubscriptionPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.MerchantSubscriptionFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MerchantSubscriptionPayload>
+        }
+        findMany: {
+          args: Prisma.MerchantSubscriptionFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MerchantSubscriptionPayload>[]
+        }
+        create: {
+          args: Prisma.MerchantSubscriptionCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MerchantSubscriptionPayload>
+        }
+        createMany: {
+          args: Prisma.MerchantSubscriptionCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.MerchantSubscriptionCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MerchantSubscriptionPayload>[]
+        }
+        delete: {
+          args: Prisma.MerchantSubscriptionDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MerchantSubscriptionPayload>
+        }
+        update: {
+          args: Prisma.MerchantSubscriptionUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MerchantSubscriptionPayload>
+        }
+        deleteMany: {
+          args: Prisma.MerchantSubscriptionDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.MerchantSubscriptionUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.MerchantSubscriptionUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MerchantSubscriptionPayload>[]
+        }
+        upsert: {
+          args: Prisma.MerchantSubscriptionUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MerchantSubscriptionPayload>
+        }
+        aggregate: {
+          args: Prisma.MerchantSubscriptionAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateMerchantSubscription>
+        }
+        groupBy: {
+          args: Prisma.MerchantSubscriptionGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.MerchantSubscriptionGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.MerchantSubscriptionCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.MerchantSubscriptionCountAggregateOutputType> | number
         }
       }
     }
@@ -1221,6 +1371,37 @@ export const MerchantScalarFieldEnum = {
 export type MerchantScalarFieldEnum = (typeof MerchantScalarFieldEnum)[keyof typeof MerchantScalarFieldEnum]
 
 
+export const PlanScalarFieldEnum = {
+  id: 'id',
+  name: 'name',
+  slug: 'slug',
+  description: 'description',
+  amount: 'amount',
+  currency: 'currency',
+  interval: 'interval',
+  created_at: 'created_at',
+  updated_at: 'updated_at'
+} as const
+
+export type PlanScalarFieldEnum = (typeof PlanScalarFieldEnum)[keyof typeof PlanScalarFieldEnum]
+
+
+export const MerchantSubscriptionScalarFieldEnum = {
+  id: 'id',
+  merchantId: 'merchantId',
+  planId: 'planId',
+  status: 'status',
+  billing_cycle: 'billing_cycle',
+  current_period_start: 'current_period_start',
+  current_period_end: 'current_period_end',
+  next_billing_date: 'next_billing_date',
+  created_at: 'created_at',
+  updated_at: 'updated_at'
+} as const
+
+export type MerchantSubscriptionScalarFieldEnum = (typeof MerchantSubscriptionScalarFieldEnum)[keyof typeof MerchantSubscriptionScalarFieldEnum]
+
+
 export const BankAccountScalarFieldEnum = {
   id: 'id',
   merchantId: 'merchantId',
@@ -1349,14 +1530,28 @@ export type WebhookRetryAttemptScalarFieldEnum = (typeof WebhookRetryAttemptScal
 
 export const PaymentScalarFieldEnum = {
   id: 'id',
+  payment_id: 'payment_id',
+  merchant_id: 'merchant_id',
   merchantId: 'merchantId',
   order_id: 'order_id',
   amount: 'amount',
   currency: 'currency',
-  customer_email: 'customer_email',
-  metadata: 'metadata',
-  expiration: 'expiration',
+  deposit_address: 'deposit_address',
   status: 'status',
+  transaction_hash: 'transaction_hash',
+  payer_address: 'payer_address',
+  confirmed_at: 'confirmed_at',
+  expires_at: 'expires_at',
+  swept: 'swept',
+  swept_at: 'swept_at',
+  sweep_transaction_hash: 'sweep_transaction_hash',
+  settled: 'settled',
+  settled_at: 'settled_at',
+  settlement_reference: 'settlement_reference',
+  settlement_fiat_amount: 'settlement_fiat_amount',
+  settlement_fiat_currency: 'settlement_fiat_currency',
+  created_at: 'created_at',
+  updated_at: 'updated_at',
   checkout_url: 'checkout_url',
   timeline: 'timeline',
   stellar_address: 'stellar_address',
@@ -1456,259 +1651,301 @@ export type JsonNullValueFilter = (typeof JsonNullValueFilter)[keyof typeof Json
  * Reference to a field of type 'String'
  */
 export type StringFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'String'>
-    
+
 
 
 /**
  * Reference to a field of type 'String[]'
  */
 export type ListStringFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'String[]'>
-    
+
 
 
 /**
  * Reference to a field of type 'MerchantStatus'
  */
 export type EnumMerchantStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'MerchantStatus'>
-    
+
 
 
 /**
  * Reference to a field of type 'MerchantStatus[]'
  */
 export type ListEnumMerchantStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'MerchantStatus[]'>
-    
+
 
 
 /**
  * Reference to a field of type 'DateTime'
  */
 export type DateTimeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'DateTime'>
-    
+
 
 
 /**
  * Reference to a field of type 'DateTime[]'
  */
 export type ListDateTimeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'DateTime[]'>
-    
+
 
 
 /**
  * Reference to a field of type 'SettlementSchedule'
  */
 export type EnumSettlementScheduleFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'SettlementSchedule'>
-    
+
 
 
 /**
  * Reference to a field of type 'SettlementSchedule[]'
  */
 export type ListEnumSettlementScheduleFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'SettlementSchedule[]'>
-    
+
 
 
 /**
  * Reference to a field of type 'Int'
  */
 export type IntFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Int'>
-    
+
 
 
 /**
  * Reference to a field of type 'Int[]'
  */
 export type ListIntFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Int[]'>
-    
 
-
-/**
- * Reference to a field of type 'OTPChannel'
- */
-export type EnumOTPChannelFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'OTPChannel'>
-    
-
-
-/**
- * Reference to a field of type 'OTPChannel[]'
- */
-export type ListEnumOTPChannelFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'OTPChannel[]'>
-    
 
 
 /**
  * Reference to a field of type 'Decimal'
  */
 export type DecimalFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Decimal'>
-    
+
 
 
 /**
  * Reference to a field of type 'Decimal[]'
  */
 export type ListDecimalFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Decimal[]'>
-    
+
+
+
+/**
+ * Reference to a field of type 'BillingInterval'
+ */
+export type EnumBillingIntervalFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'BillingInterval'>
+
+
+
+/**
+ * Reference to a field of type 'BillingInterval[]'
+ */
+export type ListEnumBillingIntervalFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'BillingInterval[]'>
+
+
+
+/**
+ * Reference to a field of type 'SubscriptionStatus'
+ */
+export type EnumSubscriptionStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'SubscriptionStatus'>
+
+
+
+/**
+ * Reference to a field of type 'SubscriptionStatus[]'
+ */
+export type ListEnumSubscriptionStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'SubscriptionStatus[]'>
+
+
+
+/**
+ * Reference to a field of type 'OTPChannel'
+ */
+export type EnumOTPChannelFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'OTPChannel'>
+
+
+
+/**
+ * Reference to a field of type 'OTPChannel[]'
+ */
+export type ListEnumOTPChannelFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'OTPChannel[]'>
+
 
 
 /**
  * Reference to a field of type 'SettlementStatus'
  */
 export type EnumSettlementStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'SettlementStatus'>
-    
+
 
 
 /**
  * Reference to a field of type 'SettlementStatus[]'
  */
 export type ListEnumSettlementStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'SettlementStatus[]'>
-    
+
 
 
 /**
  * Reference to a field of type 'Json'
  */
 export type JsonFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Json'>
-    
+
 
 
 /**
  * Reference to a field of type 'QueryMode'
  */
 export type EnumQueryModeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'QueryMode'>
-    
+
 
 
 /**
  * Reference to a field of type 'BusinessType'
  */
 export type EnumBusinessTypeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'BusinessType'>
-    
+
 
 
 /**
  * Reference to a field of type 'BusinessType[]'
  */
 export type ListEnumBusinessTypeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'BusinessType[]'>
-    
+
 
 
 /**
  * Reference to a field of type 'GovernmentIdType'
  */
 export type EnumGovernmentIdTypeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'GovernmentIdType'>
-    
+
 
 
 /**
  * Reference to a field of type 'GovernmentIdType[]'
  */
 export type ListEnumGovernmentIdTypeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'GovernmentIdType[]'>
-    
+
 
 
 /**
  * Reference to a field of type 'KYCStatus'
  */
 export type EnumKYCStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'KYCStatus'>
-    
+
 
 
 /**
  * Reference to a field of type 'KYCStatus[]'
  */
 export type ListEnumKYCStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'KYCStatus[]'>
-    
+
 
 
 /**
  * Reference to a field of type 'DocumentType'
  */
 export type EnumDocumentTypeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'DocumentType'>
-    
+
 
 
 /**
  * Reference to a field of type 'DocumentType[]'
  */
 export type ListEnumDocumentTypeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'DocumentType[]'>
-    
+
 
 
 /**
  * Reference to a field of type 'WebhookEventType'
  */
 export type EnumWebhookEventTypeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'WebhookEventType'>
-    
+
 
 
 /**
  * Reference to a field of type 'WebhookEventType[]'
  */
 export type ListEnumWebhookEventTypeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'WebhookEventType[]'>
-    
+
 
 
 /**
  * Reference to a field of type 'WebhookStatus'
  */
 export type EnumWebhookStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'WebhookStatus'>
-    
+
 
 
 /**
  * Reference to a field of type 'WebhookStatus[]'
  */
 export type ListEnumWebhookStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'WebhookStatus[]'>
-    
+
+
+
+/**
+ * Reference to a field of type 'PaymentStatus'
+ */
+export type EnumPaymentStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'PaymentStatus'>
+
+
+
+/**
+ * Reference to a field of type 'PaymentStatus[]'
+ */
+export type ListEnumPaymentStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'PaymentStatus[]'>
+
 
 
 /**
  * Reference to a field of type 'Boolean'
  */
 export type BooleanFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Boolean'>
-    
+
 
 
 /**
  * Reference to a field of type 'RefundReason'
  */
 export type EnumRefundReasonFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'RefundReason'>
-    
+
 
 
 /**
  * Reference to a field of type 'RefundReason[]'
  */
 export type ListEnumRefundReasonFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'RefundReason[]'>
-    
+
 
 
 /**
  * Reference to a field of type 'RefundStatus'
  */
 export type EnumRefundStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'RefundStatus'>
-    
+
 
 
 /**
  * Reference to a field of type 'RefundStatus[]'
  */
 export type ListEnumRefundStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'RefundStatus[]'>
-    
+
 
 
 /**
  * Reference to a field of type 'Float'
  */
 export type FloatFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Float'>
-    
+
 
 
 /**
  * Reference to a field of type 'Float[]'
  */
 export type ListFloatFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Float[]'>
-    
+
 
 /**
  * Batch Payload for updateMany & deleteMany & createMany
@@ -1798,6 +2035,8 @@ export interface PrismaClientOptions {
 }
 export type GlobalOmitConfig = {
   merchant?: Prisma.MerchantOmit
+  plan?: Prisma.PlanOmit
+  merchantSubscription?: Prisma.MerchantSubscriptionOmit
   bankAccount?: Prisma.BankAccountOmit
   oTP?: Prisma.OTPOmit
   settlement?: Prisma.SettlementOmit

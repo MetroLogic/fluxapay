@@ -23,6 +23,16 @@ export * from './enums';
  */
 export type Merchant = Prisma.MerchantModel
 /**
+ * Model Plan
+ * 
+ */
+export type Plan = Prisma.PlanModel
+/**
+ * Model MerchantSubscription
+ * 
+ */
+export type MerchantSubscription = Prisma.MerchantSubscriptionModel
+/**
  * Model BankAccount
  * 
  */

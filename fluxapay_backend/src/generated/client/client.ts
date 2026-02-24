@@ -48,6 +48,16 @@ path.join(process.cwd(), "src/generated/client/query_engine-windows.dll.node")
  */
 export type Merchant = Prisma.MerchantModel
 /**
+ * Model Plan
+ * 
+ */
+export type Plan = Prisma.PlanModel
+/**
+ * Model MerchantSubscription
+ * 
+ */
+export type MerchantSubscription = Prisma.MerchantSubscriptionModel
+/**
  * Model BankAccount
  * 
  */

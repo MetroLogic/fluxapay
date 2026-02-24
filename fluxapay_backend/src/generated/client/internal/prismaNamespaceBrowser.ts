@@ -50,6 +50,8 @@ export const AnyNull = runtime.objectEnumValues.instances.AnyNull
 
 export const ModelName = {
   Merchant: 'Merchant',
+  Plan: 'Plan',
+  MerchantSubscription: 'MerchantSubscription',
   BankAccount: 'BankAccount',
   OTP: 'OTP',
   Settlement: 'Settlement',
@@ -98,6 +100,37 @@ export const MerchantScalarFieldEnum = {
 } as const
 
 export type MerchantScalarFieldEnum = (typeof MerchantScalarFieldEnum)[keyof typeof MerchantScalarFieldEnum]
+
+
+export const PlanScalarFieldEnum = {
+  id: 'id',
+  name: 'name',
+  slug: 'slug',
+  description: 'description',
+  amount: 'amount',
+  currency: 'currency',
+  interval: 'interval',
+  created_at: 'created_at',
+  updated_at: 'updated_at'
+} as const
+
+export type PlanScalarFieldEnum = (typeof PlanScalarFieldEnum)[keyof typeof PlanScalarFieldEnum]
+
+
+export const MerchantSubscriptionScalarFieldEnum = {
+  id: 'id',
+  merchantId: 'merchantId',
+  planId: 'planId',
+  status: 'status',
+  billing_cycle: 'billing_cycle',
+  current_period_start: 'current_period_start',
+  current_period_end: 'current_period_end',
+  next_billing_date: 'next_billing_date',
+  created_at: 'created_at',
+  updated_at: 'updated_at'
+} as const
+
+export type MerchantSubscriptionScalarFieldEnum = (typeof MerchantSubscriptionScalarFieldEnum)[keyof typeof MerchantSubscriptionScalarFieldEnum]
 
 
 export const BankAccountScalarFieldEnum = {
@@ -228,14 +261,28 @@ export type WebhookRetryAttemptScalarFieldEnum = (typeof WebhookRetryAttemptScal
 
 export const PaymentScalarFieldEnum = {
   id: 'id',
+  payment_id: 'payment_id',
+  merchant_id: 'merchant_id',
   merchantId: 'merchantId',
   order_id: 'order_id',
   amount: 'amount',
   currency: 'currency',
-  customer_email: 'customer_email',
-  metadata: 'metadata',
-  expiration: 'expiration',
+  deposit_address: 'deposit_address',
   status: 'status',
+  transaction_hash: 'transaction_hash',
+  payer_address: 'payer_address',
+  confirmed_at: 'confirmed_at',
+  expires_at: 'expires_at',
+  swept: 'swept',
+  swept_at: 'swept_at',
+  sweep_transaction_hash: 'sweep_transaction_hash',
+  settled: 'settled',
+  settled_at: 'settled_at',
+  settlement_reference: 'settlement_reference',
+  settlement_fiat_amount: 'settlement_fiat_amount',
+  settlement_fiat_currency: 'settlement_fiat_currency',
+  created_at: 'created_at',
+  updated_at: 'updated_at'
   checkout_url: 'checkout_url',
   timeline: 'timeline',
   stellar_address: 'stellar_address',

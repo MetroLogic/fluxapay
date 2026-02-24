@@ -105,6 +105,14 @@ export const WebhookStatus = {
 export type WebhookStatus = (typeof WebhookStatus)[keyof typeof WebhookStatus]
 
 
+export const PaymentStatus = {
+  pending: 'pending',
+  confirmed: 'confirmed',
+  failed: 'failed',
+  expired: 'expired'
+} as const
+
+export type PaymentStatus = (typeof PaymentStatus)[keyof typeof PaymentStatus]
 export const RefundStatus = {
   initiated: 'initiated',
   processing: 'processing',
@@ -124,3 +132,20 @@ export const RefundReason = {
 } as const
 
 export type RefundReason = (typeof RefundReason)[keyof typeof RefundReason]
+
+
+export const BillingInterval = {
+  monthly: 'monthly',
+  yearly: 'yearly'
+} as const
+
+export type BillingInterval = (typeof BillingInterval)[keyof typeof BillingInterval]
+
+
+export const SubscriptionStatus = {
+  active: 'active',
+  cancelled: 'cancelled',
+  past_due: 'past_due'
+} as const
+
+export type SubscriptionStatus = (typeof SubscriptionStatus)[keyof typeof SubscriptionStatus]
