@@ -18,10 +18,17 @@ export interface DashboardStats {
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-export function useDashboardStats() {
+export interface UseDashboardStatsParams {
+  dateFrom?: string;
+  dateTo?: string;
+}
+
+export function useDashboardStats(params: UseDashboardStatsParams = {}) {
   const { summary, isLoading: summaryLoading, error: summaryError, mutate: mutateSummary } = useSettlementSummary();
   const { settlements, isLoading: listLoading, error: listError, mutate: mutateList } = useSettlements({
-    limit: 100,
+    limit: 500,
+    date_from: params.dateFrom,
+    date_to: params.dateTo,
   });
 
   const stats = useMemo((): DashboardStats | null => {

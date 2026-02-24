@@ -2,6 +2,7 @@
 
 import { ArrowUpRight, ArrowDownRight, DollarSign, Activity, CreditCard, Clock, Percent } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useDashboardDateRange } from "@/features/dashboard/context/DashboardDateRangeContext";
 import { useDashboardStats } from "@/hooks/useDashboardStats";
 
 interface StatCardProps {
@@ -52,7 +53,11 @@ function formatCurrency(n: number) {
 }
 
 export const StatsCards = () => {
-    const { stats, isLoading, error } = useDashboardStats();
+    const { dateRange } = useDashboardDateRange();
+    const { stats, isLoading, error } = useDashboardStats({
+        dateFrom: dateRange.from,
+        dateTo: dateRange.to,
+    });
 
     if (error) {
         return (
