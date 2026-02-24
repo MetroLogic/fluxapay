@@ -14,7 +14,16 @@ export default function SettlementsPage() {
     const [status, setStatus] = useState('all');
     const [currency, setCurrency] = useState('all');
     const [date, setDate] = useState({ from: '', to: '' });
-    const [selected, setSelected] = useState<Settlement | null>(null);
+    const [selected, setSelected] = useState<MerchantSettlement | null>(null);
+
+    const { settlements, isLoading, error } = useSettlements({
+        status: status !== 'all' ? status : undefined,
+        currency: currency !== 'all' ? currency : undefined,
+        date_from: date.from || undefined,
+        date_to: date.to || undefined,
+        limit: 100,
+    });
+    const { summary } = useSettlementSummary();
 
     const filtered = MOCK_SETTLEMENTS.filter(s => {
         if (status !== 'all' && s.status !== status) return false;
@@ -45,23 +54,22 @@ export default function SettlementsPage() {
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 <StatCard
                     title="Total Settled"
-                    value={`$${totalSettled.toLocaleString()}`}
+                    value={isLoading ? '…' : `$${Number(totalSettled).toLocaleString()}`}
                     icon={DollarSign}
-                    trend="+12%"
                 />
                 <StatCard
                     title="Total Fees"
-                    value={`$${totalFees.toLocaleString()}`}
+                    value={isLoading ? '…' : `$${Number(totalFees).toLocaleString()}`}
                     icon={TrendingUp}
                 />
                 <StatCard
                     title="Avg. Settlement Time"
-                    value="2.3 days"
+                    value={isLoading ? '…' : `${avgDays} days`}
                     icon={Clock}
                 />
                 <StatCard
                     title="Next Settlement"
-                    value="Jan 25, 2024"
+                    value={isLoading ? '…' : nextDate}
                     icon={Calendar}
                 />
             </div>
