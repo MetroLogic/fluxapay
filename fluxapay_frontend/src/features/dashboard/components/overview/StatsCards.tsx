@@ -1,5 +1,8 @@
+"use client";
+
 import { ArrowUpRight, ArrowDownRight, DollarSign, Activity, CreditCard, Clock, Percent } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useDashboardStats } from "@/hooks/useDashboardStats";
 
 interface StatCardProps {
     title: string;
@@ -44,43 +47,65 @@ const StatCard = ({ title, value, change, trend, icon: Icon, description, classN
     );
 };
 
+function formatCurrency(n: number) {
+    return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2 }).format(n);
+}
+
 export const StatsCards = () => {
+    const { stats, isLoading, error } = useDashboardStats();
+
+    if (error) {
+        return (
+            <div className="rounded-xl border bg-card p-6 text-destructive">
+                Failed to load dashboard stats. Please try again.
+            </div>
+        );
+    }
+
+    if (isLoading || !stats) {
+        return (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                {[1, 2, 3, 4, 5].map((i) => (
+                    <div key={i} className="rounded-xl border bg-card p-6 animate-pulse">
+                        <div className="h-4 w-24 bg-muted rounded mb-2" />
+                        <div className="h-8 w-32 bg-muted rounded" />
+                    </div>
+                ))}
+            </div>
+        );
+    }
+
     return (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <StatCard
                 title="Total Revenue"
-                value="$45,231.89"
-                change="+20.1% from last month"
+                value={formatCurrency(stats.totalRevenue)}
+                change={`${stats.totalPayments} payments`}
                 trend="up"
                 icon={DollarSign}
             />
             <StatCard
                 title="Total Payments"
-                value="2,350"
-                description="Volume: $1.2M"
-                change="+180 this week"
+                value={stats.totalPayments.toLocaleString()}
+                description={stats.totalSettled ? `Settled: ${formatCurrency(stats.totalSettled)}` : undefined}
                 trend="up"
                 icon={CreditCard}
             />
             <StatCard
                 title="Pending Payments"
-                value="12"
-                description="Amount: $3,400"
-                change="-4 from yesterday"
-                trend="down" // Good thing for pending to go down usually? Or maybe neutral.
+                value={String(stats.pendingPayments)}
+                trend={stats.pendingPayments > 0 ? "neutral" : "down"}
                 icon={Clock}
             />
             <StatCard
                 title="Success Rate"
-                value="98.2%"
-                change="+2% from last week"
+                value={`${stats.successRate}%`}
                 trend="up"
                 icon={Percent}
             />
             <StatCard
                 title="Avg. Transaction"
-                value="$145.00"
-                change="+4% from last month"
+                value={formatCurrency(stats.avgTransaction)}
                 trend="up"
                 icon={Activity}
                 className="md:col-span-2 lg:col-span-1"

@@ -10,7 +10,7 @@
  *
  * Environment variables:
  *  SETTLEMENT_CRON        – Cron for settlement (default: "0 0 * * *")
- *  PAYMENT_MONITOR_CRON  – Cron for on-chain payment checks (default: "*/2 * * * *")
+ *  PAYMENT_MONITOR_CRON  – Cron for on-chain payment checks (default: "* / 2 * * * *")
  *  BILLING_CRON          – Cron for subscription billing (default: "0 1 * * *")
  *  DISABLE_CRON          – Set to "true" to disable all jobs (e.g. in test environments)
  */
@@ -45,7 +45,7 @@ export function startCronJobs(): void {
   if (!validate(SETTLEMENT_CRON_EXPR)) {
     console.error(
       `[Cron] Invalid SETTLEMENT_CRON expression: "${SETTLEMENT_CRON_EXPR}". ` +
-        `Using default "0 0 * * *" instead.`,
+      `Using default "0 0 * * *" instead.`,
     );
   }
 
@@ -59,7 +59,7 @@ export function startCronJobs(): void {
         const result = await runSettlementBatch();
         console.log(
           `[Cron] ✅ Settlement batch ${result.batchId} finished – ` +
-            `${result.totalMerchantsSucceeded}/${result.totalMerchantsProcessed} merchants settled.`,
+          `${result.totalMerchantsSucceeded}/${result.totalMerchantsProcessed} merchants settled.`,
         );
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
