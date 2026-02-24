@@ -7,7 +7,8 @@ import { StatCard } from './StatCard';
 import { SettlementFilters } from './SettlementFilters';
 import { SettlementsTable } from './SettlementsTable';
 import { SettlementDetailsModal } from './SettlementDetailsModal';
-import { useSettlements, useSettlementSummary, type MerchantSettlement } from '@/hooks/useSettlements';
+import { Settlement } from '../types';
+import { MOCK_SETTLEMENTS } from './mockSettlements';
 
 export default function SettlementsPage() {
     const [status, setStatus] = useState('all');
@@ -24,7 +25,7 @@ export default function SettlementsPage() {
     });
     const { summary } = useSettlementSummary();
 
-    const filtered = settlements.filter(s => {
+    const filtered = MOCK_SETTLEMENTS.filter(s => {
         if (status !== 'all' && s.status !== status) return false;
         if (currency !== 'all' && s.currency !== currency) return false;
         if (date.from && s.date < date.from) return false;
@@ -32,22 +33,13 @@ export default function SettlementsPage() {
         return true;
     });
 
-    const totalSettled = summary
-        ? Number(summary.total_settled_this_month ?? 0)
-        : settlements.filter(s => s.status === 'completed').reduce((sum, s) => sum + s.fiatAmount, 0);
-    const totalFees = summary ? Number(summary.total_fees_paid ?? 0) : 0;
-    const avgDays = summary?.average_settlement_time_days ?? 0;
-    const nextDate = summary?.next_settlement_date
-        ? new Date(summary.next_settlement_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-        : '—';
+    const totalSettled = MOCK_SETTLEMENTS
+        .filter(s => s.status === 'completed')
+        .reduce((sum, s) => sum + s.fiatAmount, 0);
 
-    if (error) {
-        return (
-            <div className="space-y-6 p-6">
-                <p className="text-destructive">Failed to load settlements. Please try again.</p>
-            </div>
-        );
-    }
+    const totalFees = MOCK_SETTLEMENTS
+        .filter(s => s.status === 'completed')
+        .reduce((sum, s) => sum + s.fees, 0);
 
     return (
         <div className="space-y-6 p-6">

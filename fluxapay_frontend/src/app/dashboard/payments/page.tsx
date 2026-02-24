@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { MOCK_PAYMENTS, Payment } from "@/features/dashboard/payments/payments-mock";
 import { PaymentsTable } from "@/features/dashboard/payments/PaymentsTable";
 import { PaymentsFilters } from "@/features/dashboard/payments/PaymentsFilters";
@@ -10,10 +11,19 @@ import { Button } from "@/components/Button";
 import { Download, Plus } from "lucide-react";
 
 export default function PaymentsPage() {
+    const router = useRouter();
+    const searchParams = useSearchParams();
+    const shouldOpenCreateLink = searchParams.get("action") === "create-payment-link";
+
     const [search, setSearch] = useState("");
     const [statusFilter, setStatusFilter] = useState("all");
     const [currencyFilter, setCurrencyFilter] = useState("all");
     const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
+    const [showCreateLinkModal, setShowCreateLinkModal] = useState(shouldOpenCreateLink);
+    const [linkAmount, setLinkAmount] = useState("100");
+    const [linkCurrency, setLinkCurrency] = useState("USD");
+    const [linkDescription, setLinkDescription] = useState("Invoice payment");
+    const [generatedLink, setGeneratedLink] = useState("");
 
     const filteredPayments = useMemo(() => {
         return MOCK_PAYMENTS.filter((payment) => {
@@ -48,6 +58,24 @@ export default function PaymentsPage() {
         document.body.removeChild(link);
     };
 
+    const handleOpenCreateLink = () => {
+        setShowCreateLinkModal(true);
+        if (searchParams.get("action")) {
+            router.replace("/dashboard/payments");
+        }
+    };
+
+    const handleGenerateLink = () => {
+        const paymentId = `PAY-${Date.now()}`;
+        const link = `${window.location.origin}/pay/${paymentId}`;
+        setGeneratedLink(link);
+    };
+
+    const handleCopyLink = async () => {
+        if (!generatedLink) return;
+        await navigator.clipboard.writeText(generatedLink);
+    };
+
     return (
         <div className="space-y-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -62,7 +90,7 @@ export default function PaymentsPage() {
                         <Download className="h-4 w-4" />
                         Export CSV
                     </Button>
-                    <Button className="gap-2">
+                    <Button className="gap-2" onClick={handleOpenCreateLink}>
                         <Plus className="h-4 w-4" />
                         New Payment
                     </Button>
@@ -96,6 +124,70 @@ export default function PaymentsPage() {
                 title="Payment Details"
             >
                 {selectedPayment && <PaymentDetails payment={selectedPayment} />}
+            </Modal>
+
+            <Modal
+                isOpen={showCreateLinkModal}
+                onClose={() => setShowCreateLinkModal(false)}
+                title="Create Payment Link"
+            >
+                <div className="space-y-4">
+                    <div>
+                        <label className="mb-1 block text-sm font-medium">Amount</label>
+                        <input
+                            type="number"
+                            value={linkAmount}
+                            onChange={(e) => setLinkAmount(e.target.value)}
+                            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                        />
+                    </div>
+                    <div>
+                        <label className="mb-1 block text-sm font-medium">Currency</label>
+                        <select
+                            value={linkCurrency}
+                            onChange={(e) => setLinkCurrency(e.target.value)}
+                            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                        >
+                            <option value="USD">USD</option>
+                            <option value="EUR">EUR</option>
+                            <option value="GBP">GBP</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label className="mb-1 block text-sm font-medium">Description</label>
+                        <input
+                            type="text"
+                            value={linkDescription}
+                            onChange={(e) => setLinkDescription(e.target.value)}
+                            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                        />
+                    </div>
+
+                    <div className="flex gap-2">
+                        <Button className="flex-1" onClick={handleGenerateLink}>
+                            Generate Link
+                        </Button>
+                        <Button
+                            className="flex-1"
+                            variant="secondary"
+                            onClick={handleCopyLink}
+                            disabled={!generatedLink}
+                        >
+                            Copy Link
+                        </Button>
+                    </div>
+
+                    {generatedLink ? (
+                        <div className="rounded-md border border-border bg-muted p-3 text-xs break-all">
+                            {generatedLink}
+                        </div>
+                    ) : null}
+
+                    <p className="text-xs text-muted-foreground">
+                        Draft link for {linkAmount || "0"} {linkCurrency}
+                        {linkDescription ? ` - ${linkDescription}` : ""}.
+                    </p>
+                </div>
             </Modal>
         </div>
     );
