@@ -16,7 +16,7 @@
  */
 
 import { Decimal } from "@prisma/client/runtime/library";
-import { PrismaClient } from "../generated/client/client";
+import { Merchant, PrismaClient } from "../generated/client/client";
 import { getExchangePartner } from "./exchange.service";
 import { createAndDeliverWebhook } from "./webhook.service";
 
@@ -55,6 +55,42 @@ interface MerchantSettlementResult {
     transferRef?: string;
     paymentCount?: number;
     error?: string;
+}
+
+/**
+ * Returns true if the merchant should be settled in the current batch run.
+ *
+ * Rules:
+ *  • daily   → always true (runs every day)
+ *  • weekly  → true only when today's JS day-of-week matches merchant.settlement_day
+ *              (0 = Sunday … 6 = Saturday)
+ *
+ * @param schedule   'daily' | 'weekly'
+ * @param settlementDay  0–6 (only relevant for weekly)
+ * @param now        Date to evaluate against (injectable for testability)
+ */
+export function isMerchantDueForSettlement(
+    schedule: string,
+    settlementDay: number | null,
+    now: Date = new Date(),
+): boolean {
+    if (schedule === "daily") return true;
+
+    if (schedule === "weekly") {
+        if (settlementDay === null || settlementDay === undefined) {
+            // Misconfigured – log and skip rather than settling on wrong day
+            console.warn(
+                "[SettlementBatch] Merchant has weekly schedule but no settlement_day set – skipping.",
+            );
+            return false;
+        }
+        // Compare against UTC day-of-week so the cron (00:00 UTC) is authoritative
+        return now.getUTCDay() === settlementDay;
+    }
+
+    // Unknown schedule value – skip defensively
+    console.warn(`[SettlementBatch] Unknown settlement_schedule "${schedule}" – skipping merchant.`);
+    return false;
 }
 
 // ─── Aggregation query ───────────────────────────────────────────────────────
@@ -106,10 +142,11 @@ async function getUnsettledPaymentsByMerchant(): Promise<MerchantAggregate[]> {
 
 async function settleMerchant(
     aggregate: MerchantAggregate,
+    now: Date,
 ): Promise<MerchantSettlementResult> {
     const { merchantId, paymentIds, totalUsdc } = aggregate;
 
-    // 1. Load merchant + bank account
+    // 1. Load merchant + bank account (include schedule fields)
     const merchant = await prisma.merchant.findUnique({
         where: { id: merchantId },
         include: { bankAccount: true },
@@ -124,6 +161,21 @@ async function settleMerchant(
         };
     }
 
+    // 2. ── SCHEDULE CHECK ──────────────────────────────────────────────────────
+    //    Skip if this merchant isn't due today.
+    const schedule = (merchant as Merchant).settlement_schedule as string ?? "daily";
+    const settlementDay = (merchant as Merchant).settlement_day as number | null ?? null;
+
+    if (!isMerchantDueForSettlement(schedule, settlementDay, now)) {
+        return {
+            merchantId,
+            businessName: merchant.business_name,
+            status: "skipped",
+            error: `Not due today (schedule=${schedule}, settlement_day=${settlementDay ?? "n/a"})`,
+        };
+    }
+
+    // 3. Guard: bank account must exist
     if (!merchant.bankAccount) {
         return {
             merchantId,
@@ -146,11 +198,11 @@ async function settleMerchant(
     const bankAccount = merchant.bankAccount;
 
     try {
-        // 2. Build a unique reference for idempotency
-        const batchDate = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+        // 4. Build a unique reference for idempotency
+        const batchDate = now.toISOString().split("T")[0]; // YYYY-MM-DD
         const settlementRef = `SETTLE_${merchantId.slice(-6).toUpperCase()}_${batchDate}_${Date.now()}`;
 
-        // 3. Convert USDC → fiat + initiate bank transfer
+        // 5. Convert USDC → fiat + initiate bank transfer
         const partner = getExchangePartner();
         const payout = await partner.convertAndPayout(
             totalUsdc,
@@ -166,18 +218,19 @@ async function settleMerchant(
             settlementRef,
         );
 
-        // 4. Get the quote to record exchange rate & fiat gross
+        // 6. Get the quote to record exchange rate & fiat gross
         const quote = await partner.getQuote(totalUsdc, settlementCurrency);
         const fiatGross = quote.fiat_gross;
         const exchangeRate = quote.exchange_rate;
 
-        // 5. Calculate fee and net
-        const feeAmount = parseFloat(((fiatGross * FEE_PERCENT) / 100).toFixed(2));
+        // 7. Calculate fee and net
+        const feeAmount = parseFloat(
+            ((fiatGross * FEE_PERCENT) / 100).toFixed(2),
+        );
         const netAmount = parseFloat((fiatGross - feeAmount).toFixed(2));
 
-        // 6. Create Settlement record inside a transaction
+        // 8. Create Settlement record inside a transaction
         const settlement = await prisma.$transaction(async (tx) => {
-            // Create the settlement record
             const s = await tx.settlement.create({
                 data: {
                     merchantId,
@@ -192,8 +245,8 @@ async function settleMerchant(
                     bank_transfer_id: payout.transfer_ref,
                     payment_ids: paymentIds,
                     status: "completed",
-                    scheduled_date: new Date(),
-                    processed_date: new Date(),
+                    scheduled_date: now,
+                    processed_date: now,
                     breakdown: {
                         usdc_amount: totalUsdc,
                         exchange_rate: exchangeRate,
@@ -202,6 +255,8 @@ async function settleMerchant(
                         fee_amount: feeAmount,
                         net_amount: netAmount,
                         payment_count: paymentIds.length,
+                        settlement_schedule: schedule,
+                        settlement_day: settlementDay,
                     },
                 },
             });
@@ -211,7 +266,7 @@ async function settleMerchant(
                 where: { id: { in: paymentIds } },
                 data: {
                     settled: true,
-                    settled_at: new Date(),
+                    settled_at: now,
                     settlement_ref: settlementRef,
                     settlement_fiat_amount: new Decimal(netAmount),
                     settlement_fiat_currency: settlementCurrency,
@@ -222,7 +277,7 @@ async function settleMerchant(
             return s;
         });
 
-        // 7. Fire merchant webhook (non-blocking – failure here must not abort the settled record)
+        // 9. Fire merchant webhook (non-blocking)
         if (merchant.webhook_url) {
             const webhookPayload = {
                 event: "settlement.completed",
@@ -238,13 +293,12 @@ async function settleMerchant(
                 exchange_rate: exchangeRate,
                 exchange_ref: payout.exchange_ref,
                 bank_transfer_ref: payout.transfer_ref,
-                settled_at: new Date().toISOString(),
+                settled_at: now.toISOString(),
             };
 
             createAndDeliverWebhook(
                 merchantId,
                 "settlement_completed",
-                merchant.webhook_url,
                 webhookPayload,
             ).catch((err: unknown) => {
                 console.error(
@@ -280,7 +334,7 @@ async function settleMerchant(
             `[SettlementBatch] ❌ Failed to settle merchant ${merchantId}: ${errMsg}`,
         );
 
-        // Record a failed settlement row so we can audit / retry
+        // Record a failed settlement row for audit / retry
         try {
             await prisma.settlement.create({
                 data: {
@@ -292,24 +346,22 @@ async function settleMerchant(
                     net_amount: new Decimal(0),
                     payment_ids: paymentIds,
                     status: "failed",
-                    scheduled_date: new Date(),
+                    scheduled_date: now,
                     failure_reason: errMsg,
                 },
             });
 
-            // Deliver failed webhook if URL is configured
             if (merchant.webhook_url) {
                 createAndDeliverWebhook(
                     merchantId,
                     "settlement_failed",
-                    merchant.webhook_url,
                     {
                         event: "settlement.failed",
                         merchant_id: merchantId,
                         payment_ids: paymentIds,
                         usdc_amount: totalUsdc,
                         error: errMsg,
-                        failed_at: new Date().toISOString(),
+                        failed_at: now.toISOString(),
                     },
                 ).catch(() => { });
             }
@@ -337,18 +389,24 @@ async function settleMerchant(
  * This function is idempotent-safe at the row level: payments flagged
  * `settled=true` are excluded from subsequent runs even if the job crashes.
  */
-export async function runSettlementBatch(): Promise<SettlementBatchResult> {
+export async function runSettlementBatch(
+    runAt: Date = new Date(),
+): Promise<SettlementBatchResult> {
     const batchId = `batch_${Date.now()}`;
-    const startedAt = new Date();
+    const startedAt = runAt;
 
-    console.log(`[SettlementBatch] 🚀 Starting batch ${batchId} at ${startedAt.toISOString()}`);
+    console.log(
+        `[SettlementBatch] 🚀 Starting batch ${batchId} at ${startedAt.toISOString()} ` +
+        `(UTC day=${startedAt.getUTCDay()})`,
+    );
 
-    // Aggregate unsettled payments
     const aggregates = await getUnsettledPaymentsByMerchant();
 
     if (aggregates.length === 0) {
         const completedAt = new Date();
-        console.log("[SettlementBatch] No unsettled payments found. Batch complete.");
+        console.log(
+            "[SettlementBatch] No unsettled payments found. Batch complete.",
+        );
         return {
             batchId,
             startedAt,
@@ -360,23 +418,27 @@ export async function runSettlementBatch(): Promise<SettlementBatchResult> {
         };
     }
 
-    console.log(`[SettlementBatch] Found ${aggregates.length} merchant(s) with unsettled payments.`);
+    console.log(
+        `[SettlementBatch] Found ${aggregates.length} merchant(s) with unsettled payments.`,
+    );
 
     // Process merchants sequentially to avoid overwhelming the exchange API
     const merchantResults: MerchantSettlementResult[] = [];
     for (const agg of aggregates) {
-        const result = await settleMerchant(agg);
+        const result = await settleMerchant(agg, runAt);
         merchantResults.push(result);
     }
 
     const completedAt = new Date();
-    const succeeded = merchantResults.filter((r) => r.status === "succeeded").length;
+    const succeeded = merchantResults.filter(
+        (r) => r.status === "succeeded",
+    ).length;
     const failed = merchantResults.filter((r) => r.status === "failed").length;
+    const skipped = merchantResults.filter((r) => r.status === "skipped").length;
 
     console.log(
         `[SettlementBatch] 🏁 Batch ${batchId} complete | ` +
-        `${succeeded} succeeded, ${failed} failed, ` +
-        `${merchantResults.length - succeeded - failed} skipped | ` +
+        `${succeeded} succeeded, ${failed} failed, ${skipped} skipped | ` +
         `Duration: ${completedAt.getTime() - startedAt.getTime()}ms`,
     );
 
