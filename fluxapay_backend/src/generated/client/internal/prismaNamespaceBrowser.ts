@@ -50,6 +50,8 @@ export const AnyNull = runtime.objectEnumValues.instances.AnyNull
 
 export const ModelName = {
   Merchant: 'Merchant',
+  Plan: 'Plan',
+  MerchantSubscription: 'MerchantSubscription',
   BankAccount: 'BankAccount',
   OTP: 'OTP',
   Settlement: 'Settlement',
@@ -96,6 +98,37 @@ export const MerchantScalarFieldEnum = {
 } as const
 
 export type MerchantScalarFieldEnum = (typeof MerchantScalarFieldEnum)[keyof typeof MerchantScalarFieldEnum]
+
+
+export const PlanScalarFieldEnum = {
+  id: 'id',
+  name: 'name',
+  slug: 'slug',
+  description: 'description',
+  amount: 'amount',
+  currency: 'currency',
+  interval: 'interval',
+  created_at: 'created_at',
+  updated_at: 'updated_at'
+} as const
+
+export type PlanScalarFieldEnum = (typeof PlanScalarFieldEnum)[keyof typeof PlanScalarFieldEnum]
+
+
+export const MerchantSubscriptionScalarFieldEnum = {
+  id: 'id',
+  merchantId: 'merchantId',
+  planId: 'planId',
+  status: 'status',
+  billing_cycle: 'billing_cycle',
+  current_period_start: 'current_period_start',
+  current_period_end: 'current_period_end',
+  next_billing_date: 'next_billing_date',
+  created_at: 'created_at',
+  updated_at: 'updated_at'
+} as const
+
+export type MerchantSubscriptionScalarFieldEnum = (typeof MerchantSubscriptionScalarFieldEnum)[keyof typeof MerchantSubscriptionScalarFieldEnum]
 
 
 export const BankAccountScalarFieldEnum = {

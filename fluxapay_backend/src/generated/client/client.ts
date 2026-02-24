@@ -48,6 +48,16 @@ path.join(process.cwd(), "src/generated/client/libquery_engine-darwin-arm64.dyli
  */
 export type Merchant = Prisma.MerchantModel
 /**
+ * Model Plan
+ * 
+ */
+export type Plan = Prisma.PlanModel
+/**
+ * Model MerchantSubscription
+ * 
+ */
+export type MerchantSubscription = Prisma.MerchantSubscriptionModel
+/**
  * Model BankAccount
  * 
  */

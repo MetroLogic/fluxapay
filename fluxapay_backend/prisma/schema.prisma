@@ -36,6 +36,39 @@ model Merchant {
   api_key_last_four  String?
   webhook_secret     String?
   bankAccount         BankAccount?
+  subscriptions       MerchantSubscription[]
+}
+
+model Plan {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  amount      Decimal  @db.Decimal(20, 7)
+  currency    String   @default("USD")
+  interval    BillingInterval
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+  subscriptions MerchantSubscription[]
+}
+
+model MerchantSubscription {
+  id                String            @id @default(cuid())
+  merchant          Merchant          @relation(fields: [merchantId], references: [id])
+  merchantId        String
+  plan              Plan              @relation(fields: [planId], references: [id])
+  planId            String
+  status            SubscriptionStatus @default(active)
+  billing_cycle     BillingInterval
+  current_period_start DateTime
+  current_period_end   DateTime
+  next_billing_date   DateTime
+  created_at        DateTime          @default(now())
+  updated_at        DateTime          @updatedAt
+
+  @@unique([merchantId, planId])
+  @@index([next_billing_date])
+  @@index([merchantId])
 }
 
 model BankAccount {
@@ -281,6 +314,17 @@ enum RefundReason {
   failed_delivery
   merchant_request
   dispute_resolution
+}
+
+enum BillingInterval {
+  monthly
+  yearly
+}
+
+enum SubscriptionStatus {
+  active
+  cancelled
+  past_due
 }
 
 model Refund {
