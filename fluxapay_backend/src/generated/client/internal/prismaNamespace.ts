@@ -1347,14 +1347,28 @@ export type WebhookRetryAttemptScalarFieldEnum = (typeof WebhookRetryAttemptScal
 
 export const PaymentScalarFieldEnum = {
   id: 'id',
+  payment_id: 'payment_id',
+  merchant_id: 'merchant_id',
   merchantId: 'merchantId',
   order_id: 'order_id',
   amount: 'amount',
   currency: 'currency',
-  customer_email: 'customer_email',
-  metadata: 'metadata',
-  expiration: 'expiration',
+  deposit_address: 'deposit_address',
   status: 'status',
+  transaction_hash: 'transaction_hash',
+  payer_address: 'payer_address',
+  confirmed_at: 'confirmed_at',
+  expires_at: 'expires_at',
+  swept: 'swept',
+  swept_at: 'swept_at',
+  sweep_transaction_hash: 'sweep_transaction_hash',
+  settled: 'settled',
+  settled_at: 'settled_at',
+  settlement_reference: 'settlement_reference',
+  settlement_fiat_amount: 'settlement_fiat_amount',
+  settlement_fiat_currency: 'settlement_fiat_currency',
+  created_at: 'created_at',
+  updated_at: 'updated_at'
   checkout_url: 'checkout_url',
   timeline: 'timeline',
   stellar_address: 'stellar_address',
@@ -1643,6 +1657,20 @@ export type EnumWebhookStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$Pr
  * Reference to a field of type 'WebhookStatus[]'
  */
 export type ListEnumWebhookStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'WebhookStatus[]'>
+    
+
+
+/**
+ * Reference to a field of type 'PaymentStatus'
+ */
+export type EnumPaymentStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'PaymentStatus'>
+    
+
+
+/**
+ * Reference to a field of type 'PaymentStatus[]'
+ */
+export type ListEnumPaymentStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'PaymentStatus[]'>
     
 
 
