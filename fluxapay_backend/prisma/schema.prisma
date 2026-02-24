@@ -5,7 +5,7 @@
 // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
 
 generator client {
-  provider = "prisma-client"
+  provider = "prisma-client-js"
   output   = "../src/generated/client"
 }
 
@@ -185,6 +185,9 @@ model Payment {
   swept_at                DateTime?
   sweep_tx_hash           String?     // This is your Stellar transaction hash
   transaction_hash        String?     // The on-chain hash for the incoming payment
+  onchain_verified        Boolean     @default(false)
+  contract_tx_hash        String?     // Hash of the Soroban verify_payment call
+  verification_error      String?     // To track failures for retry logic
 
   
   // settlement fields
