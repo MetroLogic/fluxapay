@@ -136,7 +136,6 @@ export async function createSubscription(params: {
     createAndDeliverWebhook(
       params.merchantId,
       "subscription_created",
-      sub.merchant.webhook_url,
       {
         event: "subscription.created",
         subscription_id: sub.id,
@@ -216,7 +215,6 @@ export async function processBillingCycle(): Promise<ProcessBillingCycleResult> 
         await createAndDeliverWebhook(
           subscription.merchantId,
           "subscription_renewed",
-          subscription.merchant.webhook_url,
           {
             event: "subscription.renewed",
             subscription_id: subscription.id,

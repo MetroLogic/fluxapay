@@ -29,7 +29,7 @@ export class PaymentService {
 
         // 2. Update local PostgreSQL database
         const payment = await prisma.payment.update({
-            where: { payment_id: paymentId },
+            where: { id: paymentId },
             data: {
                 status: 'confirmed' as PaymentStatus,
                 transaction_hash: transactionHash,
