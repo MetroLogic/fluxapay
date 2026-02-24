@@ -205,7 +205,7 @@ model Payment {
   customer_email          String
   metadata                Json
   expiration              DateTime
-  status                  String
+  status                  PaymentStatus @default(pending)
   checkout_url            String
   timeline                Json?       // Added to track payment events
   
@@ -218,6 +218,8 @@ model Payment {
   swept_at                DateTime?
   sweep_tx_hash           String?     // This is your Stellar transaction hash
   transaction_hash        String?     // The on-chain hash for the incoming payment
+  payer_address           String?
+  confirmed_at            DateTime?
 
   
   // settlement fields
@@ -231,6 +233,7 @@ model Payment {
   settlement              Settlement? @relation(fields: [settlementId], references: [id])
   settlementId            String?
   createdAt               DateTime    @default(now())
+  updatedAt               DateTime    @updatedAt
 
   @@index([status])
   @@index([customer_email])
@@ -303,33 +306,15 @@ enum WebhookStatus {
 
 enum PaymentStatus {
   pending
+  paid
+  overpaid
+  partially_paid
   confirmed
   failed
   expired
 }
 
-model Payment {
-  id                      String        @id @default(cuid())
-  payment_id              String        @unique
-  merchant_id             String
-  amount                  Decimal
-  currency                String
-  deposit_address         String
-  status                  PaymentStatus @default(pending)
-  transaction_hash        String?
-  payer_address           String?
-  confirmed_at            DateTime?
-  expires_at              DateTime
-  swept                   Boolean       @default(false)
-  swept_at                DateTime?
-  sweep_transaction_hash  String?
-  settled                 Boolean       @default(false)
-  settled_at              DateTime?
-  settlement_reference    String?
-  settlement_fiat_amount  Decimal?
-  settlement_fiat_currency String?
-  created_at              DateTime      @default(now())
-  updated_at              DateTime      @updatedAt
+
 enum RefundStatus {
   initiated
   processing
