@@ -86,6 +86,8 @@ const LoginForm = () => {
         setErrors(fieldErrors);
         return;
       }
+
+      toast.error("Unable to sign in right now. Please try again.");
     } finally {
       setIsSubmitting(false);
     }

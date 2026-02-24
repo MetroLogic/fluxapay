@@ -57,7 +57,8 @@ export const ModelName = {
   KYCDocument: 'KYCDocument',
   WebhookLog: 'WebhookLog',
   WebhookRetryAttempt: 'WebhookRetryAttempt',
-  Payment: 'Payment'
+  Payment: 'Payment',
+  Refund: 'Refund'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -85,9 +86,13 @@ export const MerchantScalarFieldEnum = {
   settlement_currency: 'settlement_currency',
   password: 'password',
   status: 'status',
+  api_key: 'api_key',
   webhook_url: 'webhook_url',
   created_at: 'created_at',
-  updated_at: 'updated_at'
+  updated_at: 'updated_at',
+  api_key_hashed: 'api_key_hashed',
+  api_key_last_four: 'api_key_last_four',
+  webhook_secret: 'webhook_secret'
 } as const
 
 export type MerchantScalarFieldEnum = (typeof MerchantScalarFieldEnum)[keyof typeof MerchantScalarFieldEnum]
@@ -245,9 +250,12 @@ export const PaymentScalarFieldEnum = {
   updated_at: 'updated_at'
   checkout_url: 'checkout_url',
   timeline: 'timeline',
+  stellar_address: 'stellar_address',
+  last_paging_token: 'last_paging_token',
   swept: 'swept',
   swept_at: 'swept_at',
   sweep_tx_hash: 'sweep_tx_hash',
+  transaction_hash: 'transaction_hash',
   settled: 'settled',
   settled_at: 'settled_at',
   settlement_ref: 'settlement_ref',
@@ -258,6 +266,27 @@ export const PaymentScalarFieldEnum = {
 } as const
 
 export type PaymentScalarFieldEnum = (typeof PaymentScalarFieldEnum)[keyof typeof PaymentScalarFieldEnum]
+
+
+export const RefundScalarFieldEnum = {
+  id: 'id',
+  payment_id: 'payment_id',
+  merchant_id: 'merchant_id',
+  amount: 'amount',
+  currency: 'currency',
+  customer_address: 'customer_address',
+  reason: 'reason',
+  reason_note: 'reason_note',
+  status: 'status',
+  stellar_tx_hash: 'stellar_tx_hash',
+  error_message: 'error_message',
+  error_code: 'error_code',
+  initiated_by: 'initiated_by',
+  created_at: 'created_at',
+  updated_at: 'updated_at'
+} as const
+
+export type RefundScalarFieldEnum = (typeof RefundScalarFieldEnum)[keyof typeof RefundScalarFieldEnum]
 
 
 export const SortOrder = {

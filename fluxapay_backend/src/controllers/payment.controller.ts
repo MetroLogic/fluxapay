@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { PrismaClient } from "../generated/client/client";
+import { PaymentService } from "../services/payment.service";
 
 const prisma = new PrismaClient();
 
@@ -7,25 +8,27 @@ export const createPayment = async (req: Request, res: Response) => {
   try {
     const { merchantId, order_id, amount, currency, customer_email, metadata } = req.body;
 
-    // FIX 1: Added missing 'checkout_url' and correctly linked 'merchant'
-    const payment = await prisma.payment.create({
+    // Use PaymentService to create payment with derived Stellar address
+    const payment = await PaymentService.createPayment({
+      merchantId,
+      amount,
+      currency,
+      customer_email,
+      metadata: metadata || {},
+    });
+
+    // Update with order_id and timeline if provided
+    const updatedPayment = await prisma.payment.update({
+      where: { id: payment.id },
       data: {
-        amount,
-        currency,
-        customer_email,
         order_id,
-        metadata: metadata || {},
-        status: "pending",
-        expiration: new Date(Date.now() + 3600000),
-        checkout_url: "", // Provide a default or actual URL here
-        merchant: {
-          connect: { id: merchantId }
-        },
         timeline: [{ event: "payment_created", timestamp: new Date() }]
       }
     });
-    res.status(201).json(payment);
+
+    res.status(201).json(updatedPayment);
   } catch (error) {
+    console.error('Error creating payment:', error);
     res.status(500).json({ error: "Failed to create payment" });
   }
 };
@@ -101,8 +104,9 @@ export const getPayments = async (req: Request, res: Response) => {
 
 export const getPaymentById = async (req: Request, res: Response) => {
   try {
-    // Force payment_id to be a single string
-    const payment_id = String(req.params.payment_id);
+    // Endpoint: GET /api/payments/v1/payments/:id
+    // Support both 'id' and 'payment_id' parameters
+    const payment_id = String(req.params.id || req.params.payment_id);
 
     const payment = await prisma.payment.findUnique({
       where: { id: payment_id }, // This is line 106 that was failing!
@@ -110,8 +114,18 @@ export const getPaymentById = async (req: Request, res: Response) => {
     });
 
     if (!payment) return res.status(404).json({ error: "Payment not found" });
-    
-    res.json(payment);
+
+    // Add explorer link if transaction_hash exists
+    const explorerBase = (process.env.STELLAR_HORIZON_URL || "").includes("testnet")
+      ? "https://stellar.expert/explorer/testnet/tx/"
+      : "https://stellar.expert/explorer/public/tx/";
+
+    const responseData = {
+      ...payment,
+      stellar_expert_url: payment.transaction_hash ? `${explorerBase}${payment.transaction_hash}` : null
+    };
+
+    res.json(responseData);
   } catch (error) {
     res.status(500).json({ error: "Error fetching details" });
   }

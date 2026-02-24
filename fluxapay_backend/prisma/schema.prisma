@@ -23,6 +23,7 @@ model Merchant {
   settlement_currency String
   password            String
   status              MerchantStatus @default(pending_verification)
+  api_key             String?        @unique
   webhook_url         String?
   created_at          DateTime       @default(now())
   updated_at          DateTime       @updatedAt
@@ -31,6 +32,9 @@ model Merchant {
   kyc                 MerchantKYC?
   webhookLogs         WebhookLog[]
   payments            Payment[]
+  api_key_hashed     String?        @unique
+  api_key_last_four  String?
+  webhook_secret     String?
   bankAccount         BankAccount?
 }
 
@@ -172,10 +176,16 @@ model Payment {
   checkout_url            String
   timeline                Json?       // Added to track payment events
   
+  // Stellar address for this payment
+  stellar_address         String?     // Derived HD wallet address
+  last_paging_token       String?     // Cursor for efficient transaction polling
+  
   // sweeping fields
   swept                   Boolean     @default(false)
   swept_at                DateTime?
   sweep_tx_hash           String?     // This is your Stellar transaction hash
+  transaction_hash        String?     // The on-chain hash for the incoming payment
+
   
   // settlement fields
   settled                 Boolean     @default(false)
@@ -192,6 +202,7 @@ model Payment {
   @@index([status])
   @@index([customer_email])
   @@index([createdAt])
+  @@index([stellar_address])
 }
 
 // ...existing code...
@@ -286,4 +297,39 @@ model Payment {
   settlement_fiat_currency String?
   created_at              DateTime      @default(now())
   updated_at              DateTime      @updatedAt
+enum RefundStatus {
+  initiated
+  processing
+  completed
+  failed
+}
+
+enum RefundReason {
+  customer_request
+  duplicate_payment
+  failed_delivery
+  merchant_request
+  dispute_resolution
+}
+
+model Refund {
+  id               String       @id @default(cuid())
+  payment_id       String
+  merchant_id      String
+  amount           Decimal      @db.Decimal(20, 7)
+  currency         String
+  customer_address String
+  reason           RefundReason
+  reason_note      String?
+  status           RefundStatus @default(initiated)
+  stellar_tx_hash  String?
+  error_message    String?
+  error_code       String?
+  initiated_by     String
+  created_at       DateTime     @default(now())
+  updated_at       DateTime     @updatedAt
+
+  @@index([payment_id])
+  @@index([merchant_id])
+  @@index([status])
 }

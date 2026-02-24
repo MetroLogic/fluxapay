@@ -105,3 +105,22 @@ export const PaymentStatus = {
 } as const
 
 export type PaymentStatus = (typeof PaymentStatus)[keyof typeof PaymentStatus]
+export const RefundStatus = {
+  initiated: 'initiated',
+  processing: 'processing',
+  completed: 'completed',
+  failed: 'failed'
+} as const
+
+export type RefundStatus = (typeof RefundStatus)[keyof typeof RefundStatus]
+
+
+export const RefundReason = {
+  customer_request: 'customer_request',
+  duplicate_payment: 'duplicate_payment',
+  failed_delivery: 'failed_delivery',
+  merchant_request: 'merchant_request',
+  dispute_resolution: 'dispute_resolution'
+} as const
+
+export type RefundReason = (typeof RefundReason)[keyof typeof RefundReason]

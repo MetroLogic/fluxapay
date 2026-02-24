@@ -62,3 +62,8 @@ export type WebhookRetryAttempt = Prisma.WebhookRetryAttemptModel
  * 
  */
 export type Payment = Prisma.PaymentModel
+/**
+ * Model Refund
+ * 
+ */
+export type Refund = Prisma.RefundModel

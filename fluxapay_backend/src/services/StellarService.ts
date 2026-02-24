@@ -26,13 +26,16 @@ export class StellarService {
     }
     this.funderKeypair = Keypair.fromSecret(funderSecret);
 
+    // Initialize HDWalletService with KMS support
+    // For backward compatibility, still support direct seed injection in tests
     const masterSeed = process.env.HD_WALLET_MASTER_SEED;
-    if (!masterSeed) {
-        // Fallback for tests or throw if required
-        // For now, let's allow it to be injected or fail if used without it
-        // Depending on how HDWalletService is architected
+    if (masterSeed) {
+      // Legacy mode: direct seed injection (for tests)
+      this.hdWalletService = new HDWalletService(masterSeed);
+    } else {
+      // Production mode: use KMS
+      this.hdWalletService = new HDWalletService();
     }
-    this.hdWalletService = new HDWalletService(masterSeed || 'default-seed-for-testing');
     
     // Default to testnet USDC issuer or override
     this.usdcIssuer = process.env.USDC_ISSUER_PUBLIC_KEY || 'GBBD47IF6LWK7P7MDEVSCWT73IQIGCEZHR7OMXMBZQ3ZONN2T4U6W23Y';
@@ -67,7 +70,7 @@ export class StellarService {
    * @param paymentId The payment ID
    */
   public async prepareAccount(merchantId: string, paymentId: string): Promise<void> {
-    const derivedKeypairInfo = this.hdWalletService.regenerateKeypair(merchantId, paymentId);
+    const derivedKeypairInfo = await this.hdWalletService.regenerateKeypair(merchantId, paymentId);
     const destinationPublicKey = derivedKeypairInfo.publicKey;
     const destinationSecretKey = derivedKeypairInfo.secretKey;
 
