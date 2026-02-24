@@ -4,7 +4,6 @@ import "@/styles/globals.css";
 import { Providers } from "../providers";
 import { Toaster } from "react-hot-toast";
 import { NextIntlClientProvider } from 'next-intl';
-import { getMessages } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 import { routing } from '@/i18n/routing';
 
@@ -41,14 +40,12 @@ export default async function LocaleLayout({
     notFound();
   }
 
-  // Providing all messages to the client
-  // side is the easiest way to get started
-  const messages = await getMessages();
+  const messages = (await import(`../../../messages/${locale}.json`)).default;
 
   return (
     <html lang={locale} suppressHydrationWarning>
       <body className={`${inter.variable} ${caveat.variable} font-sans antialiased`}>
-        <NextIntlClientProvider messages={messages}>
+        <NextIntlClientProvider locale={locale} messages={messages}>
           <Providers>{children}</Providers>
           <Toaster position="top-right" />
         </NextIntlClientProvider>

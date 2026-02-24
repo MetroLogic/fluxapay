@@ -1,6 +1,8 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
+import { Link } from "@/i18n/routing";
 import { useTranslations } from "next-intl";
 import { DOCS_URLS } from "@/lib/docs";
 
@@ -18,12 +20,12 @@ const FooterSection = ({
     <ul className="space-y-3">
       {links.map((link, idx) => (
         <li key={idx}>
-          <a
+          <Link
             href={link.href}
             className="text-[#A0A0A0] hover:text-white transition-colors duration-200 text-sm"
           >
             {link.label}
-          </a>
+          </Link>
         </li>
       ))}
     </ul>
@@ -36,6 +38,18 @@ export const Footer = () => {
 
   const footerLinks = {
     legal: [
+      { label: "Privacy Policy", href: "/privacy" },
+      { label: "Terms of Use", href: "/terms" },
+    ],
+    product: [
+      { label: "Sign Up", href: "/signup" },
+      { label: "Log In", href: "/login" },
+      { label: "Pricing", href: "/pricing" },
+    ],
+    resources: [
+      { label: "Docs", href: "/docs" },
+      { label: "FAQs / Support", href: "/faq" },
+      { label: "Contact us", href: "/contact" },
       { label: t("privacy"), href: "/privacy" },
       { label: t("terms"), href: "/terms" },
     ],

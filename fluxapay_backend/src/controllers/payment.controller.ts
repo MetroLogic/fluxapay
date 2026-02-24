@@ -7,7 +7,7 @@ const prisma = new PrismaClient();
 
 export const createPayment = async (req: Request, res: Response) => {
   try {
-    const { order_id, amount, currency, customer_email, metadata } = req.body;
+    const { order_id, amount, currency, customer_email, metadata, success_url, cancel_url } = req.body;
     const authReq = req as AuthRequest;
     const merchantId = authReq.merchantId;
 
@@ -28,6 +28,8 @@ export const createPayment = async (req: Request, res: Response) => {
       currency,
       customer_email,
       metadata: metadata || {},
+      success_url,
+      cancel_url,
     });
 
     // Update with order_id and timeline if provided

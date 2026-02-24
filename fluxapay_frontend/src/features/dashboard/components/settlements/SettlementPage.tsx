@@ -7,73 +7,24 @@ import { StatCard } from './StatCard';
 import { SettlementFilters } from './SettlementFilters';
 import { SettlementsTable } from './SettlementsTable';
 import { SettlementDetailsModal } from './SettlementDetailsModal';
-import { Settlement } from '../types';
-
-const mockSettlements: Settlement[] = [
-    {
-        id: 'STL-2024-001',
-        date: '2024-01-20',
-        paymentsCount: 145,
-        usdcAmount: 12500.00,
-        fiatAmount: 12500.00,
-        currency: 'USD',
-        status: 'completed',
-        bankReference: 'BNK-REF-001',
-        conversionRate: 1.0,
-        fees: 125.00,
-        payments: [
-            { id: 'PAY-001', amount: 150.00, customer: 'John Doe' },
-            { id: 'PAY-002', amount: 200.00, customer: 'Jane Smith' },
-        ]
-    },
-    {
-        id: 'STL-2024-002',
-        date: '2024-01-18',
-        paymentsCount: 98,
-        usdcAmount: 8750.00,
-        fiatAmount: 8750.00,
-        currency: 'USD',
-        status: 'completed',
-        bankReference: 'BNK-REF-002',
-        conversionRate: 1.0,
-        fees: 87.50,
-        payments: []
-    },
-    {
-        id: 'STL-2024-003',
-        date: '2024-01-15',
-        paymentsCount: 67,
-        usdcAmount: 5420.00,
-        fiatAmount: 5420.00,
-        currency: 'USD',
-        status: 'pending',
-        bankReference: 'BNK-REF-003',
-        conversionRate: 1.0,
-        fees: 54.20,
-        payments: []
-    },
-    {
-        id: 'STL-2024-004',
-        date: '2024-01-12',
-        paymentsCount: 203,
-        usdcAmount: 18900.00,
-        fiatAmount: 18900.00,
-        currency: 'USD',
-        status: 'completed',
-        bankReference: 'BNK-REF-004',
-        conversionRate: 1.0,
-        fees: 189.00,
-        payments: []
-    }
-];
+import { useSettlements, useSettlementSummary, type MerchantSettlement } from '@/hooks/useSettlements';
 
 export default function SettlementsPage() {
     const [status, setStatus] = useState('all');
     const [currency, setCurrency] = useState('all');
     const [date, setDate] = useState({ from: '', to: '' });
-    const [selected, setSelected] = useState<Settlement | null>(null);
+    const [selected, setSelected] = useState<MerchantSettlement | null>(null);
 
-    const filtered = mockSettlements.filter(s => {
+    const { settlements, isLoading, error } = useSettlements({
+        status: status !== 'all' ? status : undefined,
+        currency: currency !== 'all' ? currency : undefined,
+        date_from: date.from || undefined,
+        date_to: date.to || undefined,
+        limit: 100,
+    });
+    const { summary } = useSettlementSummary();
+
+    const filtered = settlements.filter(s => {
         if (status !== 'all' && s.status !== status) return false;
         if (currency !== 'all' && s.currency !== currency) return false;
         if (date.from && s.date < date.from) return false;
@@ -81,13 +32,22 @@ export default function SettlementsPage() {
         return true;
     });
 
-    const totalSettled = mockSettlements
-        .filter(s => s.status === 'completed')
-        .reduce((sum, s) => sum + s.fiatAmount, 0);
+    const totalSettled = summary
+        ? Number(summary.total_settled_this_month ?? 0)
+        : settlements.filter(s => s.status === 'completed').reduce((sum, s) => sum + s.fiatAmount, 0);
+    const totalFees = summary ? Number(summary.total_fees_paid ?? 0) : 0;
+    const avgDays = summary?.average_settlement_time_days ?? 0;
+    const nextDate = summary?.next_settlement_date
+        ? new Date(summary.next_settlement_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+        : '—';
 
-    const totalFees = mockSettlements
-        .filter(s => s.status === 'completed')
-        .reduce((sum, s) => sum + s.fees, 0);
+    if (error) {
+        return (
+            <div className="space-y-6 p-6">
+                <p className="text-destructive">Failed to load settlements. Please try again.</p>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6 p-6">
@@ -102,23 +62,22 @@ export default function SettlementsPage() {
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 <StatCard
                     title="Total Settled"
-                    value={`$${totalSettled.toLocaleString()}`}
+                    value={isLoading ? '…' : `$${Number(totalSettled).toLocaleString()}`}
                     icon={DollarSign}
-                    trend="+12%"
                 />
                 <StatCard
                     title="Total Fees"
-                    value={`$${totalFees.toLocaleString()}`}
+                    value={isLoading ? '…' : `$${Number(totalFees).toLocaleString()}`}
                     icon={TrendingUp}
                 />
                 <StatCard
                     title="Avg. Settlement Time"
-                    value="2.3 days"
+                    value={isLoading ? '…' : `${avgDays} days`}
                     icon={Clock}
                 />
                 <StatCard
                     title="Next Settlement"
-                    value="Jan 25, 2024"
+                    value={isLoading ? '…' : nextDate}
                     icon={Calendar}
                 />
             </div>
