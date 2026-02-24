@@ -35,10 +35,11 @@ export async function initiateRefund(
     throw { status: 403, message: "Payment does not belong to this merchant" };
   }
 
-  if (payment.status !== "confirmed") {
+  const allowedStatuses = ["confirmed", "paid", "overpaid"];
+  if (!allowedStatuses.includes(payment.status)) {
     throw {
       status: 400,
-      message: `Only confirmed payments can be refunded. Current status: ${payment.status}`,
+      message: `Only confirmed/paid payments can be refunded. Current status: ${payment.status}`,
     };
   }
 

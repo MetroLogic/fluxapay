@@ -99,6 +99,9 @@ export type WebhookStatus = (typeof WebhookStatus)[keyof typeof WebhookStatus]
 
 export const PaymentStatus = {
   pending: 'pending',
+  paid: 'paid',
+  overpaid: 'overpaid',
+  partially_paid: 'partially_paid',
   confirmed: 'confirmed',
   failed: 'failed',
   expired: 'expired'

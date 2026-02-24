@@ -205,7 +205,7 @@ model Payment {
   customer_email          String
   metadata                Json
   expiration              DateTime
-  status                  String
+  status                  PaymentStatus @default(pending)
   checkout_url            String
   timeline                Json?       // Added to track payment events
   
@@ -218,6 +218,8 @@ model Payment {
   swept_at                DateTime?
   sweep_tx_hash           String?     // This is your Stellar transaction hash
   transaction_hash        String?     // The on-chain hash for the incoming payment
+  payer_address           String?
+  confirmed_at            DateTime?
 
   
   // settlement fields
@@ -231,6 +233,7 @@ model Payment {
   settlement              Settlement? @relation(fields: [settlementId], references: [id])
   settlementId            String?
   createdAt               DateTime    @default(now())
+  updatedAt               DateTime    @updatedAt
 
   @@index([status])
   @@index([customer_email])
@@ -303,6 +306,9 @@ enum WebhookStatus {
 
 enum PaymentStatus {
   pending
+  paid
+  overpaid
+  partially_paid
   confirmed
   failed
   expired

@@ -275,13 +275,16 @@ export const PaymentScalarFieldEnum = {
   swept_at: 'swept_at',
   sweep_tx_hash: 'sweep_tx_hash',
   transaction_hash: 'transaction_hash',
+  payer_address: 'payer_address',
+  confirmed_at: 'confirmed_at',
   settled: 'settled',
   settled_at: 'settled_at',
   settlement_ref: 'settlement_ref',
   settlement_fiat_amount: 'settlement_fiat_amount',
   settlement_fiat_currency: 'settlement_fiat_currency',
   settlementId: 'settlementId',
-  createdAt: 'createdAt'
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
 } as const
 
 export type PaymentScalarFieldEnum = (typeof PaymentScalarFieldEnum)[keyof typeof PaymentScalarFieldEnum]
