@@ -244,7 +244,6 @@ async function settleMerchant(
             createAndDeliverWebhook(
                 merchantId,
                 "settlement_completed",
-                merchant.webhook_url,
                 webhookPayload,
             ).catch((err: unknown) => {
                 console.error(
@@ -302,7 +301,6 @@ async function settleMerchant(
                 createAndDeliverWebhook(
                     merchantId,
                     "settlement_failed",
-                    merchant.webhook_url,
                     {
                         event: "settlement.failed",
                         merchant_id: merchantId,

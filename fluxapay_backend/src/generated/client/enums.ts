@@ -111,6 +111,17 @@ export const SubscriptionStatus = {
 } as const
 
 export type SubscriptionStatus = (typeof SubscriptionStatus)[keyof typeof SubscriptionStatus]
+export const PaymentStatus = {
+  pending: 'pending',
+  paid: 'paid',
+  overpaid: 'overpaid',
+  partially_paid: 'partially_paid',
+  confirmed: 'confirmed',
+  failed: 'failed',
+  expired: 'expired'
+} as const
+
+export type PaymentStatus = (typeof PaymentStatus)[keyof typeof PaymentStatus]
 
 
 export const RefundStatus = {
