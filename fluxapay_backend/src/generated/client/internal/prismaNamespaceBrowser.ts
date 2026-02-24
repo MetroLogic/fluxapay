@@ -90,6 +90,8 @@ export const MerchantScalarFieldEnum = {
   webhook_url: 'webhook_url',
   created_at: 'created_at',
   updated_at: 'updated_at',
+  settlement_schedule: 'settlement_schedule',
+  settlement_day: 'settlement_day',
   api_key_hashed: 'api_key_hashed',
   api_key_last_four: 'api_key_last_four',
   webhook_secret: 'webhook_secret'

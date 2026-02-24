@@ -1211,6 +1211,8 @@ export const MerchantScalarFieldEnum = {
   webhook_url: 'webhook_url',
   created_at: 'created_at',
   updated_at: 'updated_at',
+  settlement_schedule: 'settlement_schedule',
+  settlement_day: 'settlement_day',
   api_key_hashed: 'api_key_hashed',
   api_key_last_four: 'api_key_last_four',
   webhook_secret: 'webhook_secret'
@@ -1493,6 +1495,34 @@ export type ListDateTimeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaM
 
 
 /**
+ * Reference to a field of type 'SettlementSchedule'
+ */
+export type EnumSettlementScheduleFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'SettlementSchedule'>
+    
+
+
+/**
+ * Reference to a field of type 'SettlementSchedule[]'
+ */
+export type ListEnumSettlementScheduleFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'SettlementSchedule[]'>
+    
+
+
+/**
+ * Reference to a field of type 'Int'
+ */
+export type IntFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Int'>
+    
+
+
+/**
+ * Reference to a field of type 'Int[]'
+ */
+export type ListIntFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Int[]'>
+    
+
+
+/**
  * Reference to a field of type 'OTPChannel'
  */
 export type EnumOTPChannelFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'OTPChannel'>
@@ -1601,20 +1631,6 @@ export type EnumDocumentTypeFieldRefInput<$PrismaModel> = FieldRefInputType<$Pri
  * Reference to a field of type 'DocumentType[]'
  */
 export type ListEnumDocumentTypeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'DocumentType[]'>
-    
-
-
-/**
- * Reference to a field of type 'Int'
- */
-export type IntFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Int'>
-    
-
-
-/**
- * Reference to a field of type 'Int[]'
- */
-export type ListIntFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Int[]'>
     
 
 

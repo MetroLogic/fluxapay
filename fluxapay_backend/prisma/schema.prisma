@@ -15,26 +15,28 @@ datasource db {
 }
 
 model Merchant {
-  id                  String         @id @default(cuid())
+  id                  String             @id @default(cuid())
   business_name       String
-  email               String         @unique
-  phone_number        String         @unique
+  email               String             @unique
+  phone_number        String             @unique
   country             String
   settlement_currency String
   password            String
-  status              MerchantStatus @default(pending_verification)
-  api_key             String?        @unique
+  status              MerchantStatus     @default(pending_verification)
+  api_key             String?            @unique
   webhook_url         String?
-  created_at          DateTime       @default(now())
-  updated_at          DateTime       @updatedAt
+  created_at          DateTime           @default(now())
+  updated_at          DateTime           @updatedAt
   otps                OTP[]
   settlements         Settlement[]
+  settlement_schedule SettlementSchedule @default(daily)
+  settlement_day      Int?
   kyc                 MerchantKYC?
   webhookLogs         WebhookLog[]
   payments            Payment[]
-  api_key_hashed     String?        @unique
-  api_key_last_four  String?
-  webhook_secret     String?
+  api_key_hashed      String?            @unique
+  api_key_last_four   String?
+  webhook_secret      String?
   bankAccount         BankAccount?
 }
 
@@ -163,41 +165,40 @@ model WebhookRetryAttempt {
 }
 
 model Payment {
-  id                      String      @id @default(cuid())
-  merchant                Merchant    @relation(fields: [merchantId], references: [id])
-  merchantId              String
-  order_id                String?     @unique // Added for search/tracking
-  amount                  Decimal
-  currency                String
-  customer_email          String
-  metadata                Json
-  expiration              DateTime
-  status                  String
-  checkout_url            String
-  timeline                Json?       // Added to track payment events
-  
-  // Stellar address for this payment
-  stellar_address         String?     // Derived HD wallet address
-  last_paging_token       String?     // Cursor for efficient transaction polling
-  
-  // sweeping fields
-  swept                   Boolean     @default(false)
-  swept_at                DateTime?
-  sweep_tx_hash           String?     // This is your Stellar transaction hash
-  transaction_hash        String?     // The on-chain hash for the incoming payment
+  id             String   @id @default(cuid())
+  merchant       Merchant @relation(fields: [merchantId], references: [id])
+  merchantId     String
+  order_id       String?  @unique // Added for search/tracking
+  amount         Decimal
+  currency       String
+  customer_email String
+  metadata       Json
+  expiration     DateTime
+  status         String
+  checkout_url   String
+  timeline       Json? // Added to track payment events
 
-  
+  // Stellar address for this payment
+  stellar_address   String? // Derived HD wallet address
+  last_paging_token String? // Cursor for efficient transaction polling
+
+  // sweeping fields
+  swept            Boolean   @default(false)
+  swept_at         DateTime?
+  sweep_tx_hash    String? // This is your Stellar transaction hash
+  transaction_hash String? // The on-chain hash for the incoming payment
+
   // settlement fields
-  settled                 Boolean     @default(false)
-  settled_at              DateTime?
-  settlement_ref          String?
-  settlement_fiat_amount  Decimal?
+  settled                  Boolean   @default(false)
+  settled_at               DateTime?
+  settlement_ref           String?
+  settlement_fiat_amount   Decimal?
   settlement_fiat_currency String?
-  
+
   // link to settlement batch
-  settlement              Settlement? @relation(fields: [settlementId], references: [id])
-  settlementId            String?
-  createdAt               DateTime    @default(now())
+  settlement   Settlement? @relation(fields: [settlementId], references: [id])
+  settlementId String?
+  createdAt    DateTime    @default(now())
 
   @@index([status])
   @@index([customer_email])
@@ -210,6 +211,11 @@ model Payment {
 enum MerchantStatus {
   pending_verification
   active
+}
+
+enum SettlementSchedule {
+  daily
+  weekly
 }
 
 enum OTPChannel {

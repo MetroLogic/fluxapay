@@ -17,6 +17,14 @@ export const MerchantStatus = {
 export type MerchantStatus = (typeof MerchantStatus)[keyof typeof MerchantStatus]
 
 
+export const SettlementSchedule = {
+  daily: 'daily',
+  weekly: 'weekly'
+} as const
+
+export type SettlementSchedule = (typeof SettlementSchedule)[keyof typeof SettlementSchedule]
+
+
 export const OTPChannel = {
   email: 'email',
   phone: 'phone'
