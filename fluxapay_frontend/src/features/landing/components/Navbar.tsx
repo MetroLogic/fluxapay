@@ -2,17 +2,21 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import Link from "next/link";
+import { Link } from "@/i18n/routing";
+import { useTranslations } from "next-intl";
 import logo from "@/assets/logo.svg";
+import { DOCS_URLS } from "@/lib/docs";
+import LocaleSwitcher from "@/components/LocaleSwitcher";
 
 export const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
+  const t = useTranslations("nav");
 
   const navLinks = [
-    { name: "Home", href: "/" },
-    { name: "Features", href: "#features" },
-    { name: "Pricing", href: "#pricing" },
-    { name: "Documentation", href: "#docs" },
+    { name: t("home"), href: "/" },
+    { name: t("features"), href: "#features" },
+    { name: t("pricing"), href: DOCS_URLS.PRICING },
+    { name: t("docs"), href: DOCS_URLS.FULL_DOCS },
   ];
 
   return (
@@ -44,17 +48,18 @@ export const Navbar = () => {
 
         {/* Action Buttons */}
         <div className="hidden md:flex items-center gap-3">
+          <LocaleSwitcher />
           <Link
             href="/login"
             className="px-5 py-2 text-lg font-semibold text-grey hover:text-black rounded-full transition-all"
           >
-            Login
+            {t("login")}
           </Link>
           <Link
             href="/signup"
             className="px-5 py-2 text-lg font-semibold text-white bg-black hover:bg-zinc-800 rounded-lg transition-all"
           >
-            Join Fluxapay
+            {t("joinFluxapay")}
           </Link>
         </div>
 
@@ -119,19 +124,20 @@ export const Navbar = () => {
           ))}
           <div className="h-px bg-zinc-100 my-2" />
           <div className="flex flex-col gap-3">
+            <LocaleSwitcher />
             <Link
               href="/login"
               onClick={() => setIsOpen(false)}
               className="w-full py-3 text-center text-lg font-semibold text-grey"
             >
-              Login
+              {t("login")}
             </Link>
             <Link
               href="/signup"
               onClick={() => setIsOpen(false)}
               className="w-full py-3 text-center font-semibold text-white bg-zinc-900 rounded-lg"
             >
-              Join Fluxapay
+              {t("joinFluxapay")}
             </Link>
           </div>
         </div>

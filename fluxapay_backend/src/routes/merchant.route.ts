@@ -7,10 +7,14 @@ import {
   getLoggedInMerchant,
   updateMerchantProfile,
   updateMerchantWebhook,
+  rotateApiKey,
+  rotateWebhookSecret,
+  updateSettlementSchedule,
 } from "../controllers/merchant.controller";
 import { validate } from "../middleware/validation.middleware";
 import * as merchantSchema from "../schemas/merchant.schema";
 import { authenticateToken } from "../middleware/auth.middleware";
+import { updateSettlementScheduleSchema } from "../schemas/merchant.schema";
 
 const router = Router();
 
@@ -222,5 +226,97 @@ router.patch("/me", authenticateToken, updateMerchantProfile);
  *         description: Unauthorized
  */
 router.patch("/me/webhook", authenticateToken, updateMerchantWebhook);
+
+
+/**
+ * @swagger
+ * /api/merchants/keys/rotate-api-key:
+ *   post:
+ *     summary: Rotate merchant API key
+ *     tags: [Merchants]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: API key rotated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 apiKey:
+ *                   type: string
+ */
+router.post("/keys/rotate-api-key", authenticateToken, rotateApiKey);
+
+/**
+ * @swagger
+ * /api/merchants/keys/rotate-webhook-secret:
+ *   post:
+ *     summary: Rotate merchant webhook secret
+ *     tags: [Merchants]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Webhook secret rotated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 webhookSecret:
+ *                   type: string
+ */
+router.post(
+  "/keys/rotate-webhook-secret",
+  authenticateToken,
+  rotateWebhookSecret,
+);
+
+/**
+ * @swagger
+ * /api/merchants/me/settlement-schedule:
+ *   patch:
+ *     summary: Update merchant settlement schedule
+ *     tags: [Merchants]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - settlement_schedule
+ *             properties:
+ *               settlement_schedule:
+ *                 type: string
+ *                 enum: [daily, weekly]
+ *               settlement_day:
+ *                 type: integer
+ *                 minimum: 0
+ *                 maximum: 6
+ *                 description: "0=Sun, 1=Mon … 6=Sat. Required when schedule is weekly."
+ *     responses:
+ *       200:
+ *         description: Schedule updated
+ *       400:
+ *         description: Validation error (e.g. missing settlement_day for weekly)
+ *       401:
+ *         description: Unauthorized
+ */
+router.patch(
+  "/me/settlement-schedule",
+  authenticateToken,
+  validate(updateSettlementScheduleSchema),
+  updateSettlementSchedule,
+);
+
 
 export default router;

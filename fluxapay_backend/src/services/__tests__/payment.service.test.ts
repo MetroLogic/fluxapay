@@ -40,6 +40,10 @@ describe('PaymentService', () => {
   });
 
   describe('checkRateLimit', () => {
+    afterEach(() => {
+      delete process.env.PAYMENT_RATE_LIMIT_PER_MINUTE;
+    });
+
     it('should return true if under rate limit', async () => {
       mockPrisma.payment.count.mockResolvedValue(3);
       const result = await PaymentService.checkRateLimit('merchant_1');
@@ -50,6 +54,18 @@ describe('PaymentService', () => {
       mockPrisma.payment.count.mockResolvedValue(5);
       const result = await PaymentService.checkRateLimit('merchant_1');
       expect(result).toBe(false);
+    });
+
+    it('should use PAYMENT_RATE_LIMIT_PER_MINUTE when set', async () => {
+      process.env.PAYMENT_RATE_LIMIT_PER_MINUTE = '10';
+
+      mockPrisma.payment.count.mockResolvedValue(9);
+      const underLimit = await PaymentService.checkRateLimit('merchant_1');
+      expect(underLimit).toBe(true);
+
+      mockPrisma.payment.count.mockResolvedValue(10);
+      const atLimit = await PaymentService.checkRateLimit('merchant_1');
+      expect(atLimit).toBe(false);
     });
   });
 
@@ -69,9 +85,9 @@ describe('PaymentService', () => {
         stellar_address: mockStellarAddress,
       };
 
-      // Mock HDWalletService
+      // Mock HDWalletService with async methods
       (HDWalletService as jest.MockedClass<typeof HDWalletService>).mockImplementation(() => ({
-        derivePaymentAddress: jest.fn().mockReturnValue(mockStellarAddress),
+        derivePaymentAddress: jest.fn().mockResolvedValue(mockStellarAddress),
         regenerateKeypair: jest.fn(),
         verifyAddress: jest.fn(),
       } as any));
@@ -104,18 +120,37 @@ describe('PaymentService', () => {
       });
     });
 
-    it('should throw error if HD_WALLET_MASTER_SEED is not configured', async () => {
+    it('should work without HD_WALLET_MASTER_SEED when using KMS', async () => {
+      // Remove the legacy env var to test KMS mode
       delete process.env.HD_WALLET_MASTER_SEED;
+      
+      const mockStellarAddress = 'GTEST123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ123456789ABC';
 
-      await expect(
-        PaymentService.createPayment({
-          amount: 100,
-          currency: 'USDC',
-          customer_email: 'test@example.com',
-          merchantId: 'merchant_1',
-          metadata: {},
-        })
-      ).rejects.toThrow('HD_WALLET_MASTER_SEED is not configured');
+      // Mock HDWalletService with async methods
+      (HDWalletService as jest.MockedClass<typeof HDWalletService>).mockImplementation(() => ({
+        derivePaymentAddress: jest.fn().mockResolvedValue(mockStellarAddress),
+        regenerateKeypair: jest.fn(),
+        verifyAddress: jest.fn(),
+      } as any));
+
+      (StellarService as jest.MockedClass<typeof StellarService>).mockImplementation(() => ({
+        prepareAccount: jest.fn().mockResolvedValue(undefined),
+      } as any));
+
+      mockPrisma.payment.create.mockResolvedValue({
+        id: 'payment_123',
+        stellar_address: mockStellarAddress,
+      });
+
+      const result = await PaymentService.createPayment({
+        amount: 100,
+        currency: 'USDC',
+        customer_email: 'test@example.com',
+        merchantId: 'merchant_1',
+        metadata: {},
+      });
+
+      expect(result.stellar_address).toBe(mockStellarAddress);
     });
 
     it('should call prepareAccount asynchronously', async () => {
@@ -123,7 +158,7 @@ describe('PaymentService', () => {
       const mockPrepareAccount = jest.fn().mockResolvedValue(undefined);
 
       (HDWalletService as jest.MockedClass<typeof HDWalletService>).mockImplementation(() => ({
-        derivePaymentAddress: jest.fn().mockReturnValue(mockStellarAddress),
+        derivePaymentAddress: jest.fn().mockResolvedValue(mockStellarAddress),
         regenerateKeypair: jest.fn(),
         verifyAddress: jest.fn(),
       } as any));

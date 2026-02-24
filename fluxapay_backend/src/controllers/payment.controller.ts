@@ -1,12 +1,25 @@
 import { Request, Response } from "express";
 import { PrismaClient } from "../generated/client/client";
 import { PaymentService } from "../services/payment.service";
+import { AuthRequest } from "../types/express";
 
 const prisma = new PrismaClient();
 
 export const createPayment = async (req: Request, res: Response) => {
   try {
-    const { merchantId, order_id, amount, currency, customer_email, metadata } = req.body;
+    const { order_id, amount, currency, customer_email, metadata, success_url, cancel_url } = req.body;
+    const authReq = req as AuthRequest;
+    const merchantId = authReq.merchantId;
+
+    if (!merchantId) {
+      return res.status(401).json({ error: "Unauthorized: Merchant ID missing" });
+    }
+
+    const isWithinRateLimit = await PaymentService.checkRateLimit(merchantId);
+    if (!isWithinRateLimit) {
+      res.setHeader("Retry-After", "60");
+      return res.status(429).json({ error: "Rate limit exceeded. Please try again later." });
+    }
 
     // Use PaymentService to create payment with derived Stellar address
     const payment = await PaymentService.createPayment({
@@ -15,8 +28,10 @@ export const createPayment = async (req: Request, res: Response) => {
       currency,
       customer_email,
       metadata: metadata || {},
+      success_url,
+      cancel_url,
     });
-    
+
     // Update with order_id and timeline if provided
     const updatedPayment = await prisma.payment.update({
       where: { id: payment.id },
@@ -25,7 +40,7 @@ export const createPayment = async (req: Request, res: Response) => {
         timeline: [{ event: "payment_created", timestamp: new Date() }]
       }
     });
-    
+
     res.status(201).json(updatedPayment);
   } catch (error) {
     console.error('Error creating payment:', error);
@@ -35,6 +50,9 @@ export const createPayment = async (req: Request, res: Response) => {
 
 export const getPayments = async (req: Request, res: Response) => {
   try {
+    const authReq = req as AuthRequest;
+    const merchantId = authReq.merchantId;
+
     // 1. Destructure with explicit type casting immediately
     const query = req.query as Record<string, any>;
 
@@ -53,6 +71,7 @@ export const getPayments = async (req: Request, res: Response) => {
     const sortOrder: 'asc' | 'desc' = query.order === 'asc' ? 'asc' : 'desc';
 
     const where: any = {
+      merchantId: merchantId,
       ...(status && { status }),
       ...(currency && { currency }),
       ...((date_from || date_to) && {
@@ -104,17 +123,34 @@ export const getPayments = async (req: Request, res: Response) => {
 
 export const getPaymentById = async (req: Request, res: Response) => {
   try {
-    // Force payment_id to be a single string
-    const payment_id = String(req.params.payment_id);
+    const authReq = req as AuthRequest;
+    const merchantId = authReq.merchantId;
 
-    const payment = await prisma.payment.findUnique({
-      where: { id: payment_id }, // This is line 106 that was failing!
+    // Endpoint: GET /api/payments/v1/payments/:id
+    // Support both 'id' and 'payment_id' parameters
+    const payment_id = String(req.params.id || req.params.payment_id);
+
+    const payment = await prisma.payment.findFirst({
+      where: {
+        id: payment_id,
+        merchantId: merchantId
+      },
       include: { merchant: true, settlement: true }
     });
 
     if (!payment) return res.status(404).json({ error: "Payment not found" });
-    
-    res.json(payment);
+
+    // Add explorer link if transaction_hash exists
+    const explorerBase = (process.env.STELLAR_HORIZON_URL || "").includes("testnet")
+      ? "https://stellar.expert/explorer/testnet/tx/"
+      : "https://stellar.expert/explorer/public/tx/";
+
+    const responseData = {
+      ...payment,
+      stellar_expert_url: payment.transaction_hash ? `${explorerBase}${payment.transaction_hash}` : null
+    };
+
+    res.json(responseData);
   } catch (error) {
     res.status(500).json({ error: "Error fetching details" });
   }

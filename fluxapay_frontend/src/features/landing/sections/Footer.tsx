@@ -2,6 +2,9 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { Link } from "@/i18n/routing";
+import { useTranslations } from "next-intl";
+import { DOCS_URLS } from "@/lib/docs";
 
 const FooterSection = ({
   title,
@@ -30,6 +33,7 @@ const FooterSection = ({
 );
 
 export const Footer = () => {
+  const t = useTranslations("footer");
   const currentYear = new Date().getFullYear();
 
   const footerLinks = {
@@ -46,6 +50,18 @@ export const Footer = () => {
       { label: "Docs", href: "/docs" },
       { label: "FAQs / Support", href: "/faq" },
       { label: "Contact us", href: "/contact" },
+      { label: t("privacy"), href: "/privacy" },
+      { label: t("terms"), href: "/terms" },
+    ],
+    product: [
+      { label: t("signUp"), href: "/signup" },
+      { label: t("login"), href: "/login" },
+      { label: t("pricing"), href: DOCS_URLS.PRICING },
+    ],
+    resources: [
+      { label: t("documentation"), href: DOCS_URLS.FULL_DOCS },
+      { label: t("faqs"), href: DOCS_URLS.FAQS },
+      { label: t("contact"), href: DOCS_URLS.CONTACT },
     ],
   };
 
@@ -65,15 +81,15 @@ export const Footer = () => {
           </div>
 
           {/* Footer Sections */}
-          <FooterSection title="Legal" links={footerLinks.legal} />
-          <FooterSection title="Product" links={footerLinks.product} />
-          <FooterSection title="Resources" links={footerLinks.resources} />
+          <FooterSection title={t("legal")} links={footerLinks.legal} />
+          <FooterSection title={t("product")} links={footerLinks.product} />
+          <FooterSection title={t("resources")} links={footerLinks.resources} />
         </div>
 
         {/* Copyright */}
         <div className="text-center">
           <p className="text-[#8A8A8A] text-sm">
-            © {currentYear} borderless. All rights reserved.
+            {t("copyright", { year: currentYear })}
           </p>
         </div>
       </div>

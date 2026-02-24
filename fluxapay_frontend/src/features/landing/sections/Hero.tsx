@@ -1,4 +1,7 @@
-import Link from "next/link";
+"use client";
+
+import { Link } from "@/i18n/routing";
+import { useTranslations } from "next-intl";
 import Image from "next/image";
 import { Navbar } from "../components/Navbar";
 
@@ -7,6 +10,8 @@ import transfer_icon_2 from "@/assets/transfer-icon-khs.svg";
 import transfer_icon_3 from "@/assets/transfer-icon-ghs.svg";
 
 const Hero = () => {
+  const t = useTranslations("hero");
+  
   return (
     <div className="hero">
       <div className="py-8 h-screen flex flex-col relative overflow-hidden ">
@@ -27,7 +32,7 @@ const Hero = () => {
                 </div>
                 <div className="">
                   <p className="text-xs font-medium text-muted-foreground">
-                    Transfer
+                    {t("transfer")}
                   </p>
                   <h4 className="text-sm font-bold text-gray-900">
                     20,000 NGN
@@ -46,7 +51,7 @@ const Hero = () => {
                 </div>
                 <div className="">
                   <p className="text-xs font-medium text-muted-foreground">
-                    Transfer
+                    {t("transfer")}
                   </p>
                   <h4 className="text-sm font-bold text-gray-900">5,000 KHS</h4>
                 </div>
@@ -63,7 +68,7 @@ const Hero = () => {
                 </div>
                 <div className="">
                   <p className="text-xs font-medium text-muted-foreground">
-                    Transfer
+                    {t("transfer")}
                   </p>
                   <h4 className="text-sm font-bold text-gray-900">5,000 GHS</h4>
                 </div>
@@ -71,20 +76,18 @@ const Hero = () => {
             </div>
             <div className="text-center">
               <h1 className="text-5xl font-extrabold  text-white text-[3.5rem] leading-[1] tracking-[-0.04em]">
-                Accept <i className="text-yellow">Crypto</i> <br />
-                Get Paid in Fiat Instantly
+                {t("mainTitle")} <i className="text-yellow">{t("crypto")}</i> <br />
+                {t("mainSubtitle")}
               </h1>
               <p className="py-6 text-[#EFDBFC] text-xl font-medium max-w-2xl mx-auto">
-                Fluxapay lets merchants accept USDC payments on Stellar and get
-                settled in local fiat with a Stripe-like API and no on-chain
-                complexity.
+                {t("description")}
               </p>
 
               <Link
                 href="/signup"
                 className="px-5 py-2 text-lg font-semibold text-black bg-white rounded-lg transition-all block w-fit mx-auto"
               >
-                Join Fluxapay
+                {t("cta")}
               </Link>
             </div>
           </div>

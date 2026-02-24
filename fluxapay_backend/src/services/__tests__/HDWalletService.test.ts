@@ -15,41 +15,41 @@ describe('HDWalletService', () => {
     });
 
     describe('derivePaymentAddress', () => {
-        it('should derive deterministic addresses', () => {
+        it('should derive deterministic addresses', async () => {
             const merchantId = 'merchant_1';
             const paymentId = 'payment_A';
 
-            const address1 = service.derivePaymentAddress(merchantId, paymentId);
-            const address2 = service.derivePaymentAddress(merchantId, paymentId);
+            const address1 = await service.derivePaymentAddress(merchantId, paymentId);
+            const address2 = await service.derivePaymentAddress(merchantId, paymentId);
 
             expect(address1).toBe(address2);
             expect(address1).toMatch(/^G[A-Z0-9]{55}$/); // Basic Stellar address regex
         });
 
-        it('should derive different addresses for different payment IDs', () => {
+        it('should derive different addresses for different payment IDs', async () => {
             const merchantId = 'merchant_1';
-            const address1 = service.derivePaymentAddress(merchantId, 'payment_A');
-            const address2 = service.derivePaymentAddress(merchantId, 'payment_B');
+            const address1 = await service.derivePaymentAddress(merchantId, 'payment_A');
+            const address2 = await service.derivePaymentAddress(merchantId, 'payment_B');
 
             expect(address1).not.toBe(address2);
         });
 
-        it('should derive different addresses for different merchant IDs', () => {
+        it('should derive different addresses for different merchant IDs', async () => {
             const paymentId = 'payment_A';
-            const address1 = service.derivePaymentAddress('merchant_1', paymentId);
-            const address2 = service.derivePaymentAddress('merchant_2', paymentId);
+            const address1 = await service.derivePaymentAddress('merchant_1', paymentId);
+            const address2 = await service.derivePaymentAddress('merchant_2', paymentId);
 
             expect(address1).not.toBe(address2);
         });
     });
 
     describe('regenerateKeypair', () => {
-        it('should regenerate the correct keypair', () => {
+        it('should regenerate the correct keypair', async () => {
             const merchantId = 'merchant_1';
             const paymentId = 'payment_A';
 
-            const { publicKey, secretKey } = service.regenerateKeypair(merchantId, paymentId);
-            const derivedAddress = service.derivePaymentAddress(merchantId, paymentId);
+            const { publicKey, secretKey } = await service.regenerateKeypair(merchantId, paymentId);
+            const derivedAddress = await service.derivePaymentAddress(merchantId, paymentId);
 
             expect(publicKey).toBe(derivedAddress);
             expect(secretKey).toMatch(/^S[A-Z0-9]{55}$/); // Basic Stellar secret key regex
@@ -57,20 +57,20 @@ describe('HDWalletService', () => {
     });
 
     describe('verifyAddress', () => {
-        it('should return true for correct address', () => {
+        it('should return true for correct address', async () => {
             const merchantId = 'merchant_1';
             const paymentId = 'payment_A';
-            const address = service.derivePaymentAddress(merchantId, paymentId);
+            const address = await service.derivePaymentAddress(merchantId, paymentId);
 
-            expect(service.verifyAddress(merchantId, paymentId, address)).toBe(true);
+            expect(await service.verifyAddress(merchantId, paymentId, address)).toBe(true);
         });
 
-        it('should return false for incorrect address', () => {
+        it('should return false for incorrect address', async () => {
             const merchantId = 'merchant_1';
             const paymentId = 'payment_A';
-            const otherAddress = service.derivePaymentAddress(merchantId, 'payment_B');
+            const otherAddress = await service.derivePaymentAddress(merchantId, 'payment_B');
 
-            expect(service.verifyAddress(merchantId, paymentId, otherAddress)).toBe(false);
+            expect(await service.verifyAddress(merchantId, paymentId, otherAddress)).toBe(false);
         });
     });
 });

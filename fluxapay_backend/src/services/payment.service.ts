@@ -7,7 +7,10 @@ const prisma = new PrismaClient();
 
 export class PaymentService {
   static async checkRateLimit(merchantId: string) {
-    // Example: allow max 5 payments per minute
+    const configuredLimit = Number(process.env.PAYMENT_RATE_LIMIT_PER_MINUTE);
+    const maxPaymentsPerMinute =
+      Number.isFinite(configuredLimit) && configuredLimit > 0 ? configuredLimit : 5;
+
     const oneMinuteAgo = new Date(Date.now() - 60 * 1000);
     const count = await prisma.payment.count({
       where: {
@@ -15,22 +18,44 @@ export class PaymentService {
         createdAt: { gte: oneMinuteAgo },
       },
     });
-    return count < 5;
+    return count < maxPaymentsPerMinute;
   }
 
-  static async createPayment({ amount, currency, customer_email, merchantId, metadata }: any) {
+  /** Base URL for hosted checkout (e.g. https://pay.fluxapay.com). Uses PAY_CHECKOUT_BASE or BASE_URL. */
+  static getCheckoutBaseUrl(): string {
+    const base =
+      process.env.PAY_CHECKOUT_BASE ||
+      process.env.BASE_URL ||
+      'http://localhost:3000';
+    return base.replace(/\/$/, '');
+  }
+
+  static async createPayment({
+    amount,
+    currency,
+    customer_email,
+    merchantId,
+    metadata,
+    success_url,
+    cancel_url,
+  }: {
+    amount: number;
+    currency: string;
+    customer_email: string;
+    merchantId: string;
+    metadata?: Record<string, unknown>;
+    success_url?: string;
+    cancel_url?: string;
+  }) {
     const paymentId = uuidv4();
     const expiration = new Date(Date.now() + 15 * 60 * 1000); // 15 min expiry
-    
-    // Derive the Stellar address for this payment
-    const masterSeed = process.env.HD_WALLET_MASTER_SEED;
-    if (!masterSeed) {
-      throw new Error('HD_WALLET_MASTER_SEED is not configured');
-    }
-    
-    const hdWalletService = new HDWalletService(masterSeed);
-    const stellarAddress = hdWalletService.derivePaymentAddress(merchantId, paymentId);
-    
+    const checkoutBase = PaymentService.getCheckoutBaseUrl();
+    const checkout_url = `${checkoutBase}/pay/${paymentId}`;
+
+    // Derive the Stellar address for this payment using KMS-backed HDWalletService
+    const hdWalletService = new HDWalletService();
+    const stellarAddress = await hdWalletService.derivePaymentAddress(merchantId, paymentId);
+
     // Create payment with the derived Stellar address
     const payment = await prisma.payment.create({
       data: {
@@ -39,10 +64,12 @@ export class PaymentService {
         currency,
         customer_email,
         merchantId,
-        metadata,
+        metadata: metadata ?? {},
         expiration,
         status: 'pending',
-        checkout_url: `/checkout/${uuidv4()}`,
+        checkout_url,
+        success_url: success_url ?? null,
+        cancel_url: cancel_url ?? null,
         stellar_address: stellarAddress,
       },
     });
