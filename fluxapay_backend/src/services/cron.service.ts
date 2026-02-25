@@ -17,16 +17,12 @@
 
 import { schedule, validate, type ScheduledTask } from "node-cron";
 import { runSettlementBatch } from "./settlementBatch.service";
-import { runPaymentMonitorTick } from "./paymentMonitor.service";
 import { processBillingCycle } from "./plan.service";
 
 const SETTLEMENT_CRON_EXPR = process.env.SETTLEMENT_CRON ?? "0 0 * * *";
-const PAYMENT_MONITOR_CRON_EXPR =
-  process.env.PAYMENT_MONITOR_CRON ?? "*/2 * * * *";
 const BILLING_CRON_EXPR = process.env.BILLING_CRON ?? "0 1 * * *";
 
 let settlementTask: ScheduledTask | null = null;
-let paymentMonitorTask: ScheduledTask | null = null;
 let billingTask: ScheduledTask | null = null;
 
 /**
@@ -74,30 +70,8 @@ export function startCronJobs(): void {
     `[Cron] ✅ Settlement batch job scheduled (${SETTLEMENT_CRON_EXPR}) in UTC.`,
   );
 
-  // ── On-chain payment monitor (automated pulls) ──────────────────────────────
-  if (validate(PAYMENT_MONITOR_CRON_EXPR)) {
-    paymentMonitorTask = schedule(
-      PAYMENT_MONITOR_CRON_EXPR,
-      async () => {
-        try {
-          await runPaymentMonitorTick();
-        } catch (err: unknown) {
-          const msg = err instanceof Error ? err.message : String(err);
-          console.error(
-            `[Cron] ❌ Payment monitor tick failed: ${msg}`,
-          );
-        }
-      },
-      { timezone: "UTC" },
-    );
-    console.log(
-      `[Cron] ✅ Payment monitor job scheduled (${PAYMENT_MONITOR_CRON_EXPR}) in UTC.`,
-    );
-  } else {
-    console.warn(
-      `[Cron] Invalid PAYMENT_MONITOR_CRON "${PAYMENT_MONITOR_CRON_EXPR}" – payment monitor disabled.`,
-    );
-  }
+  // Note: On-chain payment monitor was moved to its own loop in paymentMonitor.service.ts
+
 
   // ── Billing cycle (subscription renewals) ────────────────────────────────────
   if (validate(BILLING_CRON_EXPR)) {
@@ -141,7 +115,6 @@ export function startCronJobs(): void {
 export function stopCronJobs(): void {
   const tasks: [ScheduledTask | null, string][] = [
     [settlementTask, "Settlement batch"],
-    [paymentMonitorTask, "Payment monitor"],
     [billingTask, "Billing cycle"],
   ];
   for (const [task, name] of tasks) {
@@ -151,6 +124,5 @@ export function stopCronJobs(): void {
     }
   }
   settlementTask = null;
-  paymentMonitorTask = null;
   billingTask = null;
 }
