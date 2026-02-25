@@ -6,9 +6,6 @@
 
 generator client {
   provider = "prisma-client-js"
-indempotency-rate-limiting
-
-main
   output   = "../src/generated/client"
 }
 
@@ -18,46 +15,42 @@ datasource db {
 }
 
 model Merchant {
-  id                  String             @id @default(cuid())
+  id                  String                 @id @default(cuid())
   business_name       String
-  email               String             @unique
-  phone_number        String             @unique
+  email               String                 @unique
+  phone_number        String                 @unique
   country             String
   settlement_currency String
-  created_at         DateTime @default(now())
-  updated_at         DateTime @updatedAt
-  otps               OTP[]
-  payments           Payment[]
   password            String
-  status              MerchantStatus     @default(pending_verification)
-  api_key             String?            @unique
+  status              MerchantStatus         @default(pending_verification)
+  api_key             String?                @unique
   webhook_url         String?
-  created_at          DateTime           @default(now())
-  updated_at          DateTime           @updatedAt
+  created_at          DateTime               @default(now())
+  updated_at          DateTime               @updatedAt
   otps                OTP[]
   settlements         Settlement[]
-  settlement_schedule SettlementSchedule @default(daily)
+  settlement_schedule SettlementSchedule     @default(daily)
   settlement_day      Int?
   kyc                 MerchantKYC?
   webhookLogs         WebhookLog[]
   payments            Payment[]
-  webhook_secret      String?            @default(cuid())
-  api_key_hashed      String?            @unique
+  webhook_secret      String?                @default(cuid())
+  api_key_hashed      String?                @unique
   api_key_last_four   String?
   bankAccount         BankAccount?
   subscriptions       MerchantSubscription[]
 }
 
 model Plan {
-  id            String               @id @default(cuid())
+  id            String                 @id @default(cuid())
   name          String
-  slug          String               @unique
+  slug          String                 @unique
   description   String?
-  amount        Decimal              @db.Decimal(20, 7)
-  currency      String               @default("USD")
+  amount        Decimal                @db.Decimal(20, 7)
+  currency      String                 @default("USD")
   interval      BillingInterval
-  created_at    DateTime             @default(now())
-  updated_at    DateTime             @updatedAt
+  created_at    DateTime               @default(now())
+  updated_at    DateTime               @updatedAt
   subscriptions MerchantSubscription[]
 }
 
@@ -92,9 +85,7 @@ model BankAccount {
   country        String
   created_at     DateTime @default(now())
   updated_at     DateTime @updatedAt
-main
 }
-
 
 model OTP {
   id         String     @id @default(cuid())
@@ -207,48 +198,48 @@ model WebhookRetryAttempt {
 }
 
 model Payment {
-  id                      String        @id @default(cuid())
-  merchant                Merchant      @relation(fields: [merchantId], references: [id])
-  merchantId              String
-  order_id                String?       @unique
-  amount                  Decimal
-  currency                String
-  customer_email          String
-  metadata                Json
-  expiration              DateTime
-  status                  PaymentStatus @default(pending)
-  checkout_url            String
-  success_url             String?
-  cancel_url              String?
-  timeline                Json?
-  
+  id             String        @id @default(cuid())
+  merchant       Merchant      @relation(fields: [merchantId], references: [id])
+  merchantId     String
+  order_id       String?       @unique
+  amount         Decimal
+  currency       String
+  customer_email String
+  metadata       Json
+  expiration     DateTime
+  status         PaymentStatus @default(pending)
+  checkout_url   String
+  success_url    String?
+  cancel_url     String?
+  timeline       Json?
+
   // Stellar address for this payment
-  stellar_address         String?
-  last_paging_token       String?
+  stellar_address   String?
+  last_paging_token String?
 
   // sweeping fields
-  swept                   Boolean       @default(false)
-  swept_at                DateTime?
-  sweep_tx_hash           String?
-  transaction_hash        String?
-  onchain_verified        Boolean       @default(false)
-  contract_tx_hash        String?
-  verification_error      String?
-  payer_address           String?
-  confirmed_at            DateTime?
+  swept              Boolean   @default(false)
+  swept_at           DateTime?
+  sweep_tx_hash      String?
+  transaction_hash   String?
+  onchain_verified   Boolean   @default(false)
+  contract_tx_hash   String?
+  verification_error String?
+  payer_address      String?
+  confirmed_at       DateTime?
 
   // settlement fields
-  settled                  Boolean      @default(false)
+  settled                  Boolean   @default(false)
   settled_at               DateTime?
   settlement_ref           String?
   settlement_fiat_amount   Decimal?
   settlement_fiat_currency String?
 
   // link to settlement batch
-  settlement              Settlement?   @relation(fields: [settlementId], references: [id])
-  settlementId            String?
-  createdAt               DateTime      @default(now())
-  updatedAt               DateTime      @updatedAt
+  settlement   Settlement? @relation(fields: [settlementId], references: [id])
+  settlementId String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
 
   @@index([status])
   @@index([customer_email])
@@ -347,49 +338,19 @@ enum OTPChannel {
   phone
 }
 
-indempotency-rate-limiting
-model Payment {
-  id               String   @id @default(cuid())
-  merchant         Merchant @relation(fields: [merchantId], references: [id])
-  merchantId       String
-  order_id         String?
-  amount           Float
-  currency         String
-  customer_email   String
-  status           String   @default("pending")
-  timeline         Json?
-  metadata         Json?
-  success_url      String?
-  cancel_url       String?
-  transaction_hash String?
-  settlement       Settlement? @relation(fields: [settlementId], references: [id])
-  settlementId     String?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-}
-
-model Settlement {
-  id          String   @id @default(cuid())
-  merchant_id String
-  amount      Float
-  currency    String
-  status      String
-  payments    Payment[]
-  createdAt   DateTime @default(now())
-}
-
 model IdempotencyRecord {
-
   id              String   @id @default(cuid())
   idempotency_key String   @unique
   user_id         String?
-  request_hash    String   // To detect if the body changed for the same key
+  request_hash    String // To detect if the body changed for the same key
   response_code   Int
   response_body   Json
   created_at      DateTime @default(now())
 
   @@index([user_id])
   @@index([idempotency_key])
+}
+
 enum SettlementStatus {
   pending
   processing
@@ -463,7 +424,6 @@ enum PaymentStatus {
   expired
 }
 
-
 enum RefundStatus {
   initiated
   processing
@@ -520,5 +480,4 @@ enum AuditEntityType {
   system_config
   sweep_operation
   settlement_batch
-main
 }
