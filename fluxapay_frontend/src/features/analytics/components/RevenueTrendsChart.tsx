@@ -49,7 +49,7 @@ export function RevenueTrendsChart({ data }: RevenueTrendsChartProps) {
                         axisLine={false}
                         tickLine={false}
                         tick={{ fill: '#64748b', fontSize: 12 }}
-                        tickFormatter={(value) => `$${value}`}
+                        tickFormatter={(value) => `$${Number(value).toLocaleString()}`}
                     />
                     <Tooltip
                         contentStyle={{
@@ -57,7 +57,7 @@ export function RevenueTrendsChart({ data }: RevenueTrendsChartProps) {
                             border: 'none',
                             boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
                         }}
-                        labelFormatter={(label) => new Date(label).toLocaleDateString('en-US', { day: 'numeric', month: 'short' })}
+                        labelFormatter={(label) => label ? new Date(label).toLocaleDateString('en-US', { day: 'numeric', month: 'short' }) : ''}
                     />
                     <Area
                         type="monotone"
