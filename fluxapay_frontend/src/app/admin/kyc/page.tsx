@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, JSX, useEffect, useCallback } from "react";
+import React, { useState, JSX } from "react";
 import {
   Search,
   AlertTriangle,
@@ -13,37 +13,10 @@ import {
   Shield,
   User,
   Globe,
-  Loader2,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import EmptyState from "@/components/EmptyState";
 import { api } from "@/lib/api";
-
-// Type definitions
-interface KycApplication {
-  id: string;
-  merchantName: string;
-  email: string;
-  country: string;
-  submittedDate: string;
-  status: "pending" | "approved" | "rejected" | "additional_info_required";
-  documents: {
-    type: string;
-    name: string;
-    url: string;
-    status: "verified" | "pending" | "rejected";
-  }[];
-  businessInfo: {
-    registrationNumber: string;
-    address: string;
-    type: string;
-  };
-  beneficialOwners: {
-    name: string;
-    role: string;
-    ownership: number;
-  }[];
-}
 import {
   useKycSubmissions,
   useKycDetails,
@@ -69,48 +42,7 @@ const AdminKycPage = () => {
   );
   const [rejectionReason, setRejectionReason] = useState("");
   const [showRejectModal, setShowRejectModal] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
 
-  const [applications, setApplications] = useState<KycApplication[]>([]);
-
-  const fetchApplications = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const params: Record<string, string | number> = { limit: 100 };
-      if (statusFilter !== "all") params.status = statusFilter;
-      const data = await api.adminKyc.list({ limit: 100, status: statusFilter !== "all" ? statusFilter : undefined });
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const mapped: KycApplication[] = (data?.submissions ?? data?.kyc ?? []).map((k: any) => ({
-        id: k.id,
-        merchantName: k.merchant?.business_name ?? k.legal_business_name ?? "Unknown",
-        email: k.merchant?.email ?? k.director_email ?? "",
-        country: k.country_of_registration ?? "",
-        submittedDate: k.created_at?.substring(0, 10) ?? "",
-        status: k.kyc_status === "pending_review" ? "pending" : k.kyc_status,
-        documents: (k.documents ?? []).map((d: any) => ({
-          type: d.document_type,
-          name: d.file_name,
-          url: d.file_url,
-          status: "pending",
-        })),
-        businessInfo: {
-          registrationNumber: k.business_registration_number ?? "",
-          address: k.business_address ?? "",
-          type: k.business_type ?? "",
-        },
-        beneficialOwners: k.director_full_name
-          ? [{ name: k.director_full_name, role: "Director", ownership: 100 }]
-          : [],
-      }));
-      setApplications(mapped);
-    } catch {
-      // fall back silently – leave mock data in place
-    } finally {
-      setIsLoading(false);
-    }
-  }, [statusFilter]);
-
-  useEffect(() => { fetchApplications(); }, [fetchApplications]);
   const { applications, isLoading, mutate } = useKycSubmissions({
     status: statusFilter !== "all" ? statusFilter : undefined,
     limit: 100,
@@ -166,25 +98,6 @@ const AdminKycPage = () => {
   };
 
   const handleUpdateStatus = async (
-    id: string,
-    newStatus: KycApplication["status"],
-    reason?: string,
-  ) => {
-    try {
-      await api.adminKyc.updateStatus(id, {
-        kyc_status: newStatus === "pending" ? "pending_review" : newStatus,
-        ...(reason ? { rejection_reason: reason } : {}),
-      });
-      setApplications((apps) =>
-        apps.map((app) => (app.id === id ? { ...app, status: newStatus } : app)),
-      );
-      toast.success(`Application ${newStatus} successfully`);
-    } catch {
-      toast.error("Failed to update KYC status");
-    }
-    setSelectedApplication(null);
-    setShowRejectModal(false);
-    setRejectionReason("");
     merchantId: string,
     newStatus: "approved" | "rejected" | "additional_info_required",
     rejection_reason?: string,
@@ -210,7 +123,6 @@ const AdminKycPage = () => {
       toast.error("Please provide a reason for rejection");
       return;
     }
-    handleUpdateStatus(selectedApplication.id, "rejected", rejectionReason);
     void handleUpdateStatus(
       selectedApplication.merchantId,
       "rejected",

@@ -149,6 +149,8 @@ export const api = {
   health: {
     check: () => fetch(`${API_BASE_URL}/health`),
     ready: () => fetch(`${API_BASE_URL}/ready`),
+  },
+
   // Settlements (merchant-scoped)
   settlements: {
     list: (params?: {

@@ -127,7 +127,7 @@ export async function adminListMerchants(req: Request, res: Response) {
 /** GET /api/merchants/admin/:merchantId – single merchant detail */
 export async function adminGetMerchant(req: Request, res: Response) {
   try {
-    const { merchantId } = req.params;
+    const merchantId = String(req.params.merchantId);
     const merchant = await adminPrisma.merchant.findUnique({
       where: { id: merchantId },
       include: {
@@ -146,7 +146,7 @@ export async function adminGetMerchant(req: Request, res: Response) {
 /** PATCH /api/merchants/admin/:merchantId/status – suspend / activate */
 export async function adminUpdateMerchantStatus(req: Request, res: Response) {
   try {
-    const { merchantId } = req.params;
+    const merchantId = String(req.params.merchantId);
     const { status } = req.body;
 
     if (!["active", "pending_verification"].includes(status)) {

@@ -1,7 +1,7 @@
 "use client";
 
 
-import React, { useState, useRef, JSX, useEffect, useCallback } from 'react';
+import React, { useState, useRef, JSX } from 'react';
 import {
     Search,
     AlertTriangle,
@@ -21,26 +21,10 @@ import {
     UserCheck,
     UserX,
     FileText,
-    Loader2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import EmptyState from '@/components/EmptyState';
 import { api } from '@/lib/api';
-
-// Type definitions
-interface Merchant {
-    id: string;
-    businessName: string;
-    email: string;
-    kycStatus: 'approved' | 'pending_review' | 'rejected' | 'not_submitted';
-    accountStatus: 'active' | 'pending_verification';
-    volume: number;
-    revenue: number;
-    dateJoined: string;
-    transactionCount: number;
-    avgTransaction: number;
-}
-
 import { useAdminMerchants, type AdminMerchant } from '@/hooks/useAdminMerchants';
 
 
@@ -55,9 +39,6 @@ const AdminMerchantsPage = () => {
     const primaryColor = 'oklch(0.205 0 0)';
     const primaryLight = 'oklch(0.93 0 0)';
 
-    const [merchants, setMerchants] = useState<Merchant[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-
     const [searchTerm, setSearchTerm] = useState<string>('');
     const [kycFilter, setKycFilter] = useState<string>('all');
     const [accountFilter, setAccountFilter] = useState<string>('all');
@@ -69,35 +50,6 @@ const AdminMerchantsPage = () => {
     const exportMenuRef = useRef<HTMLDivElement>(null);
     const exportButtonRef = useRef<HTMLButtonElement>(null);
 
-    // Fetch merchants from backend
-    const fetchMerchants = useCallback(async () => {
-        setIsLoading(true);
-        try {
-            const res = await api.adminMerchants.list({ limit: 100 });
-            if (!res.ok) throw new Error('Failed to fetch merchants');
-            const data = await res.json();
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const mapped: Merchant[] = (data.merchants || []).map((m: any) => ({
-                id: m.id,
-                businessName: m.business_name,
-                email: m.email,
-                kycStatus: m.kyc?.kyc_status ?? 'not_submitted',
-                accountStatus: m.status,
-                volume: 0,
-                revenue: 0,
-                dateJoined: m.created_at?.substring(0, 10) ?? '',
-                transactionCount: m._count?.payments ?? 0,
-                avgTransaction: 0,
-            }));
-            setMerchants(mapped);
-        } catch {
-            toast.error('Could not load merchants from server');
-        } finally {
-            setIsLoading(false);
-        }
-    }, []);
-
-    useEffect(() => { fetchMerchants(); }, [fetchMerchants]);
     const { merchants, isLoading, mutate } = useAdminMerchants({
         limit: 200,
         kycStatus: kycFilter !== 'all' ? kycFilter : undefined,
@@ -180,10 +132,10 @@ const AdminMerchantsPage = () => {
         return matchesSearch;
     });
 
-    const updateMerchantKyc = async (id: string, status: Merchant['kycStatus']) => {
+    const updateMerchantKyc = async (id: string, status: AdminMerchant['kycStatus']) => {
         try {
             await api.adminKyc.updateStatus(id, { kyc_status: status });
-            setMerchants(prev => prev.map(m => m.id === id ? { ...m, kycStatus: status } : m));
+            void mutate();
             toast.success(`KYC status updated to ${status}`);
         } catch {
             toast.error('Failed to update KYC status');
@@ -198,7 +150,7 @@ const AdminMerchantsPage = () => {
         try {
             const res = await api.adminMerchants.updateStatus(id, newStatus);
             if (!res.ok) throw new Error();
-            setMerchants(prev => prev.map(m => m.id === id ? { ...m, accountStatus: newStatus } : m));
+            void mutate();
             toast.success(`Merchant ${newStatus === 'active' ? 'activated' : 'suspended'}`);
         } catch {
             toast.error('Failed to update account status');
