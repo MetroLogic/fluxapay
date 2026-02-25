@@ -1,7 +1,7 @@
 import { PrismaClient } from "../generated/client/client";
 import bcrypt from "bcrypt";
 import { createOtp, verifyOtp as verifyOtpService } from "./otp.service";
-import { sendOtpEmail } from "./email.service";
+import { sendOtpEmail, sendWelcomeEmail } from "./email.service";
 import { isDevEnv } from "../helpers/env.helper";
 import { generateToken } from "../helpers/jwt.helper";
 import { merchantRegistryService } from "./merchantRegistry.service";
@@ -24,6 +24,8 @@ export async function signupMerchantService(data: {
   country: string;
   settlement_currency: string;
   password: string;
+  settlement_schedule?: 'daily' | 'weekly';
+  settlement_day?: number;
 }) {
   const {
     email,
@@ -32,6 +34,8 @@ export async function signupMerchantService(data: {
     business_name,
     country,
     settlement_currency,
+    settlement_schedule,
+    settlement_day
   } = data;
 
   // Check duplicates
@@ -57,6 +61,8 @@ export async function signupMerchantService(data: {
       settlement_currency,
       password: hashedPassword,
       api_key: apiKey,
+      settlement_schedule: settlement_schedule ?? 'daily',
+      settlement_day: settlement_schedule === 'weekly' ? (settlement_day ?? null) : null,
     },
   });
 
@@ -113,10 +119,23 @@ export async function verifyOtpMerchantService(data: {
   if (!success) throw { status: 400, message };
 
   // Activate merchant
-  await prisma.merchant.update({
+  const merchant = await prisma.merchant.update({
     where: { id: merchantId },
     data: { status: "active" },
+    select: { email: true, business_name: true, api_key: true },
   });
+
+  // Send welcome email (non-blocking)
+  const dashboardUrl = process.env.DASHBOARD_URL || "https://dashboard.fluxapay.com";
+  if (merchant.api_key) {
+    sendWelcomeEmail(merchant.email, merchant.business_name, merchant.api_key, dashboardUrl).catch(
+      (err) => {
+        if (isDevEnv()) {
+          console.error("Non-blocking error sending welcome email:", err);
+        }
+      },
+    );
+  }
 
   return { message: "Merchant verified and activated" };
 }
@@ -154,6 +173,8 @@ export async function getMerchantUserService(data: { merchantId: string }) {
       webhook_url: true,
       created_at: true,
       updated_at: true,
+      settlement_schedule: true,
+      settlement_day: true,
     },
   });
 
@@ -264,5 +285,74 @@ export async function regenerateApiKeyService(data: {
   return {
     message: "API key regenerated successfully",
     api_key: apiKey
+  };
+}
+
+export async function addBankAccountService(data: {
+  merchantId: string;
+  account_name: string;
+  account_number: string;
+  bank_name: string;
+  bank_code?: string;
+  currency: string;
+  country: string;
+}) {
+  const { merchantId, account_name, account_number, bank_name, bank_code, currency, country } = data;
+
+  const merchant = await prisma.merchant.findUnique({ where: { id: merchantId } });
+  if (!merchant) throw { status: 404, message: "Merchant not found" };
+
+  const bankAccount = await prisma.bankAccount.upsert({
+    where: { merchantId },
+    create: {
+      merchantId,
+      account_name,
+      account_number,
+      bank_name,
+      bank_code: bank_code ?? null,
+      currency,
+      country,
+    },
+    update: {
+      account_name,
+      account_number,
+      bank_name,
+      bank_code: bank_code ?? null,
+      currency,
+      country,
+    },
+  });
+
+  return { message: "Bank account saved successfully", bankAccount };
+}
+
+export async function updateSettlementScheduleService(data: {
+  merchantId: string;
+  settlement_schedule: 'daily' | 'weekly';
+  settlement_day?: number;
+}) {
+  const { merchantId, settlement_schedule, settlement_day } = data;
+
+  const merchant = await prisma.merchant.findUnique({ where: { id: merchantId } });
+  if (!merchant) throw { status: 404, message: 'Merchant not found' };
+
+  const updated = await prisma.merchant.update({
+    where: { id: merchantId },
+    data: {
+      settlement_schedule,
+      // Clear settlement_day when switching back to daily
+      settlement_day: settlement_schedule === 'weekly' ? (settlement_day ?? null) : null,
+    },
+    select: {
+      id: true,
+      business_name: true,
+      settlement_schedule: true,
+      settlement_day: true,
+    },
+  });
+
+  return {
+    message: 'Settlement schedule updated successfully',
+    merchant: updated,
   };
 }

@@ -6,6 +6,7 @@ import Image from "next/image";
 import * as yup from "yup";
 import Input from "@/components/Input";
 import { Button } from "@/components/Button";
+import { Link } from "@/i18n/routing";
 
 const signupSchema = yup.object({
   name: yup.string().required("Name is required"),
@@ -234,12 +235,12 @@ const SignUpForm = () => {
               {/* Have account */}
               <div className="pt-2 text-center text-xs md:text-[18px] text-muted-foreground font-semibold">
                 Already have an account?{" "}
-                <a
+                <Link
                   href="/login"
                   className="font-semibold text-indigo-500 hover:text-indigo-600 underline underline-offset-4 hover:underline"
                 >
                   Sign in
-                </a>
+                </Link>
               </div>
             </form>
           </div>

@@ -116,7 +116,7 @@ describe('PaymentMonitor Service Logic', () => {
       expect(mockServer.cursor).not.toHaveBeenCalled();
     });
 
-    it('should update paging token after processing transactions', async () => {
+    it('should update status to confirmed after processing transactions', async () => {
       const mockPayment = {
         id: 'payment_1',
         stellar_address: 'GTEST123',
@@ -132,22 +132,31 @@ describe('PaymentMonitor Service Logic', () => {
         asset_code: 'USDC',
         asset_issuer: 'GBBD47IF6LWK7P7MDEVSCWT73IQIGCEZHR7OMXMBZQ3ZONN2T4U6W23Y',
         amount: '100.0',
+        transaction_hash: 'tx_1',
+        from: 'G_PAYER'
       };
 
       mockPrisma.payment.findMany.mockResolvedValue([mockPayment]);
+      mockServer.loadAccount.mockResolvedValue({
+        balances: [{ asset_code: 'USDC', asset_issuer: 'GBBD47IF6LWK7P7MDEVSCWT73IQIGCEZHR7OMXMBZQ3ZONN2T4U6W23Y', balance: '100.0' }]
+      });
       mockServer.call.mockResolvedValue({ records: [mockTransactionRecord] });
       mockPrisma.payment.update.mockResolvedValue({});
 
-      // Simulate the monitor logic
+      // Simulate the new monitor logic (simplified)
+      const now = new Date();
       const payments = await mockPrisma.payment.findMany({
         where: {
-          status: 'pending',
-          expiration: { gt: new Date() },
+          status: { in: ['pending', 'partially_paid'] },
+          expiration: { gt: now },
           stellar_address: { not: null },
         },
       });
 
       for (const payment of payments) {
+        const account = await mockServer.loadAccount(payment.stellar_address);
+        const usdcBalance = parseFloat(account.balances[0].balance);
+
         const transactions = await mockServer
           .payments()
           .forAccount(payment.stellar_address)
@@ -156,31 +165,33 @@ describe('PaymentMonitor Service Logic', () => {
           .call();
 
         let latestPagingToken = payment.last_paging_token;
+        let latestTxHash: string | undefined;
 
         for (const record of transactions.records) {
           if (record.paging_token && (!latestPagingToken || record.paging_token > latestPagingToken)) {
             latestPagingToken = record.paging_token;
           }
-
-          const amount = parseFloat(record.amount);
-          if (amount >= payment.amount) {
-            await mockPrisma.payment.update({
-              where: { id: payment.id },
-              data: {
-                status: 'paid',
-                last_paging_token: latestPagingToken,
-              },
-            });
-            break;
-          }
+          if (!latestTxHash) latestTxHash = record.transaction_hash;
         }
+
+        let newStatus = usdcBalance >= payment.amount ? 'confirmed' : 'partially_paid';
+
+        await mockPrisma.payment.update({
+          where: { id: payment.id },
+          data: {
+            status: newStatus,
+            last_paging_token: latestPagingToken,
+            transaction_hash: latestTxHash,
+          },
+        });
       }
 
       expect(mockPrisma.payment.update).toHaveBeenCalledWith({
         where: { id: 'payment_1' },
         data: {
-          status: 'paid',
+          status: 'confirmed',
           last_paging_token: '67890',
+          transaction_hash: 'tx_1',
         },
       });
     });

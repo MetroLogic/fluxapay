@@ -4,6 +4,7 @@ import { routing } from './i18n/routing';
 export default createMiddleware(routing);
 
 export const config = {
-  // Match only internationalized pathnames
-  matcher: ['/', '/(fr|pt)/:path*', '/((?!_next|_vercel|.*\\..*).*)'],
+  // Apply locale middleware only to locale entrypoints.
+  // Non-localized app routes like /dashboard should bypass this.
+  matcher: ['/', '/(fr|pt)/:path*'],
 };

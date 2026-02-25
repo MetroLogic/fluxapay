@@ -6,7 +6,15 @@ import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
 import { api, ApiError } from "@/lib/api";
 
-import { Copy, Key, Webhook, Shield, CheckCircle2 } from "lucide-react";
+import {
+  Copy,
+  Key,
+  Webhook,
+  Shield,
+  CheckCircle2,
+  CalendarClock,
+  Clock,
+} from "lucide-react";
 
 export default function SettingsPage() {
   // Account Details State
@@ -15,6 +23,11 @@ export default function SettingsPage() {
   const [accountSaved, setAccountSaved] = useState(false);
   const [isSavingAccount, setIsSavingAccount] = useState(false);
   const [accountError, setAccountError] = useState("");
+  const [settlementSchedule, setSettlementSchedule] = useState<
+    "daily" | "weekly"
+  >("daily");
+  const [settlementDay, setSettlementDay] = useState<number>(1); // Default to Monday
+  const [nextSettlementDate, setNextSettlementDate] = useState<string>("");
 
   // API Key State
   const [apiKey, setApiKey] = useState("Loading...");
@@ -49,6 +62,18 @@ export default function SettingsPage() {
       setContactEmail(merchant.email || "");
       setWebhookUrl(merchant.webhook_url || "");
       setApiKey(merchant.api_key || "No API key generated");
+      setSettlementSchedule(merchant.settlement_schedule || "daily");
+      setSettlementDay(merchant.settlement_day ?? 1);
+
+      // Fetch settlement summary for next settlement date
+      try {
+        const summary = await api.settlements.summary();
+        if (summary.next_settlement_date) {
+          setNextSettlementDate(summary.next_settlement_date);
+        }
+      } catch (err) {
+        console.error("Failed to load settlement summary:", err);
+      }
     } catch (error) {
       console.error("Failed to load merchant data:", error);
     } finally {
@@ -65,12 +90,16 @@ export default function SettingsPage() {
       await api.merchant.updateProfile({
         business_name: businessName,
         email: contactEmail,
+        settlement_schedule: settlementSchedule,
+        settlement_day:
+          settlementSchedule === "weekly" ? settlementDay : undefined,
       });
       
       setAccountSaved(true);
       setTimeout(() => setAccountSaved(false), 3000);
     } catch (error) {
-      const message = error instanceof ApiError ? error.message : "Failed to save changes";
+      const message =
+        error instanceof ApiError ? error.message : "Failed to save changes";
       setAccountError(message);
       console.error("Failed to save account details:", error);
     } finally {
@@ -128,7 +157,10 @@ export default function SettingsPage() {
       setWebhookSaved(true);
       setTimeout(() => setWebhookSaved(false), 3000);
     } catch (error) {
-      const message = error instanceof ApiError ? error.message : "Failed to save webhook URL";
+      const message =
+        error instanceof ApiError
+          ? error.message
+          : "Failed to save webhook URL";
       setWebhookError(message);
       console.error("Failed to save webhook URL:", error);
     } finally {
@@ -233,6 +265,96 @@ export default function SettingsPage() {
               <p className="text-sm">{accountError}</p>
             </div>
           )}
+        </div>
+      </div>
+
+      {/* Settlement Schedule Section */}
+      <div className="space-y-4 p-6 rounded-2xl border bg-muted/20">
+        <div className="flex items-center gap-2 text-primary font-semibold mb-4">
+          <CalendarClock className="h-5 w-5" />
+          <h3 className="text-lg">Settlement Schedule</h3>
+        </div>
+
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-2">
+                Schedule Frequency
+              </label>
+              <select
+                value={settlementSchedule}
+                onChange={(e) =>
+                  setSettlementSchedule(e.target.value as "daily" | "weekly")
+                }
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly</option>
+              </select>
+            </div>
+
+            {settlementSchedule === "weekly" && (
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Settlement Day
+                </label>
+                <select
+                  value={settlementDay}
+                  onChange={(e) => setSettlementDay(parseInt(e.target.value))}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <option value={0}>Sunday</option>
+                  <option value={1}>Monday</option>
+                  <option value={2}>Tuesday</option>
+                  <option value={3}>Wednesday</option>
+                  <option value={4}>Thursday</option>
+                  <option value={5}>Friday</option>
+                  <option value={6}>Saturday</option>
+                </select>
+              </div>
+            )}
+          </div>
+
+          {nextSettlementDate && (
+            <div className="p-4 rounded-xl bg-primary/5 border border-primary/10">
+              <div className="flex items-center gap-2 text-sm text-primary font-medium">
+                <Clock className="h-4 w-4" />
+                <span>
+                  Next Scheduled Settlement:{" "}
+                  {new Date(nextSettlementDate).toLocaleDateString(undefined, {
+                    weekday: "long",
+                    year: "numeric",
+                    month: "long",
+                    day: "numeric",
+                  })}
+                </span>
+              </div>
+            </div>
+          )}
+
+          <div className="flex items-center gap-3 pt-2">
+            <Button
+              variant="dark"
+              onClick={handleAccountSave}
+              disabled={isSavingAccount}
+              className="gap-2"
+            >
+              {isSavingAccount && (
+                <svg
+                  className="h-4 w-4 animate-spin"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="3"
+                >
+                  <circle cx="12" cy="12" r="10" className="opacity-30" />
+                  <path d="M22 12a10 10 0 0 1-10 10" />
+                </svg>
+              )}
+              {accountSaved && <CheckCircle2 className="h-4 w-4" />}
+              {isSavingAccount ? "Saving..." : "Update Schedule"}
+            </Button>
+          </div>
         </div>
       </div>
 

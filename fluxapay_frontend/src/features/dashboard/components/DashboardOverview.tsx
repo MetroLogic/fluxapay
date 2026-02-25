@@ -1,20 +1,21 @@
+"use client";
+
+import { DashboardDateRangeProvider } from "@/features/dashboard/context/DashboardDateRangeContext";
 import { StatsCards } from "./overview/StatsCards";
 import { ChartsSection } from "./overview/ChartsSection";
 import { RecentActivity } from "./overview/RecentActivity";
 import { QuickActions } from "./overview/QuickActions";
+import { DateRangePicker } from "./overview/DateRangePicker";
 
-export const DashboardOverview = () => {
+function OverviewContent() {
     return (
         <div className="space-y-4 animate-fade-in">
-            <div className="flex items-center justify-between space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-4">
                 <h2 className="text-3xl font-bold tracking-tight">Overview</h2>
-                <div className="flex items-center space-x-2">
-                    {/* DateRangePicker or similar could go here */}
-                </div>
+                <DateRangePicker />
             </div>
 
             <StatsCards />
-
             <ChartsSection />
 
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
@@ -22,5 +23,13 @@ export const DashboardOverview = () => {
                 <QuickActions />
             </div>
         </div>
+    );
+}
+
+export const DashboardOverview = () => {
+    return (
+        <DashboardDateRangeProvider>
+            <OverviewContent />
+        </DashboardDateRangeProvider>
     );
 };

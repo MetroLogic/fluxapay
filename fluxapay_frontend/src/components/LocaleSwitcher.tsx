@@ -1,7 +1,7 @@
 'use client';
 
-import { useLocale, useTranslations } from 'next-intl';
-import { useRouter, usePathname } from '@/i18n/routing';
+import { useLocale } from 'next-intl';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { routing } from '@/i18n/routing';
 import { useState, useTransition } from 'react';
 
@@ -21,12 +21,34 @@ export default function LocaleSwitcher() {
   const locale = useLocale();
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
   const [isOpen, setIsOpen] = useState(false);
 
+  function buildLocalizedPath(nextLocale: string) {
+    const currentPath = pathname || '/';
+    const unprefixedPath =
+      currentPath.replace(/^\/(fr|pt)(?=\/|$)/, '') || '/';
+
+    if (nextLocale === routing.defaultLocale) {
+      return unprefixedPath;
+    }
+
+    if (unprefixedPath === '/') {
+      return `/${nextLocale}`;
+    }
+
+    return `/${nextLocale}${unprefixedPath}`;
+  }
+
   function onSelectChange(nextLocale: string) {
     startTransition(() => {
-      router.replace(pathname, { locale: nextLocale });
+      const nextPath = buildLocalizedPath(nextLocale);
+      const query = searchParams.toString();
+      const target = query ? `${nextPath}?${query}` : nextPath;
+
+      document.cookie = `NEXT_LOCALE=${nextLocale}; path=/; max-age=31536000`;
+      router.replace(target);
       setIsOpen(false);
     });
   }

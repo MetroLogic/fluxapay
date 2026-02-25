@@ -61,7 +61,7 @@ export async function getPlans(): Promise<PlanPublic[]> {
   const plans = await prisma.plan.findMany({
     orderBy: { amount: "asc" },
   });
-  return plans.map((p) => ({
+  return plans.map((p: any) => ({
     id: p.id,
     name: p.name,
     slug: p.slug,
@@ -136,7 +136,6 @@ export async function createSubscription(params: {
     createAndDeliverWebhook(
       params.merchantId,
       "subscription_created",
-      sub.merchant.webhook_url,
       {
         event: "subscription.created",
         subscription_id: sub.id,
@@ -166,7 +165,7 @@ export async function getSubscriptionsDueForRenewal(): Promise<SubscriptionDue[]
     },
     include: { plan: true },
   });
-  return list.map((s) => ({
+  return list.map((s: any) => ({
     id: s.id,
     merchantId: s.merchantId,
     planId: s.planId,
@@ -216,7 +215,6 @@ export async function processBillingCycle(): Promise<ProcessBillingCycleResult> 
         await createAndDeliverWebhook(
           subscription.merchantId,
           "subscription_renewed",
-          subscription.merchant.webhook_url,
           {
             event: "subscription.renewed",
             subscription_id: subscription.id,

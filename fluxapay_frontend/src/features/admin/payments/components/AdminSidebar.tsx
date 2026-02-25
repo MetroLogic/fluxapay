@@ -16,6 +16,7 @@ import {
   Menu,
   X,
   ServerCog,
+  Scale,
   Zap,
 } from "lucide-react";
 
@@ -24,6 +25,7 @@ const navigation = [
   { name: "Merchants", href: "/admin/merchants", icon: Users },
   { name: "Payments", href: "/admin/payments", icon: CreditCard },
   { name: "Settlements", href: "/admin/settlements", icon: Wallet },
+  { name: "Reconciliation", href: "/admin/reconciliation", icon: Scale },
   { name: "Sweep", href: "/admin/sweep", icon: Zap },
   { name: "Webhooks", href: "/admin/webhooks", icon: Webhook },
   { name: "System", href: "/admin/system", icon: ServerCog },

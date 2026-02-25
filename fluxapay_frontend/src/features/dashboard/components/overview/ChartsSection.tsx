@@ -16,31 +16,9 @@ import {
     Legend,
 } from "recharts";
 import { cn } from "@/lib/utils";
+import { useDashboardDateRange } from "@/features/dashboard/context/DashboardDateRangeContext";
+import { useDashboardStats } from "@/hooks/useDashboardStats";
 
-const volumeData = [
-    { name: "Mon", value: 4000 },
-    { name: "Tue", value: 3000 },
-    { name: "Wed", value: 2000 },
-    { name: "Thu", value: 2780 },
-    { name: "Fri", value: 1890 },
-    { name: "Sat", value: 2390 },
-    { name: "Sun", value: 3490 },
-];
-
-const revenueData = [
-    { name: "Week 1", revenue: 12000 },
-    { name: "Week 2", revenue: 19000 },
-    { name: "Week 3", revenue: 15000 },
-    { name: "Week 4", revenue: 22000 },
-];
-
-const statusData = [
-    { name: "Successful", value: 850, color: "var(--color-chart-1)" }, // Using CSS variables from globals.css
-    { name: "Failed", value: 50, color: "var(--color-destructive)" },
-    { name: "Pending", value: 100, color: "var(--color-chart-2)" },
-];
-
-// Fallback colors if vars aren't ready, but they should be.
 const COLORS = ["#10b981", "#ef4444", "#f59e0b", "#3b82f6"];
 
 const ChartCard = ({
@@ -61,6 +39,51 @@ const ChartCard = ({
 };
 
 export const ChartsSection = () => {
+    const { dateRange } = useDashboardDateRange();
+    const { stats, isLoading, error } = useDashboardStats({
+        dateFrom: dateRange.from,
+        dateTo: dateRange.to,
+    });
+
+    const volumeData = stats?.volumeByDay ?? [
+        { name: "Mon", value: 0 },
+        { name: "Tue", value: 0 },
+        { name: "Wed", value: 0 },
+        { name: "Thu", value: 0 },
+        { name: "Fri", value: 0 },
+        { name: "Sat", value: 0 },
+        { name: "Sun", value: 0 },
+    ];
+    const revenueData = stats?.revenueByWeek ?? [
+        { name: "Week 1", revenue: 0 },
+        { name: "Week 2", revenue: 0 },
+        { name: "Week 3", revenue: 0 },
+        { name: "Week 4", revenue: 0 },
+    ];
+    const statusData = stats?.statusDistribution ?? [
+        { name: "Successful", value: 0, color: "var(--color-chart-1)" },
+        { name: "Failed", value: 0, color: "var(--color-destructive)" },
+        { name: "Pending", value: 0, color: "var(--color-chart-2)" },
+    ];
+
+    if (error) {
+        return (
+            <div className="rounded-xl border bg-card p-6 mt-4 text-destructive">
+                Failed to load charts. Please try again.
+            </div>
+        );
+    }
+
+    if (isLoading) {
+        return (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7 mt-4">
+                {[1, 2, 3].map((i) => (
+                    <div key={i} className="rounded-xl border bg-card p-6 h-[300px] animate-pulse lg:col-span-4" />
+                ))}
+            </div>
+        );
+    }
+
     return (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7 mt-4">
             {/* Payment Volume - Line Chart */}
@@ -148,7 +171,7 @@ export const ChartsSection = () => {
                             dataKey="value"
                         >
                             {statusData.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                <Cell key={`cell-${index}`} fill={entry.color || COLORS[index % COLORS.length]} />
                             ))}
                         </Pie>
                         <Tooltip
