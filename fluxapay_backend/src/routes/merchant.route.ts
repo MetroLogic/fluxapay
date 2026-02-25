@@ -18,10 +18,12 @@ import {
 import { validate } from "../middleware/validation.middleware";
 import * as merchantSchema from "../schemas/merchant.schema";
 import { authenticateToken } from "../middleware/auth.middleware";
+import { idempotencyMiddleware } from "../middleware/idempotency.middleware";
 import { authorizeAdmin } from "../middleware/admin.middleware";
 import { updateSettlementScheduleSchema, bankAccountSchema } from "../schemas/merchant.schema";
 
 const router = Router();
+
 
 /**
  * @swagger
@@ -61,7 +63,7 @@ const router = Router();
  *       400:
  *         description: Email or phone already exists
  */
-router.post("/signup", validate(merchantSchema.signupSchema), signupMerchant);
+router.post("/signup", idempotencyMiddleware, validate(merchantSchema.signupSchema), signupMerchant);
 
 /**
  * @swagger
@@ -121,7 +123,7 @@ router.post("/login", validate(merchantSchema.loginSchema), loginMerchant);
  *       400:
  *         description: Invalid or expired OTP
  */
-router.post("/verify-otp", validate(merchantSchema.verifyOtpSchema), verifyOtp);
+router.post("/verify-otp", idempotencyMiddleware, validate(merchantSchema.verifyOtpSchema), verifyOtp);
 /**
  * @swagger
  * /api/merchants/resend-otp:
@@ -149,7 +151,7 @@ router.post("/verify-otp", validate(merchantSchema.verifyOtpSchema), verifyOtp);
  *       404:
  *         description: Merchant not found
  */
-router.post("/resend-otp", validate(merchantSchema.resendOtpSchema), resendOtp);
+router.post("/resend-otp", idempotencyMiddleware, validate(merchantSchema.resendOtpSchema), resendOtp);
 
 /**
  * @swagger
