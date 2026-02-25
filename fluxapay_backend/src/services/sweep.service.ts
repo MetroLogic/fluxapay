@@ -28,8 +28,8 @@ export class SweepService {
         // Get USDC balance
         const usdcBalance = account.balances.find(b => b.asset_code === 'USDC' && b.asset_issuer === getEnv('USDC_ISSUER'))?.balance;
         if (!usdcBalance || parseFloat(usdcBalance) === 0) continue;
-        // Build transaction
-        const tx = new TransactionBuilder(account, {
+        // Build transaction: sweep USDC
+        const txBuilder = new TransactionBuilder(account, {
           fee: await server.fetchBaseFee(),
           networkPassphrase: Networks[getEnv('STELLAR_NETWORK')],
         })
@@ -37,9 +37,17 @@ export class SweepService {
             destination: TREASURY_ADDRESS,
             asset: USDC_ASSET,
             amount: usdcBalance,
-          }))
-          .setTimeout(60)
-          .build();
+          }));
+
+        // Optional: Account Merge to reclaim XLM reserve
+        const FUNDING_ADDRESS = getEnv('FUNDING_ADDRESS');
+        if (getEnv('ENABLE_ACCOUNT_MERGE') === 'true' && FUNDING_ADDRESS) {
+          txBuilder.addOperation(Operation.accountMerge({
+            destination: FUNDING_ADDRESS,
+          }));
+        }
+
+        const tx = txBuilder.setTimeout(60).build();
         tx.sign(keypair);
         // Submit transaction
         const result = await server.submitTransaction(tx);
