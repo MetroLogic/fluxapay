@@ -69,6 +69,21 @@ describe('PaymentService', () => {
     });
   });
 
+  describe('getRateLimitWindowSeconds', () => {
+    afterEach(() => {
+      delete process.env.PAYMENT_RATE_LIMIT_WINDOW_SECONDS;
+    });
+
+    it('should default to 60 seconds when not configured', () => {
+      expect(PaymentService.getRateLimitWindowSeconds()).toBe(60);
+    });
+
+    it('should use PAYMENT_RATE_LIMIT_WINDOW_SECONDS when set', () => {
+      process.env.PAYMENT_RATE_LIMIT_WINDOW_SECONDS = '120';
+      expect(PaymentService.getRateLimitWindowSeconds()).toBe(120);
+    });
+  });
+
   describe('createPayment', () => {
     it('should create payment with derived Stellar address', async () => {
       const mockStellarAddress = 'GTEST123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ123456789ABC';
