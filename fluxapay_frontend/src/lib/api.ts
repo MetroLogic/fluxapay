@@ -305,6 +305,21 @@ export const api = {
       }),
   },
 
+  // Payments (merchant-scoped payment link creation)
+  payments: {
+    create: (data: {
+      amount: number;
+      currency: string;
+      description?: string;
+      success_url?: string;
+      cancel_url?: string;
+    }) =>
+      fetchWithAuth("/api/payments", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+  },
+
   // Dashboard overview (metrics, charts, activity)
   dashboard: {
     overviewMetrics: (params?: { from?: string; to?: string }) => {
