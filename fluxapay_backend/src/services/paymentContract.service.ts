@@ -52,7 +52,7 @@ export class PaymentContractService {
                     where: { id: paymentId },
                     data: {
                         onchain_verified: true,
-                        contract_tx_hash: txResponse.hash,
+                        contract_tx_hash: txHash,
                         verification_error: null
                     }
                 });
