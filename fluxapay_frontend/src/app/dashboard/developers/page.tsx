@@ -172,7 +172,7 @@ print(response.json())`;
   };
 
   const getActiveRequest = () => {
-    const lang = activeTab === "rest" ? "curl" : activeTab as any;
+    const lang = activeTab === "rest" ? "curl" : (activeTab as "js" | "python");
     return activeEndpoint === "create" ? getCreatePaymentLines(lang) : getStatusPaymentLines(lang);
   };
 
