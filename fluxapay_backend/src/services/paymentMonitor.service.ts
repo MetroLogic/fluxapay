@@ -153,3 +153,33 @@ export async function runPaymentMonitorTick(): Promise<void> {
     }
   }
 }
+
+let monitorTimer: NodeJS.Timeout | null = null;
+
+/**
+ * Starts the payment monitor loop.
+ */
+export function startPaymentMonitor() {
+  const intervalMs = parseInt(process.env.PAYMENT_MONITOR_INTERVAL_MS || '120000', 10);
+  console.log(`[PaymentMonitor] Starting payment monitor loop (interval: ${intervalMs}ms)`);
+
+  // Run immediately
+  runPaymentMonitorTick().catch(err => console.error('[PaymentMonitor] Immediate tick failed:', err));
+
+  // Run on interval
+  monitorTimer = setInterval(() => {
+    runPaymentMonitorTick().catch(err => console.error('[PaymentMonitor] Tick failed:', err));
+  }, intervalMs);
+}
+
+/**
+ * Stops the payment monitor loop.
+ */
+export function stopPaymentMonitor() {
+  if (monitorTimer) {
+    clearInterval(monitorTimer);
+    monitorTimer = null;
+    console.log('[PaymentMonitor] Payment monitor loop stopped.');
+  }
+}
+

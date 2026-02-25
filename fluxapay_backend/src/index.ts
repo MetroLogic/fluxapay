@@ -1,6 +1,7 @@
 import { app } from "./app";
 import dotenv from "dotenv";
 import { startCronJobs } from "./services/cron.service";
+import { startPaymentMonitor } from "./services/paymentMonitor.service";
 
 dotenv.config();
 
@@ -12,5 +13,7 @@ app.listen(PORT, () => {
 
   // Start scheduled jobs (daily settlement batch, etc.)
   startCronJobs();
-});
 
+  // Start payment monitor loop
+  startPaymentMonitor();
+});
