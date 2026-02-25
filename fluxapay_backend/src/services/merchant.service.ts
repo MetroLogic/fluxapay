@@ -48,10 +48,12 @@ export async function signupMerchantService(data: {
   // Hash password
   const hashedPassword = await bcrypt.hash(password, 10);
 
-  // Generate API key
-  const apiKey = generateApiKey();
+  // Generate API key and derive hashed + last-four for storage
+  const rawApiKey = generateApiKey();
+  const apiKeyHashed = await hashKey(rawApiKey);
+  const apiKeyLastFour = getLastFour(rawApiKey);
 
-  // Create merchant
+  // Create merchant — never persist the raw key
   const merchant = await prisma.merchant.create({
     data: {
       business_name,
@@ -60,7 +62,8 @@ export async function signupMerchantService(data: {
       country,
       settlement_currency,
       password: hashedPassword,
-      api_key: apiKey,
+      api_key_hashed: apiKeyHashed,
+      api_key_last_four: apiKeyLastFour,
       settlement_schedule: settlement_schedule ?? 'daily',
       settlement_day: settlement_schedule === 'weekly' ? (settlement_day ?? null) : null,
     },
@@ -87,6 +90,7 @@ export async function signupMerchantService(data: {
   return {
     message: "Merchant registered. Verify OTP to activate.",
     merchantId: merchant.id,
+    apiKey: rawApiKey,
   };
 }
 
@@ -169,7 +173,7 @@ export async function getMerchantUserService(data: { merchantId: string }) {
       country: true,
       settlement_currency: true,
       status: true,
-      api_key: true,
+      api_key_last_four: true,
       webhook_url: true,
       created_at: true,
       updated_at: true,
@@ -180,7 +184,16 @@ export async function getMerchantUserService(data: { merchantId: string }) {
 
   if (!merchant) throw { status: 404, message: "Merchant not found" };
 
-  return { message: "Merchant found", merchant: merchant };
+  // Build a masked display key; never expose the raw key
+  const { api_key_last_four, ...rest } = merchant;
+  const maskedKey = api_key_last_four
+    ? `sk_live_****${api_key_last_four}`
+    : null;
+
+  return {
+    message: "Merchant found",
+    merchant: { ...rest, api_key_masked: maskedKey },
+  };
 }
 
 export async function rotateApiKeyService(data: { merchantId: string }) {
@@ -273,18 +286,22 @@ export async function regenerateApiKeyService(data: {
 }) {
   const { merchantId } = data;
 
-  // Generate new API key
-  const apiKey = generateApiKey();
+  const rawKey = generateApiKey();
+  const hashedKey = await hashKey(rawKey);
+  const lastFour = getLastFour(rawKey);
 
-  // Update merchant with new API key
   await prisma.merchant.update({
     where: { id: merchantId },
-    data: { api_key: apiKey },
+    data: {
+      api_key_hashed: hashedKey,
+      api_key_last_four: lastFour,
+    },
   });
 
   return {
-    message: "API key regenerated successfully",
-    api_key: apiKey
+    message:
+      "API key regenerated successfully. Store this key securely as it will not be shown again.",
+    apiKey: rawKey,
   };
 }
 

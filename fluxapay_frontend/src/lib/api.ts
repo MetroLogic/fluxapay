@@ -1,6 +1,50 @@
 // API Client for FluxaPay Backend
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
+export interface AuthSignupRequest {
+  name: string;
+  businessName: string;
+  email: string;
+  password: string;
+  country: string;
+  settlementCurrency: string;
+  accountNumber: string;
+  bankName: string;
+  bankCode: string;
+}
+
+export interface AuthLoginRequest {
+  email: string;
+  password: string;
+}
+
+export type RefundReason =
+  | "customer_request"
+  | "duplicate_payment"
+  | "failed_delivery"
+  | "merchant_request"
+  | "dispute_resolution";
+
+export interface InitiateRefundRequest {
+  paymentId: string;
+  merchantId: string;
+  amount: number;
+  currency: "USDC" | "XLM";
+  customerAddress: string;
+  reason: RefundReason;
+  reasonNote?: string;
+}
+
+export type RefundStatus = "initiated" | "processing" | "completed" | "failed";
+
+export interface ListRefundsParams {
+  paymentId?: string;
+  merchantId?: string;
+  status?: RefundStatus;
+  page?: number;
+  limit?: number;
+}
+
 class ApiError extends Error {
   constructor(
     public status: number,
@@ -51,7 +95,36 @@ function adminHeaders(): Record<string, string> {
   return headers;
 }
 
+function refundAdminKeyHeader(): Record<string, string> {
+  const header: Record<string, string> = {};
+  const adminApiKey = process.env.NEXT_PUBLIC_ADMIN_API_KEY;
+  if (adminApiKey) header["X-Admin-API-Key"] = adminApiKey;
+  return header;
+}
+
 export const api = {
+  // Authentication
+  auth: {
+    signup: (data: AuthSignupRequest) =>
+      fetch(`${API_BASE_URL}/api/v1/auth/signup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      }).then((res) => {
+        if (!res.ok) throw new ApiError(res.status, "Signup failed");
+        return res.json();
+      }),
+    login: (data: AuthLoginRequest) =>
+      fetch(`${API_BASE_URL}/api/v1/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      }).then((res) => {
+        if (!res.ok) throw new ApiError(res.status, "Login failed");
+        return res.json();
+      }),
+  },
+
   // Merchant endpoints
   merchant: {
     getMe: () => fetchWithAuth("/api/v1/merchants/me"),
@@ -151,6 +224,33 @@ export const api = {
           body: JSON.stringify(body),
         }),
     },
+  },
+
+  // Refunds (admin-authorized backend flow)
+  refunds: {
+    initiate: (data: InitiateRefundRequest) =>
+      fetchWithAuth("/api/refunds", {
+        method: "POST",
+        headers: refundAdminKeyHeader(),
+        body: JSON.stringify(data),
+      }),
+    list: (params?: ListRefundsParams) => {
+      const sp = new URLSearchParams();
+      if (params?.paymentId) sp.set("paymentId", params.paymentId);
+      if (params?.merchantId) sp.set("merchantId", params.merchantId);
+      if (params?.status) sp.set("status", params.status);
+      if (params?.page != null) sp.set("page", String(params.page));
+      if (params?.limit != null) sp.set("limit", String(params.limit));
+
+      const query = sp.toString();
+      return fetchWithAuth(`/api/refunds${query ? `?${query}` : ""}`, {
+        headers: refundAdminKeyHeader(),
+      });
+    },
+    getById: (refundId: string) =>
+      fetchWithAuth(`/api/refunds/${refundId}`, {
+        headers: refundAdminKeyHeader(),
+      }),
   },
 
   // Dashboard overview (metrics, charts, activity)

@@ -34,6 +34,7 @@ model Merchant {
   kyc                 MerchantKYC?
   webhookLogs         WebhookLog[]
   payments            Payment[]
+  invoices            Invoice[]
   webhook_secret      String?            @default(cuid())
   api_key_hashed      String?            @unique
   api_key_last_four   String?
@@ -247,6 +248,28 @@ model Payment {
   @@index([stellar_address])
 }
 
+model Invoice {
+  id             String        @id @default(cuid())
+  merchant       Merchant      @relation(fields: [merchantId], references: [id])
+  merchantId     String
+  invoice_number String        @unique
+  customer_name  String
+  customer_email String
+  line_items     Json
+  total_amount   Decimal       @db.Decimal(20, 2)
+  currency       String        @default("USD")
+  due_date       DateTime
+  notes          String?
+  status         InvoiceStatus @default(unpaid)
+  payment_link   String?
+  created_at     DateTime      @default(now())
+  updated_at     DateTime      @updatedAt
+
+  @@index([merchantId])
+  @@index([status])
+  @@index([due_date])
+}
+
 model Refund {
   id               String       @id @default(cuid())
   payment_id       String
@@ -303,6 +326,22 @@ model ReconciliationAlert {
   acknowledged_by  String?
   acknowledged_at  DateTime?
   created_at       DateTime                @default(now())
+}
+
+model AuditLog {
+  id          String          @id @default(cuid())
+  admin_id    String
+  action_type AuditActionType
+  entity_type AuditEntityType
+  entity_id   String
+  details     Json
+  created_at  DateTime        @default(now())
+
+  @@index([created_at])
+  @@index([admin_id])
+  @@index([action_type])
+  @@index([entity_id])
+  @@index([entity_type, entity_id])
 }
 
 // ─── Enums ────────────────────────────────────────────────────────────────────
@@ -396,6 +435,13 @@ enum PaymentStatus {
 }
 
 
+enum InvoiceStatus {
+  unpaid
+  pending
+  paid
+  overdue
+}
+
 enum RefundStatus {
   initiated
   processing
@@ -433,4 +479,23 @@ enum AlertSeverity {
   medium
   high
   critical
+}
+
+enum AuditActionType {
+  kyc_approve
+  kyc_reject
+  config_change
+  sweep_trigger
+  sweep_complete
+  sweep_fail
+  settlement_batch_initiate
+  settlement_batch_complete
+  settlement_batch_fail
+}
+
+enum AuditEntityType {
+  merchant_kyc
+  system_config
+  sweep_operation
+  settlement_batch
 }

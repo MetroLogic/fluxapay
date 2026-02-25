@@ -22,8 +22,9 @@ const router = Router();
  *               properties:
  *                 message:
  *                   type: string
- *                 api_key:
+ *                 apiKey:
  *                   type: string
+ *                   description: Raw key shown only once; store it securely
  *       401:
  *         description: Unauthorized
  */

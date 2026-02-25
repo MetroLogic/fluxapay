@@ -12,12 +12,12 @@ import { paymentContractService } from "./paymentContract.service";
  * Intended to be run on a schedule via cron.service (e.g. every 1–2 minutes).
  */
 
-const HORIZON_URL = process.env.STELLAR_HORIZON_URL || 'https://horizon-testnet.stellar.org';
-const USDC_ISSUER = process.env.USDC_ISSUER_PUBLIC_KEY || 'GBBD47IF6LWK7P7MDEVSCWT73IQIGCEZHR7OMXMBZQ3ZONN2T4U6W23Y';
-const USDC_ASSET = new Asset('USDC', USDC_ISSUER);
+const HORIZON_URL = () => process.env.STELLAR_HORIZON_URL || 'https://horizon-testnet.stellar.org';
+const USDC_ISSUER = () => process.env.USDC_ISSUER_PUBLIC_KEY || 'GBBD47IF6LWK7P7MDEVSCWT73IQIGCEZHR7OMXMBZQ3ZONN2T4U6W23Y';
+const getUsdcAsset = () => new Asset('USDC', USDC_ISSUER());
 
 const prisma = new PrismaClient();
-const server = new Horizon.Server(HORIZON_URL);
+const getServer = () => new Horizon.Server(HORIZON_URL());
 
 /**
  * Run one pass of the payment monitor: check for expired payments,
@@ -51,14 +51,14 @@ export async function runPaymentMonitorTick(): Promise<void> {
 
     try {
       // Fetch total USDC balance for cumulative payment handling
-      const account = await server.loadAccount(address);
+      const account = await getServer().loadAccount(address);
       const usdcBalanceRecord = account.balances.find((b: any) =>
-        'asset_code' in b && b.asset_code === 'USDC' && b.asset_issuer === USDC_ASSET.issuer
+        'asset_code' in b && b.asset_code === 'USDC' && b.asset_issuer === getUsdcAsset().issuer
       );
       const totalReceived = usdcBalanceRecord ? parseFloat(usdcBalanceRecord.balance) : 0;
 
       // Build the payments query with cursor support to find new transactions
-      let paymentsQuery = server.payments()
+      let paymentsQuery = getServer().payments()
         .forAccount(address)
         .order('desc')
         .limit(10);
@@ -85,7 +85,7 @@ export async function runPaymentMonitorTick(): Promise<void> {
         if (record.type === 'payment' &&
           record.asset_type === 'credit_alphanum4' &&
           record.asset_code === 'USDC' &&
-          record.asset_issuer === USDC_ASSET.issuer) {
+          record.asset_issuer === getUsdcAsset().issuer) {
 
           if (!latestTxHash) {
             latestTxHash = record.transaction_hash;
