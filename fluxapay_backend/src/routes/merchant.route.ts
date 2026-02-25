@@ -18,11 +18,9 @@ import {
 import { validate } from "../middleware/validation.middleware";
 import * as merchantSchema from "../schemas/merchant.schema";
 import { authenticateToken } from "../middleware/auth.middleware";
-indempotency-rate-limiting
 import { idempotencyMiddleware } from "../middleware/idempotency.middleware";
 import { authorizeAdmin } from "../middleware/admin.middleware";
 import { updateSettlementScheduleSchema, bankAccountSchema } from "../schemas/merchant.schema";
-main
 
 const router = Router();
 
