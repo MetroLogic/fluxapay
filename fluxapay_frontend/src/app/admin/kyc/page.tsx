@@ -37,7 +37,9 @@ const AdminKycPage = () => {
 
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [selectedMerchantId, setSelectedMerchantId] = useState<string | null>(null);
+  const [selectedMerchantId, setSelectedMerchantId] = useState<string | null>(
+    null,
+  );
   const [rejectionReason, setRejectionReason] = useState("");
   const [showRejectModal, setShowRejectModal] = useState(false);
 
@@ -45,9 +47,12 @@ const AdminKycPage = () => {
     status: statusFilter !== "all" ? statusFilter : undefined,
     limit: 100,
   });
-  const { application: selectedApplication } = useKycDetails(selectedMerchantId);
+  const { application: selectedApplication } =
+    useKycDetails(selectedMerchantId);
 
-  const getStatusConfig = (status: KycApplicationShape["status"]): StatusConfig => {
+  const getStatusConfig = (
+    status: KycApplicationShape["status"],
+  ): StatusConfig => {
     switch (status) {
       case "approved":
         return {
@@ -94,8 +99,8 @@ const AdminKycPage = () => {
 
   const handleUpdateStatus = async (
     merchantId: string,
-    newStatus: "approved" | "rejected",
-    rejection_reason?: string
+    newStatus: "approved" | "rejected" | "additional_info_required",
+    rejection_reason?: string,
   ) => {
     try {
       await api.kyc.admin.updateStatus(merchantId, {
@@ -118,7 +123,11 @@ const AdminKycPage = () => {
       toast.error("Please provide a reason for rejection");
       return;
     }
-    void handleUpdateStatus(selectedApplication.merchantId, "rejected", rejectionReason);
+    void handleUpdateStatus(
+      selectedApplication.merchantId,
+      "rejected",
+      rejectionReason,
+    );
   };
 
   const filteredApplications = applications.filter((app) => {
@@ -339,7 +348,9 @@ const AdminKycPage = () => {
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center gap-2">
                             <button
-                              onClick={() => setSelectedMerchantId(app.merchantId)}
+                              onClick={() =>
+                                setSelectedMerchantId(app.merchantId)
+                              }
                               className="px-3 py-1.5 text-sm font-medium text-white rounded-lg transition-colors hover:opacity-90 flex items-center gap-2"
                               style={{ backgroundColor: primaryColor }}
                             >
@@ -566,7 +577,10 @@ const AdminKycPage = () => {
                   </button>
                   <button
                     onClick={() =>
-                      handleUpdateStatus(selectedApplication.merchantId, "approved")
+                      handleUpdateStatus(
+                        selectedApplication.merchantId,
+                        "approved",
+                      )
                     }
                     className="px-6 py-2 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors shadow-sm"
                   >

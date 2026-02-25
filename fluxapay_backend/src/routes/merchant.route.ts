@@ -10,11 +10,12 @@ import {
   rotateApiKey,
   rotateWebhookSecret,
   updateSettlementSchedule,
+  addBankAccount,
 } from "../controllers/merchant.controller";
 import { validate } from "../middleware/validation.middleware";
 import * as merchantSchema from "../schemas/merchant.schema";
 import { authenticateToken } from "../middleware/auth.middleware";
-import { updateSettlementScheduleSchema } from "../schemas/merchant.schema";
+import { updateSettlementScheduleSchema, bankAccountSchema } from "../schemas/merchant.schema";
 
 const router = Router();
 
@@ -318,5 +319,53 @@ router.patch(
   updateSettlementSchedule,
 );
 
+
+/**
+ * @swagger
+ * /api/merchants/me/bank-account:
+ *   post:
+ *     summary: Add or update merchant bank account
+ *     tags: [Merchants]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - account_name
+ *               - account_number
+ *               - bank_name
+ *               - currency
+ *               - country
+ *             properties:
+ *               account_name:
+ *                 type: string
+ *               account_number:
+ *                 type: string
+ *               bank_name:
+ *                 type: string
+ *               bank_code:
+ *                 type: string
+ *               currency:
+ *                 type: string
+ *               country:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: Bank account saved successfully
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Merchant not found
+ */
+router.post(
+  "/me/bank-account",
+  authenticateToken,
+  validate(bankAccountSchema),
+  addBankAccount,
+);
 
 export default router;
