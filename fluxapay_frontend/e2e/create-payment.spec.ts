@@ -15,7 +15,7 @@ test.describe('Create payment link', () => {
 
   test('navigates to payments page', async ({ page }) => {
     await page.goto('/dashboard/payments');
-    await expect(page.getByText(/payments history/i).or(page.getByText(/payments/i))).toBeVisible({ timeout: 5000 });
+    await expect(page.getByRole('heading', { name: /payments/i })).toBeVisible({ timeout: 5000 });
   });
 
   test('create payment modal opens (mocked)', async ({ page }) => {
