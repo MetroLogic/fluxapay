@@ -1,8 +1,7 @@
 import { Request, Response } from "express";
-import { KYCStatus } from "../generated/client/enums";
+import { WebhookEventType, WebhookStatus, PrismaClient, KYCStatus, DocumentType } from "../generated/client";
 import { AuthRequest } from "../types/express";
 import { validateUserId } from "../helpers/request.helper";
-import { DocumentType } from "../generated/client/client";
 import {
   submitKycService,
   uploadKycDocumentService,
@@ -40,7 +39,7 @@ export async function uploadKycDocument(req: AuthRequest, res: Response) {
 
     const result = await uploadKycDocumentService(
       merchantId,
-      document_type as DocumentType,
+      document_type, // Assuming DocumentType is now imported via `WebhookEventType, WebhookStatus, PrismaClient` or inferred
       {
         buffer: req.file.buffer,
         originalname: req.file.originalname,

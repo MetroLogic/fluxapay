@@ -1,6 +1,6 @@
 import { Keypair, nativeToScVal, rpc, TransactionBuilder, Networks, Contract, xdr } from '@stellar/stellar-sdk';
 import { isDevEnv } from '../helpers/env.helper';
-import { PrismaClient } from '../generated/client';
+import { PrismaClient } from '../generated/client/client';
 
 const prisma = new PrismaClient();
 
@@ -52,7 +52,7 @@ export class PaymentContractService {
                     where: { id: paymentId },
                     data: {
                         onchain_verified: true,
-                        contract_tx_hash: (txResponse as any).hash || (txResponse as any).tx_hash || "",
+                        contract_tx_hash: (txResponse as any).hash || txHash,
                         verification_error: null
                     }
                 });
