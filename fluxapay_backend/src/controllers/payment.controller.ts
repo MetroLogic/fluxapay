@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { PrismaClient } from "../generated/client/client";
-import { PaymentService } from "../services/PaymentService";
+import { PaymentService } from "../services/payment.service";
 import { AuthRequest } from "../types/express";
 
 const prisma = new PrismaClient();
