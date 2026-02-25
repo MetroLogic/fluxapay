@@ -7,6 +7,21 @@ import * as yup from "yup";
 import Input from "@/components/Input";
 import { Button } from "@/components/Button";
 import { Link } from "@/i18n/routing";
+import { cn } from "@/lib/utils";
+import { api } from "@/lib/api";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { NG, KE } from "country-flag-icons/react/3x2";
+
+const COUNTRIES = [
+  { code: "NG", name: "Nigeria", currency: "NGN", Icon: NG },
+  { code: "KE", name: "Kenya", currency: "KES", Icon: KE },
+];
 
 const signupSchema = yup.object({
   name: yup.string().required("Name is required"),
@@ -19,6 +34,11 @@ const signupSchema = yup.object({
     .string()
     .min(6, "Password must be at least 6 characters")
     .required("Password is required"),
+  country: yup.string().required("Country is required"),
+  settlementCurrency: yup.string().required("Settlement currency is required"),
+  accountNumber: yup.string().required("Account number is required"),
+  bankName: yup.string().required("Bank name is required"),
+  bankCode: yup.string().required("Bank code is required"),
 });
 
 type SignUpFormData = yup.InferType<typeof signupSchema>;
@@ -29,6 +49,11 @@ const SignUpForm = () => {
     businessName: "",
     email: "",
     password: "",
+    country: "",
+    settlementCurrency: "",
+    accountNumber: "",
+    bankName: "",
+    bankCode: "",
   });
 
   const [errors, setErrors] = useState<{
@@ -36,6 +61,11 @@ const SignUpForm = () => {
     businessName?: string;
     email?: string;
     password?: string;
+    country?: string;
+    settlementCurrency?: string;
+    accountNumber?: string;
+    bankName?: string;
+    bankCode?: string;
   }>({});
 
   const [showPassword, setShowPassword] = useState(false);
@@ -57,6 +87,21 @@ const SignUpForm = () => {
     }
   };
 
+  const handleCountryChange = (value: string) => {
+    const selectedCountry = COUNTRIES.find((c) => c.code === value);
+    setFormData((prev) => ({
+      ...prev,
+      country: value,
+      settlementCurrency: selectedCountry?.currency || "",
+    }));
+
+    setErrors((prev) => ({
+      ...prev,
+      country: "",
+      settlementCurrency: "",
+    }));
+  };
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
@@ -68,9 +113,8 @@ const SignUpForm = () => {
       setErrors({});
       setIsSubmitting(true);
 
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      await api.auth.signup(validData);
 
-      console.log("Signup data:", validData);
       toast.success("Signup successful!");
     } catch (err) {
       if (err instanceof yup.ValidationError) {
@@ -79,6 +123,11 @@ const SignUpForm = () => {
           businessName?: string;
           email?: string;
           password?: string;
+          country?: string;
+          settlementCurrency?: string;
+          accountNumber?: string;
+          bankName?: string;
+          bankCode?: string;
         } = {};
 
         err.inner.forEach((issue) => {
@@ -91,7 +140,11 @@ const SignUpForm = () => {
         return;
       }
 
-      toast.error("Unable to create your account right now. Please try again.");
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Unable to create your account right now. Please try again.";
+      toast.error(message);
     } finally {
       setIsSubmitting(false);
     }
@@ -160,6 +213,76 @@ const SignUpForm = () => {
                   onChange={handleChange}
                   placeholder="you@example.com"
                   error={errors.email}
+                />
+              </div>
+
+              {/* Country & Currency */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Select
+                    value={formData.country}
+                    onValueChange={handleCountryChange}
+                  >
+                    <SelectTrigger className={cn(
+                      "w-full h-[46px] rounded-[10px] border px-4 text-sm bg-white focus:ring-2 focus:ring-[#5649DF] focus:border-[#5649DF]",
+                      errors.country ? "border-red-500" : "border-[#D9D9D9]"
+                    )}>
+                      <SelectValue placeholder="Select Country" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {COUNTRIES.map((country) => (
+                        <SelectItem key={country.code} value={country.code}>
+                          <div className="flex items-center gap-2">
+                            <country.Icon className="w-4 h-3" />
+                            <span>{country.name}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {errors.country && (
+                    <span className="text-xs text-red-500">{errors.country}</span>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Input
+                    type="text"
+                    name="settlementCurrency"
+                    value={formData.settlementCurrency}
+                    readOnly
+                    placeholder="Currency"
+                    error={errors.settlementCurrency}
+                    className="bg-slate-50 cursor-not-allowed"
+                  />
+                </div>
+              </div>
+
+              {/* Bank Details */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <Input
+                  type="text"
+                  name="bankName"
+                  value={formData.bankName}
+                  onChange={handleChange}
+                  placeholder="Bank Name"
+                  error={errors.bankName}
+                />
+                <Input
+                  type="text"
+                  name="bankCode"
+                  value={formData.bankCode}
+                  onChange={handleChange}
+                  placeholder="Bank Code"
+                  error={errors.bankCode}
+                />
+                <Input
+                  type="text"
+                  name="accountNumber"
+                  value={formData.accountNumber}
+                  onChange={handleChange}
+                  placeholder="Account Number"
+                  error={errors.accountNumber}
                 />
               </div>
 
