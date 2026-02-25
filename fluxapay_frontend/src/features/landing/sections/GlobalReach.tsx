@@ -7,7 +7,7 @@ const FlagItem = ({ country }: { country: string }) => {
   const Flag = (Flags as Record<string, React.ComponentType<{ title?: string; className?: string }>>)[country];
   if (!Flag) return null;
   return (
-    <div className="w-16 h-12 md:w-20 md:h-14 rounded-lg overflow-hidden shadow-sm flex-shrink-0">
+    <div className="w-16 h-12 md:w-20 md:h-14 rounded-lg overflow-hidden shadow-sm shrink-0">
       <Flag title={country} className="w-full h-full object-cover" />
     </div>
   );
@@ -25,7 +25,7 @@ export const GlobalReach = () => {
       <div className="container mx-auto px-4 max-w-7xl">
         <div className="flex flex-col lg:flex-row items-center justify-between gap-16">
           <div className="max-w-xl text-center lg:text-left">
-            <span className="inline-block px-4 py-1.5 rounded-full text-[13px] font-bold mb-8 bg-gradient-to-r from-[#FEE9A4] to-[#FAFAFA9E] border border-[#FEE9A4]">
+            <span className="inline-block px-4 py-1.5 rounded-full text-[13px] font-bold mb-8 bg-linear-to-r from-[#FEE9A4] to-[#FAFAFA9E] border border-[#FEE9A4]">
               Supercharged for 127+ countries 🚀
             </span>
             <h2 className="text-5xl md:text-6xl font-black text-[#2E3539] leading-[1.1] mb-6">
@@ -35,10 +35,10 @@ export const GlobalReach = () => {
             </h2>
           </div>
 
-          <div className="relative w-full lg:w-1/2 h-[300px] pointer-events-none">
+          <div className="relative w-full lg:w-1/2 h-75 pointer-events-none">
             {/* Top and Bottom Fading Masks */}
-            <div className="absolute top-0 left-0 right-0 h-24 bg-gradient-to-b from-[#FFFBEE] to-transparent z-10"></div>
-            <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-[#FFFBEE] to-transparent z-10"></div>
+            <div className="absolute top-0 left-0 right-0 h-24 bg-linear-to-b from-[#FFFBEE] to-transparent z-10"></div>
+            <div className="absolute bottom-0 left-0 right-0 h-24 bg-linear-to-t from-[#FFFBEE] to-transparent z-10"></div>
             
             <div className="grid grid-cols-4 gap-4 animate-scroll-vertical h-full">
               {/* Duplicate flags for infinite loop look or just a dense grid */}

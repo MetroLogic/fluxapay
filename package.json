@@ -5,6 +5,7 @@
     "yup": "^1.7.1"
   },
   "devDependencies": {
-    "@types/yup": "^0.29.14"
+    "@types/yup": "^0.29.14",
+    "tailwindcss": "^4.2.1"
   }
 }

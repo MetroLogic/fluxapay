@@ -1,0 +1,26 @@
+
+> fluxapay-backend@1.0.0 lint
+> eslint src/**/*.ts
+
+
+/Users/victor/Desktop/fluxapay/fluxapay_backend/src/helpers/controller.helper.ts
+   4:16  error    The `{}` ("empty object") type allows any non-nullish value, including literals like `0` and `""`.
+- If that's what you want, disable this lint rule with an inline comment or configure the 'allowObjectTypes' rule option.
+- If you want a type meaning "any object", you probably want `object` instead.
+- If you want a type meaning "any value", you probably want `unknown` instead  @typescript-eslint/no-empty-object-type
+   4:20  error    The `{}` ("empty object") type allows any non-nullish value, including literals like `0` and `""`.
+- If that's what you want, disable this lint rule with an inline comment or configure the 'allowObjectTypes' rule option.
+- If you want a type meaning "any object", you probably want `object` instead.
+- If you want a type meaning "any value", you probably want `unknown` instead  @typescript-eslint/no-empty-object-type
+  10:47  warning  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                   @typescript-eslint/no-explicit-any
+  17:19  warning  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                   @typescript-eslint/no-explicit-any
+
+/Users/victor/Desktop/fluxapay/fluxapay_backend/src/middleware/auth.middleware.ts
+   1:10  warning  'Request' is defined but never used  @typescript-eslint/no-unused-vars
+  22:12  warning  'err' is defined but never used      @typescript-eslint/no-unused-vars
+
+/Users/victor/Desktop/fluxapay/fluxapay_backend/src/services/email.service.ts
+  1:8  warning  'fetch' is defined but never used  @typescript-eslint/no-unused-vars
+
+✖ 7 problems (2 errors, 5 warnings)
+
