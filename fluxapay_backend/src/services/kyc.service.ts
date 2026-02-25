@@ -1,4 +1,4 @@
-import { PrismaClient, KYCStatus, DocumentType, BusinessType, GovernmentIdType } from "../generated/client/client";
+import { PrismaClient, KYCStatus, DocumentType, BusinessType, GovernmentIdType, Prisma } from "../generated/client/client";
 import { uploadToCloudinary, deleteFromCloudinary } from "./cloudinary.service";
 import { SubmitKycInput, UpdateKycStatusInput } from "../schemas/kyc.schema";
 import { logKycDecision } from "./audit.service";
@@ -277,7 +277,7 @@ export async function updateKycStatusService(
   const action = data.status === "approved" ? "approve" : "reject";
 
   // Use transaction to ensure atomicity
-  const result = await prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     // Update KYC status
     const updatedKyc = await tx.merchantKYC.update({
       where: { merchantId },
