@@ -40,6 +40,7 @@ model Merchant {
   api_key_last_four   String?
   bankAccount         BankAccount?
   subscriptions       MerchantSubscription[]
+  manualInterventions ManualIntervention[]
 }
 
 model Plan {
@@ -498,4 +499,31 @@ enum AuditEntityType {
   system_config
   sweep_operation
   settlement_batch
+}
+
+model ManualIntervention {
+  id               String                   @id @default(cuid())
+  merchant         Merchant                 @relation(fields: [merchantId], references: [id])
+  merchantId       String
+  issue_type       InterventionIssueType
+  description      String
+  status           InterventionStatus       @default(pending)
+  resolution_notes String?
+  resolved_at      DateTime?
+  created_at       DateTime                 @default(now())
+  updated_at       DateTime                 @updatedAt
+
+  @@index([merchantId])
+  @@index([status])
+}
+
+enum InterventionIssueType {
+  onchain_registration_failed
+  other
+}
+
+enum InterventionStatus {
+  pending
+  resolving
+  resolved
 }
