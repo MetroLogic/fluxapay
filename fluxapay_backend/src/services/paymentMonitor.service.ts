@@ -13,9 +13,20 @@ const server = new Horizon.Server(HORIZON_URL);
 async function monitorPayments() {
   while (true) {
     const now = new Date();
+
+    // 1. Check for expired payments (pending or partially_paid)
+    await prisma.payment.updateMany({
+      where: {
+        status: { in: ['pending', 'partially_paid'] },
+        expiration: { lte: now },
+      },
+      data: { status: 'expired' },
+    });
+
+    // 2. Monitor active payments
     const payments = await prisma.payment.findMany({
       where: {
-        status: 'pending',
+        status: { in: ['pending', 'partially_paid'] },
         expiration: { gt: now },
         stellar_address: { not: null },
       },
@@ -24,61 +35,92 @@ async function monitorPayments() {
     for (const payment of payments) {
       const address = payment.stellar_address;
       if (!address) continue;
-      
+
       try {
-        // Build the payments query with cursor support
+        // Fetch total USDC balance for cumulative payment handling
+        const account = await server.loadAccount(address);
+        const usdcBalanceRecord = account.balances.find((b: any) =>
+          'asset_code' in b && b.asset_code === 'USDC' && b.asset_issuer === USDC_ASSET.issuer
+        );
+        const totalReceived = usdcBalanceRecord ? parseFloat(usdcBalanceRecord.balance) : 0;
+
+        // Build the payments query with cursor support to find new transactions
         let paymentsQuery = server.payments()
           .forAccount(address)
           .order('desc')
           .limit(10);
-        
-        // If we have a last paging token, start from there to only get new transactions
+
         if (payment.last_paging_token) {
           paymentsQuery = paymentsQuery.cursor(payment.last_paging_token);
         }
-        
+
         const transactions = await paymentsQuery.call();
-        
-        // Track the latest paging token to avoid re-processing
         let latestPagingToken = payment.last_paging_token;
-        
+
+        // Process new transactions (if any) to find the latest valid payment
+        let latestTxHash: string | undefined;
+        let latestPayer: string | undefined;
+
         for (const record of transactions.records) {
-          // Update the latest paging token
           if (record.paging_token && (!latestPagingToken || record.paging_token > latestPagingToken)) {
             latestPagingToken = record.paging_token;
           }
-          
-          if (record.type !== 'payment') continue;
-          if (record.asset_type !== 'credit_alphanum4' || record.asset_code !== 'USDC') continue;
-          if (record.asset_issuer !== USDC_ASSET.issuer) continue;
-          
-          const amount = parseFloat(record.amount);
-          if (amount >= payment.amount) {
-            let status = 'paid';
-            if (amount > payment.amount) status = 'overpaid';
-            else if (amount < payment.amount) status = 'partially_paid';
-            
-            await prisma.payment.update({
-              where: { id: payment.id },
-              data: { 
-                status,
-                last_paging_token: latestPagingToken,
-                transaction_hash: record.transaction_hash,
-              },
-            });
-            break; // Payment processed, move to next payment
+
+          if (record.type === 'payment' &&
+            record.asset_type === 'credit_alphanum4' &&
+            record.asset_code === 'USDC' &&
+            record.asset_issuer === USDC_ASSET.issuer) {
+
+            if (!latestTxHash) {
+              latestTxHash = record.transaction_hash;
+              latestPayer = record.from;
+            }
           }
         }
-        
-        // Update the paging token even if no matching payment was found
-        if (latestPagingToken && latestPagingToken !== payment.last_paging_token) {
+
+        // Determine new status based on total balance
+        let newStatus: string | undefined;
+        const expectedAmount = Number(payment.amount);
+
+        if (totalReceived >= expectedAmount) {
+          newStatus = totalReceived > expectedAmount ? 'overpaid' : 'confirmed';
+        } else if (totalReceived > 0) {
+          newStatus = 'partially_paid';
+        }
+
+        // Update database if status changed or new activity detected
+        if (newStatus && (newStatus !== payment.status || latestTxHash)) {
+          await prisma.payment.update({
+            where: { id: payment.id },
+            data: {
+              status: newStatus,
+              last_paging_token: latestPagingToken,
+              ...(latestTxHash && { transaction_hash: latestTxHash }),
+            },
+          });
+
+          // Trigger Soroban verification on confirmation (using latest transaction)
+          if ((newStatus === 'confirmed' || newStatus === 'overpaid') && latestTxHash && latestPayer) {
+            const { sorobanService } = await import('./soroban.service');
+            sorobanService.verifyPaymentOnChain(
+              payment.id,
+              latestTxHash,
+              latestPayer,
+              totalReceived
+            ).catch(err => console.error(`Failed to verify payment ${payment.id} on Soroban:`, err));
+          }
+        } else if (latestPagingToken !== payment.last_paging_token) {
+          // Just update paging token if no status change
           await prisma.payment.update({
             where: { id: payment.id },
             data: { last_paging_token: latestPagingToken },
           });
         }
       } catch (e) {
-        console.error('Error checking address', address, e);
+        // Handle 404 meaning account doesn't exist yet (no payments received)
+        if ((e as any).response?.status !== 404) {
+          console.error('Error checking address', address, e);
+        }
       }
     }
     await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL));
