@@ -101,6 +101,7 @@ function adminFetch(endpoint: string, options: RequestInit = {}): Promise<Respon
     ...options,
     headers: { ...adminHeaders(), ...(options.headers as Record<string, string> || {}) },
   });
+}
 function refundAdminKeyHeader(): Record<string, string> {
   const header: Record<string, string> = {};
   const adminApiKey = process.env.NEXT_PUBLIC_ADMIN_API_KEY;
