@@ -20,6 +20,11 @@ export interface SweepOptions {
   adminId?: string;
   /** If true, don't submit transactions; just report what would be swept. */
   dryRun?: boolean;
+  /**
+   * If true, after sweeping USDC this will attempt an `accountMerge` back into the funder
+   * to recover the XLM reserve.
+   */
+  enableAccountMerge?: boolean;
 }
 
 export interface SweepResult {
@@ -88,23 +93,32 @@ export class SweepService {
     sourceSecret: string;
     destination: string;
     amount: string;
+    /** Optional destination to merge remaining XLM into after payment succeeds. */
+    mergeDestination?: string;
   }): Promise<string> {
     const sourceKeypair = Keypair.fromSecret(params.sourceSecret);
     const sourceAccount = await this.server.loadAccount(sourceKeypair.publicKey());
 
-    const tx = new TransactionBuilder(sourceAccount, {
+    const builder = new TransactionBuilder(sourceAccount, {
       fee: "100",
       networkPassphrase: this.networkPassphrase,
-    })
-      .addOperation(
-        Operation.payment({
-          destination: params.destination,
-          asset: this.usdcAsset,
-          amount: params.amount,
+    }).addOperation(
+      Operation.payment({
+        destination: params.destination,
+        asset: this.usdcAsset,
+        amount: params.amount,
+      }),
+    );
+
+    if (params.mergeDestination) {
+      builder.addOperation(
+        Operation.accountMerge({
+          destination: params.mergeDestination,
         }),
-      )
-      .setTimeout(30)
-      .build();
+      );
+    }
+
+    const tx = builder.setTimeout(30).build();
 
     tx.sign(sourceKeypair);
 
@@ -142,6 +156,17 @@ export class SweepService {
     let total = 0;
     let addressesSwept = 0;
 
+    const enableAccountMerge =
+      options.enableAccountMerge ?? process.env.SWEEP_ENABLE_ACCOUNT_MERGE === "true";
+
+    const mergeDestination = enableAccountMerge ? process.env.FUNDER_PUBLIC_KEY : undefined;
+
+    if (enableAccountMerge && !mergeDestination) {
+      console.warn(
+        "[Sweep] SWEEP_ENABLE_ACCOUNT_MERGE=true but FUNDER_PUBLIC_KEY is not set. Account merge will be skipped.",
+      );
+    }
+
     for (const p of payments) {
       try {
         const expected = Number(p.amount as any as Decimal);
@@ -171,6 +196,7 @@ export class SweepService {
           sourceSecret: kp.secretKey,
           destination: this.vaultKeypair.publicKey(),
           amount: amountStr,
+          mergeDestination,
         });
 
         await prisma.payment.update({
