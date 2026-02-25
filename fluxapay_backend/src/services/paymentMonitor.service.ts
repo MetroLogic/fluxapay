@@ -1,7 +1,8 @@
 // Payment Monitor Oracle
-import { Horizon, Asset } from '@stellar/stellar-sdk';
-import { PrismaClient } from '../generated/client/client';
+import { Horizon, Asset } from "@stellar/stellar-sdk";
+import { PrismaClient } from "../generated/client/client";
 import { Decimal } from "@prisma/client/runtime/library";
+import { paymentContractService } from "./paymentContract.service";
 
 /**
  * paymentMonitor.service.ts
@@ -62,11 +63,14 @@ export async function runPaymentMonitorTick(): Promise<void> {
         .order('desc')
         .limit(10);
 
+      // If we have a last paging token, start from there to only get new transactions
       if (payment.last_paging_token) {
         paymentsQuery = paymentsQuery.cursor(payment.last_paging_token);
       }
 
       const transactions = await paymentsQuery.call();
+
+      // Track the latest paging token to avoid re-processing
       let latestPagingToken = payment.last_paging_token;
 
       // Process new transactions (if any) to find the latest valid payment
@@ -105,21 +109,34 @@ export async function runPaymentMonitorTick(): Promise<void> {
         await prisma.payment.update({
           where: { id: payment.id },
           data: {
-            status: newStatus,
+            status: newStatus as any,
             last_paging_token: latestPagingToken,
             ...(latestTxHash && { transaction_hash: latestTxHash }),
           },
         });
 
-        // Trigger Soroban verification on confirmation (using latest transaction)
-        if ((newStatus === 'confirmed' || newStatus === 'overpaid') && latestTxHash && latestPayer) {
-          const { PaymentService } = await import('./payment.service');
-          PaymentService.verifyPayment(
+        // Trigger on-chain verification via Soroban contract
+        if ((newStatus === 'confirmed' || newStatus === 'overpaid') && latestTxHash) {
+          // Use the newer paymentContractService with retry logic
+          paymentContractService.verify_payment(
             payment.id,
             latestTxHash,
-            latestPayer,
-            totalReceived
-          ).catch(err => console.error(`[PaymentMonitor] Failed to verify payment ${payment.id} on Soroban:`, err));
+            totalReceived.toString()
+          ).catch((err) =>
+            console.error(
+              `[PaymentMonitor] Failed to initiate on-chain verification for payment ${payment.id}:`,
+              err
+            )
+          );
+
+          // Also emit internal event if needed by other services (like Webhook)
+          // We can import PaymentService dynamically to avoid circular dependency
+          const { PaymentService } = await import('./payment.service');
+          const updatedPayment = await prisma.payment.findUnique({ where: { id: payment.id } });
+          if (updatedPayment) {
+            const { eventBus, AppEvents } = await import('./EventService');
+            eventBus.emit(AppEvents.PAYMENT_CONFIRMED, updatedPayment);
+          }
         }
       } else if (latestPagingToken && latestPagingToken !== payment.last_paging_token) {
         // Just update paging token if no status change

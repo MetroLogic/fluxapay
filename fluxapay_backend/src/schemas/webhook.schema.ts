@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 export const webhookEventTypes = [
   'payment_completed',
+  'payment_confirmed',
   'payment_failed',
   'payment_pending',
   'refund_completed',

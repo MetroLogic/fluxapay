@@ -1,5 +1,6 @@
 import { PrismaClient, PaymentStatus } from "../generated/client/client";
 import { v4 as uuidv4 } from 'uuid';
+import { createAndDeliverWebhook, generateMerchantPayload } from './webhook.service';
 import { HDWalletService } from './HDWalletService';
 import { StellarService } from './StellarService';
 import { sorobanService } from './SorobanService';
@@ -66,7 +67,7 @@ export class PaymentService {
         currency,
         customer_email,
         merchantId,
-        metadata: metadata ?? {},
+        metadata: (metadata ?? {}) as any,
         expiration,
         status: 'pending',
         checkout_url,
@@ -111,7 +112,7 @@ export class PaymentService {
     const payment = await prisma.payment.update({
       where: { id: paymentId },
       data: {
-        status: 'confirmed' as PaymentStatus,
+        status: 'confirmed',
         transaction_hash: transactionHash,
         payer_address: payerAddress,
         confirmed_at: new Date(),
