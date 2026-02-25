@@ -14,6 +14,7 @@ import paymentRoutes from "./routes/payment.route";
 import keysRoutes from "./routes/keys.route";
 import refundRoutes from "./routes/refund.route";
 import invoiceRoutes from "./routes/invoice.route";
+import auditRoutes from "./routes/audit.route";
 
 const app = express();
 const prisma = new PrismaClient();
@@ -38,6 +39,7 @@ app.use("/v1/payments", paymentRoutes); // Standard API path
 app.use("/api/v1/keys", keysRoutes);
 app.use("/api/refunds", refundRoutes);
 app.use("/api/invoices", invoiceRoutes);
+app.use("/api/admin", auditRoutes);
 
 // Basic health check
 app.get("/health", (req, res) => {
