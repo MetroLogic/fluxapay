@@ -58,6 +58,6 @@ test.describe('Checkout flow', () => {
     );
 
     await page.goto('/pay/unknown_id');
-    await expect(page.getByText(/payment not found/i)).toBeVisible({ timeout: 5000 });
+    await expect(page.getByRole('heading', { name: /payment not found/i })).toBeVisible({ timeout: 5000 });
   });
 });
