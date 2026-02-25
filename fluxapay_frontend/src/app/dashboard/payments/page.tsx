@@ -19,6 +19,7 @@ import { Download, Plus } from "lucide-react";
 import { Suspense } from "react";
 import toast from "react-hot-toast";
 import { api } from "@/lib/api";
+import { QRCodeCanvas } from "qrcode.react";
 
 interface BackendRefund {
   id: string;
@@ -53,7 +54,20 @@ function PaymentsContent() {
   const [linkAmount, setLinkAmount] = useState("100");
   const [linkCurrency, setLinkCurrency] = useState("USD");
   const [linkDescription, setLinkDescription] = useState("Invoice payment");
+  const [linkSuccessUrl, setLinkSuccessUrl] = useState("");
+  const [linkCancelUrl, setLinkCancelUrl] = useState("");
   const [generatedLink, setGeneratedLink] = useState("");
+  const [isGeneratingLink, setIsGeneratingLink] = useState(false);
+  const [recentLinks, setRecentLinks] = useState<
+    {
+      id: string;
+      url: string;
+      amount: number;
+      currency: string;
+      description?: string;
+      createdAt: string;
+    }[]
+  >([]);
 
   const filteredPayments = useMemo(() => {
     return MOCK_PAYMENTS.filter((payment) => {
@@ -136,15 +150,71 @@ function PaymentsContent() {
     }
   };
 
-  const handleGenerateLink = () => {
-    const paymentId = `PAY-${Date.now()}`;
-    const link = `${window.location.origin}/pay/${paymentId}`;
-    setGeneratedLink(link);
+  const handleGenerateLink = async () => {
+    const amountNumber = Number(linkAmount);
+    if (!amountNumber || amountNumber <= 0) {
+      toast.error("Please enter a valid amount.");
+      return;
+    }
+
+    setIsGeneratingLink(true);
+    try {
+      const payload = {
+        amount: amountNumber,
+        currency: linkCurrency,
+        description: linkDescription || undefined,
+        success_url: linkSuccessUrl || undefined,
+        cancel_url: linkCancelUrl || undefined,
+      };
+
+      const response = (await api.payments.create(payload)) as {
+        payment?: {
+          id: string;
+          checkoutUrl?: string;
+          checkout_url?: string;
+          status?: string;
+        };
+      };
+
+      const payment = response?.payment;
+      if (!payment?.id) {
+        throw new Error("Payment link could not be created.");
+      }
+
+      const url =
+        payment.checkoutUrl ??
+        payment.checkout_url ??
+        `${window.location.origin}/pay/${payment.id}`;
+
+      setGeneratedLink(url);
+      setRecentLinks((prev) => [
+        {
+          id: payment.id,
+          url,
+          amount: amountNumber,
+          currency: linkCurrency,
+          description: linkDescription || undefined,
+          createdAt: new Date().toISOString(),
+        },
+        ...prev,
+      ].slice(0, 5));
+
+      toast.success("Payment link created successfully.");
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Unable to create payment link. Please try again.";
+      toast.error(message);
+    } finally {
+      setIsGeneratingLink(false);
+    }
   };
 
   const handleCopyLink = async () => {
     if (!generatedLink) return;
     await navigator.clipboard.writeText(generatedLink);
+    toast.success("Payment link copied to clipboard.");
   };
 
   const handleInitiateRefund = async (payload: {
@@ -223,6 +293,49 @@ function PaymentsContent() {
       </div>
 
       <div className="bg-card rounded-2xl border p-6 shadow-sm">
+        {recentLinks.length > 0 && (
+          <div className="mb-6 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-semibold">Recent payment links</h3>
+                <p className="text-xs text-muted-foreground">
+                  Links you've generated in this session.
+                </p>
+              </div>
+            </div>
+            <div className="space-y-2">
+              {recentLinks.map((link) => (
+                <div
+                  key={link.id}
+                  className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 rounded-md border border-border bg-muted/40 px-3 py-2"
+                >
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium break-all">
+                      {link.url}
+                    </p>
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      {link.amount} {link.currency}
+                      {link.description ? ` • ${link.description}` : ""} •{" "}
+                      {new Date(link.createdAt).toLocaleString()}
+                    </p>
+                  </div>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="shrink-0 mt-1 sm:mt-0"
+                    onClick={async () => {
+                      await navigator.clipboard.writeText(link.url);
+                      toast.success("Payment link copied to clipboard.");
+                    }}
+                  >
+                    Copy
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         <PaymentsFilters
           onSearchChange={setSearch}
           onStatusChange={setStatusFilter}
@@ -307,10 +420,38 @@ function PaymentsContent() {
               className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
             />
           </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium">
+              Success URL (optional)
+            </label>
+            <input
+              type="url"
+              value={linkSuccessUrl}
+              onChange={(e) => setLinkSuccessUrl(e.target.value)}
+              placeholder="https://your-site.com/checkout/success"
+              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium">
+              Cancel URL (optional)
+            </label>
+            <input
+              type="url"
+              value={linkCancelUrl}
+              onChange={(e) => setLinkCancelUrl(e.target.value)}
+              placeholder="https://your-site.com/checkout/cancel"
+              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+            />
+          </div>
 
           <div className="flex gap-2">
-            <Button className="flex-1" onClick={handleGenerateLink}>
-              Generate Link
+            <Button
+              className="flex-1"
+              onClick={handleGenerateLink}
+              disabled={isGeneratingLink}
+            >
+              {isGeneratingLink ? "Generating..." : "Generate Link"}
             </Button>
             <Button
               className="flex-1"
@@ -323,8 +464,20 @@ function PaymentsContent() {
           </div>
 
           {generatedLink ? (
-            <div className="rounded-md border border-border bg-muted p-3 text-xs break-all">
-              {generatedLink}
+            <div className="space-y-3">
+              <div className="rounded-md border border-border bg-muted p-3 text-xs break-all">
+                {generatedLink}
+              </div>
+              <div className="flex justify-center">
+                <div className="bg-background rounded-lg p-3 border">
+                  <QRCodeCanvas
+                    value={generatedLink}
+                    size={160}
+                    level="M"
+                    includeMargin
+                  />
+                </div>
+              </div>
             </div>
           ) : null}
 
