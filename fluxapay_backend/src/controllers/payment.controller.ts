@@ -96,7 +96,7 @@ export const getPayments = async (req: Request, res: Response) => {
         orderBy: { [sortBy]: sortOrder }
       });
       const header = "ID,OrderID,Amount,Currency,Status,Email,Date\n";
-      const csv = payments.map((p: { id: string, order_id?: string, amount: any, currency: string, status: string, customer_email: string, createdAt: Date }) =>
+      const csv = payments.map((p) =>
         `${p.id},${p.order_id || ''},${p.amount},${p.currency},${p.status},${p.customer_email},${p.createdAt}`
       ).join("\n");
       res.setHeader("Content-Type", "text/csv");

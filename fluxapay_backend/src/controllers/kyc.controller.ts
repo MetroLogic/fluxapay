@@ -1,5 +1,5 @@
-import { Request, Response } from "express";
-import { WebhookEventType, WebhookStatus, PrismaClient, KYCStatus, DocumentType } from "../generated/client";
+import { Response } from "express";
+import { KYCStatus } from "../generated/client";
 import { AuthRequest } from "../types/express";
 import { validateUserId } from "../helpers/request.helper";
 import {
@@ -17,7 +17,7 @@ import {
 export async function submitKyc(req: AuthRequest, res: Response) {
   try {
     const merchantId = await validateUserId(req);
-    const result = await submitKycService(merchantId, (req as any).body);
+    const result = await submitKycService(merchantId, (req as unknown as any).body);
     res.status(200).json(result);
   } catch (err: unknown) {
     console.error(err);
@@ -32,20 +32,20 @@ export async function submitKyc(req: AuthRequest, res: Response) {
 export async function uploadKycDocument(req: AuthRequest, res: Response) {
   try {
     const merchantId = await validateUserId(req);
-    const { document_type } = (req as any).body;
+    const { document_type } = (req as unknown as any).body;
 
-    if (!(req as any).file) {
+    if (!(req as unknown as any).file) {
       return res.status(400).json({ message: "No file uploaded" });
     }
 
     const result = await uploadKycDocumentService(
       merchantId,
-      document_type, // Assuming DocumentType is now imported via `WebhookEventType, WebhookStatus, PrismaClient` or inferred
+      document_type as any,
       {
-        buffer: (req as any).file.buffer,
-        originalname: (req as any).file.originalname,
-        mimetype: (req as any).file.mimetype,
-        size: (req as any).file.size,
+        buffer: (req as unknown as any).file.buffer,
+        originalname: (req as unknown as any).file.originalname,
+        mimetype: (req as unknown as any).file.mimetype,
+        size: (req as unknown as any).file.size,
       }
     );
     res.status(200).json(result);
@@ -77,11 +77,11 @@ export async function getKycStatus(req: AuthRequest, res: Response) {
 export async function updateKycStatus(req: AuthRequest, res: Response) {
   try {
     const reviewerId = await validateUserId(req);
-    const { merchantId } = (req as any).params;
+    const { merchantId } = (req as unknown as any).params;
     if (!merchantId || typeof merchantId !== "string") {
       return res.status(400).json({ message: "Invalid merchant ID" });
     }
-    const result = await updateKycStatusService(merchantId, (req as any).body, reviewerId);
+    const result = await updateKycStatusService(merchantId, (req as unknown as any).body, reviewerId);
     res.status(200).json(result);
   } catch (err: unknown) {
     console.error(err);
@@ -95,7 +95,7 @@ export async function updateKycStatus(req: AuthRequest, res: Response) {
  */
 export async function getAllKycSubmissions(req: AuthRequest, res: Response) {
   try {
-    const { status, page = "1", limit = "10" } = (req as any).query;
+    const { status, page = "1", limit = "10" } = (req as unknown as any).query;
     const result = await getAllKycSubmissionsService(
       status as KYCStatus | undefined,
       parseInt(page as string),
@@ -114,7 +114,7 @@ export async function getAllKycSubmissions(req: AuthRequest, res: Response) {
  */
 export async function getKycDetailsByMerchantId(req: AuthRequest, res: Response) {
   try {
-    const { merchantId } = (req as any).params;
+    const { merchantId } = (req as unknown as any).params;
     if (!merchantId || typeof merchantId !== "string") {
       return res.status(400).json({ message: "Invalid merchant ID" });
     }
