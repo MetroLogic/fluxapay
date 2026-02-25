@@ -3,6 +3,14 @@ import { Horizon, Asset } from '@stellar/stellar-sdk';
 import { PrismaClient } from '../generated/client/client';
 import { Decimal } from "@prisma/client/runtime/library";
 
+/**
+ * paymentMonitor.service.ts
+ *
+ * Automated on-chain payment detection: polls Stellar Horizon for incoming
+ * USDC payments to payment addresses and updates Payment status (confirmed / overpaid / partially_paid).
+ * Intended to be run on a schedule via cron.service (e.g. every 1–2 minutes).
+ */
+
 const HORIZON_URL = process.env.STELLAR_HORIZON_URL || 'https://horizon-testnet.stellar.org';
 const USDC_ISSUER = process.env.USDC_ISSUER_PUBLIC_KEY || 'GBBD47IF6LWK7P7MDEVSCWT73IQIGCEZHR7OMXMBZQ3ZONN2T4U6W23Y';
 const USDC_ASSET = new Asset('USDC', USDC_ISSUER);
@@ -13,8 +21,7 @@ const server = new Horizon.Server(HORIZON_URL);
 /**
  * Run one pass of the payment monitor: check for expired payments,
  * fetch all pending or partially paid, check for incoming USDC,
- * and update status (confirmed / overpaid / partially_paid).
- * Safe to call repeatedly from a cron job.
+ * and update status. Safe to call repeatedly from a cron job.
  */
 export async function runPaymentMonitorTick(): Promise<void> {
   const now = new Date();
