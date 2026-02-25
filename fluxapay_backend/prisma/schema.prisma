@@ -5,7 +5,8 @@
 // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
 
 generator client {
-  provider = "prisma-client"
+  provider = "prisma-client-js"
+
   output   = "../src/generated/client"
 }
 
@@ -27,7 +28,9 @@ model Merchant {
   created_at         DateTime @default(now())
   updated_at         DateTime @updatedAt
   otps               OTP[]
+  payments           Payment[]
 }
+
 
 model OTP {
   id          String   @id @default(cuid())
@@ -49,4 +52,48 @@ enum MerchantStatus {
 enum OTPChannel {
   email
   phone
+}
+
+model Payment {
+  id               String   @id @default(cuid())
+  merchant         Merchant @relation(fields: [merchantId], references: [id])
+  merchantId       String
+  order_id         String?
+  amount           Float
+  currency         String
+  customer_email   String
+  status           String   @default("pending")
+  timeline         Json?
+  metadata         Json?
+  success_url      String?
+  cancel_url       String?
+  transaction_hash String?
+  settlement       Settlement? @relation(fields: [settlementId], references: [id])
+  settlementId     String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model Settlement {
+  id          String   @id @default(cuid())
+  merchant_id String
+  amount      Float
+  currency    String
+  status      String
+  payments    Payment[]
+  createdAt   DateTime @default(now())
+}
+
+model IdempotencyRecord {
+
+  id              String   @id @default(cuid())
+  idempotency_key String   @unique
+  user_id         String?
+  request_hash    String   // To detect if the body changed for the same key
+  response_code   Int
+  response_body   Json
+  created_at      DateTime @default(now())
+
+  @@index([user_id])
+  @@index([idempotency_key])
 }
