@@ -1,5 +1,5 @@
 import { LoginForm } from "@/features/auth";
 
-export default function LoginPage() {
+export default function LocalizedLoginPage() {
   return <LoginForm />;
 }

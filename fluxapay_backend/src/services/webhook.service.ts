@@ -1,5 +1,6 @@
 import { PrismaClient, WebhookEventType, WebhookStatus } from "../generated/client/client";
-import { webhookEventTypes } from "../schemas/webhook.schema";
+
+import { eventBus, AppEvents } from "./EventService";
 
 const prisma = new PrismaClient();
 
@@ -169,6 +170,11 @@ export async function retryWebhookService(params: RetryWebhookParams) {
     throw { status: 404, message: "Webhook log not found" };
   }
 
+  const merchant = await prisma.merchant.findUnique({
+    where: { id: merchantId },
+    select: { webhook_secret: true },
+  });
+
   if (log.status === "delivered") {
     throw { status: 400, message: "Webhook already delivered successfully" };
   }
@@ -176,11 +182,12 @@ export async function retryWebhookService(params: RetryWebhookParams) {
   // Attempt to deliver the webhook
   const result = await deliverWebhook(
     log.endpoint_url,
-    log.request_payload as Record<string, any>
+    log.request_payload as Record<string, any>,
+    merchant?.webhook_secret || undefined
   );
 
   const newRetryCount = log.retry_count + 1;
-  const newStatus: WebhookStatus = result.success ? "delivered" : 
+  const newStatus: WebhookStatus = result.success ? "delivered" :
     newRetryCount >= log.max_retries ? "failed" : "retrying";
 
   // Create retry attempt record
@@ -195,7 +202,7 @@ export async function retryWebhookService(params: RetryWebhookParams) {
   });
 
   // Calculate next retry time with exponential backoff
-  const nextRetryAt = newStatus === "retrying" 
+  const nextRetryAt = newStatus === "retrying"
     ? new Date(Date.now() + Math.pow(2, newRetryCount) * 60 * 1000) // exponential backoff in minutes
     : null;
 
@@ -212,8 +219,8 @@ export async function retryWebhookService(params: RetryWebhookParams) {
   });
 
   return {
-    message: result.success 
-      ? "Webhook retry successful" 
+    message: result.success
+      ? "Webhook retry successful"
       : `Webhook retry failed${newStatus === "retrying" ? ", will retry again" : ""}`,
     data: {
       id: updatedLog.id,
@@ -252,7 +259,7 @@ export async function sendTestWebhookService(params: SendTestWebhookParams) {
   });
 
   // Attempt to deliver the webhook
-  const result = await deliverWebhook(endpoint_url, testPayload);
+  const result = await deliverWebhook(endpoint_url, testPayload, merchant.webhook_secret || undefined);
 
   const status: WebhookStatus = result.success ? "delivered" : "failed";
 
@@ -267,8 +274,8 @@ export async function sendTestWebhookService(params: SendTestWebhookParams) {
   });
 
   return {
-    message: result.success 
-      ? "Test webhook delivered successfully" 
+    message: result.success
+      ? "Test webhook delivered successfully"
       : "Test webhook delivery failed",
     data: {
       id: updatedLog.id,
@@ -286,7 +293,8 @@ export async function sendTestWebhookService(params: SendTestWebhookParams) {
 // Helper function to deliver webhook
 async function deliverWebhook(
   endpointUrl: string,
-  payload: Record<string, any>
+  payload: Record<string, any>,
+  secret?: string
 ): Promise<{
   success: boolean;
   httpStatus?: number;
@@ -301,7 +309,7 @@ async function deliverWebhook(
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-Webhook-Signature": generateWebhookSignature(payload),
+        "X-Webhook-Signature": generateWebhookSignature(payload, secret),
         "X-Webhook-Timestamp": new Date().toISOString(),
       },
       body: JSON.stringify(payload),
@@ -327,9 +335,9 @@ async function deliverWebhook(
 
 // Helper function to generate webhook signature
 import crypto from "crypto";
-function generateWebhookSignature(payload: Record<string, unknown>): string {
-  const secret = process.env.WEBHOOK_SECRET || "webhook-secret";
-  const hmac = crypto.createHmac("sha256", secret);
+function generateWebhookSignature(payload: Record<string, unknown>, secret?: string): string {
+  const signingSecret = secret || process.env.WEBHOOK_SECRET || "webhook-secret";
+  const hmac = crypto.createHmac("sha256", signingSecret);
   hmac.update(JSON.stringify(payload));
   return hmac.digest("hex");
 }
@@ -421,25 +429,35 @@ function generateTestPayload(
 export async function createAndDeliverWebhook(
   merchantId: string,
   eventType: WebhookEventType,
-  endpointUrl: string,
   payload: Record<string, any>,
   paymentId?: string
 ) {
+  // Fetch merchant to get webhook URL and secret
+  const merchant = await prisma.merchant.findUnique({
+    where: { id: merchantId },
+    select: { webhook_url: true, webhook_secret: true },
+  });
+
+  if (!merchant || !merchant.webhook_url) {
+    console.warn(`Webhook not sent: Merchant ${merchantId} has no webhook URL.`);
+    return null;
+  }
+
   const webhookLog = await prisma.webhookLog.create({
     data: {
       merchantId,
       event_type: eventType,
-      endpoint_url: endpointUrl,
+      endpoint_url: merchant.webhook_url,
       request_payload: payload,
       payment_id: paymentId,
       status: "pending",
     },
   });
 
-  const result = await deliverWebhook(endpointUrl, payload);
+  const result = await deliverWebhook(merchant.webhook_url, payload, merchant.webhook_secret || undefined);
   const status: WebhookStatus = result.success ? "delivered" : "retrying";
 
-  const nextRetryAt = status === "retrying" 
+  const nextRetryAt = status === "retrying"
     ? new Date(Date.now() + 60 * 1000) // First retry in 1 minute
     : null;
 
@@ -455,3 +473,31 @@ export async function createAndDeliverWebhook(
 
   return webhookLog;
 }
+
+// Listen for internal events
+eventBus.on(AppEvents.PAYMENT_CONFIRMED, async (payment) => {
+  try {
+    const merchant = await prisma.merchant.findUnique({
+      where: { id: payment.merchant_id }
+    });
+
+    if (merchant && merchant.status === 'active') {
+      await createAndDeliverWebhook(
+        payment.merchant_id,
+        'payment_completed',
+        {
+          event: 'payment.confirmed',
+          payment_id: payment.payment_id,
+          amount: payment.amount.toString(),
+          currency: payment.currency,
+          status: 'confirmed',
+          transaction_hash: payment.transaction_hash,
+          confirmed_at: payment.confirmed_at
+        },
+        payment.payment_id
+      );
+    }
+  } catch (error) {
+    console.error('Error handling payment.confirmed event in Webhook Service:', error);
+  }
+});

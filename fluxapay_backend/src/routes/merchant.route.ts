@@ -9,10 +9,12 @@ import {
   updateMerchantWebhook,
   rotateApiKey,
   rotateWebhookSecret,
+  updateSettlementSchedule,
 } from "../controllers/merchant.controller";
 import { validate } from "../middleware/validation.middleware";
 import * as merchantSchema from "../schemas/merchant.schema";
 import { authenticateToken } from "../middleware/auth.middleware";
+import { updateSettlementScheduleSchema } from "../schemas/merchant.schema";
 
 const router = Router();
 
@@ -275,5 +277,46 @@ router.post(
   authenticateToken,
   rotateWebhookSecret,
 );
+
+/**
+ * @swagger
+ * /api/merchants/me/settlement-schedule:
+ *   patch:
+ *     summary: Update merchant settlement schedule
+ *     tags: [Merchants]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - settlement_schedule
+ *             properties:
+ *               settlement_schedule:
+ *                 type: string
+ *                 enum: [daily, weekly]
+ *               settlement_day:
+ *                 type: integer
+ *                 minimum: 0
+ *                 maximum: 6
+ *                 description: "0=Sun, 1=Mon … 6=Sat. Required when schedule is weekly."
+ *     responses:
+ *       200:
+ *         description: Schedule updated
+ *       400:
+ *         description: Validation error (e.g. missing settlement_day for weekly)
+ *       401:
+ *         description: Unauthorized
+ */
+router.patch(
+  "/me/settlement-schedule",
+  authenticateToken,
+  validate(updateSettlementScheduleSchema),
+  updateSettlementSchedule,
+);
+
 
 export default router;

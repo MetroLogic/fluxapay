@@ -7,12 +7,18 @@ const prisma = new PrismaClient();
 
 export const createPayment = async (req: Request, res: Response) => {
   try {
-    const { order_id, amount, currency, customer_email, metadata } = req.body;
+    const { order_id, amount, currency, customer_email, metadata, success_url, cancel_url } = req.body;
     const authReq = req as AuthRequest;
     const merchantId = authReq.merchantId;
 
     if (!merchantId) {
       return res.status(401).json({ error: "Unauthorized: Merchant ID missing" });
+    }
+
+    const isWithinRateLimit = await PaymentService.checkRateLimit(merchantId);
+    if (!isWithinRateLimit) {
+      res.setHeader("Retry-After", "60");
+      return res.status(429).json({ error: "Rate limit exceeded. Please try again later." });
     }
 
     // Use PaymentService to create payment with derived Stellar address
@@ -22,6 +28,8 @@ export const createPayment = async (req: Request, res: Response) => {
       currency,
       customer_email,
       metadata: metadata || {},
+      success_url,
+      cancel_url,
     });
 
     // Update with order_id and timeline if provided

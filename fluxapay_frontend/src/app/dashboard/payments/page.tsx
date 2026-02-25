@@ -1,102 +1,249 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { MOCK_PAYMENTS, Payment } from "@/features/dashboard/payments/payments-mock";
+import { useRouter, useSearchParams } from "next/navigation";
+import {
+  MOCK_PAYMENTS,
+  Payment,
+} from "@/features/dashboard/payments/payments-mock";
 import { PaymentsTable } from "@/features/dashboard/payments/PaymentsTable";
 import { PaymentsFilters } from "@/features/dashboard/payments/PaymentsFilters";
 import { PaymentDetails } from "@/features/dashboard/payments/PaymentDetails";
 import { Modal } from "@/components/Modal";
 import { Button } from "@/components/Button";
 import { Download, Plus } from "lucide-react";
+import { Suspense } from "react";
+
+function PaymentsContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const shouldOpenCreateLink =
+    searchParams.get("action") === "create-payment-link";
+
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [currencyFilter, setCurrencyFilter] = useState("all");
+  const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
+  const [showCreateLinkModal, setShowCreateLinkModal] =
+    useState(shouldOpenCreateLink);
+  const [linkAmount, setLinkAmount] = useState("100");
+  const [linkCurrency, setLinkCurrency] = useState("USD");
+  const [linkDescription, setLinkDescription] = useState("Invoice payment");
+  const [generatedLink, setGeneratedLink] = useState("");
+
+  const filteredPayments = useMemo(() => {
+    return MOCK_PAYMENTS.filter((payment) => {
+      const matchesSearch =
+        payment.id.toLowerCase().includes(search.toLowerCase()) ||
+        payment.orderId.toLowerCase().includes(search.toLowerCase()) ||
+        payment.customerEmail.toLowerCase().includes(search.toLowerCase()) ||
+        payment.customerName.toLowerCase().includes(search.toLowerCase());
+
+      const matchesStatus =
+        statusFilter === "all" || payment.status === statusFilter;
+      const matchesCurrency =
+        currencyFilter === "all" || payment.currency === currencyFilter;
+
+      return matchesSearch && matchesStatus && matchesCurrency;
+    });
+  }, [search, statusFilter, currencyFilter]);
+
+  const handleExportCSV = () => {
+    const headers = [
+      "ID",
+      "Amount",
+      "Currency",
+      "Status",
+      "Customer",
+      "Email",
+      "OrderID",
+      "Date",
+    ];
+    const rows = filteredPayments.map((p) => [
+      p.id,
+      p.amount,
+      p.currency,
+      p.status,
+      p.customerName,
+      p.customerEmail,
+      p.orderId,
+      p.createdAt,
+    ]);
+
+    const csvContent = [headers, ...rows].map((e) => e.join(",")).join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute(
+      "download",
+      `payments_export_${new Date().toISOString().split("T")[0]}.csv`,
+    );
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleOpenCreateLink = () => {
+    setShowCreateLinkModal(true);
+    if (searchParams.get("action")) {
+      router.replace("/dashboard/payments");
+    }
+  };
+
+  const handleGenerateLink = () => {
+    const paymentId = `PAY-${Date.now()}`;
+    const link = `${window.location.origin}/pay/${paymentId}`;
+    setGeneratedLink(link);
+  };
+
+  const handleCopyLink = async () => {
+    if (!generatedLink) return;
+    await navigator.clipboard.writeText(generatedLink);
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">
+            Payments History
+          </h2>
+          <p className="text-muted-foreground">
+            View and manage all transactions processed through Fluxapay.
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <Button
+            variant="secondary"
+            className="gap-2"
+            onClick={handleExportCSV}
+          >
+            <Download className="h-4 w-4" />
+            Export CSV
+          </Button>
+          <Button className="gap-2" onClick={handleOpenCreateLink}>
+            <Plus className="h-4 w-4" />
+            New Payment
+          </Button>
+        </div>
+      </div>
+
+      <div className="bg-card rounded-2xl border p-6 shadow-sm">
+        <PaymentsFilters
+          onSearchChange={setSearch}
+          onStatusChange={setStatusFilter}
+          onCurrencyChange={setCurrencyFilter}
+        />
+
+        <PaymentsTable
+          payments={filteredPayments}
+          onRowClick={(payment) => setSelectedPayment(payment)}
+        />
+
+        <div className="mt-6 flex items-center justify-between text-sm text-muted-foreground">
+          <p>
+            Showing {filteredPayments.length} of {MOCK_PAYMENTS.length} payments
+          </p>
+          <div className="flex items-center gap-2">
+            <Button variant="secondary" size="sm" disabled>
+              Previous
+            </Button>
+            <Button variant="secondary" size="sm" disabled>
+              Next
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <Modal
+        isOpen={!!selectedPayment}
+        onClose={() => setSelectedPayment(null)}
+        title="Payment Details"
+      >
+        {selectedPayment && <PaymentDetails payment={selectedPayment} />}
+      </Modal>
+
+      <Modal
+        isOpen={showCreateLinkModal}
+        onClose={() => setShowCreateLinkModal(false)}
+        title="Create Payment Link"
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="mb-1 block text-sm font-medium">Amount</label>
+            <input
+              type="number"
+              value={linkAmount}
+              onChange={(e) => setLinkAmount(e.target.value)}
+              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium">Currency</label>
+            <select
+              value={linkCurrency}
+              onChange={(e) => setLinkCurrency(e.target.value)}
+              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+            >
+              <option value="USD">USD</option>
+              <option value="EUR">EUR</option>
+              <option value="GBP">GBP</option>
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium">
+              Description
+            </label>
+            <input
+              type="text"
+              value={linkDescription}
+              onChange={(e) => setLinkDescription(e.target.value)}
+              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+            />
+          </div>
+
+          <div className="flex gap-2">
+            <Button className="flex-1" onClick={handleGenerateLink}>
+              Generate Link
+            </Button>
+            <Button
+              className="flex-1"
+              variant="secondary"
+              onClick={handleCopyLink}
+              disabled={!generatedLink}
+            >
+              Copy Link
+            </Button>
+          </div>
+
+          {generatedLink ? (
+            <div className="rounded-md border border-border bg-muted p-3 text-xs break-all">
+              {generatedLink}
+            </div>
+          ) : null}
+
+          <p className="text-xs text-muted-foreground">
+            Draft link for {linkAmount || "0"} {linkCurrency}
+            {linkDescription ? ` - ${linkDescription}` : ""}.
+          </p>
+        </div>
+      </Modal>
+    </div>
+  );
+}
 
 export default function PaymentsPage() {
-    const [search, setSearch] = useState("");
-    const [statusFilter, setStatusFilter] = useState("all");
-    const [currencyFilter, setCurrencyFilter] = useState("all");
-    const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
-
-    const filteredPayments = useMemo(() => {
-        return MOCK_PAYMENTS.filter((payment) => {
-            const matchesSearch =
-                payment.id.toLowerCase().includes(search.toLowerCase()) ||
-                payment.orderId.toLowerCase().includes(search.toLowerCase()) ||
-                payment.customerEmail.toLowerCase().includes(search.toLowerCase()) ||
-                payment.customerName.toLowerCase().includes(search.toLowerCase());
-
-            const matchesStatus = statusFilter === "all" || payment.status === statusFilter;
-            const matchesCurrency = currencyFilter === "all" || payment.currency === currencyFilter;
-
-            return matchesSearch && matchesStatus && matchesCurrency;
-        });
-    }, [search, statusFilter, currencyFilter]);
-
-    const handleExportCSV = () => {
-        const headers = ["ID", "Amount", "Currency", "Status", "Customer", "Email", "OrderID", "Date"];
-        const rows = filteredPayments.map(p => [
-            p.id, p.amount, p.currency, p.status, p.customerName, p.customerEmail, p.orderId, p.createdAt
-        ]);
-
-        const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.setAttribute("href", url);
-        link.setAttribute("download", `payments_export_${new Date().toISOString().split('T')[0]}.csv`);
-        link.style.visibility = 'hidden';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    };
-
-    return (
-        <div className="space-y-6">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                    <h2 className="text-2xl font-bold tracking-tight">Payments History</h2>
-                    <p className="text-muted-foreground">
-                        View and manage all transactions processed through Fluxapay.
-                    </p>
-                </div>
-                <div className="flex items-center gap-3">
-                    <Button variant="secondary" className="gap-2" onClick={handleExportCSV}>
-                        <Download className="h-4 w-4" />
-                        Export CSV
-                    </Button>
-                    <Button className="gap-2">
-                        <Plus className="h-4 w-4" />
-                        New Payment
-                    </Button>
-                </div>
-            </div>
-
-            <div className="bg-card rounded-2xl border p-6 shadow-sm">
-                <PaymentsFilters
-                    onSearchChange={setSearch}
-                    onStatusChange={setStatusFilter}
-                    onCurrencyChange={setCurrencyFilter}
-                />
-
-                <PaymentsTable
-                    payments={filteredPayments}
-                    onRowClick={(payment) => setSelectedPayment(payment)}
-                />
-
-                <div className="mt-6 flex items-center justify-between text-sm text-muted-foreground">
-                    <p>Showing {filteredPayments.length} of {MOCK_PAYMENTS.length} payments</p>
-                    <div className="flex items-center gap-2">
-                        <Button variant="secondary" size="sm" disabled>Previous</Button>
-                        <Button variant="secondary" size="sm" disabled>Next</Button>
-                    </div>
-                </div>
-            </div>
-
-            <Modal
-                isOpen={!!selectedPayment}
-                onClose={() => setSelectedPayment(null)}
-                title="Payment Details"
-            >
-                {selectedPayment && <PaymentDetails payment={selectedPayment} />}
-            </Modal>
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
         </div>
-    );
+      }
+    >
+      <PaymentsContent />
+    </Suspense>
+  );
 }
