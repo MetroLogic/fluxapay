@@ -61,7 +61,7 @@ export async function getPlans(): Promise<PlanPublic[]> {
   const plans = await prisma.plan.findMany({
     orderBy: { amount: "asc" },
   });
-  return plans.map((p: any) => ({
+  return plans.map((p: typeof plans[number]) => ({
     id: p.id,
     name: p.name,
     slug: p.slug,
@@ -165,7 +165,7 @@ export async function getSubscriptionsDueForRenewal(): Promise<SubscriptionDue[]
     },
     include: { plan: true },
   });
-  return list.map((s: any) => ({
+  return list.map((s: typeof list[number]) => ({
     id: s.id,
     merchantId: s.merchantId,
     planId: s.planId,
