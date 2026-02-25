@@ -6,7 +6,7 @@ import { test, expect } from '@playwright/test';
  */
 test.describe('Signup flow', () => {
   test('shows validation errors for empty form', async ({ page }) => {
-    await page.goto('/signup');
+    await page.goto('/en/signup');
     await page.getByRole('button', { name: /create account/i }).click();
     await expect(page.getByText(/name is required/i)).toBeVisible();
   });
@@ -21,7 +21,7 @@ test.describe('Signup flow', () => {
       }),
     );
 
-    await page.goto('/signup');
+    await page.goto('/en/signup');
     await page.getByLabel(/your name/i).fill('Test User');
     await page.getByLabel(/business name/i).fill('Test Business');
     await page.getByLabel(/email/i).fill('test@example.com');
