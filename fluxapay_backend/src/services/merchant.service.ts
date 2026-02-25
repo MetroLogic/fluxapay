@@ -16,7 +16,6 @@ const prisma = new PrismaClient();
 
 // Local generateApiKey removed to resolve conflict with import from crypto.helper
 
-
 export async function signupMerchantService(data: {
   business_name: string;
   email: string;
@@ -24,7 +23,7 @@ export async function signupMerchantService(data: {
   country: string;
   settlement_currency: string;
   password: string;
-  settlement_schedule?: 'daily' | 'weekly';
+  settlement_schedule?: "daily" | "weekly";
   settlement_day?: number;
 }) {
   const {
@@ -35,7 +34,7 @@ export async function signupMerchantService(data: {
     country,
     settlement_currency,
     settlement_schedule,
-    settlement_day
+    settlement_day,
   } = data;
 
   // Check duplicates
@@ -64,17 +63,32 @@ export async function signupMerchantService(data: {
       password: hashedPassword,
       api_key_hashed: apiKeyHashed,
       api_key_last_four: apiKeyLastFour,
-      settlement_schedule: settlement_schedule ?? 'daily',
-      settlement_day: settlement_schedule === 'weekly' ? (settlement_day ?? null) : null,
+      settlement_schedule: settlement_schedule ?? "daily",
+      settlement_day:
+        settlement_schedule === "weekly" ? (settlement_day ?? null) : null,
     },
   });
 
-  // On-chain registration (non-blocking)
-  merchantRegistryService.register_merchant(merchant.id, business_name, settlement_currency).catch(err => {
+  // On-chain registration (synchronous here to guarantee order before OTP)
+  try {
+    await merchantRegistryService.register_merchant(
+      merchant.id,
+      business_name,
+      settlement_currency,
+    );
+  } catch (err) {
     if (isDevEnv()) {
-      console.error("Non-blocking error during on-chain merchant registration:", err);
+      console.error(
+        "Non-blocking error during on-chain merchant registration:",
+        err,
+      );
     }
-  });
+    // Depending on exact requirements, we might want to throw or continue.
+    // Phase 1 requirement says "persist to manual_intervention table", which is now
+    // done inside register_merchant. We will continue and let them verify via OTP.
+    // Alternatively, we could delay the welcome email entirely and prevent OTP.
+    // For now, logging and continuing is the safest approach that doesn't halt DB creation.
+  }
 
   // Generate OTP
   try {
@@ -130,15 +144,19 @@ export async function verifyOtpMerchantService(data: {
   });
 
   // Send welcome email (non-blocking)
-  const dashboardUrl = process.env.DASHBOARD_URL || "https://dashboard.fluxapay.com";
+  const dashboardUrl =
+    process.env.DASHBOARD_URL || "https://dashboard.fluxapay.com";
   if (merchant.api_key) {
-    sendWelcomeEmail(merchant.email, merchant.business_name, merchant.api_key, dashboardUrl).catch(
-      (err) => {
-        if (isDevEnv()) {
-          console.error("Non-blocking error sending welcome email:", err);
-        }
-      },
-    );
+    sendWelcomeEmail(
+      merchant.email,
+      merchant.business_name,
+      merchant.api_key,
+      dashboardUrl,
+    ).catch((err) => {
+      if (isDevEnv()) {
+        console.error("Non-blocking error sending welcome email:", err);
+      }
+    });
   }
 
   return { message: "Merchant verified and activated" };
@@ -281,9 +299,7 @@ export async function updateMerchantWebhookService(data: {
   return { message: "Webhook URL updated successfully", merchant };
 }
 
-export async function regenerateApiKeyService(data: {
-  merchantId: string;
-}) {
+export async function regenerateApiKeyService(data: { merchantId: string }) {
   const { merchantId } = data;
 
   const rawKey = generateApiKey();
@@ -314,9 +330,19 @@ export async function addBankAccountService(data: {
   currency: string;
   country: string;
 }) {
-  const { merchantId, account_name, account_number, bank_name, bank_code, currency, country } = data;
+  const {
+    merchantId,
+    account_name,
+    account_number,
+    bank_name,
+    bank_code,
+    currency,
+    country,
+  } = data;
 
-  const merchant = await prisma.merchant.findUnique({ where: { id: merchantId } });
+  const merchant = await prisma.merchant.findUnique({
+    where: { id: merchantId },
+  });
   if (!merchant) throw { status: 404, message: "Merchant not found" };
 
   const bankAccount = await prisma.bankAccount.upsert({
@@ -345,20 +371,23 @@ export async function addBankAccountService(data: {
 
 export async function updateSettlementScheduleService(data: {
   merchantId: string;
-  settlement_schedule: 'daily' | 'weekly';
+  settlement_schedule: "daily" | "weekly";
   settlement_day?: number;
 }) {
   const { merchantId, settlement_schedule, settlement_day } = data;
 
-  const merchant = await prisma.merchant.findUnique({ where: { id: merchantId } });
-  if (!merchant) throw { status: 404, message: 'Merchant not found' };
+  const merchant = await prisma.merchant.findUnique({
+    where: { id: merchantId },
+  });
+  if (!merchant) throw { status: 404, message: "Merchant not found" };
 
   const updated = await prisma.merchant.update({
     where: { id: merchantId },
     data: {
       settlement_schedule,
       // Clear settlement_day when switching back to daily
-      settlement_day: settlement_schedule === 'weekly' ? (settlement_day ?? null) : null,
+      settlement_day:
+        settlement_schedule === "weekly" ? (settlement_day ?? null) : null,
     },
     select: {
       id: true,
@@ -369,7 +398,7 @@ export async function updateSettlementScheduleService(data: {
   });
 
   return {
-    message: 'Settlement schedule updated successfully',
+    message: "Settlement schedule updated successfully",
     merchant: updated,
   };
 }
