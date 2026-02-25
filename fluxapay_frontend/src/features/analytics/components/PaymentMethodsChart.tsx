@@ -41,12 +41,15 @@ export function PaymentMethodsChart({ data }: PaymentMethodsChartProps) {
                             border: 'none',
                             boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
                         }}
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        formatter={(value: any) => [`${Number(value || 0).toLocaleString()}%`, 'Distribution']}
                     />
                     <Legend
                         verticalAlign="bottom"
                         height={36}
                         iconType="circle"
-                        formatter={(value) => <span className="text-xs text-slate-600">{value}</span>}
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        formatter={(value: any) => <span className="text-xs text-slate-600">{value}</span>}
                     />
                 </PieChart>
             </ResponsiveContainer>

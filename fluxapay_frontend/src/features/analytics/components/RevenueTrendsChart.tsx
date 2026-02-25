@@ -49,7 +49,8 @@ export function RevenueTrendsChart({ data }: RevenueTrendsChartProps) {
                         axisLine={false}
                         tickLine={false}
                         tick={{ fill: '#64748b', fontSize: 12 }}
-                        tickFormatter={(value) => `$${Number(value).toLocaleString()}`}
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        tickFormatter={(value: any) => `$${Number(value || 0).toLocaleString()}`}
                     />
                     <Tooltip
                         contentStyle={{
@@ -57,7 +58,10 @@ export function RevenueTrendsChart({ data }: RevenueTrendsChartProps) {
                             border: 'none',
                             boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
                         }}
-                        labelFormatter={(label) => label ? new Date(label).toLocaleDateString('en-US', { day: 'numeric', month: 'short' }) : ''}
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        labelFormatter={(label: any) => label ? new Date(label).toLocaleDateString('en-US', { day: 'numeric', month: 'short' }) : ''}
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        formatter={(value: any) => [`$${Number(value || 0).toLocaleString()}`, 'Revenue']}
                     />
                     <Area
                         type="monotone"
