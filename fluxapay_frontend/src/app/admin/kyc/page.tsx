@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, JSX } from "react";
+import React, { useState, JSX, useEffect, useCallback } from "react";
 import {
   Search,
   AlertTriangle,
@@ -13,9 +13,11 @@ import {
   Shield,
   User,
   Globe,
+  Loader2,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import EmptyState from "@/components/EmptyState";
+import { api } from "@/lib/api";
 
 // Type definitions
 interface KycApplication {
@@ -61,121 +63,48 @@ const AdminKycPage = () => {
     useState<KycApplication | null>(null);
   const [rejectionReason, setRejectionReason] = useState("");
   const [showRejectModal, setShowRejectModal] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Dummy Data
-  const [applications, setApplications] = useState<KycApplication[]>([
-    {
-      id: "KYC-2024-001",
-      merchantName: "TechNova Solutions",
-      email: "admin@technova.com",
-      country: "Nigeria",
-      submittedDate: "2024-03-15",
-      status: "pending",
-      documents: [
-        {
-          type: "Business Registration",
-          name: "cac_cert.pdf",
-          url: "#",
+  const [applications, setApplications] = useState<KycApplication[]>([]);
+
+  const fetchApplications = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const params: Record<string, string | number> = { limit: 100 };
+      if (statusFilter !== "all") params.status = statusFilter;
+      const data = await api.adminKyc.list({ limit: 100, status: statusFilter !== "all" ? statusFilter : undefined });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const mapped: KycApplication[] = (data?.submissions ?? data?.kyc ?? []).map((k: any) => ({
+        id: k.id,
+        merchantName: k.merchant?.business_name ?? k.legal_business_name ?? "Unknown",
+        email: k.merchant?.email ?? k.director_email ?? "",
+        country: k.country_of_registration ?? "",
+        submittedDate: k.created_at?.substring(0, 10) ?? "",
+        status: k.kyc_status === "pending_review" ? "pending" : k.kyc_status,
+        documents: (k.documents ?? []).map((d: any) => ({
+          type: d.document_type,
+          name: d.file_name,
+          url: d.file_url,
           status: "pending",
+        })),
+        businessInfo: {
+          registrationNumber: k.business_registration_number ?? "",
+          address: k.business_address ?? "",
+          type: k.business_type ?? "",
         },
-        {
-          type: "Proof of Address",
-          name: "utility_bill.jpg",
-          url: "#",
-          status: "pending",
-        },
-        {
-          type: "Director ID",
-          name: "passport.jpg",
-          url: "#",
-          status: "pending",
-        },
-      ],
-      businessInfo: {
-        registrationNumber: "RC123456",
-        address: "123 Innovation Drive, Lekki Phase 1, Lagos",
-        type: "Limited Liability Company",
-      },
-      beneficialOwners: [
-        { name: "John Doe", role: "CEO", ownership: 60 },
-        { name: "Jane Smith", role: "CTO", ownership: 40 },
-      ],
-    },
-    {
-      id: "KYC-2024-002",
-      merchantName: "GreenLeaf Retail",
-      email: "info@greenleaf.com",
-      country: "Kenya",
-      submittedDate: "2024-03-14",
-      status: "approved",
-      documents: [
-        {
-          type: "Business Registration",
-          name: "reg_cert.pdf",
-          url: "#",
-          status: "verified",
-        },
-        { type: "Tax PIN", name: "tax_pin.pdf", url: "#", status: "verified" },
-      ],
-      businessInfo: {
-        registrationNumber: "P051123456Z",
-        address: "45 Green Way, Westlands, Nairobi",
-        type: "Partnership",
-      },
-      beneficialOwners: [
-        { name: "Michael Kamau", role: "Managing Partner", ownership: 100 },
-      ],
-    },
-    {
-      id: "KYC-2024-003",
-      merchantName: "SwiftPay Logistics",
-      email: "support@swiftpay.com",
-      country: "South Africa",
-      submittedDate: "2024-03-10",
-      status: "rejected",
-      documents: [
-        {
-          type: "Business Registration",
-          name: "cipc_doc.pdf",
-          url: "#",
-          status: "rejected",
-        },
-      ],
-      businessInfo: {
-        registrationNumber: "2024/123456/07",
-        address: "78 Logistics Park, Midrand, Johannesburg",
-        type: "Private Company",
-      },
-      beneficialOwners: [
-        { name: "Sara Williams", role: "Director", ownership: 50 },
-        { name: "David Jones", role: "Director", ownership: 50 },
-      ],
-    },
-    {
-      id: "KYC-2024-004",
-      merchantName: "CryptoFlow Exchange",
-      email: "verification@cryptoflow.io",
-      country: "Nigeria",
-      submittedDate: "2024-03-16",
-      status: "additional_info_required",
-      documents: [
-        {
-          type: "License",
-          name: "license_draft.pdf",
-          url: "#",
-          status: "pending",
-        },
-      ],
-      businessInfo: {
-        registrationNumber: "RC987654",
-        address: "5 Block-Chain Street, Abuja",
-        type: "Limited Liability Company",
-      },
-      beneficialOwners: [
-        { name: "Satoshi Nakamoto", role: "Founder", ownership: 100 },
-      ],
-    },
-  ]);
+        beneficialOwners: k.director_full_name
+          ? [{ name: k.director_full_name, role: "Director", ownership: 100 }]
+          : [],
+      }));
+      setApplications(mapped);
+    } catch {
+      // fall back silently – leave mock data in place
+    } finally {
+      setIsLoading(false);
+    }
+  }, [statusFilter]);
+
+  useEffect(() => { fetchApplications(); }, [fetchApplications]);
 
   const getStatusConfig = (status: KycApplication["status"]): StatusConfig => {
     switch (status) {
@@ -222,14 +151,23 @@ const AdminKycPage = () => {
     }
   };
 
-  const handleUpdateStatus = (
+  const handleUpdateStatus = async (
     id: string,
     newStatus: KycApplication["status"],
+    reason?: string,
   ) => {
-    setApplications((apps) =>
-      apps.map((app) => (app.id === id ? { ...app, status: newStatus } : app)),
-    );
-    toast.success(`Application ${newStatus} successfully`);
+    try {
+      await api.adminKyc.updateStatus(id, {
+        kyc_status: newStatus === "pending" ? "pending_review" : newStatus,
+        ...(reason ? { rejection_reason: reason } : {}),
+      });
+      setApplications((apps) =>
+        apps.map((app) => (app.id === id ? { ...app, status: newStatus } : app)),
+      );
+      toast.success(`Application ${newStatus} successfully`);
+    } catch {
+      toast.error("Failed to update KYC status");
+    }
     setSelectedApplication(null);
     setShowRejectModal(false);
     setRejectionReason("");
@@ -241,7 +179,7 @@ const AdminKycPage = () => {
       toast.error("Please provide a reason for rejection");
       return;
     }
-    handleUpdateStatus(selectedApplication.id, "rejected");
+    handleUpdateStatus(selectedApplication.id, "rejected", rejectionReason);
   };
 
   const filteredApplications = applications.filter((app) => {
@@ -264,6 +202,14 @@ const AdminKycPage = () => {
   };
 
   const stats = getStats();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-slate-500" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50">

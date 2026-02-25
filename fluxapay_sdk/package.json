@@ -1,0 +1,35 @@
+{
+  "name": "@fluxapay/sdk",
+  "version": "0.1.0",
+  "description": "FluxaPay JavaScript/TypeScript SDK for merchant integration",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "node --experimental-vm-modules node_modules/.bin/jest",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "fluxapay",
+    "payments",
+    "stellar",
+    "usdc",
+    "crypto"
+  ],
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^20.19.33",
+    "typescript": "^5.0.0"
+  }
+}

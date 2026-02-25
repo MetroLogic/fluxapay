@@ -145,8 +145,25 @@ export default function AdminAuditLogsPage() {
     });
 
     const exportLogs = () => {
-        // Simple mock export
-        toast.success(`Exporting ${filteredLogs.length} logs...`);
+        if (filteredLogs.length === 0) {
+            toast.error('No logs to export');
+            return;
+        }
+        const headers = ['ID', 'Timestamp', 'Admin User', 'Email', 'Action', 'Target Resource', 'Status', 'Details', 'IP Address'];
+        const rows = filteredLogs.map(l => [
+            l.id, l.timestamp, l.adminUser, l.email, l.action, l.targetResource, l.status, l.details, l.ipAddress,
+        ]);
+        const csv = [headers, ...rows]
+            .map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
+            .join('\n');
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `audit_logs_${new Date().toISOString().split('T')[0]}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+        toast.success(`Exported ${filteredLogs.length} log entries`);
     };
 
     return (
