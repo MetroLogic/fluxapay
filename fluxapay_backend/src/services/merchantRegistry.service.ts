@@ -110,11 +110,7 @@ export class MerchantRegistryService {
             retries++;
         }
 
-        if (txResponse.status === 'FAILED') {
-            throw new Error(`Transaction failed on-chain: ${JSON.stringify(txResponse)}`);
-        }
-
-        return txResponse;
+        return true;
     }
 
     private logToManualInterventionQueue(merchantId: string, reason: string) {

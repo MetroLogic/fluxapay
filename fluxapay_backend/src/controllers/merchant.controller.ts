@@ -11,6 +11,8 @@ import {
   updateMerchantWebhookService,
   rotateApiKeyService,
   rotateWebhookSecretService,
+  updateSettlementScheduleService,
+  addBankAccountService,
 } from "../services/merchant.service";
 import { AuthRequest } from "../types/express";
 import { validateUserId } from "../helpers/request.helper";
@@ -49,7 +51,7 @@ export const getLoggedInMerchant = createController(
 export const updateMerchantProfile = createController(
   async (body: { business_name?: string; email?: string }, req: AuthRequest) => {
     const merchantId = await validateUserId(req);
-    
+
     return updateMerchantProfileService({
       merchantId,
       ...body,
@@ -60,7 +62,7 @@ export const updateMerchantProfile = createController(
 export const updateMerchantWebhook = createController(
   async (body: { webhook_url: string }, req: AuthRequest) => {
     const merchantId = await validateUserId(req);
-    
+
     return updateMerchantWebhookService({
       merchantId,
       webhook_url: body.webhook_url,
@@ -162,3 +164,39 @@ export async function adminUpdateMerchantStatus(req: Request, res: Response) {
     res.status(500).json({ message: err.message || "Server error" });
   }
 }
+export const updateSettlementSchedule = createController(
+  async (
+    body: { settlement_schedule: "daily" | "weekly"; settlement_day?: number },
+    req: AuthRequest,
+  ) => {
+    const merchantId = await validateUserId(req);
+
+    return updateSettlementScheduleService({
+      merchantId,
+      settlement_schedule: body.settlement_schedule,
+      settlement_day: body.settlement_day,
+    });
+  },
+);
+
+export const addBankAccount = createController(
+  async (
+    body: {
+      account_name: string;
+      account_number: string;
+      bank_name: string;
+      bank_code?: string;
+      currency: string;
+      country: string;
+    },
+    req: AuthRequest,
+  ) => {
+    const merchantId = await validateUserId(req);
+
+    return addBankAccountService({
+      merchantId,
+      ...body,
+    });
+  },
+  201,
+);

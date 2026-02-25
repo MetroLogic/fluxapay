@@ -44,6 +44,11 @@ interface KycApplication {
     ownership: number;
   }[];
 }
+import {
+  useKycSubmissions,
+  useKycDetails,
+  type KycApplicationShape,
+} from "@/hooks/useKycSubmissions";
 
 interface StatusConfig {
   color: string;
@@ -59,8 +64,9 @@ const AdminKycPage = () => {
 
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [selectedApplication, setSelectedApplication] =
-    useState<KycApplication | null>(null);
+  const [selectedMerchantId, setSelectedMerchantId] = useState<string | null>(
+    null,
+  );
   const [rejectionReason, setRejectionReason] = useState("");
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -105,8 +111,16 @@ const AdminKycPage = () => {
   }, [statusFilter]);
 
   useEffect(() => { fetchApplications(); }, [fetchApplications]);
+  const { applications, isLoading, mutate } = useKycSubmissions({
+    status: statusFilter !== "all" ? statusFilter : undefined,
+    limit: 100,
+  });
+  const { application: selectedApplication } =
+    useKycDetails(selectedMerchantId);
 
-  const getStatusConfig = (status: KycApplication["status"]): StatusConfig => {
+  const getStatusConfig = (
+    status: KycApplicationShape["status"],
+  ): StatusConfig => {
     switch (status) {
       case "approved":
         return {
@@ -171,6 +185,23 @@ const AdminKycPage = () => {
     setSelectedApplication(null);
     setShowRejectModal(false);
     setRejectionReason("");
+    merchantId: string,
+    newStatus: "approved" | "rejected" | "additional_info_required",
+    rejection_reason?: string,
+  ) => {
+    try {
+      await api.kyc.admin.updateStatus(merchantId, {
+        status: newStatus,
+        rejection_reason,
+      });
+      toast.success(`Application ${newStatus} successfully`);
+      setSelectedMerchantId(null);
+      setShowRejectModal(false);
+      setRejectionReason("");
+      void mutate();
+    } catch {
+      toast.error("Failed to update application status");
+    }
   };
 
   const handleReject = () => {
@@ -180,17 +211,20 @@ const AdminKycPage = () => {
       return;
     }
     handleUpdateStatus(selectedApplication.id, "rejected", rejectionReason);
+    void handleUpdateStatus(
+      selectedApplication.merchantId,
+      "rejected",
+      rejectionReason,
+    );
   };
 
   const filteredApplications = applications.filter((app) => {
     const matchesSearch =
+      !searchTerm ||
       app.merchantName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       app.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
       app.id.toLowerCase().includes(searchTerm.toLowerCase());
-
-    const matchesStatus = statusFilter === "all" || app.status === statusFilter;
-
-    return matchesSearch && matchesStatus;
+    return matchesSearch;
   });
 
   const getStats = () => {
@@ -203,10 +237,10 @@ const AdminKycPage = () => {
 
   const stats = getStats();
 
-  if (isLoading) {
+  if (isLoading && applications.length === 0) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-slate-500" />
+        <div className="text-slate-600">Loading KYC applications...</div>
       </div>
     );
   }
@@ -402,7 +436,9 @@ const AdminKycPage = () => {
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center gap-2">
                             <button
-                              onClick={() => setSelectedApplication(app)}
+                              onClick={() =>
+                                setSelectedMerchantId(app.merchantId)
+                              }
                               className="px-3 py-1.5 text-sm font-medium text-white rounded-lg transition-colors hover:opacity-90 flex items-center gap-2"
                               style={{ backgroundColor: primaryColor }}
                             >
@@ -428,7 +464,7 @@ const AdminKycPage = () => {
             {/* Close Button */}
             <button
               onClick={() => {
-                setSelectedApplication(null);
+                setSelectedMerchantId(null);
                 setShowRejectModal(false);
               }}
               className="absolute top-4 right-4 p-2 hover:bg-slate-100 rounded-full transition-colors z-10"
@@ -629,7 +665,10 @@ const AdminKycPage = () => {
                   </button>
                   <button
                     onClick={() =>
-                      handleUpdateStatus(selectedApplication.id, "approved")
+                      handleUpdateStatus(
+                        selectedApplication.merchantId,
+                        "approved",
+                      )
                     }
                     className="px-6 py-2 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors shadow-sm"
                   >

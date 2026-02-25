@@ -41,6 +41,8 @@ interface Merchant {
     avgTransaction: number;
 }
 
+import { useAdminMerchants, type AdminMerchant } from '@/hooks/useAdminMerchants';
+
 
 interface StatusConfig {
     color: string;
@@ -59,7 +61,7 @@ const AdminMerchantsPage = () => {
     const [searchTerm, setSearchTerm] = useState<string>('');
     const [kycFilter, setKycFilter] = useState<string>('all');
     const [accountFilter, setAccountFilter] = useState<string>('all');
-    const [selectedMerchant, setSelectedMerchant] = useState<Merchant | null>(null);
+    const [selectedMerchant, setSelectedMerchant] = useState<AdminMerchant | null>(null);
     const [showResetKeyModal, setShowResetKeyModal] = useState<string | null>(null);
     const [showExportMenu, setShowExportMenu] = useState<boolean>(false);
     const [isExporting, setIsExporting] = useState<boolean>(false);
@@ -96,8 +98,14 @@ const AdminMerchantsPage = () => {
     }, []);
 
     useEffect(() => { fetchMerchants(); }, [fetchMerchants]);
+    const { merchants, isLoading, mutate } = useAdminMerchants({
+        limit: 200,
+        kycStatus: kycFilter !== 'all' ? kycFilter : undefined,
+        accountStatus: accountFilter !== 'all' ? accountFilter : undefined,
+    });
 
-    const getKycStatusConfig = (status: Merchant['kycStatus']): StatusConfig => {
+
+    const getKycStatusConfig = (status: AdminMerchant['kycStatus']): StatusConfig => {
         switch (status) {
             case 'approved':
                 return {
@@ -130,7 +138,7 @@ const AdminMerchantsPage = () => {
         }
     };
 
-    const getAccountStatusConfig = (status: Merchant['accountStatus']): StatusConfig => {
+    const getAccountStatusConfig = (status: string): StatusConfig => {
         return status === 'active'
             ? {
                 color: 'text-emerald-700',
@@ -165,14 +173,11 @@ const AdminMerchantsPage = () => {
 
     const filteredMerchants = merchants.filter(merchant => {
         const matchesSearch =
+            !searchTerm ||
             merchant.businessName.toLowerCase().includes(searchTerm.toLowerCase()) ||
             merchant.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
             merchant.id.toLowerCase().includes(searchTerm.toLowerCase());
-
-        const matchesKyc = kycFilter === 'all' || merchant.kycStatus === kycFilter;
-        const matchesAccount = accountFilter === 'all' || merchant.accountStatus === accountFilter;
-
-        return matchesSearch && matchesKyc && matchesAccount;
+        return matchesSearch;
     });
 
     const updateMerchantKyc = async (id: string, status: Merchant['kycStatus']) => {
@@ -215,7 +220,7 @@ const AdminMerchantsPage = () => {
         return { total, active, approved, totalVolume };
     };
 
-    const formatMerchantForExport = (merchant: Merchant) => {
+    const formatMerchantForExport = (merchant: AdminMerchant) => {
         return {
             'Merchant ID': merchant.id,
             'Business Name': merchant.businessName,
@@ -250,7 +255,7 @@ const AdminMerchantsPage = () => {
         });
     };
 
-    const exportToCSV = async (data: Merchant[], filename: string, message: string) => {
+    const exportToCSV = async (data: AdminMerchant[], filename: string, message: string) => {
         setIsExporting(true);
         setShowExportMenu(false);
 
@@ -309,10 +314,10 @@ const AdminMerchantsPage = () => {
 
     const stats = getStats();
 
-    if (isLoading) {
+    if (isLoading && merchants.length === 0) {
         return (
             <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-                <Loader2 className="w-8 h-8 animate-spin text-slate-500" />
+                <div className="text-slate-600">Loading merchants...</div>
             </div>
         );
     }
