@@ -16,7 +16,7 @@
  */
 
 import { Decimal } from "@prisma/client/runtime/library";
-import { Merchant, PrismaClient } from "../generated/client/client";
+import { Merchant, PrismaClient, Prisma } from "../generated/client/client";
 import { getExchangePartner } from "./exchange.service";
 import { createAndDeliverWebhook } from "./webhook.service";
 import { logSettlementBatch, updateSettlementBatchCompletion } from "./audit.service";
@@ -231,7 +231,7 @@ async function settleMerchant(
         const netAmount = parseFloat((fiatGross - feeAmount).toFixed(2));
 
         // 8. Create Settlement record inside a transaction
-        const settlement = await prisma.$transaction(async (tx) => {
+        const settlement = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
             const s = await tx.settlement.create({
                 data: {
                     merchantId,
