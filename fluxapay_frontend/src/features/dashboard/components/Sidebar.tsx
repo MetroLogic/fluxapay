@@ -11,6 +11,8 @@ import {
   Settings,
   Code,
   X,
+  Webhook,
+  RefreshCcw,
 } from "lucide-react";
 import Image from "next/image";
 import FluxapayLogo from "@/assets/fluxapaylogo.png";
@@ -24,7 +26,9 @@ interface SidebarProps {
 const navItems = [
   { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
   { name: "Payments", href: "/dashboard/payments", icon: CreditCard },
+  { name: "Refunds", href: "/dashboard/refunds", icon: RefreshCcw },
   { name: "Settlements", href: "/dashboard/settlements", icon: Landmark },
+  { name: "Webhooks", href: "/dashboard/webhooks", icon: Webhook },
   { name: "Analytics", href: "/dashboard/analytics", icon: BarChart3 },
   { name: "Settings", href: "/dashboard/settings", icon: Settings },
   { name: "Developers", href: "/dashboard/developers", icon: Code },

@@ -9,8 +9,10 @@ export interface Payment {
   amount: number;
   currency: string;
   status: PaymentStatus;
+  merchantId: string;
   customerName: string;
   customerEmail: string;
+  customerAddress: string;
   orderId: string;
   createdAt: string;
   depositAddress: string;
@@ -23,8 +25,10 @@ export const MOCK_PAYMENTS: Payment[] = [
     amount: 150.0,
     currency: "USDC",
     status: "confirmed",
+    merchantId: "merch_demo_001",
     customerName: "John Doe",
     customerEmail: "john@example.com",
+    customerAddress: "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
     orderId: "ORD-9921",
     createdAt: "2026-01-24T10:30:00Z",
     depositAddress: "GBX...W4Q",
@@ -35,8 +39,10 @@ export const MOCK_PAYMENTS: Payment[] = [
     amount: 45.5,
     currency: "XLM",
     status: "pending",
+    merchantId: "merch_demo_001",
     customerName: "Alice Smith",
     customerEmail: "alice@company.com",
+    customerAddress: "GBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
     orderId: "ORD-9922",
     createdAt: "2026-01-24T09:15:00Z",
     depositAddress: "GC2...P9L",
@@ -46,8 +52,10 @@ export const MOCK_PAYMENTS: Payment[] = [
     amount: 1200.0,
     currency: "USDC",
     status: "failed",
+    merchantId: "merch_demo_002",
     customerName: "Bob Richards",
     customerEmail: "bob@richards.io",
+    customerAddress: "GCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
     orderId: "ORD-9923",
     createdAt: "2026-01-23T18:45:00Z",
     depositAddress: "GDU...K2M",
@@ -57,8 +65,10 @@ export const MOCK_PAYMENTS: Payment[] = [
     amount: 89.99,
     currency: "EURC",
     status: "confirmed",
+    merchantId: "merch_demo_003",
     customerName: "Sarah Connor",
     customerEmail: "sarah@resistance.net",
+    customerAddress: "GDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD",
     orderId: "ORD-9924",
     createdAt: "2026-01-23T14:20:00Z",
     depositAddress: "GAV...N6X",
@@ -69,8 +79,10 @@ export const MOCK_PAYMENTS: Payment[] = [
     amount: 10.0,
     currency: "USDC",
     status: "expired",
+    merchantId: "merch_demo_003",
     customerName: "Charlie Brown",
     customerEmail: "charlie@peanuts.com",
+    customerAddress: "GEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE",
     orderId: "ORD-9925",
     createdAt: "2026-01-22T11:05:00Z",
     depositAddress: "GCT...B5V",
@@ -80,8 +92,10 @@ export const MOCK_PAYMENTS: Payment[] = [
     amount: 300.75,
     currency: "XLM",
     status: "confirmed",
+    merchantId: "merch_demo_001",
     customerName: "Diana Prince",
     customerEmail: "diana@themyscira.com",
+    customerAddress: "GFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
     orderId: "ORD-9926",
     createdAt: "2026-01-21T16:40:00Z",
     depositAddress: "GBS...D1S",
@@ -92,8 +106,10 @@ export const MOCK_PAYMENTS: Payment[] = [
     amount: 55.0,
     currency: "USDC",
     status: "confirmed",
+    merchantId: "merch_demo_002",
     customerName: "Peter Parker",
     customerEmail: "peter@dailybugle.com",
+    customerAddress: "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG",
     orderId: "ORD-9927",
     createdAt: "2026-01-20T10:15:00Z",
     depositAddress: "GCD...A7F",

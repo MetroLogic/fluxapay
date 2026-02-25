@@ -1,6 +1,5 @@
 "use client";
 
-
 import React, { useState, useRef, JSX } from 'react';
 import {
     Search,
@@ -23,21 +22,9 @@ import {
     FileText
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-
-// Type definitions
-interface Merchant {
-    id: string;
-    businessName: string;
-    email: string;
-    kycStatus: 'approved' | 'pending' | 'rejected' | 'unverified';
-    accountStatus: 'active' | 'suspended';
-    volume: number;
-    revenue: number;
-    dateJoined: string;
-    transactionCount: number;
-    avgTransaction: number;
-}
-
+import EmptyState from '@/components/EmptyState';
+import { useAdminMerchants, type AdminMerchant } from '@/hooks/useAdminMerchants';
+import { api } from '@/lib/api';
 
 interface StatusConfig {
     color: string;
@@ -50,74 +37,10 @@ const AdminMerchantsPage = () => {
     const primaryColor = 'oklch(0.205 0 0)';
     const primaryLight = 'oklch(0.93 0 0)';
 
-    // Sample merchant data
-    const [merchants, setMerchants] = useState<Merchant[]>([
-        {
-            id: 'M001',
-            businessName: 'TechStore Inc',
-            email: 'contact@techstore.com',
-            kycStatus: 'approved',
-            accountStatus: 'active',
-            volume: 245000,
-            revenue: 4900,
-            dateJoined: '2024-01-15',
-            transactionCount: 156,
-            avgTransaction: 1570.51
-        },
-        {
-            id: 'M002',
-            businessName: 'Fashion Hub',
-            email: 'info@fashionhub.com',
-            kycStatus: 'pending',
-            accountStatus: 'active',
-            volume: 125000,
-            revenue: 2500,
-            dateJoined: '2024-02-20',
-            transactionCount: 89,
-            avgTransaction: 1404.49
-        },
-        {
-            id: 'M003',
-            businessName: 'Global Imports',
-            email: 'admin@globalimports.com',
-            kycStatus: 'rejected',
-            accountStatus: 'suspended',
-            volume: 0,
-            revenue: 0,
-            dateJoined: '2024-03-10',
-            transactionCount: 0,
-            avgTransaction: 0
-        },
-        {
-            id: 'M004',
-            businessName: 'Digital Services Co',
-            email: 'hello@digitalservices.com',
-            kycStatus: 'unverified',
-            accountStatus: 'active',
-            volume: 50000,
-            revenue: 1000,
-            dateJoined: '2024-03-25',
-            transactionCount: 34,
-            avgTransaction: 1470.59
-        },
-        {
-            id: 'M005',
-            businessName: 'E-Commerce Plus',
-            email: 'support@ecommerceplus.com',
-            kycStatus: 'approved',
-            accountStatus: 'active',
-            volume: 380000,
-            revenue: 7600,
-            dateJoined: '2024-01-05',
-            transactionCount: 243,
-            avgTransaction: 1563.79
-        }
-    ]);
-
     const [searchTerm, setSearchTerm] = useState<string>('');
     const [kycFilter, setKycFilter] = useState<string>('all');
     const [accountFilter, setAccountFilter] = useState<string>('all');
-    const [selectedMerchant, setSelectedMerchant] = useState<Merchant | null>(null);
+    const [selectedMerchant, setSelectedMerchant] = useState<AdminMerchant | null>(null);
     const [showResetKeyModal, setShowResetKeyModal] = useState<string | null>(null);
     const [showExportMenu, setShowExportMenu] = useState<boolean>(false);
     const [isExporting, setIsExporting] = useState<boolean>(false);
@@ -125,8 +48,14 @@ const AdminMerchantsPage = () => {
     const exportMenuRef = useRef<HTMLDivElement>(null);
     const exportButtonRef = useRef<HTMLButtonElement>(null);
 
+    const { merchants, isLoading, mutate } = useAdminMerchants({
+        limit: 200,
+        kycStatus: kycFilter !== 'all' ? kycFilter : undefined,
+        accountStatus: accountFilter !== 'all' ? accountFilter : undefined,
+    });
 
-    const getKycStatusConfig = (status: Merchant['kycStatus']): StatusConfig => {
+
+    const getKycStatusConfig = (status: AdminMerchant['kycStatus']): StatusConfig => {
         switch (status) {
             case 'approved':
                 return {
@@ -159,7 +88,7 @@ const AdminMerchantsPage = () => {
         }
     };
 
-    const getAccountStatusConfig = (status: Merchant['accountStatus']): StatusConfig => {
+    const getAccountStatusConfig = (status: string): StatusConfig => {
         return status === 'active'
             ? {
                 color: 'text-emerald-700',
@@ -194,31 +123,36 @@ const AdminMerchantsPage = () => {
 
     const filteredMerchants = merchants.filter(merchant => {
         const matchesSearch =
+            !searchTerm ||
             merchant.businessName.toLowerCase().includes(searchTerm.toLowerCase()) ||
             merchant.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
             merchant.id.toLowerCase().includes(searchTerm.toLowerCase());
-
-        const matchesKyc = kycFilter === 'all' || merchant.kycStatus === kycFilter;
-        const matchesAccount = accountFilter === 'all' || merchant.accountStatus === accountFilter;
-
-        return matchesSearch && matchesKyc && matchesAccount;
+        return matchesSearch;
     });
 
-    const updateMerchantKyc = (id: string, status: Merchant['kycStatus']) => {
-        setMerchants(merchants.map(m =>
-            m.id === id ? { ...m, kycStatus: status } : m
-        ));
-        setSelectedMerchant(null);
+    const updateMerchantKyc = async (id: string, status: 'approved' | 'rejected') => {
+        try {
+            await api.kyc.admin.updateStatus(id, { status });
+            toast.success(`KYC ${status} successfully`);
+            setSelectedMerchant(null);
+            void mutate();
+        } catch {
+            toast.error('Failed to update KYC status');
+        }
     };
 
-    const toggleAccountStatus = (id: string) => {
-        setMerchants(merchants.map(m =>
-            m.id === id ? {
-                ...m,
-                accountStatus: m.accountStatus === 'active' ? 'suspended' : 'active'
-            } : m
-        ));
-        setSelectedMerchant(null);
+    const toggleAccountStatus = async (id: string) => {
+        const m = merchants.find(x => x.id === id);
+        if (!m) return;
+        const next = m.accountStatus === 'active' ? 'suspended' : 'active';
+        try {
+            await api.admin.merchants.updateStatus(id, next as 'active' | 'suspended');
+            toast.success(`Account ${next}`);
+            setSelectedMerchant(null);
+            void mutate();
+        } catch {
+            toast.error('Failed to update account status');
+        }
     };
 
     const resetApiKeys = (id: string) => {
@@ -235,7 +169,7 @@ const AdminMerchantsPage = () => {
         return { total, active, approved, totalVolume };
     };
 
-    const formatMerchantForExport = (merchant: Merchant) => {
+    const formatMerchantForExport = (merchant: AdminMerchant) => {
         return {
             'Merchant ID': merchant.id,
             'Business Name': merchant.businessName,
@@ -270,7 +204,7 @@ const AdminMerchantsPage = () => {
         });
     };
 
-    const exportToCSV = async (data: Merchant[], filename: string, message: string) => {
+    const exportToCSV = async (data: AdminMerchant[], filename: string, message: string) => {
         setIsExporting(true);
         setShowExportMenu(false);
 
@@ -304,8 +238,7 @@ const AdminMerchantsPage = () => {
 
             await simulateExportProgress();
             toast.success(message);
-        } catch (error) {
-            console.error('Export error:', error);
+        } catch {
             toast.error('Failed to export merchants. Please try again.');
             setIsExporting(false);
             setExportProgress(0);
@@ -329,6 +262,14 @@ const AdminMerchantsPage = () => {
     };
 
     const stats = getStats();
+
+    if (isLoading && merchants.length === 0) {
+        return (
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+                <div className="text-slate-600">Loading merchants...</div>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-slate-50">
@@ -602,102 +543,94 @@ const AdminMerchantsPage = () => {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-200">
-                                {filteredMerchants.map((merchant, index) => {
-                                    const kycConfig = getKycStatusConfig(merchant.kycStatus);
-                                    const accountConfig = getAccountStatusConfig(merchant.accountStatus);
+                                {filteredMerchants.length === 0 ? (
+                                    <EmptyState colSpan={8} className="py-12" message="No merchants found. Try adjusting your search or filter criteria." />
+                                ) : (
+                                    filteredMerchants.map((merchant, index) => {
+                                        const kycConfig = getKycStatusConfig(merchant.kycStatus);
+                                        const accountConfig = getAccountStatusConfig(merchant.accountStatus);
 
-                                    return (
-                                        <tr key={merchant.id} className="hover:bg-slate-50/50 transition-colors">
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <span className="text-sm font-medium text-slate-900 font-mono">
-                                                    {index + 1}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <span className="text-sm font-medium text-slate-900 font-mono">
-                                                    {merchant.id}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <div className="flex items-center gap-3">
-                                                    <div
-                                                        className="w-8 h-8 rounded-lg flex items-center justify-center"
-                                                        style={{ backgroundColor: primaryLight }}
-                                                    >
-                                                        <Building className="w-4 h-4" style={{ color: primaryColor }} />
+                                        return (
+                                            <tr key={merchant.id} className="hover:bg-slate-50/50 transition-colors">
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <span className="text-sm font-medium text-slate-900 font-mono">
+                                                        {index + 1}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <span className="text-sm font-medium text-slate-900 font-mono">
+                                                        {merchant.id}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <div className="flex items-center gap-3">
+                                                        <div
+                                                            className="w-8 h-8 rounded-lg flex items-center justify-center"
+                                                            style={{ backgroundColor: primaryLight }}
+                                                        >
+                                                            <Building className="w-4 h-4" style={{ color: primaryColor }} />
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-sm font-medium text-slate-900">{merchant.businessName}</p>
+                                                            <p className="text-xs text-slate-500 mt-0.5">
+                                                                Joined {merchant.dateJoined}
+                                                            </p>
+                                                        </div>
                                                     </div>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <div className="flex items-center gap-2 text-sm text-slate-600">
+                                                        <Mail className="w-4 h-4 text-slate-400" />
+                                                        {merchant.email}
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <span
+                                                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium ${kycConfig.bg} ${kycConfig.color} ${kycConfig.border}`}
+                                                    >
+                                                        {kycConfig.icon}
+                                                        {merchant.kycStatus.charAt(0).toUpperCase() + merchant.kycStatus.slice(1)}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <span
+                                                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium ${accountConfig.bg} ${accountConfig.color} ${accountConfig.border}`}
+                                                    >
+                                                        {accountConfig.icon}
+                                                        {merchant.accountStatus.charAt(0).toUpperCase() + merchant.accountStatus.slice(1)}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
                                                     <div>
-                                                        <p className="text-sm font-medium text-slate-900">{merchant.businessName}</p>
-                                                        <p className="text-xs text-slate-500 mt-0.5">
-                                                            Joined {merchant.dateJoined}
+                                                        <p className="text-sm font-medium text-slate-900">
+                                                            ${(merchant.volume / 1000).toFixed(1)}k volume
+                                                        </p>
+                                                        <p className="text-xs text-slate-500">
+                                                            ${merchant.revenue.toLocaleString()} revenue
                                                         </p>
                                                     </div>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="flex items-center gap-2 text-sm text-slate-600">
-                                                    <Mail className="w-4 h-4 text-slate-400" />
-                                                    {merchant.email}
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <span
-                                                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium ${kycConfig.bg} ${kycConfig.color} ${kycConfig.border}`}
-                                                >
-                                                    {kycConfig.icon}
-                                                    {merchant.kycStatus.charAt(0).toUpperCase() + merchant.kycStatus.slice(1)}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <span
-                                                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium ${accountConfig.bg} ${accountConfig.color} ${accountConfig.border}`}
-                                                >
-                                                    {accountConfig.icon}
-                                                    {merchant.accountStatus.charAt(0).toUpperCase() + merchant.accountStatus.slice(1)}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <div>
-                                                    <p className="text-sm font-medium text-slate-900">
-                                                        ${(merchant.volume / 1000).toFixed(1)}k volume
-                                                    </p>
-                                                    <p className="text-xs text-slate-500">
-                                                        ${merchant.revenue.toLocaleString()} revenue
-                                                    </p>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="flex items-center gap-2">
-                                                    <button
-                                                        onClick={() => setSelectedMerchant(merchant)}
-                                                        className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
-                                                        title="View Details"
-                                                    >
-                                                        <Eye className="w-4 h-4" />
-                                                    </button>
-                                                    <button className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors">
-                                                        <MoreVertical className="w-4 h-4" />
-                                                    </button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <div className="flex items-center gap-2">
+                                                        <button
+                                                            onClick={() => setSelectedMerchant(merchant)}
+                                                            className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
+                                                            title="View Details"
+                                                        >
+                                                            <Eye className="w-4 h-4" />
+                                                        </button>
+                                                        <button className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors">
+                                                            <MoreVertical className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })
+                                )}
                             </tbody>
                         </table>
                     </div>
-
-                    {filteredMerchants.length === 0 && (
-                        <div className="text-center py-12">
-                            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-100 mb-4">
-                                <Search className="w-8 h-8 text-slate-400" />
-                            </div>
-                            <h3 className="text-lg font-medium text-slate-900 mb-2">No merchants found</h3>
-                            <p className="text-sm text-slate-600 max-w-md mx-auto">
-                                Try adjusting your search or filter criteria to find what you&apos;re looking for.
-                            </p>
-                        </div>
-                    )}
                 </div>
             </div>
 

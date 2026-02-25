@@ -1,0 +1,320 @@
+// API Client for FluxaPay Backend
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+
+export interface AuthSignupRequest {
+  name: string;
+  businessName: string;
+  email: string;
+  password: string;
+  country: string;
+  settlementCurrency: string;
+  accountNumber: string;
+  bankName: string;
+  bankCode: string;
+}
+
+export interface AuthLoginRequest {
+  email: string;
+  password: string;
+}
+
+export type RefundReason =
+  | "customer_request"
+  | "duplicate_payment"
+  | "failed_delivery"
+  | "merchant_request"
+  | "dispute_resolution";
+
+export interface InitiateRefundRequest {
+  paymentId: string;
+  merchantId: string;
+  amount: number;
+  currency: "USDC" | "XLM";
+  customerAddress: string;
+  reason: RefundReason;
+  reasonNote?: string;
+}
+
+export type RefundStatus = "initiated" | "processing" | "completed" | "failed";
+
+export interface ListRefundsParams {
+  paymentId?: string;
+  merchantId?: string;
+  status?: RefundStatus;
+  page?: number;
+  limit?: number;
+}
+
+class ApiError extends Error {
+  constructor(
+    public status: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
+async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
+  const token = localStorage.getItem("token");
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+
+  if (options.headers) {
+    Object.assign(headers, options.headers);
+  }
+
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    ...options,
+    headers,
+  });
+
+  if (!response.ok) {
+    const error = await response
+      .json()
+      .catch(() => ({ message: "An error occurred" }));
+    throw new ApiError(response.status, error.message || "Request failed");
+  }
+
+  return response.json();
+}
+
+/** Build headers including the optional admin secret for internal endpoints. */
+function adminHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  const secret = process.env.NEXT_PUBLIC_ADMIN_SECRET;
+  if (secret) headers["X-Admin-Secret"] = secret;
+  return headers;
+}
+
+function refundAdminKeyHeader(): Record<string, string> {
+  const header: Record<string, string> = {};
+  const adminApiKey = process.env.NEXT_PUBLIC_ADMIN_API_KEY;
+  if (adminApiKey) header["X-Admin-API-Key"] = adminApiKey;
+  return header;
+}
+
+export const api = {
+  // Authentication
+  auth: {
+    signup: (data: AuthSignupRequest) =>
+      fetch(`${API_BASE_URL}/api/v1/auth/signup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      }).then((res) => {
+        if (!res.ok) throw new ApiError(res.status, "Signup failed");
+        return res.json();
+      }),
+    login: (data: AuthLoginRequest) =>
+      fetch(`${API_BASE_URL}/api/v1/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      }).then((res) => {
+        if (!res.ok) throw new ApiError(res.status, "Login failed");
+        return res.json();
+      }),
+  },
+
+  // Merchant endpoints
+  merchant: {
+    getMe: () => fetchWithAuth("/api/v1/merchants/me"),
+
+    updateProfile: (data: {
+      business_name?: string;
+      email?: string;
+      settlement_schedule?: "daily" | "weekly";
+      settlement_day?: number;
+    }) =>
+      fetchWithAuth("/api/v1/merchants/me", {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      }),
+
+    updateWebhook: (webhook_url: string) =>
+      fetchWithAuth("/api/v1/merchants/me/webhook", {
+        method: "PATCH",
+        body: JSON.stringify({ webhook_url }),
+      }),
+  },
+
+  // API Keys endpoints
+  keys: {
+    regenerate: () =>
+      fetchWithAuth("/api/v1/keys/regenerate", {
+        method: "POST",
+      }),
+  },
+
+  // Sweep / Settlement Batch endpoints (admin-only)
+  sweep: {
+    /** Fetch current sweep system status */
+    getStatus: (): Promise<Response> =>
+      fetch(`${API_BASE_URL}/api/admin/settlement/status`, {
+        headers: adminHeaders(),
+      }),
+
+    /** Manually trigger a full accounts sweep (settlement batch) */
+    runSweep: (): Promise<Response> =>
+      fetch(`${API_BASE_URL}/api/admin/settlement/run`, {
+        method: "POST",
+        headers: adminHeaders(),
+      }),
+  },
+
+  // Settlements (merchant-scoped)
+  settlements: {
+    list: (params?: {
+      page?: number;
+      limit?: number;
+      status?: string;
+      currency?: string;
+      date_from?: string;
+      date_to?: string;
+    }) => {
+      const sp = new URLSearchParams();
+      if (params?.page != null) sp.set("page", String(params.page));
+      if (params?.limit != null) sp.set("limit", String(params.limit));
+      if (params?.status) sp.set("status", params.status);
+      if (params?.currency) sp.set("currency", params.currency);
+      if (params?.date_from) sp.set("date_from", params.date_from);
+      if (params?.date_to) sp.set("date_to", params.date_to);
+      return fetchWithAuth(`/api/settlements?${sp.toString()}`);
+    },
+    summary: () => fetchWithAuth("/api/settlements/summary"),
+    getById: (id: string) => fetchWithAuth(`/api/settlements/${id}`),
+  },
+
+  // KYC admin
+  kyc: {
+    admin: {
+      getSubmissions: (params?: {
+        status?: string;
+        page?: number;
+        limit?: number;
+      }) => {
+        const sp = new URLSearchParams();
+        if (params?.status) sp.set("status", params.status);
+        if (params?.page != null) sp.set("page", String(params.page));
+        if (params?.limit != null) sp.set("limit", String(params.limit));
+        return fetchWithAuth(
+          `/api/merchants/kyc/admin/submissions?${sp.toString()}`,
+        );
+      },
+      getByMerchantId: (merchantId: string) =>
+        fetchWithAuth(`/api/merchants/kyc/admin/${merchantId}`),
+      updateStatus: (
+        merchantId: string,
+        body: {
+          status: "approved" | "rejected" | "additional_info_required";
+          rejection_reason?: string;
+        },
+      ) =>
+        fetchWithAuth(`/api/merchants/kyc/admin/${merchantId}/status`, {
+          method: "PATCH",
+          body: JSON.stringify(body),
+        }),
+    },
+  },
+
+  // Refunds (admin-authorized backend flow)
+  refunds: {
+    initiate: (data: InitiateRefundRequest) =>
+      fetchWithAuth("/api/refunds", {
+        method: "POST",
+        headers: refundAdminKeyHeader(),
+        body: JSON.stringify(data),
+      }),
+    list: (params?: ListRefundsParams) => {
+      const sp = new URLSearchParams();
+      if (params?.paymentId) sp.set("paymentId", params.paymentId);
+      if (params?.merchantId) sp.set("merchantId", params.merchantId);
+      if (params?.status) sp.set("status", params.status);
+      if (params?.page != null) sp.set("page", String(params.page));
+      if (params?.limit != null) sp.set("limit", String(params.limit));
+
+      const query = sp.toString();
+      return fetchWithAuth(`/api/refunds${query ? `?${query}` : ""}`, {
+        headers: refundAdminKeyHeader(),
+      });
+    },
+    getById: (refundId: string) =>
+      fetchWithAuth(`/api/refunds/${refundId}`, {
+        headers: refundAdminKeyHeader(),
+      }),
+  },
+
+  // Dashboard overview (metrics, charts, activity)
+  dashboard: {
+    overviewMetrics: (params?: { from?: string; to?: string }) => {
+      const sp = new URLSearchParams();
+      if (params?.from) sp.set("from", params.from);
+      if (params?.to) sp.set("to", params.to);
+      const q = sp.toString();
+      return fetchWithAuth(
+        `/api/dashboard/overview/metrics${q ? `?${q}` : ""}`,
+      );
+    },
+    charts: (params?: { from?: string; to?: string }) => {
+      const sp = new URLSearchParams();
+      if (params?.from) sp.set("from", params.from);
+      if (params?.to) sp.set("to", params.to);
+      const q = sp.toString();
+      return fetchWithAuth(`/api/dashboard/overview/charts${q ? `?${q}` : ""}`);
+    },
+    activity: (params?: { from?: string; to?: string }) => {
+      const sp = new URLSearchParams();
+      if (params?.from) sp.set("from", params.from);
+      if (params?.to) sp.set("to", params.to);
+      const q = sp.toString();
+      return fetchWithAuth(
+        `/api/dashboard/overview/activity${q ? `?${q}` : ""}`,
+      );
+    },
+  },
+
+  // Admin: merchants & settlements
+  admin: {
+    merchants: {
+      list: (params?: {
+        page?: number;
+        limit?: number;
+        kycStatus?: string;
+        accountStatus?: string;
+      }) => {
+        const sp = new URLSearchParams();
+        if (params?.page != null) sp.set("page", String(params.page));
+        if (params?.limit != null) sp.set("limit", String(params.limit));
+        if (params?.kycStatus) sp.set("kycStatus", params.kycStatus);
+        if (params?.accountStatus)
+          sp.set("accountStatus", params.accountStatus);
+        return fetchWithAuth(`/api/admin/merchants?${sp.toString()}`);
+      },
+      updateStatus: (merchantId: string, status: "active" | "suspended") =>
+        fetchWithAuth(`/api/admin/merchants/${merchantId}/status`, {
+          method: "PATCH",
+          body: JSON.stringify({ status }),
+        }),
+    },
+    settlements: {
+      list: (params?: { page?: number; limit?: number; status?: string }) => {
+        const sp = new URLSearchParams();
+        if (params?.page != null) sp.set("page", String(params.page));
+        if (params?.limit != null) sp.set("limit", String(params.limit));
+        if (params?.status) sp.set("status", params.status);
+        return fetchWithAuth(`/api/admin/settlements?${sp.toString()}`);
+      },
+    },
+  },
+};
+
+export { ApiError };
