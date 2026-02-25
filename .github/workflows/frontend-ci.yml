@@ -28,12 +28,7 @@ jobs:
           node-version: "20"
 
       - name: Install dependencies
-        run: |
-          if [ -f package-lock.json ]; then
-            npm ci --legacy-peer-deps
-          else
-            npm install --legacy-peer-deps
-          fi
+        run: npm install --legacy-peer-deps
 
       - name: Format Check (Lint)
         run: npx eslint . --max-warnings=0
@@ -60,12 +55,7 @@ jobs:
           node-version: "20"
 
       - name: Install dependencies
-        run: |
-          if [ -f package-lock.json ]; then
-            npm ci --legacy-peer-deps
-          else
-            npm install --legacy-peer-deps
-          fi
+        run: npm install --legacy-peer-deps
 
       - name: Run unit / component tests
         run: npm test
@@ -88,12 +78,7 @@ jobs:
           node-version: "20"
 
       - name: Install dependencies
-        run: |
-          if [ -f package-lock.json ]; then
-            npm ci --legacy-peer-deps
-          else
-            npm install --legacy-peer-deps
-          fi
+        run: npm install --legacy-peer-deps
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
