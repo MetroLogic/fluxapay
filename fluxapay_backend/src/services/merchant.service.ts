@@ -1,7 +1,7 @@
 import { PrismaClient } from "../generated/client/client";
 import bcrypt from "bcrypt";
 import { createOtp, verifyOtp as verifyOtpService } from "./otp.service";
-import { sendOtpEmail } from "./email.service";
+import { sendOtpEmail, sendWelcomeEmail } from "./email.service";
 import { isDevEnv } from "../helpers/env.helper";
 import { generateToken } from "../helpers/jwt.helper";
 import { merchantRegistryService } from "./merchantRegistry.service";
@@ -123,10 +123,23 @@ export async function verifyOtpMerchantService(data: {
   if (!success) throw { status: 400, message };
 
   // Activate merchant
-  await prisma.merchant.update({
+  const merchant = await prisma.merchant.update({
     where: { id: merchantId },
     data: { status: "active" },
+    select: { email: true, business_name: true, api_key: true },
   });
+
+  // Send welcome email (non-blocking)
+  const dashboardUrl = process.env.DASHBOARD_URL || "https://dashboard.fluxapay.com";
+  if (merchant.api_key) {
+    sendWelcomeEmail(merchant.email, merchant.business_name, merchant.api_key, dashboardUrl).catch(
+      (err) => {
+        if (isDevEnv()) {
+          console.error("Non-blocking error sending welcome email:", err);
+        }
+      },
+    );
+  }
 
   return { message: "Merchant verified and activated" };
 }
@@ -290,6 +303,44 @@ export async function regenerateApiKeyService(data: {
       "API key regenerated successfully. Store this key securely as it will not be shown again.",
     apiKey: rawKey,
   };
+}
+
+export async function addBankAccountService(data: {
+  merchantId: string;
+  account_name: string;
+  account_number: string;
+  bank_name: string;
+  bank_code?: string;
+  currency: string;
+  country: string;
+}) {
+  const { merchantId, account_name, account_number, bank_name, bank_code, currency, country } = data;
+
+  const merchant = await prisma.merchant.findUnique({ where: { id: merchantId } });
+  if (!merchant) throw { status: 404, message: "Merchant not found" };
+
+  const bankAccount = await prisma.bankAccount.upsert({
+    where: { merchantId },
+    create: {
+      merchantId,
+      account_name,
+      account_number,
+      bank_name,
+      bank_code: bank_code ?? null,
+      currency,
+      country,
+    },
+    update: {
+      account_name,
+      account_number,
+      bank_name,
+      bank_code: bank_code ?? null,
+      currency,
+      country,
+    },
+  });
+
+  return { message: "Bank account saved successfully", bankAccount };
 }
 
 export async function updateSettlementScheduleService(data: {

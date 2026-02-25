@@ -141,7 +141,10 @@ export const api = {
         fetchWithAuth(`/api/merchants/kyc/admin/${merchantId}`),
       updateStatus: (
         merchantId: string,
-        body: { status: "approved" | "rejected"; rejection_reason?: string },
+        body: {
+          status: "approved" | "rejected" | "additional_info_required";
+          rejection_reason?: string;
+        },
       ) =>
         fetchWithAuth(`/api/merchants/kyc/admin/${merchantId}/status`, {
           method: "PATCH",
@@ -157,7 +160,9 @@ export const api = {
       if (params?.from) sp.set("from", params.from);
       if (params?.to) sp.set("to", params.to);
       const q = sp.toString();
-      return fetchWithAuth(`/api/dashboard/overview/metrics${q ? `?${q}` : ""}`);
+      return fetchWithAuth(
+        `/api/dashboard/overview/metrics${q ? `?${q}` : ""}`,
+      );
     },
     charts: (params?: { from?: string; to?: string }) => {
       const sp = new URLSearchParams();
@@ -171,7 +176,9 @@ export const api = {
       if (params?.from) sp.set("from", params.from);
       if (params?.to) sp.set("to", params.to);
       const q = sp.toString();
-      return fetchWithAuth(`/api/dashboard/overview/activity${q ? `?${q}` : ""}`);
+      return fetchWithAuth(
+        `/api/dashboard/overview/activity${q ? `?${q}` : ""}`,
+      );
     },
   },
 

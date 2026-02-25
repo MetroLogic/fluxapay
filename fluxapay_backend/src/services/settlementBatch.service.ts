@@ -19,6 +19,7 @@ import { Decimal } from "@prisma/client/runtime/library";
 import { Merchant, PrismaClient } from "../generated/client/client";
 import { getExchangePartner } from "./exchange.service";
 import { createAndDeliverWebhook } from "./webhook.service";
+import { logSettlementBatch, updateSettlementBatchCompletion } from "./audit.service";
 
 const prisma = new PrismaClient();
 
@@ -391,6 +392,7 @@ async function settleMerchant(
  */
 export async function runSettlementBatch(
     runAt: Date = new Date(),
+    adminId: string = 'system',
 ): Promise<SettlementBatchResult> {
     const batchId = `batch_${Date.now()}`;
     const startedAt = runAt;
@@ -400,6 +402,13 @@ export async function runSettlementBatch(
         `(UTC day=${startedAt.getUTCDay()})`,
     );
 
+    // Create audit log for batch initiation
+    const auditLog = await logSettlementBatch({
+        adminId,
+        batchId,
+        reason: 'Scheduled settlement batch run',
+    });
+
     const aggregates = await getUnsettledPaymentsByMerchant();
 
     if (aggregates.length === 0) {
@@ -407,6 +416,18 @@ export async function runSettlementBatch(
         console.log(
             "[SettlementBatch] No unsettled payments found. Batch complete.",
         );
+
+        // Update audit log with completion
+        if (auditLog) {
+            await updateSettlementBatchCompletion({
+                auditLogId: auditLog.id,
+                status: 'completed',
+                transactionCount: 0,
+                totalAmount: 0,
+                currency: 'USD',
+            });
+        }
+
         return {
             batchId,
             startedAt,
@@ -441,6 +462,23 @@ export async function runSettlementBatch(
         `${succeeded} succeeded, ${failed} failed, ${skipped} skipped | ` +
         `Duration: ${completedAt.getTime() - startedAt.getTime()}ms`,
     );
+
+    // Calculate total amount settled
+    const totalAmount = merchantResults
+        .filter(r => r.status === 'succeeded')
+        .reduce((sum, r) => sum + (r.netAmount ? parseFloat(r.netAmount.toString()) : 0), 0);
+
+    // Update audit log with completion
+    if (auditLog) {
+        await updateSettlementBatchCompletion({
+            auditLogId: auditLog.id,
+            status: failed > 0 ? 'failed' : 'completed',
+            transactionCount: succeeded,
+            totalAmount,
+            currency: 'USD',
+            failureReason: failed > 0 ? `${failed} merchant settlements failed` : undefined,
+        });
+    }
 
     return {
         batchId,

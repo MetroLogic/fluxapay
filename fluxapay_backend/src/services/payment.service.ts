@@ -1,7 +1,10 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, PaymentStatus } from "../generated/client/client";
 import { v4 as uuidv4 } from 'uuid';
+import { createAndDeliverWebhook, generateMerchantPayload } from './webhook.service';
 import { HDWalletService } from './HDWalletService';
 import { StellarService } from './StellarService';
+import { sorobanService } from './SorobanService';
+import { eventBus, AppEvents } from "./EventService";
 
 const prisma = new PrismaClient();
 
@@ -64,7 +67,7 @@ export class PaymentService {
         currency,
         customer_email,
         merchantId,
-        metadata: metadata ?? {},
+        metadata: (metadata ?? {}) as any,
         expiration,
         status: 'pending',
         checkout_url,
@@ -73,14 +76,53 @@ export class PaymentService {
         stellar_address: stellarAddress,
       },
     });
-    
+
     // Prepare the Stellar account asynchronously (fund and add trustline)
     // This runs in the background to avoid blocking payment creation
     const stellarService = new StellarService();
     stellarService.prepareAccount(merchantId, paymentId).catch((error) => {
       console.error(`Failed to prepare Stellar account for payment ${paymentId}:`, error);
     });
-    
+
+    return payment;
+  }
+
+  /**
+   * Verifies a payment on-chain, updates the database, and emits an internal event.
+   */
+  static async verifyPayment(
+    paymentId: string,
+    transactionHash: string,
+    payerAddress: string,
+    amountReceived: number
+  ): Promise<any> {
+    // 1. Verify on Soroban
+    const onChainVerified = await sorobanService.verifyPaymentOnChain(
+      paymentId,
+      transactionHash,
+      payerAddress,
+      amountReceived
+    );
+
+    if (!onChainVerified) {
+      throw new Error('Payment verification failed on-chain');
+    }
+
+    // 2. Update local PostgreSQL database
+    const payment = await prisma.payment.update({
+      where: { id: paymentId },
+      data: {
+        status: 'confirmed',
+        transaction_hash: transactionHash,
+        payer_address: payerAddress,
+        confirmed_at: new Date(),
+        onchain_verified: true,
+      }
+    });
+
+    // 3. Emit internal event for Webhook Service to pick up
+    eventBus.emit(AppEvents.PAYMENT_CONFIRMED, payment);
+
     return payment;
   }
 }

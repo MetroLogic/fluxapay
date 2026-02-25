@@ -122,12 +122,12 @@ export class PaymentContractService {
         }
 
         // Wait for the transaction to be processed
-        let txResponse = await this.server.getTransaction(sendTxResponse.hash);
+        let txResponse = await this.server.getTransaction((sendTxResponse as any).hash);
 
         let retries = 0;
         while (txResponse.status === 'NOT_FOUND' && retries < 15) {
             await new Promise(resolve => setTimeout(resolve, 3000));
-            txResponse = await this.server.getTransaction(sendTxResponse.hash);
+            txResponse = await this.server.getTransaction((sendTxResponse as any).hash);
             retries++;
         }
 
