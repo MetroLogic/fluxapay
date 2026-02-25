@@ -43,7 +43,7 @@ export function RevenueByCountryChart({ data }: RevenueByCountryChartProps) {
                         axisLine={false}
                         tickLine={false}
                         tick={{ fill: '#64748b', fontSize: 12 }}
-                        tickFormatter={(value) => `$${value / 1000}k`}
+                        tickFormatter={(value) => `$${(Number(value) || 0) / 1000}k`}
                     />
                     <Tooltip
                         cursor={{ fill: '#f1f5f9' }}
@@ -52,7 +52,7 @@ export function RevenueByCountryChart({ data }: RevenueByCountryChartProps) {
                             border: 'none',
                             boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
                         }}
-                        formatter={(value: number) => [`$${value.toLocaleString()}`, 'Revenue']}
+                        formatter={(value: any) => [`$${Number(value).toLocaleString()}`, 'Revenue']}
                     />
                     <Bar
                         dataKey="revenue"
