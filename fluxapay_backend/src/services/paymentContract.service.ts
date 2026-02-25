@@ -1,6 +1,6 @@
 import { Keypair, nativeToScVal, rpc, TransactionBuilder, Networks, Contract, xdr } from '@stellar/stellar-sdk';
 import { isDevEnv } from '../helpers/env.helper';
-import { PrismaClient } from '../generated/client/client';
+import { PrismaClient } from '../generated/client';
 
 const prisma = new PrismaClient();
 
