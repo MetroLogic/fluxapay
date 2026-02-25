@@ -5,7 +5,7 @@ import { test, expect } from '@playwright/test';
  */
 test.describe('Login flow', () => {
   test('shows validation error for empty fields', async ({ page }) => {
-    await page.goto('/login');
+    await page.goto('/en/login');
     await page.getByRole('button', { name: /sign in/i }).click();
     await expect(page.getByText(/email is required/i)).toBeVisible();
   });
@@ -19,7 +19,7 @@ test.describe('Login flow', () => {
       }),
     );
 
-    await page.goto('/login');
+    await page.goto('/en/login');
     await page.getByLabel(/email/i).fill('bad@example.com');
     await page.getByLabel(/password/i).fill('wrongpass');
     await page.getByRole('button', { name: /sign in/i }).click();
@@ -36,7 +36,7 @@ test.describe('Login flow', () => {
       }),
     );
 
-    await page.goto('/login');
+    await page.goto('/en/login');
     await page.getByLabel(/email/i).fill('test@example.com');
     await page.getByLabel(/password/i).fill('password123');
     await page.getByRole('button', { name: /sign in/i }).click();
