@@ -12,6 +12,7 @@ import {
   rotateApiKeyService,
   rotateWebhookSecretService,
   updateSettlementScheduleService,
+  addBankAccountService,
 } from "../services/merchant.service";
 import { AuthRequest } from "../types/express";
 import { validateUserId } from "../helpers/request.helper";
@@ -94,4 +95,26 @@ export const updateSettlementSchedule = createController(
       settlement_day: body.settlement_day,
     });
   },
+);
+
+export const addBankAccount = createController(
+  async (
+    body: {
+      account_name: string;
+      account_number: string;
+      bank_name: string;
+      bank_code?: string;
+      currency: string;
+      country: string;
+    },
+    req: AuthRequest,
+  ) => {
+    const merchantId = await validateUserId(req);
+
+    return addBankAccountService({
+      merchantId,
+      ...body,
+    });
+  },
+  201,
 );

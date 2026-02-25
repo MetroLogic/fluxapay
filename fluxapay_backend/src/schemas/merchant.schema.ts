@@ -69,3 +69,12 @@ export const settlementScheduleSchema = z
 export const updateSettlementScheduleSchema = settlementScheduleSchema.required({
   settlement_schedule: true,
 });
+
+export const bankAccountSchema = z.object({
+  account_name: z.string().min(2, 'Account name is required'),
+  account_number: z.string().min(5, 'Account number is required'),
+  bank_name: z.string().min(2, 'Bank name is required'),
+  bank_code: z.string().optional(),
+  currency: z.string().min(3, 'Currency is required'),
+  country: z.string().min(2, 'Country is required'),
+});

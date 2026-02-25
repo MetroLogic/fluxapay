@@ -33,7 +33,7 @@ jobs:
         run: npm ci --legacy-peer-deps
 
       - name: Format Check (Lint)
-        run: npm run lint -- --max-warnings=0
+        run: npx eslint . --max-warnings=0
         # Runs ESLint to verify code quality and formatting rules defined in eslint config.
         # This satisfies the "Format Check" requirement.
 
