@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useEffect } from "react";
 import {
   Copy,
   Check,
@@ -12,16 +12,31 @@ import {
   ToggleRight,
   Terminal,
   Braces,
-  OptionIcon as PythonIcon,
 } from "lucide-react";
+import { api } from "@/lib/api";
+import { DOCS_URLS } from "@/lib/docs";
 
 export default function DevelopersPage() {
   const [copied, setCopied] = useState<string | null>(null);
   const [showApiKey, setShowApiKey] = useState(false);
   const [testMode, setTestMode] = useState(true);
   const [activeTab, setActiveTab] = useState("rest");
+  const [apiKey, setApiKey] = useState("Loading...");
+  const [activeEndpoint, setActiveEndpoint] = useState<"create" | "status">("create");
 
-  const apiKey = "sk_live_51234567890abcdefghijklmnop";
+  useEffect(() => {
+    const fetchApiKey = async () => {
+      try {
+        const response = await api.merchant.getMe();
+        setApiKey(response.merchant.api_key || "No API key generated");
+      } catch (error) {
+        console.error("Failed to fetch API key:", error);
+        setApiKey("Failed to load API key");
+      }
+    };
+
+    fetchApiKey();
+  }, []);
 
   const copyToClipboard = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
@@ -29,102 +44,170 @@ export default function DevelopersPage() {
     setTimeout(() => setCopied(null), 2000);
   };
 
-  const styles = {
-    container: `min-h-screen bg-slate-950 text-slate-50`,
-    header: `bg-gradient-to-r from-slate-900 to-slate-800 border-b border-slate-800 sticky top-0 z-50`,
-    headerContent: `max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6`,
-    headerTitle: `text-3xl sm:text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-100 to-slate-300 mb-2`,
-    headerSubtitle: `text-slate-400 text-lg`,
+  // const styles = {
+  //   container: `min-h-screen bg-slate-950 text-slate-50`,
+  //   header: `bg-gradient-to-r from-slate-900 to-slate-800 border-b border-slate-800 sticky top-0 z-50`,
+  //   headerContent: `max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6`,
+  //   headerTitle: `text-3xl sm:text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-100 to-slate-300 mb-2`,
+  //   headerSubtitle: `text-slate-400 text-lg`,
 
-    mainContent: `max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12`,
-    gridContainer: `grid grid-cols-1 lg:grid-cols-3 gap-8`,
+  //   mainContent: `max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12`,
+  //   gridContainer: `grid grid-cols-1 lg:grid-cols-3 gap-8`,
 
-    section: `rounded-lg border border-slate-800 bg-slate-900/50 p-6 backdrop-blur`,
-    sectionTitle: `text-2xl font-bold text-slate-100 mb-6 flex items-center gap-3`,
-    sectionTitleIcon: `w-8 h-8 text-blue-400`,
+  //   section: `rounded-lg border border-slate-800 bg-slate-900/50 p-6 backdrop-blur`,
+  //   sectionTitle: `text-2xl font-bold text-slate-100 mb-6 flex items-center gap-3`,
+  //   sectionTitleIcon: `w-8 h-8 text-blue-400`,
 
-    card: `bg-slate-800/50 rounded-lg border border-slate-700 p-4 mb-4 hover:border-slate-600 transition`,
-    cardTitle: `text-lg font-semibold text-slate-100 mb-2`,
-    cardDesc: `text-slate-400 text-sm mb-4`,
+  //   card: `bg-slate-800/50 rounded-lg border border-slate-700 p-4 mb-4 hover:border-slate-600 transition`,
+  //   cardTitle: `text-lg font-semibold text-slate-100 mb-2`,
+  //   cardDesc: `text-slate-400 text-sm mb-4`,
 
-    button: `inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition`,
-    buttonPrimary: `bg-blue-600 text-white hover:bg-blue-700 active:scale-95`,
-    buttonSecondary: `bg-slate-700 text-slate-100 hover:bg-slate-600 active:scale-95`,
-    buttonIcon: `w-4 h-4`,
+  //   button: `inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition`,
+  //   buttonPrimary: `bg-blue-600 text-white hover:bg-blue-700 active:scale-95`,
+  //   buttonSecondary: `bg-slate-700 text-slate-100 hover:bg-slate-600 active:scale-95`,
+  //   buttonIcon: `w-4 h-4`,
 
-    toggleButton: `flex items-center gap-3 p-3 rounded-lg bg-slate-800/50 border border-slate-700 cursor-pointer hover:border-slate-600 transition`,
+  //   toggleButton: `flex items-center gap-3 p-3 rounded-lg bg-slate-800/50 border border-slate-700 cursor-pointer hover:border-slate-600 transition`,
 
-    badge: `inline-block px-3 py-1 rounded-full text-xs font-semibold bg-blue-600/20 text-blue-300 border border-blue-500/30`,
+  //   badge: `inline-block px-3 py-1 rounded-full text-xs font-semibold bg-blue-600/20 text-blue-300 border border-blue-500/30`,
 
-    input: `w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition font-mono text-sm`,
+  //   input: `w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition font-mono text-sm`,
 
-    codeBlock: `bg-slate-950 rounded-lg border border-slate-800 p-4 overflow-x-auto`,
-    codeText: `text-slate-300 font-mono text-sm leading-relaxed whitespace-pre-wrap break-words`,
+  //   codeBlock: `bg-slate-950 rounded-lg border border-slate-800 p-4 overflow-x-auto`,
+  //   codeText: `text-slate-300 font-mono text-sm leading-relaxed whitespace-pre-wrap break-words`,
 
-    tabContainer: `flex gap-2 mb-6 border-b border-slate-800 overflow-x-auto`,
-    tabButton: `px-4 py-2 font-medium text-sm border-b-2 transition whitespace-nowrap`,
-    tabButtonActive: `border-blue-500 text-blue-400`,
-    tabButtonInactive: `border-transparent text-slate-400 hover:text-slate-300`,
+  //   tabContainer: `flex gap-2 mb-6 border-b border-slate-800 overflow-x-auto`,
+  //   tabButton: `px-4 py-2 font-medium text-sm border-b-2 transition whitespace-nowrap`,
+  //   tabButtonActive: `border-blue-500 text-blue-400`,
+  //   tabButtonInactive: `border-transparent text-slate-400 hover:text-slate-300`,
 
-    docLink: `inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-800 text-slate-100 hover:bg-slate-700 transition border border-slate-700`,
-    docLinkText: `text-sm font-medium`,
+  //   docLink: `inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-800 text-slate-100 hover:bg-slate-700 transition border border-slate-700`,
+  //   docLinkText: `text-sm font-medium`,
+  // };
+
+  const baseUrl = testMode
+    ? "https://sandbox-api.fluxapay.com"
+    : "https://api.fluxapay.com";
+
+  const getCreatePaymentLines = (lang: "curl" | "js" | "python") => {
+    const body = {
+      amount: 100,
+      currency: "USDC",
+      customer_email: "customer@example.com",
+      order_id: "order_123",
+      success_url: "https://merchant.com/success",
+      cancel_url: "https://merchant.com/cancel",
+      metadata: { cart_id: "987" }
+    };
+
+    if (lang === "curl") {
+      return `curl -X POST ${baseUrl}/v1/payments \\
+  -H "Authorization: Bearer ${apiKey}" \\
+  -H "Content-Type: application/json" \\
+  -d '${JSON.stringify(body, null, 2)}'`;
+    }
+
+    if (lang === "js") {
+      return `import fetch from 'node-fetch';
+
+const response = await fetch('${baseUrl}/v1/payments', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer ${apiKey}',
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify(${JSON.stringify(body, null, 2)})
+});
+
+const data = await response.json();
+console.log(data);`;
+    }
+
+    return `import requests
+import json
+
+url = "${baseUrl}/v1/payments"
+headers = {
+    "Authorization": "Bearer ${apiKey}",
+    "Content-Type": "application/json"
+}
+payload = ${JSON.stringify(body, null, 4)}
+
+response = requests.post(url, headers=headers, data=json.dumps(payload))
+print(response.json())`;
   };
 
-  const restRequest = `curl -X GET \\
-  https://api.example.com/v1/users \\
-  -H "Authorization: Bearer ${apiKey}" \\
-  -H "Content-Type: application/json"`;
+  const getStatusPaymentLines = (lang: "curl" | "js" | "python") => {
+    const paymentId = "pay_123abc456";
+    const url = `${baseUrl}/v1/payments/${paymentId}`;
 
-  const restResponse = `{
-  "status": "success",
-  "data": [
-    {
-      "id": "user_123",
-      "name": "John Doe",
-      "email": "john@example.com",
-      "created_at": "2024-01-15T10:30:00Z"
-    },
-    {
-      "id": "user_456",
-      "name": "Jane Smith",
-      "email": "jane@example.com",
-      "created_at": "2024-01-16T14:45:00Z"
+    if (lang === "curl") {
+      return `curl -X GET ${url} \\
+  -H "Authorization: Bearer ${apiKey}"`;
     }
-  ],
-  "pagination": {
-    "total": 156,
-    "page": 1,
-    "limit": 20
-  }
-}`;
 
-  const jsRequest = `import fetch from 'node-fetch';
+    if (lang === "js") {
+      return `import fetch from 'node-fetch';
 
-const response = await fetch('https://api.example.com/v1/users', {
+const response = await fetch('${url}', {
   method: 'GET',
   headers: {
-    'Authorization': \`Bearer ${apiKey}\`,
-    'Content-Type': 'application/json'
+    'Authorization': 'Bearer ${apiKey}'
   }
 });
 
 const data = await response.json();
 console.log(data);`;
+    }
 
-  const pythonRequest = `import requests
+    return `import requests
 
+url = "${url}"
 headers = {
-    'Authorization': f'Bearer ${apiKey}',
-    'Content-Type': 'application/json'
+    "Authorization": "Bearer ${apiKey}"
 }
 
-response = requests.get(
-    'https://api.example.com/v1/users',
-    headers=headers
-)
+response = requests.get(url, headers=headers)
+print(response.json())`;
+  };
 
-data = response.json()
-print(data)`;
+  const getActiveRequest = () => {
+    const lang = activeTab === "rest" ? "curl" : (activeTab as "js" | "python");
+    return activeEndpoint === "create" ? getCreatePaymentLines(lang) : getStatusPaymentLines(lang);
+  };
+
+  const getActiveResponse = () => {
+    if (activeEndpoint === "create") {
+      return `{
+  "id": "pay_123abc456",
+  "amount": 100,
+  "currency": "USDC",
+  "status": "pending",
+  "checkout_url": "https://pay.fluxapay.com/pay_123abc456",
+  "customer_email": "customer@example.com",
+  "order_id": "order_123",
+  "metadata": {
+    "cart_id": "987"
+  },
+  "created_at": "${new Date().toISOString()}"
+}`;
+    }
+    return `{
+  "id": "pay_123abc456",
+  "amount": 100,
+  "currency": "USDC",
+  "status": "paid",
+  "customer_email": "customer@example.com",
+  "order_id": "order_123",
+  "transaction_hash": "tx_abc123...",
+  "confirmed_at": "${new Date().toISOString()}"
+}`;
+  };
+
+  const restRequest = getActiveRequest();
+  const restResponse = getActiveResponse();
+  const jsRequest = getActiveRequest();
+  const pythonRequest = getActiveRequest();
 
   return (
     <div
@@ -419,7 +502,7 @@ print(data)`;
               style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
             >
               <a
-                href="#"
+                href={DOCS_URLS.API_REFERENCE}
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -461,7 +544,7 @@ print(data)`;
               </a>
 
               <a
-                href="#"
+                href={DOCS_URLS.GETTING_STARTED}
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -503,7 +586,7 @@ print(data)`;
               </a>
 
               <a
-                href="#"
+                href={DOCS_URLS.AUTHENTICATION}
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -545,7 +628,7 @@ print(data)`;
               </a>
 
               <a
-                href="#"
+                href={DOCS_URLS.RATE_LIMITS}
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -781,6 +864,41 @@ print(data)`;
           >
             Sample Requests & Responses
           </h2>
+
+          <div style={{ display: "flex", gap: "1rem", marginBottom: "2rem" }}>
+            <button
+              onClick={() => setActiveEndpoint("create")}
+              style={{
+                padding: "0.75rem 1.5rem",
+                borderRadius: "0.5rem",
+                fontWeight: "600",
+                fontSize: "0.875rem",
+                backgroundColor: activeEndpoint === "create" ? "#fbbf24" : "#f3f4f6",
+                color: "#1a1a3e",
+                border: "none",
+                cursor: "pointer",
+                transition: "all 0.2s"
+              }}
+            >
+              Create Payment
+            </button>
+            <button
+              onClick={() => setActiveEndpoint("status")}
+              style={{
+                padding: "0.75rem 1.5rem",
+                borderRadius: "0.5rem",
+                fontWeight: "600",
+                fontSize: "0.875rem",
+                backgroundColor: activeEndpoint === "status" ? "#fbbf24" : "#f3f4f6",
+                color: "#1a1a3e",
+                border: "none",
+                cursor: "pointer",
+                transition: "all 0.2s"
+              }}
+            >
+              Get Payment Status
+            </button>
+          </div>
 
           {/* Tabs */}
           <div
@@ -1066,7 +1184,7 @@ print(data)`;
                 and use cases.
               </p>
               <a
-                href="#"
+                href={DOCS_URLS.FULL_DOCS}
                 style={{
                   color: "#fbbf24",
                   textDecoration: "none",
@@ -1111,7 +1229,7 @@ print(data)`;
                 Join our community forums and chat with other developers.
               </p>
               <a
-                href="#"
+                href={DOCS_URLS.COMMUNITY}
                 style={{
                   color: "#fbbf24",
                   textDecoration: "none",
@@ -1156,7 +1274,7 @@ print(data)`;
                 Check system status and get technical support from our team.
               </p>
               <a
-                href="#"
+                href={DOCS_URLS.STATUS}
                 style={{
                   color: "#fbbf24",
                   textDecoration: "none",
