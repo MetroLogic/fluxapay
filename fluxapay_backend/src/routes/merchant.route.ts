@@ -9,12 +9,16 @@ import {
   updateMerchantWebhook,
   rotateApiKey,
   rotateWebhookSecret,
+  adminListMerchants,
+  adminGetMerchant,
+  adminUpdateMerchantStatus,
   updateSettlementSchedule,
   addBankAccount,
 } from "../controllers/merchant.controller";
 import { validate } from "../middleware/validation.middleware";
 import * as merchantSchema from "../schemas/merchant.schema";
 import { authenticateToken } from "../middleware/auth.middleware";
+import { authorizeAdmin } from "../middleware/admin.middleware";
 import { updateSettlementScheduleSchema, bankAccountSchema } from "../schemas/merchant.schema";
 
 const router = Router();
@@ -279,6 +283,10 @@ router.post(
   rotateWebhookSecret,
 );
 
+// ── Admin routes ──────────────────────────────────────────────────────────────
+router.get("/admin/list", authorizeAdmin, adminListMerchants);
+router.get("/admin/:merchantId", authorizeAdmin, adminGetMerchant);
+router.patch("/admin/:merchantId/status", authorizeAdmin, adminUpdateMerchantStatus);
 /**
  * @swagger
  * /api/merchants/me/settlement-schedule:
