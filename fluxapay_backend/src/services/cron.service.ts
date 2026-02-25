@@ -19,14 +19,17 @@ import { schedule, validate, type ScheduledTask } from "node-cron";
 import { runSettlementBatch } from "./settlementBatch.service";
 import { processBillingCycle } from "./plan.service";
 import { sweepService } from "./sweep.service";
+import { funderMonitorService } from "./funderMonitor.service";
 
 const SETTLEMENT_CRON_EXPR = process.env.SETTLEMENT_CRON ?? "0 0 * * *";
 const BILLING_CRON_EXPR = process.env.BILLING_CRON ?? "0 1 * * *";
 const SWEEP_CRON_EXPR = process.env.SWEEP_CRON ?? "55 23 * * *"; // 23:55 UTC daily (5 min before settlement)
+const FUNDER_MONITOR_CRON_EXPR = process.env.FUNDER_MONITOR_CRON ?? "*/10 * * * *"; // every 10 minutes
 
 let settlementTask: ScheduledTask | null = null;
 let billingTask: ScheduledTask | null = null;
 let sweepTask: ScheduledTask | null = null;
+let funderMonitorTask: ScheduledTask | null = null;
 
 /**
  * Starts all scheduled cron jobs.
@@ -139,6 +142,34 @@ export function startCronJobs(): void {
   } else {
     console.log("[Cron] DISABLE_SWEEP_CRON=true – sweep job disabled.");
   }
+
+  // ── Funder Balance Monitor (XLM reserve funding wallet) ───────────────────
+  if (process.env.DISABLE_FUNDER_MONITOR_CRON !== "true") {
+    if (validate(FUNDER_MONITOR_CRON_EXPR)) {
+      funderMonitorTask = schedule(
+        FUNDER_MONITOR_CRON_EXPR,
+        async () => {
+          try {
+            const status = await funderMonitorService.getBalanceStatus();
+            if (!status.ok) {
+              console.warn(
+                `[Cron] ⚠️ FUNDER wallet low balance: ${status.xlmBalance} XLM (threshold=${status.thresholdXlm}). pub=${status.publicKey}`,
+              );
+            }
+          } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            console.error(`[Cron] ❌ Funder monitor failed: ${msg}`);
+          }
+        },
+        { timezone: "UTC" },
+      );
+      console.log(`[Cron] ✅ Funder monitor job scheduled (${FUNDER_MONITOR_CRON_EXPR}) in UTC.`);
+    } else {
+      console.warn(`[Cron] Invalid FUNDER_MONITOR_CRON "${FUNDER_MONITOR_CRON_EXPR}" – funder monitor disabled.`);
+    }
+  } else {
+    console.log("[Cron] DISABLE_FUNDER_MONITOR_CRON=true – funder monitor job disabled.");
+  }
 }
 
 /**
@@ -150,6 +181,7 @@ export function stopCronJobs(): void {
     [settlementTask, "Settlement batch"],
     [billingTask, "Billing cycle"],
     [sweepTask, "Sweep"],
+    [funderMonitorTask, "Funder monitor"],
   ];
   for (const [task, name] of tasks) {
     if (task) {
@@ -160,4 +192,5 @@ export function stopCronJobs(): void {
   settlementTask = null;
   billingTask = null;
   sweepTask = null;
+  funderMonitorTask = null;
 }
