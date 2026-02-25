@@ -1,18 +1,7 @@
 import type { Metadata } from "next";
-import { Inter, Caveat } from "next/font/google";
 import "@/styles/globals.css";
 import { Providers } from "./providers";
 import { Toaster } from "react-hot-toast";
-
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-inter",
-});
-
-const caveat = Caveat({
-  subsets: ["latin"],
-  variable: "--font-caveat",
-});
 
 export const metadata: Metadata = {
   title: "FluxaPay | Global Payment Infrastructure",
@@ -26,7 +15,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${inter.variable} ${caveat.variable} font-sans antialiased`}>
+      <body className="font-sans antialiased">
         <Providers>{children}</Providers>
         <Toaster position="top-right" />
       </body>
