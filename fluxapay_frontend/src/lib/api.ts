@@ -95,6 +95,13 @@ function adminHeaders(): Record<string, string> {
   return headers;
 }
 
+/** Authenticated fetch that builds the full URL */
+function adminFetch(endpoint: string, options: RequestInit = {}): Promise<Response> {
+  return fetch(`${API_BASE_URL}${endpoint}`, {
+    ...options,
+    headers: { ...adminHeaders(), ...(options.headers as Record<string, string> || {}) },
+  });
+}
 function refundAdminKeyHeader(): Record<string, string> {
   const header: Record<string, string> = {};
   const adminApiKey = process.env.NEXT_PUBLIC_ADMIN_API_KEY;
@@ -169,6 +176,51 @@ export const api = {
         method: "POST",
         headers: adminHeaders(),
       }),
+  },
+
+  // Admin merchant management
+  adminMerchants: {
+    list: (params?: { page?: number; limit?: number; status?: string }) => {
+      const qs = new URLSearchParams();
+      if (params?.page) qs.set("page", String(params.page));
+      if (params?.limit) qs.set("limit", String(params.limit));
+      if (params?.status) qs.set("status", params.status);
+      return adminFetch(`/api/merchants/admin/list?${qs.toString()}`);
+    },
+    get: (merchantId: string) =>
+      adminFetch(`/api/merchants/admin/${merchantId}`),
+    updateStatus: (merchantId: string, status: string) =>
+      adminFetch(`/api/merchants/admin/${merchantId}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ status }),
+      }),
+  },
+
+  // Admin KYC management
+  adminKyc: {
+    list: (params?: { status?: string; page?: number; limit?: number }) => {
+      const qs = new URLSearchParams();
+      if (params?.status) qs.set("status", params.status);
+      if (params?.page) qs.set("page", String(params.page));
+      if (params?.limit) qs.set("limit", String(params.limit));
+      return fetchWithAuth(`/api/merchants/kyc/admin/submissions?${qs.toString()}`);
+    },
+    getByMerchant: (merchantId: string) =>
+      fetchWithAuth(`/api/merchants/kyc/admin/${merchantId}`),
+    updateStatus: (
+      merchantId: string,
+      body: { kyc_status: string; rejection_reason?: string },
+    ) =>
+      fetchWithAuth(`/api/merchants/kyc/admin/${merchantId}/status`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      }),
+  },
+
+  // Health / readiness
+  health: {
+    check: () => fetch(`${API_BASE_URL}/health`),
+    ready: () => fetch(`${API_BASE_URL}/ready`),
   },
 
   // Settlements (merchant-scoped)

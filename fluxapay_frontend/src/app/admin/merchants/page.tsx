@@ -1,5 +1,6 @@
 "use client";
 
+
 import React, { useState, useRef, JSX } from 'react';
 import {
     Search,
@@ -19,12 +20,13 @@ import {
     Shield,
     UserCheck,
     UserX,
-    FileText
+    FileText,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import EmptyState from '@/components/EmptyState';
-import { useAdminMerchants, type AdminMerchant } from '@/hooks/useAdminMerchants';
 import { api } from '@/lib/api';
+import { useAdminMerchants, type AdminMerchant } from '@/hooks/useAdminMerchants';
+
 
 interface StatusConfig {
     color: string;
@@ -64,7 +66,7 @@ const AdminMerchantsPage = () => {
                     border: 'border-emerald-200',
                     icon: <UserCheck className="w-3 h-3" />
                 };
-            case 'pending':
+            case 'pending_review':
                 return {
                     color: 'text-amber-700',
                     bg: 'bg-amber-50',
@@ -130,29 +132,30 @@ const AdminMerchantsPage = () => {
         return matchesSearch;
     });
 
-    const updateMerchantKyc = async (id: string, status: 'approved' | 'rejected') => {
+    const updateMerchantKyc = async (id: string, status: AdminMerchant['kycStatus']) => {
         try {
-            await api.kyc.admin.updateStatus(id, { status });
-            toast.success(`KYC ${status} successfully`);
-            setSelectedMerchant(null);
+            await api.adminKyc.updateStatus(id, { kyc_status: status });
             void mutate();
+            toast.success(`KYC status updated to ${status}`);
         } catch {
             toast.error('Failed to update KYC status');
         }
+        setSelectedMerchant(null);
     };
 
     const toggleAccountStatus = async (id: string) => {
-        const m = merchants.find(x => x.id === id);
-        if (!m) return;
-        const next = m.accountStatus === 'active' ? 'suspended' : 'active';
+        const merchant = merchants.find(m => m.id === id);
+        if (!merchant) return;
+        const newStatus = merchant.accountStatus === 'active' ? 'pending_verification' : 'active';
         try {
-            await api.admin.merchants.updateStatus(id, next as 'active' | 'suspended');
-            toast.success(`Account ${next}`);
-            setSelectedMerchant(null);
+            const res = await api.adminMerchants.updateStatus(id, newStatus);
+            if (!res.ok) throw new Error();
             void mutate();
+            toast.success(`Merchant ${newStatus === 'active' ? 'activated' : 'suspended'}`);
         } catch {
             toast.error('Failed to update account status');
         }
+        setSelectedMerchant(null);
     };
 
     const resetApiKeys = (id: string) => {
