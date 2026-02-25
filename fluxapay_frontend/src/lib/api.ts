@@ -18,6 +18,33 @@ export interface AuthLoginRequest {
   password: string;
 }
 
+export type RefundReason =
+  | "customer_request"
+  | "duplicate_payment"
+  | "failed_delivery"
+  | "merchant_request"
+  | "dispute_resolution";
+
+export interface InitiateRefundRequest {
+  paymentId: string;
+  merchantId: string;
+  amount: number;
+  currency: "USDC" | "XLM";
+  customerAddress: string;
+  reason: RefundReason;
+  reasonNote?: string;
+}
+
+export type RefundStatus = "initiated" | "processing" | "completed" | "failed";
+
+export interface ListRefundsParams {
+  paymentId?: string;
+  merchantId?: string;
+  status?: RefundStatus;
+  page?: number;
+  limit?: number;
+}
+
 class ApiError extends Error {
   constructor(
     public status: number,
@@ -74,6 +101,11 @@ function adminFetch(endpoint: string, options: RequestInit = {}): Promise<Respon
     ...options,
     headers: { ...adminHeaders(), ...(options.headers as Record<string, string> || {}) },
   });
+function refundAdminKeyHeader(): Record<string, string> {
+  const header: Record<string, string> = {};
+  const adminApiKey = process.env.NEXT_PUBLIC_ADMIN_API_KEY;
+  if (adminApiKey) header["X-Admin-API-Key"] = adminApiKey;
+  return header;
 }
 
 export const api = {
@@ -243,6 +275,33 @@ export const api = {
           body: JSON.stringify(body),
         }),
     },
+  },
+
+  // Refunds (admin-authorized backend flow)
+  refunds: {
+    initiate: (data: InitiateRefundRequest) =>
+      fetchWithAuth("/api/refunds", {
+        method: "POST",
+        headers: refundAdminKeyHeader(),
+        body: JSON.stringify(data),
+      }),
+    list: (params?: ListRefundsParams) => {
+      const sp = new URLSearchParams();
+      if (params?.paymentId) sp.set("paymentId", params.paymentId);
+      if (params?.merchantId) sp.set("merchantId", params.merchantId);
+      if (params?.status) sp.set("status", params.status);
+      if (params?.page != null) sp.set("page", String(params.page));
+      if (params?.limit != null) sp.set("limit", String(params.limit));
+
+      const query = sp.toString();
+      return fetchWithAuth(`/api/refunds${query ? `?${query}` : ""}`, {
+        headers: refundAdminKeyHeader(),
+      });
+    },
+    getById: (refundId: string) =>
+      fetchWithAuth(`/api/refunds/${refundId}`, {
+        headers: refundAdminKeyHeader(),
+      }),
   },
 
   // Dashboard overview (metrics, charts, activity)
