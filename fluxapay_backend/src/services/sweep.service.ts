@@ -58,7 +58,8 @@ export class SweepService {
     this.server = new Horizon.Server(horizonUrl);
     this.networkPassphrase = process.env.STELLAR_NETWORK_PASSPHRASE || Networks.TESTNET;
 
-    const issuer = process.env.USDC_ISSUER_PUBLIC_KEY ||
+    const issuer =
+      process.env.USDC_ISSUER_PUBLIC_KEY ||
       "GBBD47IF6LWK7P7MDEVSCWT73IQIGCEZHR7OMXMBZQ3ZONN2T4U6W23Y";
     this.usdcAsset = new Asset("USDC", issuer);
 
@@ -115,15 +116,15 @@ export class SweepService {
    * Runs a sweep.
    *
    * For safety and simplicity, this submits **one tx per payment address**.
-   * (Can be optimized later with batching + manageData memoing, etc.)
    */
   public async sweepPaidPayments(options: SweepOptions = {}): Promise<SweepResult> {
     const startedAt = new Date();
     const sweepId = `sweep_${startedAt.getTime()}`;
 
-    const limit = Number.isFinite(options.limit) && (options.limit as number) > 0
-      ? (options.limit as number)
-      : parseInt(process.env.SWEEP_BATCH_LIMIT || "200", 10);
+    const limit =
+      Number.isFinite(options.limit) && (options.limit as number) > 0
+        ? (options.limit as number)
+        : parseInt(process.env.SWEEP_BATCH_LIMIT || "200", 10);
 
     const adminId = options.adminId || "system";
     const dryRun = options.dryRun === true;
@@ -164,7 +165,7 @@ export class SweepService {
           continue;
         }
 
-        // Sweep the expected amount. (If address contains more than expected, leave dust.)
+        // Sweep the expected amount.
         const amountStr = expected.toFixed(7);
         const hash = await this.submitUsdcSweepTx({
           sourceSecret: kp.secretKey,
@@ -184,7 +185,7 @@ export class SweepService {
         txHashes.push(hash);
         addressesSwept += 1;
         total += expected;
-      } catch (err: any) {
+      } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
         skipped.push({ paymentId: p.id, reason: msg });
       }
@@ -201,9 +202,13 @@ export class SweepService {
           total_amount: total.toFixed(7),
           transaction_hash: txHashes[0],
         },
-        failureReason: skipped.length > 0 && addressesSwept === 0
-          ? skipped.map(s => `${s.paymentId}:${s.reason}`).slice(0, 5).join(" | ")
-          : undefined,
+        failureReason:
+          skipped.length > 0 && addressesSwept === 0
+            ? skipped
+                .map((s) => `${s.paymentId}:${s.reason}`)
+                .slice(0, 5)
+                .join(" | ")
+            : undefined,
       });
     }
 

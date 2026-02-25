@@ -1,6 +1,23 @@
 // API Client for FluxaPay Backend
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
+export interface AuthSignupRequest {
+  name: string;
+  businessName: string;
+  email: string;
+  password: string;
+  country: string;
+  settlementCurrency: string;
+  accountNumber: string;
+  bankName: string;
+  bankCode: string;
+}
+
+export interface AuthLoginRequest {
+  email: string;
+  password: string;
+}
+
 class ApiError extends Error {
   constructor(
     public status: number,
@@ -52,6 +69,28 @@ function adminHeaders(): Record<string, string> {
 }
 
 export const api = {
+  // Authentication
+  auth: {
+    signup: (data: AuthSignupRequest) =>
+      fetch(`${API_BASE_URL}/api/v1/auth/signup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      }).then((res) => {
+        if (!res.ok) throw new ApiError(res.status, "Signup failed");
+        return res.json();
+      }),
+    login: (data: AuthLoginRequest) =>
+      fetch(`${API_BASE_URL}/api/v1/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      }).then((res) => {
+        if (!res.ok) throw new ApiError(res.status, "Login failed");
+        return res.json();
+      }),
+  },
+
   // Merchant endpoints
   merchant: {
     getMe: () => fetchWithAuth("/api/v1/merchants/me"),
