@@ -305,6 +305,22 @@ model ReconciliationAlert {
   created_at       DateTime                @default(now())
 }
 
+model AuditLog {
+  id          String          @id @default(cuid())
+  admin_id    String
+  action_type AuditActionType
+  entity_type AuditEntityType
+  entity_id   String
+  details     Json
+  created_at  DateTime        @default(now())
+
+  @@index([created_at])
+  @@index([admin_id])
+  @@index([action_type])
+  @@index([entity_id])
+  @@index([entity_type, entity_id])
+}
+
 // ─── Enums ────────────────────────────────────────────────────────────────────
 
 enum MerchantStatus {
@@ -433,4 +449,23 @@ enum AlertSeverity {
   medium
   high
   critical
+}
+
+enum AuditActionType {
+  kyc_approve
+  kyc_reject
+  config_change
+  sweep_trigger
+  sweep_complete
+  sweep_fail
+  settlement_batch_initiate
+  settlement_batch_complete
+  settlement_batch_fail
+}
+
+enum AuditEntityType {
+  merchant_kyc
+  system_config
+  sweep_operation
+  settlement_batch
 }
