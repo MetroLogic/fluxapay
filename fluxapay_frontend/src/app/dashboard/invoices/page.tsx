@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { MOCK_INVOICES, Invoice, InvoiceStatus } from "@/features/dashboard/invoices/invoices-mock";
+import { MOCK_INVOICES, Invoice } from "@/features/dashboard/invoices/invoices-mock";
 import { InvoicesTable } from "@/features/dashboard/invoices/InvoicesTable";
 import { InvoiceDetails } from "@/features/dashboard/invoices/InvoiceDetails";
 import { InvoiceForm } from "@/features/dashboard/invoices/InvoiceForm";

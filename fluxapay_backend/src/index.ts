@@ -5,7 +5,6 @@ import { startPaymentMonitor } from "./services/paymentMonitor.service";
 dotenv.config();
 
 import { app } from "./app";
-import { startCronJobs } from "./services/cron.service";
 
 const PORT = process.env.PORT || 3001;
 

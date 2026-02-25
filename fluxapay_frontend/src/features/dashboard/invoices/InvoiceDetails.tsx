@@ -69,7 +69,7 @@ export const InvoiceDetails = ({ invoice }: InvoiceDetailsProps) => {
     });
     
     // Footer details (Payment Info & Notes)
-    const finalY = (doc as any).lastAutoTable.finalY || 100;
+    const finalY = (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY || 100;
     
     doc.setFontSize(10);
     doc.setTextColor(40);
