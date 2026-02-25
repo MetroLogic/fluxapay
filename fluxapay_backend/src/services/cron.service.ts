@@ -60,6 +60,20 @@ export function startCronJobs(): void {
     console.log(
         `[Cron] ✅ Settlement batch job scheduled (${SETTLEMENT_CRON_EXPR}) in UTC timezone.`,
     );
+
+    // ── Payment Monitor Tick (Every 1 minute) ──────────────────────────────────
+    schedule("*/1 * * * *", async () => {
+        console.log(`[Cron] ⏰ Payment monitor tick triggered at ${new Date().toISOString()}`);
+        try {
+            const { runPaymentMonitorTick } = await import("./paymentMonitor.service");
+            await runPaymentMonitorTick();
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            console.error(`[Cron] ❌ Payment monitor tick failed: ${msg}`);
+        }
+    });
+
+    console.log("[Cron] ✅ Payment monitor job scheduled (every 1 minute).");
 }
 
 /**
