@@ -135,7 +135,7 @@ export async function getAuditLogByIdHandler(req: AuthRequest, res: Response) {
   try {
     const { id } = req.params;
 
-    if (!id) {
+    if (!id || typeof id !== 'string') {
       return res.status(400).json({
         success: false,
         error: {
