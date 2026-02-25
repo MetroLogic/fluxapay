@@ -1,6 +1,7 @@
-import { PrismaClient, Payment } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 import { HDWalletService } from './HDWalletService';
-import { Server, TransactionBuilder, Networks, Operation, Asset, Keypair, AccountResponse, BalanceLine } from 'stellar-sdk';
+import Server from 'stellar-sdk';
+import { TransactionBuilder, Networks, Operation, Asset, Keypair } from 'stellar-sdk';
 
 
 const prisma = new PrismaClient();
@@ -10,7 +11,7 @@ const TREASURY_ADDRESS = process.env.TREASURY_ADDRESS!;
 export class SweepService {
   static async sweepPayments() {
     // Find eligible payments
-    const payments: Payment[] = await prisma.payment.findMany({
+  const payments = await prisma.payment.findMany({
       where: {
         status: { in: ['confirmed', 'paid'] },
         swept: false,
@@ -28,12 +29,12 @@ export class SweepService {
         const server = new Server(process.env.STELLAR_HORIZON_URL!);
         const account = await server.loadAccount(payment.stellar_address!);
         // Get USDC balance
-        const usdcBalance = (account.balances as BalanceLine[]).find((b: any) => b.asset_code === 'USDC' && b.asset_issuer === process.env.USDC_ISSUER)?.balance;
+        const usdcBalance = (account.balances as Array<any>).find((b) => b.asset_code === 'USDC' && b.asset_issuer === process.env.USDC_ISSUER)?.balance;
         if (!usdcBalance || parseFloat(usdcBalance) === 0) continue;
         // Build transaction: sweep USDC
         const txBuilder = new TransactionBuilder(account, {
           fee: await server.fetchBaseFee(),
-          networkPassphrase: Networks[process.env.STELLAR_NETWORK!],
+          networkPassphrase: process.env.STELLAR_NETWORK!,
         })
           .addOperation(Operation.payment({
             destination: TREASURY_ADDRESS,
