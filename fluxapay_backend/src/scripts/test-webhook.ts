@@ -68,7 +68,7 @@ async function runTest() {
 
             // 3. Confirm payment (this should trigger the webhook)
             console.log('Confirming payment...');
-            await PaymentService.confirmPayment(payment.id, 'TXN-ABC-123', 'PAYER-ADDR-XYZ');
+            await (PaymentService as any).verifyPayment(payment.id, 'TXN-ABC-123', 'PAYER-ADDR-XYZ', 100);
 
             console.log('Payment confirmed.');
 

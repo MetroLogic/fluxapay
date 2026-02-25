@@ -42,7 +42,7 @@ export const createPayment = async (req: Request, res: Response) => {
     });
 
     res.status(201).json(updatedPayment);
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error creating payment:', error);
     res.status(500).json({ error: "Failed to create payment" });
   }
@@ -54,7 +54,7 @@ export const getPayments = async (req: Request, res: Response) => {
     const merchantId = authReq.merchantId;
 
     // 1. Destructure with explicit type casting immediately
-    const query = req.query as Record<string, any>;
+    const query = req.query as Record<string, unknown>;
 
     const page = Number(query.page) || 1;
     const limit = Number(query.limit) || 10;
@@ -70,7 +70,7 @@ export const getPayments = async (req: Request, res: Response) => {
     const sortBy = typeof query.sort_by === 'string' ? query.sort_by : 'createdAt';
     const sortOrder: 'asc' | 'desc' = query.order === 'asc' ? 'asc' : 'desc';
 
-    const where: any = {
+    const where: Record<string, unknown> = {
       merchantId: merchantId,
       ...(status && { status }),
       ...(currency && { currency }),
@@ -96,7 +96,7 @@ export const getPayments = async (req: Request, res: Response) => {
         orderBy: { [sortBy]: sortOrder }
       });
       const header = "ID,OrderID,Amount,Currency,Status,Email,Date\n";
-      const csv = payments.map((p: any) =>
+      const csv = payments.map((p) =>
         `${p.id},${p.order_id || ''},${p.amount},${p.currency},${p.status},${p.customer_email},${p.createdAt}`
       ).join("\n");
       res.setHeader("Content-Type", "text/csv");
@@ -116,7 +116,7 @@ export const getPayments = async (req: Request, res: Response) => {
     ]);
 
     res.json({ data, meta: { total, page, limit } });
-  } catch (error) {
+  } catch (error: unknown) {
     res.status(500).json({ error: "Internal Server Error" });
   }
 };
@@ -151,7 +151,7 @@ export const getPaymentById = async (req: Request, res: Response) => {
     };
 
     res.json(responseData);
-  } catch (error) {
+  } catch (error: unknown) {
     res.status(500).json({ error: "Error fetching details" });
   }
 };

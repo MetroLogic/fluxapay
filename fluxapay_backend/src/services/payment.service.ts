@@ -1,8 +1,10 @@
-import { PrismaClient } from '../generated/client/client';
+import { PrismaClient, PaymentStatus } from "../generated/client/client";
 import { v4 as uuidv4 } from 'uuid';
 import { createAndDeliverWebhook, generateMerchantPayload } from './webhook.service';
 import { HDWalletService } from './HDWalletService';
 import { StellarService } from './StellarService';
+import { sorobanService } from './SorobanService';
+import { eventBus, AppEvents } from "./EventService";
 
 const prisma = new PrismaClient();
 
@@ -85,29 +87,41 @@ export class PaymentService {
     return payment;
   }
 
-  static async confirmPayment(paymentId: string, txnHash: string, payerAddress: string) {
+  /**
+   * Verifies a payment on-chain, updates the database, and emits an internal event.
+   */
+  static async verifyPayment(
+    paymentId: string,
+    transactionHash: string,
+    payerAddress: string,
+    amountReceived: number
+  ): Promise<any> {
+    // 1. Verify on Soroban
+    const onChainVerified = await sorobanService.verifyPaymentOnChain(
+      paymentId,
+      transactionHash,
+      payerAddress,
+      amountReceived
+    );
+
+    if (!onChainVerified) {
+      throw new Error('Payment verification failed on-chain');
+    }
+
+    // 2. Update local PostgreSQL database
     const payment = await prisma.payment.update({
       where: { id: paymentId },
       data: {
         status: 'confirmed',
-        transaction_hash: txnHash,
+        transaction_hash: transactionHash,
         payer_address: payerAddress,
         confirmed_at: new Date(),
-      },
-      include: {
-        merchant: true,
-      },
+        onchain_verified: true,
+      }
     });
 
-    if (payment.merchant?.webhook_url) {
-      const payload = generateMerchantPayload(payment);
-      await createAndDeliverWebhook(
-        payment.merchantId,
-        'payment_confirmed' as any,
-        payload,
-        payment.id
-      );
-    }
+    // 3. Emit internal event for Webhook Service to pick up
+    eventBus.emit(AppEvents.PAYMENT_CONFIRMED, payment);
 
     return payment;
   }

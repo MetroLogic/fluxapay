@@ -45,7 +45,7 @@ export const runReconciliationService = async (params: RunReconciliationParams) 
     });
 
     // Calculate totals
-    const totalUsdcSwept = payments.reduce(
+    const totalUsdcSwept = (payments as any[]).reduce(
         (sum: number, p: any) => sum + Number(p.amount),
         0
     );
