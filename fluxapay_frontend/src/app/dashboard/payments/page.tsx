@@ -1,29 +1,53 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   MOCK_PAYMENTS,
-  Payment,
 } from "@/features/dashboard/payments/payments-mock";
 import { PaymentsTable } from "@/features/dashboard/payments/PaymentsTable";
 import { PaymentsFilters } from "@/features/dashboard/payments/PaymentsFilters";
 import { PaymentDetails } from "@/features/dashboard/payments/PaymentDetails";
+import {
+  MOCK_REFUNDS,
+  type RefundRecord,
+  type RefundReason,
+} from "@/features/dashboard/refunds/refunds-mock";
 import { Modal } from "@/components/Modal";
 import { Button } from "@/components/Button";
 import { Download, Plus } from "lucide-react";
 import { Suspense } from "react";
+import toast from "react-hot-toast";
+import { api } from "@/lib/api";
+
+interface BackendRefund {
+  id: string;
+  payment_id: string;
+  merchant_id: string;
+  amount: number;
+  currency: "USDC" | "XLM";
+  customer_address: string;
+  reason: RefundReason;
+  reason_note?: string;
+  status: RefundRecord["status"];
+  stellar_tx_hash?: string;
+  created_at: string;
+}
 
 function PaymentsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const shouldOpenCreateLink =
     searchParams.get("action") === "create-payment-link";
+  const paymentIdFromQuery = searchParams.get("paymentId");
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [currencyFilter, setCurrencyFilter] = useState("all");
-  const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
+  const [selectedPaymentId, setSelectedPaymentId] = useState<string | null>(
+    paymentIdFromQuery || null,
+  );
+  const [refunds, setRefunds] = useState<RefundRecord[]>(MOCK_REFUNDS);
   const [showCreateLinkModal, setShowCreateLinkModal] =
     useState(shouldOpenCreateLink);
   const [linkAmount, setLinkAmount] = useState("100");
@@ -47,6 +71,26 @@ function PaymentsContent() {
       return matchesSearch && matchesStatus && matchesCurrency;
     });
   }, [search, statusFilter, currencyFilter]);
+
+  const selectedPayment = useMemo(() => {
+    const id = selectedPaymentId ?? paymentIdFromQuery;
+    if (!id) return null;
+    return MOCK_PAYMENTS.find((item) => item.id === id) ?? null;
+  }, [selectedPaymentId, paymentIdFromQuery]);
+
+  const mapBackendRefund = (refund: BackendRefund): RefundRecord => ({
+    id: refund.id,
+    paymentId: refund.payment_id,
+    merchantId: refund.merchant_id,
+    amount: refund.amount,
+    currency: refund.currency,
+    customerAddress: refund.customer_address,
+    reason: refund.reason,
+    reasonNote: refund.reason_note,
+    status: refund.status,
+    stellarTxHash: refund.stellar_tx_hash,
+    createdAt: refund.created_at,
+  });
 
   const handleExportCSV = () => {
     const headers = [
@@ -103,6 +147,47 @@ function PaymentsContent() {
     await navigator.clipboard.writeText(generatedLink);
   };
 
+  const handleInitiateRefund = async (payload: {
+    paymentId: string;
+    merchantId: string;
+    amount: number;
+    currency: "USDC" | "XLM";
+    customerAddress: string;
+    reason: RefundReason;
+    reasonNote?: string;
+  }) => {
+    try {
+      const response = (await api.refunds.initiate(payload)) as {
+        refund?: BackendRefund;
+      };
+
+      const createdRefund: RefundRecord = response.refund
+        ? mapBackendRefund(response.refund)
+        : {
+            id: `ref_${Date.now()}`,
+            paymentId: payload.paymentId,
+            merchantId: payload.merchantId,
+            amount: payload.amount,
+            currency: payload.currency,
+            customerAddress: payload.customerAddress,
+            reason: payload.reason,
+            reasonNote: payload.reasonNote,
+            status: "initiated",
+            createdAt: new Date().toISOString(),
+          };
+
+      setRefunds((prev) => [createdRefund, ...prev]);
+      toast.success("Refund submitted successfully.");
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Unable to submit refund at this time.";
+      toast.error(message);
+      throw error;
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -115,6 +200,13 @@ function PaymentsContent() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <Button
+            variant="secondary"
+            className="gap-2"
+            onClick={() => router.push("/dashboard/refunds")}
+          >
+            Refunds
+          </Button>
           <Button
             variant="secondary"
             className="gap-2"
@@ -139,7 +231,7 @@ function PaymentsContent() {
 
         <PaymentsTable
           payments={filteredPayments}
-          onRowClick={(payment) => setSelectedPayment(payment)}
+          onRowClick={(payment) => setSelectedPaymentId(payment.id)}
         />
 
         <div className="mt-6 flex items-center justify-between text-sm text-muted-foreground">
@@ -159,10 +251,22 @@ function PaymentsContent() {
 
       <Modal
         isOpen={!!selectedPayment}
-        onClose={() => setSelectedPayment(null)}
+        onClose={() => {
+          setSelectedPaymentId(null);
+          if (paymentIdFromQuery) router.replace("/dashboard/payments");
+        }}
         title="Payment Details"
       >
-        {selectedPayment && <PaymentDetails payment={selectedPayment} />}
+        {selectedPayment && (
+          <PaymentDetails
+            payment={selectedPayment}
+            refunds={refunds}
+            onCreateRefund={handleInitiateRefund}
+            onOpenRefundsSection={() =>
+              router.push(`/dashboard/refunds?paymentId=${selectedPayment.id}`)
+            }
+          />
+        )}
       </Modal>
 
       <Modal
