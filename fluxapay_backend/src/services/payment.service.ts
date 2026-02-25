@@ -1,5 +1,6 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '../generated/client/client';
 import { v4 as uuidv4 } from 'uuid';
+import { createAndDeliverWebhook, generateMerchantPayload } from './webhook.service';
 import { HDWalletService } from './HDWalletService';
 import { StellarService } from './StellarService';
 
@@ -64,7 +65,7 @@ export class PaymentService {
         currency,
         customer_email,
         merchantId,
-        metadata: metadata ?? {},
+        metadata: (metadata ?? {}) as any,
         expiration,
         status: 'pending',
         checkout_url,
@@ -73,14 +74,41 @@ export class PaymentService {
         stellar_address: stellarAddress,
       },
     });
-    
+
     // Prepare the Stellar account asynchronously (fund and add trustline)
     // This runs in the background to avoid blocking payment creation
     const stellarService = new StellarService();
     stellarService.prepareAccount(merchantId, paymentId).catch((error) => {
       console.error(`Failed to prepare Stellar account for payment ${paymentId}:`, error);
     });
-    
+
+    return payment;
+  }
+
+  static async confirmPayment(paymentId: string, txnHash: string, payerAddress: string) {
+    const payment = await prisma.payment.update({
+      where: { id: paymentId },
+      data: {
+        status: 'confirmed',
+        transaction_hash: txnHash,
+        payer_address: payerAddress,
+        confirmed_at: new Date(),
+      },
+      include: {
+        merchant: true,
+      },
+    });
+
+    if (payment.merchant?.webhook_url) {
+      const payload = generateMerchantPayload(payment);
+      await createAndDeliverWebhook(
+        payment.merchantId,
+        'payment_confirmed' as any,
+        payload,
+        payment.id
+      );
+    }
+
     return payment;
   }
 }
