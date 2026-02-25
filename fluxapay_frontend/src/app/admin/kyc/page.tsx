@@ -16,12 +16,12 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import EmptyState from "@/components/EmptyState";
+import { api } from "@/lib/api";
 import {
   useKycSubmissions,
   useKycDetails,
   type KycApplicationShape,
 } from "@/hooks/useKycSubmissions";
-import { api } from "@/lib/api";
 
 interface StatusConfig {
   color: string;

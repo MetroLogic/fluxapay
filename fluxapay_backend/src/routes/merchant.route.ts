@@ -9,6 +9,9 @@ import {
   updateMerchantWebhook,
   rotateApiKey,
   rotateWebhookSecret,
+  adminListMerchants,
+  adminGetMerchant,
+  adminUpdateMerchantStatus,
   updateSettlementSchedule,
   addBankAccount,
 } from "../controllers/merchant.controller";
@@ -17,6 +20,7 @@ import * as merchantSchema from "../schemas/merchant.schema";
 import { authenticateToken } from "../middleware/auth.middleware";
 indempotency-rate-limiting
 import { idempotencyMiddleware } from "../middleware/idempotency.middleware";
+import { authorizeAdmin } from "../middleware/admin.middleware";
 import { updateSettlementScheduleSchema, bankAccountSchema } from "../schemas/merchant.schema";
 main
 
@@ -283,6 +287,10 @@ router.post(
   rotateWebhookSecret,
 );
 
+// ── Admin routes ──────────────────────────────────────────────────────────────
+router.get("/admin/list", authorizeAdmin, adminListMerchants);
+router.get("/admin/:merchantId", authorizeAdmin, adminGetMerchant);
+router.patch("/admin/:merchantId/status", authorizeAdmin, adminUpdateMerchantStatus);
 /**
  * @swagger
  * /api/merchants/me/settlement-schedule:

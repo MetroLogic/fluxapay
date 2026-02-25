@@ -12,6 +12,7 @@ import {
   Code,
   X,
   Webhook,
+  FileText,
   RefreshCcw,
 } from "lucide-react";
 import Image from "next/image";
@@ -26,6 +27,7 @@ interface SidebarProps {
 const navItems = [
   { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
   { name: "Payments", href: "/dashboard/payments", icon: CreditCard },
+  { name: "Invoices", href: "/dashboard/invoices", icon: FileText },
   { name: "Refunds", href: "/dashboard/refunds", icon: RefreshCcw },
   { name: "Settlements", href: "/dashboard/settlements", icon: Landmark },
   { name: "Webhooks", href: "/dashboard/webhooks", icon: Webhook },

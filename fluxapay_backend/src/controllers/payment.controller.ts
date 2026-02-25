@@ -203,6 +203,10 @@ export const getPayments = async (req: Request, res: Response) => {
     const authReq = req as AuthRequest;
     const merchantId = authReq.merchantId;
 
+    if (!merchantId) {
+      return res.status(401).json({ error: "Unauthorized: Merchant ID missing" });
+    }
+
     // 1. Destructure with explicit type casting immediately
     const query = req.query as Record<string, unknown>;
 
