@@ -28,9 +28,12 @@ export class SorobanService {
 
         const oracleSecret = process.env.SOROBAN_ORACLE_SECRET;
         if (!oracleSecret) {
-            throw new Error('SOROBAN_ORACLE_SECRET is not defined');
+            console.warn('SOROBAN_ORACLE_SECRET is not defined. Soroban transactions will fail if signed.');
+            // Initialize with a dummy keypair to avoid null errors, but operations requiring signing will fail
+            this.oracleKeypair = Keypair.random();
+        } else {
+            this.oracleKeypair = Keypair.fromSecret(oracleSecret);
         }
-        this.oracleKeypair = Keypair.fromSecret(oracleSecret);
     }
 
     /**
@@ -138,3 +141,5 @@ export class SorobanService {
         }
     }
 }
+
+export const sorobanService = new SorobanService();

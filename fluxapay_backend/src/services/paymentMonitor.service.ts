@@ -113,8 +113,8 @@ export async function runPaymentMonitorTick(): Promise<void> {
 
         // Trigger Soroban verification on confirmation (using latest transaction)
         if ((newStatus === 'confirmed' || newStatus === 'overpaid') && latestTxHash && latestPayer) {
-          const { sorobanService } = await import('./soroban.service');
-          sorobanService.verifyPaymentOnChain(
+          const { PaymentService } = await import('./payment.service');
+          PaymentService.verifyPayment(
             payment.id,
             latestTxHash,
             latestPayer,
