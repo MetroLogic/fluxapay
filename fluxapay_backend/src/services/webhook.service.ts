@@ -510,23 +510,24 @@ export async function createAndDeliverWebhook(
 eventBus.on(AppEvents.PAYMENT_CONFIRMED, async (payment) => {
   try {
     const merchant = await prisma.merchant.findUnique({
-      where: { id: payment.merchant_id }
+      where: { id: payment.merchantId }
     });
 
-    if (merchant && merchant.status === 'active') {
+    if (merchant) {
       await createAndDeliverWebhook(
-        payment.merchant_id,
+        payment.merchantId,
         'payment_completed',
         {
-          event: 'payment.confirmed',
-          payment_id: payment.payment_id,
+          event: 'payment.completed',
+          payment_id: payment.id,
           amount: payment.amount.toString(),
           currency: payment.currency,
-          status: 'confirmed',
+          status: payment.status,
+          customer_email: payment.customer_email,
           transaction_hash: payment.transaction_hash,
           confirmed_at: payment.confirmed_at
         },
-        payment.payment_id
+        payment.id
       );
     }
   } catch (error) {

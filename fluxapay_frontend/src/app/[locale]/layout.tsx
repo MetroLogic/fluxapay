@@ -1,21 +1,10 @@
 import type { Metadata } from "next";
-import { Inter, Caveat } from "next/font/google";
 import "@/styles/globals.css";
 import { Providers } from "../providers";
 import { Toaster } from "react-hot-toast";
 import { NextIntlClientProvider } from "next-intl";
 import { notFound } from "next/navigation";
 import { routing } from "@/i18n/routing";
-
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-inter",
-});
-
-const caveat = Caveat({
-  subsets: ["latin"],
-  variable: "--font-caveat",
-});
 
 export const metadata: Metadata = {
   title: "FluxaPay | Global Payment Infrastructure",
@@ -45,9 +34,7 @@ export default async function LocaleLayout({
 
   return (
     <html lang={locale} suppressHydrationWarning>
-      <body
-        className={`${inter.variable} ${caveat.variable} font-sans antialiased`}
-      >
+      <body className="font-sans antialiased">
         <NextIntlClientProvider locale={locale} messages={messages}>
           <Providers>{children}</Providers>
           <Toaster position="top-right" />
