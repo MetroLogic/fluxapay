@@ -3,6 +3,8 @@ dist
 .env
 .DS_Store
 coverage
+/docker-compose.yml
+/docker-compose.yaml
 
 /src/generated/
 /prisma/migrations/

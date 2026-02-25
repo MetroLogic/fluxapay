@@ -1,0 +1,259 @@
+{
+  "common": {
+    "getStarted": "Get Started",
+    "learnMore": "Learn More",
+    "contactUs": "Contact Us",
+    "signUp": "Sign Up",
+    "signIn": "Sign In",
+    "dashboard": "Dashboard",
+    "logout": "Logout",
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "save": "Save",
+    "delete": "Delete",
+    "edit": "Edit",
+    "view": "View",
+    "search": "Search",
+    "filter": "Filter",
+    "export": "Export",
+    "import": "Import",
+    "download": "Download",
+    "upload": "Upload"
+  },
+  "nav": {
+    "home": "Home",
+    "features": "Features",
+    "pricing": "Pricing",
+    "about": "About",
+    "contact": "Contact",
+    "docs": "Documentation",
+    "login": "Login",
+    "joinFluxapay": "Join Fluxapay"
+  },
+  "hero": {
+    "title": "Global Payment Infrastructure",
+    "subtitle": "Accept crypto and fiat payments seamlessly across emerging markets",
+    "description": "Fluxapay lets merchants accept USDC payments on Stellar and get settled in local fiat with a Stripe-like API and no on-chain complexity.",
+    "cta": "Join Fluxapay",
+    "secondaryCta": "View Documentation",
+    "transfer": "Transfer",
+    "mainTitle": "Accept",
+    "crypto": "Crypto",
+    "mainSubtitle": "Get Paid in Fiat Instantly"
+  },
+  "whyFluxapay": {
+    "title": "Why FluxaPay?",
+    "subtitle": "Built for the future of global commerce",
+    "instant": {
+      "title": "Instant Settlements",
+      "description": "Get paid in seconds, not days. Real-time settlement to your wallet."
+    },
+    "lowFees": {
+      "title": "Low Transaction Fees",
+      "description": "Save up to 70% on payment processing fees compared to traditional providers."
+    },
+    "global": {
+      "title": "Global Reach",
+      "description": "Accept payments from anywhere in the world with multi-currency support."
+    },
+    "secure": {
+      "title": "Bank-Grade Security",
+      "description": "Enterprise-level security with multi-signature wallets and encryption."
+    }
+  },
+  "bridges": {
+    "title": "Bridging Traditional & Crypto",
+    "subtitle": "Seamlessly connect fiat and cryptocurrency payments",
+    "crypto": {
+      "title": "Crypto Payments",
+      "description": "Accept Bitcoin, Ethereum, USDC, and more"
+    },
+    "fiat": {
+      "title": "Fiat Integration",
+      "description": "Convert to local currency instantly"
+    },
+    "settlement": {
+      "title": "Flexible Settlement",
+      "description": "Choose how and when you get paid"
+    }
+  },
+  "globalReach": {
+    "title": "Truly Global",
+    "subtitle": "Serving emerging markets worldwide",
+    "africa": "Africa",
+    "latinAmerica": "Latin America",
+    "asia": "Asia",
+    "countries": "Countries Supported",
+    "currencies": "Currencies",
+    "transactions": "Transactions Processed"
+  },
+  "useCases": {
+    "title": "Built for Every Business",
+    "subtitle": "From startups to enterprises",
+    "ecommerce": {
+      "title": "E-Commerce",
+      "description": "Accept payments on your online store with simple integration"
+    },
+    "marketplace": {
+      "title": "Marketplaces",
+      "description": "Split payments between multiple vendors automatically"
+    },
+    "subscription": {
+      "title": "Subscriptions",
+      "description": "Recurring billing made simple with automated payments"
+    },
+    "remittance": {
+      "title": "Remittances",
+      "description": "Cross-border transfers with minimal fees"
+    }
+  },
+  "faq": {
+    "title": "Frequently Asked Questions",
+    "subtitle": "Everything you need to know",
+    "q1": {
+      "question": "How long does it take to integrate?",
+      "answer": "Most merchants complete integration in under 2 hours with our simple API and SDKs."
+    },
+    "q2": {
+      "question": "What are the fees?",
+      "answer": "We charge 1.5% per transaction with no hidden fees or monthly charges."
+    },
+    "q3": {
+      "question": "Which cryptocurrencies do you support?",
+      "answer": "We support Bitcoin, Ethereum, USDC, USDT, and all major Stellar assets."
+    },
+    "q4": {
+      "question": "How do settlements work?",
+      "answer": "You can choose instant settlement to your wallet or batch settlements on a schedule."
+    },
+    "q5": {
+      "question": "Is it secure?",
+      "answer": "Yes, we use bank-grade encryption, multi-signature wallets, and comply with international security standards."
+    }
+  },
+  "footer": {
+    "tagline": "The future of global payments",
+    "product": "Product",
+    "features": "Features",
+    "pricing": "Pricing",
+    "security": "Security",
+    "company": "Company",
+    "about": "About Us",
+    "careers": "Careers",
+    "blog": "Blog",
+    "developers": "Developers",
+    "documentation": "Documentation",
+    "apiReference": "API Reference",
+    "support": "Support",
+    "legal": "Legal",
+    "privacy": "Privacy Policy",
+    "terms": "Terms of Service",
+    "copyright": "© {year} borderless. All rights reserved.",
+    "signUp": "Sign Up",
+    "login": "Log In",
+    "faqs": "FAQs / Support",
+    "contact": "Contact us",
+    "resources": "Resources"
+  },
+  "dashboard": {
+    "overview": "Overview",
+    "payments": "Payments",
+    "settlements": "Settlements",
+    "analytics": "Analytics",
+    "developers": "Developers",
+    "settings": "Settings",
+    "webhooks": "Webhooks",
+    "totalRevenue": "Total Revenue",
+    "successfulPayments": "Successful Payments",
+    "pendingSettlements": "Pending Settlements",
+    "activeCustomers": "Active Customers",
+    "recentTransactions": "Recent Transactions",
+    "amount": "Amount",
+    "status": "Status",
+    "date": "Date",
+    "customer": "Customer",
+    "viewAll": "View All"
+  },
+  "payment": {
+    "title": "Complete Your Payment",
+    "amount": "Amount",
+    "merchant": "Merchant",
+    "description": "Description",
+    "payWith": "Pay with",
+    "crypto": "Cryptocurrency",
+    "card": "Credit/Debit Card",
+    "processing": "Processing payment...",
+    "success": "Payment successful!",
+    "failed": "Payment failed",
+    "expired": "Payment link expired",
+    "scanQR": "Scan QR code to pay",
+    "orCopyAddress": "Or copy the address below",
+    "copyAddress": "Copy Address",
+    "addressCopied": "Address copied!",
+    "waitingForPayment": "Waiting for payment...",
+    "confirmations": "Confirmations",
+    "timeRemaining": "Time remaining"
+  },
+  "auth": {
+    "login": "Login",
+    "signup": "Sign Up",
+    "email": "Email",
+    "password": "Password",
+    "confirmPassword": "Confirm Password",
+    "forgotPassword": "Forgot Password?",
+    "noAccount": "Don't have an account?",
+    "hasAccount": "Already have an account?",
+    "businessName": "Business Name",
+    "fullName": "Full Name",
+    "country": "Country",
+    "createAccount": "Create Account",
+    "signingIn": "Signing in...",
+    "creatingAccount": "Creating account..."
+  },
+  "settings": {
+    "profile": "Profile",
+    "security": "Security",
+    "apiKeys": "API Keys",
+    "billing": "Billing",
+    "notifications": "Notifications",
+    "team": "Team",
+    "updateProfile": "Update Profile",
+    "changePassword": "Change Password",
+    "twoFactor": "Two-Factor Authentication",
+    "generateKey": "Generate New Key",
+    "revokeKey": "Revoke Key"
+  },
+  "currency": {
+    "usd": "US Dollar",
+    "eur": "Euro",
+    "gbp": "British Pound",
+    "ngn": "Nigerian Naira",
+    "kes": "Kenyan Shilling",
+    "zar": "South African Rand",
+    "brl": "Brazilian Real",
+    "mxn": "Mexican Peso",
+    "btc": "Bitcoin",
+    "eth": "Ethereum",
+    "usdc": "USD Coin",
+    "usdt": "Tether"
+  },
+  "status": {
+    "pending": "Pending",
+    "processing": "Processing",
+    "completed": "Completed",
+    "failed": "Failed",
+    "cancelled": "Cancelled",
+    "expired": "Expired"
+  },
+  "errors": {
+    "generic": "Something went wrong. Please try again.",
+    "network": "Network error. Please check your connection.",
+    "unauthorized": "You are not authorized to perform this action.",
+    "notFound": "The requested resource was not found.",
+    "validation": "Please check your input and try again.",
+    "paymentFailed": "Payment processing failed. Please try again."
+  }
+}

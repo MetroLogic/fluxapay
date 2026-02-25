@@ -1,54 +1,128 @@
-import { PrismaClient } from "../generated/client/client";
-import { HDWalletService } from "./HDWalletService";
+import { PrismaClient, PaymentStatus } from "../generated/client/client";
+import { v4 as uuidv4 } from 'uuid';
+import { createAndDeliverWebhook, generateMerchantPayload } from './webhook.service';
+import { HDWalletService } from './HDWalletService';
+import { StellarService } from './StellarService';
+import { sorobanService } from './SorobanService';
+import { eventBus, AppEvents } from "./EventService";
 
 const prisma = new PrismaClient();
 
-const MASTER_SEED = process.env.HD_WALLET_MASTER_SEED;
-if (!MASTER_SEED) {
-    throw new Error('HD_WALLET_MASTER_SEED environment variable is not defined');
-}
-const walletService = new HDWalletService(MASTER_SEED);
-
-
 export class PaymentService {
-    /**
-     * Checks if a merchant is within their rate limit.
-     * Stub implementation: returns true.
-     */
-    static async checkRateLimit(merchantId: string): Promise<boolean> {
-        // Implementation for rate limiting (e.g., Redis or DB check) would go here
-        return true;
+  static async checkRateLimit(merchantId: string) {
+    const configuredLimit = Number(process.env.PAYMENT_RATE_LIMIT_PER_MINUTE);
+    const maxPaymentsPerMinute =
+      Number.isFinite(configuredLimit) && configuredLimit > 0 ? configuredLimit : 5;
+
+    const oneMinuteAgo = new Date(Date.now() - 60 * 1000);
+    const count = await prisma.payment.count({
+      where: {
+        merchantId,
+        createdAt: { gte: oneMinuteAgo },
+      },
+    });
+    return count < maxPaymentsPerMinute;
+  }
+
+  /** Base URL for hosted checkout (e.g. https://pay.fluxapay.com). Uses PAY_CHECKOUT_BASE or BASE_URL. */
+  static getCheckoutBaseUrl(): string {
+    const base =
+      process.env.PAY_CHECKOUT_BASE ||
+      process.env.BASE_URL ||
+      'http://localhost:3000';
+    return base.replace(/\/$/, '');
+  }
+
+  static async createPayment({
+    amount,
+    currency,
+    customer_email,
+    merchantId,
+    metadata,
+    success_url,
+    cancel_url,
+  }: {
+    amount: number;
+    currency: string;
+    customer_email: string;
+    merchantId: string;
+    metadata?: Record<string, unknown>;
+    success_url?: string;
+    cancel_url?: string;
+  }) {
+    const paymentId = uuidv4();
+    const expiration = new Date(Date.now() + 15 * 60 * 1000); // 15 min expiry
+    const checkoutBase = PaymentService.getCheckoutBaseUrl();
+    const checkout_url = `${checkoutBase}/pay/${paymentId}`;
+
+    // Derive the Stellar address for this payment using KMS-backed HDWalletService
+    const hdWalletService = new HDWalletService();
+    const stellarAddress = await hdWalletService.derivePaymentAddress(merchantId, paymentId);
+
+    // Create payment with the derived Stellar address
+    const payment = await prisma.payment.create({
+      data: {
+        id: paymentId,
+        amount,
+        currency,
+        customer_email,
+        merchantId,
+        metadata: (metadata ?? {}) as any,
+        expiration,
+        status: 'pending',
+        checkout_url,
+        success_url: success_url ?? null,
+        cancel_url: cancel_url ?? null,
+        stellar_address: stellarAddress,
+      },
+    });
+
+    // Prepare the Stellar account asynchronously (fund and add trustline)
+    // This runs in the background to avoid blocking payment creation
+    const stellarService = new StellarService();
+    stellarService.prepareAccount(merchantId, paymentId).catch((error) => {
+      console.error(`Failed to prepare Stellar account for payment ${paymentId}:`, error);
+    });
+
+    return payment;
+  }
+
+  /**
+   * Verifies a payment on-chain, updates the database, and emits an internal event.
+   */
+  static async verifyPayment(
+    paymentId: string,
+    transactionHash: string,
+    payerAddress: string,
+    amountReceived: number
+  ): Promise<any> {
+    // 1. Verify on Soroban
+    const onChainVerified = await sorobanService.verifyPaymentOnChain(
+      paymentId,
+      transactionHash,
+      payerAddress,
+      amountReceived
+    );
+
+    if (!onChainVerified) {
+      throw new Error('Payment verification failed on-chain');
     }
 
-    /**
-     * Creates a new payment record and derives a Stellar address.
-     */
-    static async createPayment(data: {
-        merchantId: string;
-        amount: number;
-        currency: string;
-        customer_email: string;
-        metadata: any;
-        success_url?: string;
-        cancel_url?: string;
-    }) {
-        const { merchantId, amount, currency, customer_email, metadata, success_url, cancel_url } = data;
+    // 2. Update local PostgreSQL database
+    const payment = await prisma.payment.update({
+      where: { id: paymentId },
+      data: {
+        status: 'confirmed',
+        transaction_hash: transactionHash,
+        payer_address: payerAddress,
+        confirmed_at: new Date(),
+        onchain_verified: true,
+      }
+    });
 
-        // 1. Create the payment record in DB first to get the payment ID
-        const payment = await prisma.payment.create({
-            data: {
-                merchantId,
-                amount,
-                currency,
-                customer_email,
-                metadata,
-                success_url,
-                cancel_url,
-                status: "pending",
-                timeline: [{ event: "payment_initiated", timestamp: new Date() }]
-            }
-        });
+    // 3. Emit internal event for Webhook Service to pick up
+    eventBus.emit(AppEvents.PAYMENT_CONFIRMED, payment);
 
-        return payment;
-    }
+    return payment;
+  }
 }

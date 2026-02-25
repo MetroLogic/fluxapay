@@ -1,7 +1,9 @@
 "use client";
 
 import React, { useState } from "react";
+import toast from "react-hot-toast";
 import Image from "next/image";
+import Link from "next/link";
 import * as yup from "yup";
 import Input from "@/components/Input";
 import { Button } from "@/components/Button";
@@ -27,12 +29,10 @@ const LoginForm = () => {
     keepLoggedIn: false,
   });
 
-  const [errors, setErrors] = useState<{ email?: string; password?: string }>(
-    {
-      email: "",
-      password: "",
-    }
-  );
+  const [errors, setErrors] = useState<{ email?: string; password?: string }>({
+    email: "",
+    password: "",
+  });
 
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -74,7 +74,7 @@ const LoginForm = () => {
       await new Promise((resolve) => setTimeout(resolve, 1500));
 
       console.log("Login data:", validData);
-      alert("Login successful! Check console for form data.");
+      toast.success("Login successful!");
     } catch (err) {
       if (err instanceof yup.ValidationError) {
         const fieldErrors: { email?: string; password?: string } = {};
@@ -86,6 +86,8 @@ const LoginForm = () => {
         setErrors(fieldErrors);
         return;
       }
+
+      toast.error("Unable to sign in right now. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -108,10 +110,10 @@ const LoginForm = () => {
           <div className="w-full max-w-md rounded-none lg:rounded-r-2xl bg-white p-8 shadow-none animate-slide-in-left">
             {/* Form header */}
             <div className="space-y-2 mb-8 animate-fade-in [animation-delay:200ms]">
-              <h1 className="text-2xl md:text-[40px] font-bold text-[#232323] tracking-tight">
+              <h1 className="text-2xl md:text-[40px] font-bold text-black tracking-tight">
                 Sign in
               </h1>
-              <p className="text-sm md:text-[18px] font-normal text-[#969696]">
+              <p className="text-sm md:text-[18px] font-normal text-muted-foreground">
                 Please login to continue to your account.
               </p>
             </div>
@@ -189,7 +191,9 @@ const LoginForm = () => {
                     onChange={handleChange}
                     className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
                   />
-                  <span className="text-[#232323] font-medium text-[16px]">Keep me logged in</span>
+                  <span className="text-black font-medium text-[16px]">
+                    Keep me logged in
+                  </span>
                 </label>
               </div>
 
@@ -207,12 +211,7 @@ const LoginForm = () => {
                     stroke="currentColor"
                     strokeWidth="3"
                   >
-                    <circle
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      className="opacity-30"
-                    />
+                    <circle cx="12" cy="12" r="10" className="opacity-30" />
                     <path d="M22 12a10 10 0 0 1-10 10" />
                   </svg>
                 )}
@@ -220,14 +219,14 @@ const LoginForm = () => {
               </Button>
 
               {/* Create account */}
-              <div className="pt-2 text-center text-xs md:text-[18px] text-[#6C6C6C] font-semibold">
+              <div className="pt-2 text-center text-xs md:text-[18px] text-muted-foreground font-semibold">
                 Need an account?{" "}
-                <a
-                  href="#"
+                <Link
+                  href="/signup"
                   className="font-semibold text-indigo-500 hover:text-indigo-600 underline underline-offset-4 hover:underline"
                 >
                   Create one
-                </a>
+                </Link>
               </div>
             </form>
           </div>
