@@ -33,6 +33,7 @@ app.use("/api/webhooks", webhookRoutes);
 app.use("/api/reconciliation", reconciliationRoutes);
 app.use("/api/admin/settlement", settlementBatchRoutes);
 app.use("/api/payments", paymentRoutes);
+app.use("/v1/payments", paymentRoutes); // Standard API path
 app.use("/api/v1/keys", keysRoutes);
 app.use("/api/refunds", refundRoutes);
 

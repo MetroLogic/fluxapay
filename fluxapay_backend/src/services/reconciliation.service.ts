@@ -46,17 +46,17 @@ export const runReconciliationService = async (params: RunReconciliationParams) 
 
     // Calculate totals
     const totalUsdcSwept = payments.reduce(
-        (sum, p) => sum + Number(p.amount),
+        (sum: number, p: any) => sum + Number(p.amount),
         0
     );
 
     const totalFiatPayouts = settlements
-        .filter((s) => s.status === "completed")
-        .reduce((sum, s) => sum + Number(s.amount), 0);
+        .filter((s: any) => s.status === "completed")
+        .reduce((sum: number, s: any) => sum + Number(s.amount), 0);
 
     const totalFees = settlements
-        .filter((s) => s.status === "completed")
-        .reduce((sum, s) => sum + Number(s.fees), 0);
+        .filter((s: any) => s.status === "completed")
+        .reduce((sum: number, s: any) => sum + Number(s.fees), 0);
 
     // Expected = total USDC swept (what we received)
     // Actual = total fiat payouts + fees (what we paid out)
@@ -124,7 +124,7 @@ export const runReconciliationService = async (params: RunReconciliationParams) 
 
     // Check for amount mismatches per settlement
     const failedSettlements = settlements.filter(
-        (s) => s.status === "failed"
+        (s: any) => s.status === "failed"
     );
     if (failedSettlements.length > 0) {
         alerts.push({
@@ -132,9 +132,9 @@ export const runReconciliationService = async (params: RunReconciliationParams) 
             severity: failedSettlements.length > 3 ? "high" : "medium",
             message: `${failedSettlements.length} failed settlement(s) detected in period.`,
             details: {
-                failedSettlementIds: failedSettlements.map((s) => s.id),
+                failedSettlementIds: failedSettlements.map((s: any) => s.id),
                 totalFailedAmount: failedSettlements.reduce(
-                    (sum, s) => sum + Number(s.amount),
+                    (sum: number, s: any) => sum + Number(s.amount),
                     0
                 ),
             },
@@ -394,7 +394,7 @@ export const getReconciliationSummaryService = async () => {
     const averageDiscrepancy =
         recentRecords.length > 0
             ? recentRecords.reduce(
-                (sum, r) => sum + r.discrepancy_percent,
+                (sum: number, r: any) => sum + r.discrepancy_percent,
                 0
             ) / recentRecords.length
             : 0;

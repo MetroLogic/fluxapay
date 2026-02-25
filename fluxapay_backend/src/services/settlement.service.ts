@@ -180,7 +180,7 @@ export const exportSettlementService = async (
             `Payment ID,Amount,Currency,Customer Email,Date,Status`,
         ];
 
-        const paymentRows = payments.map((p) =>
+        const paymentRows = payments.map((p: any) =>
             `${p.id},${p.amount},${p.currency},${p.customer_email},${p.createdAt.toISOString().split('T')[0]},${p.status}`
         );
 
@@ -210,7 +210,7 @@ export const exportSettlementService = async (
                 processed_date: settlement.processed_date,
                 created_at: settlement.created_at,
             },
-            payments: payments.map((p) => ({
+            payments: payments.map((p: any) => ({
                 id: p.id,
                 amount: Number(p.amount),
                 currency: p.currency,

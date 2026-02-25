@@ -22,6 +22,7 @@ export default function DevelopersPage() {
   const [testMode, setTestMode] = useState(true);
   const [activeTab, setActiveTab] = useState("rest");
   const [apiKey, setApiKey] = useState("Loading...");
+  const [activeEndpoint, setActiveEndpoint] = useState<"create" | "status">("create");
 
   useEffect(() => {
     const fetchApiKey = async () => {
@@ -84,61 +85,129 @@ export default function DevelopersPage() {
   //   docLinkText: `text-sm font-medium`,
   // };
 
-  const restRequest = `curl -X GET \\
-  https://api.example.com/v1/users \\
+  const baseUrl = testMode
+    ? "https://sandbox-api.fluxapay.com"
+    : "https://api.fluxapay.com";
+
+  const getCreatePaymentLines = (lang: "curl" | "js" | "python") => {
+    const body = {
+      amount: 100,
+      currency: "USDC",
+      customer_email: "customer@example.com",
+      order_id: "order_123",
+      success_url: "https://merchant.com/success",
+      cancel_url: "https://merchant.com/cancel",
+      metadata: { cart_id: "987" }
+    };
+
+    if (lang === "curl") {
+      return `curl -X POST ${baseUrl}/v1/payments \\
   -H "Authorization: Bearer ${apiKey}" \\
-  -H "Content-Type: application/json"`;
-
-  const restResponse = `{
-  "status": "success",
-  "data": [
-    {
-      "id": "user_123",
-      "name": "John Doe",
-      "email": "john@example.com",
-      "created_at": "2024-01-15T10:30:00Z"
-    },
-    {
-      "id": "user_456",
-      "name": "Jane Smith",
-      "email": "jane@example.com",
-      "created_at": "2024-01-16T14:45:00Z"
+  -H "Content-Type: application/json" \\
+  -d '${JSON.stringify(body, null, 2)}'`;
     }
-  ],
-  "pagination": {
-    "total": 156,
-    "page": 1,
-    "limit": 20
-  }
-}`;
 
-  const jsRequest = `import fetch from 'node-fetch';
+    if (lang === "js") {
+      return `import fetch from 'node-fetch';
 
-const response = await fetch('https://api.example.com/v1/users', {
+const response = await fetch('${baseUrl}/v1/payments', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer ${apiKey}',
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify(${JSON.stringify(body, null, 2)})
+});
+
+const data = await response.json();
+console.log(data);`;
+    }
+
+    return `import requests
+import json
+
+url = "${baseUrl}/v1/payments"
+headers = {
+    "Authorization": "Bearer ${apiKey}",
+    "Content-Type": "application/json"
+}
+payload = ${JSON.stringify(body, null, 4)}
+
+response = requests.post(url, headers=headers, data=json.dumps(payload))
+print(response.json())`;
+  };
+
+  const getStatusPaymentLines = (lang: "curl" | "js" | "python") => {
+    const paymentId = "pay_123abc456";
+    const url = `${baseUrl}/v1/payments/${paymentId}`;
+
+    if (lang === "curl") {
+      return `curl -X GET ${url} \\
+  -H "Authorization: Bearer ${apiKey}"`;
+    }
+
+    if (lang === "js") {
+      return `import fetch from 'node-fetch';
+
+const response = await fetch('${url}', {
   method: 'GET',
   headers: {
-    'Authorization': \`Bearer ${apiKey}\`,
-    'Content-Type': 'application/json'
+    'Authorization': 'Bearer ${apiKey}'
   }
 });
 
 const data = await response.json();
 console.log(data);`;
+    }
 
-  const pythonRequest = `import requests
+    return `import requests
 
+url = "${url}"
 headers = {
-    'Authorization': f'Bearer ${apiKey}',
-    'Content-Type': 'application/json'
+    "Authorization": "Bearer ${apiKey}"
 }
 
-response = requests.get(
-    'https://api.example.com/v1/users',
-    headers=headers
-)
+response = requests.get(url, headers=headers)
+print(response.json())`;
+  };
 
-data = response.json()
-print(data)`;
+  const getActiveRequest = () => {
+    const lang = activeTab === "rest" ? "curl" : (activeTab as "js" | "python");
+    return activeEndpoint === "create" ? getCreatePaymentLines(lang) : getStatusPaymentLines(lang);
+  };
+
+  const getActiveResponse = () => {
+    if (activeEndpoint === "create") {
+      return `{
+  "id": "pay_123abc456",
+  "amount": 100,
+  "currency": "USDC",
+  "status": "pending",
+  "checkout_url": "https://pay.fluxapay.com/pay_123abc456",
+  "customer_email": "customer@example.com",
+  "order_id": "order_123",
+  "metadata": {
+    "cart_id": "987"
+  },
+  "created_at": "${new Date().toISOString()}"
+}`;
+    }
+    return `{
+  "id": "pay_123abc456",
+  "amount": 100,
+  "currency": "USDC",
+  "status": "paid",
+  "customer_email": "customer@example.com",
+  "order_id": "order_123",
+  "transaction_hash": "tx_abc123...",
+  "confirmed_at": "${new Date().toISOString()}"
+}`;
+  };
+
+  const restRequest = getActiveRequest();
+  const restResponse = getActiveResponse();
+  const jsRequest = getActiveRequest();
+  const pythonRequest = getActiveRequest();
 
   return (
     <div
@@ -795,6 +864,41 @@ print(data)`;
           >
             Sample Requests & Responses
           </h2>
+
+          <div style={{ display: "flex", gap: "1rem", marginBottom: "2rem" }}>
+            <button
+              onClick={() => setActiveEndpoint("create")}
+              style={{
+                padding: "0.75rem 1.5rem",
+                borderRadius: "0.5rem",
+                fontWeight: "600",
+                fontSize: "0.875rem",
+                backgroundColor: activeEndpoint === "create" ? "#fbbf24" : "#f3f4f6",
+                color: "#1a1a3e",
+                border: "none",
+                cursor: "pointer",
+                transition: "all 0.2s"
+              }}
+            >
+              Create Payment
+            </button>
+            <button
+              onClick={() => setActiveEndpoint("status")}
+              style={{
+                padding: "0.75rem 1.5rem",
+                borderRadius: "0.5rem",
+                fontWeight: "600",
+                fontSize: "0.875rem",
+                backgroundColor: activeEndpoint === "status" ? "#fbbf24" : "#f3f4f6",
+                color: "#1a1a3e",
+                border: "none",
+                cursor: "pointer",
+                transition: "all 0.2s"
+              }}
+            >
+              Get Payment Status
+            </button>
+          </div>
 
           {/* Tabs */}
           <div
