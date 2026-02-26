@@ -229,7 +229,10 @@ router.post("/logs/:log_id/retry", authenticateToken, retryWebhook);
  *                 description: Optional custom payload data to override defaults
  *     responses:
  *       200:
- *         description: Test webhook sent
+ *         description: Test webhook sent. The delivery includes
+ *           `X-FluxaPay-Signature` and `X-FluxaPay-Timestamp` headers signed
+ *           using the merchant's webhook secret; clients should verify the
+ *           signature by recomputing the HMAC over the timestamp and body.
  *         content:
  *           application/json:
  *             schema:
