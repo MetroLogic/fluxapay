@@ -234,17 +234,17 @@ function PaymentsContent() {
       const createdRefund: RefundRecord = response.refund
         ? mapBackendRefund(response.refund)
         : {
-            id: `ref_${Date.now()}`,
-            paymentId: payload.paymentId,
-            merchantId: payload.merchantId,
-            amount: payload.amount,
-            currency: payload.currency,
-            customerAddress: payload.customerAddress,
-            reason: payload.reason,
-            reasonNote: payload.reasonNote,
-            status: "initiated",
-            createdAt: new Date().toISOString(),
-          };
+          id: `ref_${Date.now()}`,
+          paymentId: payload.paymentId,
+          merchantId: payload.merchantId,
+          amount: payload.amount,
+          currency: payload.currency,
+          customerAddress: payload.customerAddress,
+          reason: payload.reason,
+          reasonNote: payload.reasonNote,
+          status: "initiated",
+          createdAt: new Date().toISOString(),
+        };
 
       setRefunds((prev) => [createdRefund, ...prev]);
       toast.success("Refund submitted successfully.");
@@ -299,7 +299,7 @@ function PaymentsContent() {
               <div>
                 <h3 className="text-sm font-semibold">Recent payment links</h3>
                 <p className="text-xs text-muted-foreground">
-                  Links you've generated in this session.
+                  Links you&apos;ve generated in this session.
                 </p>
               </div>
             </div>

@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { NG, KE } from "country-flag-icons/react/3x2";
+import { useTranslations } from "next-intl";
 
 const COUNTRIES = [
   { code: "NG", name: "Nigeria", currency: "NGN", Icon: NG },
@@ -44,6 +45,7 @@ const signupSchema = yup.object({
 type SignUpFormData = yup.InferType<typeof signupSchema>;
 
 const SignUpForm = () => {
+  const tAuth = useTranslations("auth");
   const [formData, setFormData] = useState<SignUpFormData>({
     name: "",
     businessName: "",
@@ -164,11 +166,11 @@ const SignUpForm = () => {
       <div className="flex h-screen w-full items-stretch justify-between gap-0 px-3">
         {/* Card: 40% width */}
         <div className="flex h-full w-full md:w-[40%] items-center justify-center bg-transparent ">
-          <div className="w-full max-w-md rounded-none lg:rounded-r-2xl bg-white p-8 shadow-none animate-slide-in-left">
+          <div className="w-full max-md:max-w-md rounded-none lg:rounded-r-2xl bg-white p-8 shadow-none animate-slide-in-left">
             {/* Form header */}
             <div className="space-y-2 mb-8 animate-fade-in [animation-delay:200ms]">
               <h1 className="text-2xl md:text-[40px] font-bold text-black tracking-tight">
-                Get Started
+                {tAuth("signup")}
               </h1>
               <p className="text-sm md:text-[18px] font-normal text-muted-foreground">
                 Please signup to get started.
@@ -185,6 +187,7 @@ const SignUpForm = () => {
                 <Input
                   type="text"
                   name="name"
+                  label={tAuth("fullName")}
                   value={formData.name}
                   onChange={handleChange}
                   placeholder="Your name"
@@ -197,6 +200,7 @@ const SignUpForm = () => {
                 <Input
                   type="text"
                   name="businessName"
+                  label={tAuth("businessName")}
                   value={formData.businessName}
                   onChange={handleChange}
                   placeholder="Business name"
@@ -209,6 +213,7 @@ const SignUpForm = () => {
                 <Input
                   type="email"
                   name="email"
+                  label={tAuth("email")}
                   value={formData.email}
                   onChange={handleChange}
                   placeholder="you@example.com"
@@ -218,15 +223,20 @@ const SignUpForm = () => {
 
               {/* Country & Currency */}
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
+                <div className="space-y-1.5">
+                  <label id="country-label" className="block text-sm font-medium text-slate-700">
+                    {tAuth("country")}
+                  </label>
                   <Select
                     value={formData.country}
                     onValueChange={handleCountryChange}
                   >
-                    <SelectTrigger className={cn(
-                      "w-full h-[46px] rounded-[10px] border px-4 text-sm bg-white focus:ring-2 focus:ring-[#5649DF] focus:border-[#5649DF]",
-                      errors.country ? "border-red-500" : "border-[#D9D9D9]"
-                    )}>
+                    <SelectTrigger
+                      aria-labelledby="country-label"
+                      className={cn(
+                        "w-full h-[46px] rounded-[10px] border px-4 text-sm bg-white focus:ring-2 focus:ring-[#5649DF] focus:border-[#5649DF]",
+                        errors.country ? "border-red-500" : "border-[#D9D9D9]"
+                      )}>
                       <SelectValue placeholder="Select Country" />
                     </SelectTrigger>
                     <SelectContent>
@@ -249,6 +259,7 @@ const SignUpForm = () => {
                   <Input
                     type="text"
                     name="settlementCurrency"
+                    label="Currency"
                     value={formData.settlementCurrency}
                     readOnly
                     placeholder="Currency"
@@ -263,6 +274,7 @@ const SignUpForm = () => {
                 <Input
                   type="text"
                   name="bankName"
+                  label="Bank"
                   value={formData.bankName}
                   onChange={handleChange}
                   placeholder="Bank Name"
@@ -271,6 +283,7 @@ const SignUpForm = () => {
                 <Input
                   type="text"
                   name="bankCode"
+                  label="Code"
                   value={formData.bankCode}
                   onChange={handleChange}
                   placeholder="Bank Code"
@@ -279,6 +292,7 @@ const SignUpForm = () => {
                 <Input
                   type="text"
                   name="accountNumber"
+                  label="Account"
                   value={formData.accountNumber}
                   onChange={handleChange}
                   placeholder="Account Number"
@@ -292,6 +306,7 @@ const SignUpForm = () => {
                   <Input
                     type={showPassword ? "text" : "password"}
                     name="password"
+                    label={tAuth("password")}
                     value={formData.password}
                     onChange={handleChange}
                     placeholder="Password"

@@ -49,17 +49,24 @@ export function PaymentTimer({ expiresAt, onExpire }: PaymentTimerProps) {
     return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   };
 
+  const displayText = isExpired ? 'Expired' : formatTime(timeLeft);
+  const ariaLabel = isExpired
+    ? 'Payment timer expired'
+    : `Time remaining: ${Math.floor(timeLeft / 60000)} minutes and ${Math.floor((timeLeft % 60000) / 1000)} seconds`;
+
   return (
     <div
-      className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-semibold transition-colors ${
-        isExpired
+      role="timer"
+      aria-live="off"
+      aria-label={ariaLabel}
+      className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-semibold transition-colors min-h-[44px] ${isExpired
           ? 'bg-red-100 text-red-700 border border-red-300'
           : 'bg-blue-100 text-blue-700 border border-blue-300'
-      }`}
+        }`}
     >
-      <Clock className="w-4 h-4" />
+      <Clock aria-hidden="true" className="w-4 h-4" />
       <span className="text-lg">
-        {isExpired ? 'Expired' : formatTime(timeLeft)}
+        {displayText}
       </span>
     </div>
   );
