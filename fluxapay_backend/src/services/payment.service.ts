@@ -8,22 +8,28 @@ import { eventBus, AppEvents } from "./EventService";
 const prisma = new PrismaClient();
 
 export class PaymentService {
-  static async checkRateLimit(merchantId: string) {
-    const configuredLimit = Number(process.env.PAYMENT_RATE_LIMIT_PER_MINUTE);
-    const maxPaymentsPerMinute =
-      Number.isFinite(configuredLimit) && configuredLimit > 0
-        ? configuredLimit
-        : 5;
+    static getRateLimitWindowSeconds() {
+        const configuredWindow = Number(process.env.PAYMENT_RATE_LIMIT_WINDOW_SECONDS);
+        return Number.isFinite(configuredWindow) && configuredWindow > 0
+            ? Math.floor(configuredWindow)
+            : 60;
+    }
 
-    const oneMinuteAgo = new Date(Date.now() - 60 * 1000);
-    const count = await prisma.payment.count({
-      where: {
-        merchantId,
-        createdAt: { gte: oneMinuteAgo },
-      },
-    });
-    return count < maxPaymentsPerMinute;
-  }
+    static async checkRateLimit(merchantId: string) {
+        const configuredLimit = Number(process.env.PAYMENT_RATE_LIMIT_PER_MINUTE);
+        const maxPaymentsPerMinute =
+            Number.isFinite(configuredLimit) && configuredLimit > 0 ? configuredLimit : 5;
+
+        const rateLimitWindowMs = this.getRateLimitWindowSeconds() * 1000;
+        const windowStart = new Date(Date.now() - rateLimitWindowMs);
+        const count = await prisma.payment.count({
+            where: {
+                merchantId,
+                createdAt: { gte: windowStart },
+            },
+        });
+        return count < maxPaymentsPerMinute;
+    }
 
   /** Base URL for hosted checkout (e.g. https://pay.fluxapay.com). Uses PAY_CHECKOUT_BASE or BASE_URL. */
   static getCheckoutBaseUrl(): string {

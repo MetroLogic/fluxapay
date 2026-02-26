@@ -17,7 +17,8 @@ export const createPayment = async (req: Request, res: Response) => {
 
         const isWithinRateLimit = await PaymentService.checkRateLimit(merchantId);
         if (!isWithinRateLimit) {
-            res.setHeader("Retry-After", "60");
+            const retryAfterSeconds = PaymentService.getRateLimitWindowSeconds();
+            res.setHeader("Retry-After", String(retryAfterSeconds));
             return res.status(429).json({ error: "Rate limit exceeded. Please try again later." });
         }
 

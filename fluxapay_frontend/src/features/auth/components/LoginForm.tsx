@@ -8,6 +8,8 @@ import * as yup from "yup";
 import Input from "@/components/Input";
 import { Button } from "@/components/Button";
 
+import { useTranslations } from "next-intl";
+
 const loginSchema = yup.object({
   email: yup
     .string()
@@ -23,6 +25,7 @@ const loginSchema = yup.object({
 type LoginFormData = yup.InferType<typeof loginSchema>;
 
 const LoginForm = () => {
+  const tAuth = useTranslations("auth");
   const [formData, setFormData] = useState<LoginFormData>({
     email: "",
     password: "",
@@ -111,7 +114,7 @@ const LoginForm = () => {
             {/* Form header */}
             <div className="space-y-2 mb-8 animate-fade-in [animation-delay:200ms]">
               <h1 className="text-2xl md:text-[40px] font-bold text-black tracking-tight">
-                Sign in
+                {tAuth("login")}
               </h1>
               <p className="text-sm md:text-[18px] font-normal text-muted-foreground">
                 Please login to continue to your account.
@@ -128,6 +131,7 @@ const LoginForm = () => {
                 <Input
                   type="email"
                   name="email"
+                  label={tAuth("email")}
                   value={formData.email}
                   onChange={handleChange}
                   placeholder="test@gmail.com"
@@ -141,6 +145,7 @@ const LoginForm = () => {
                   <Input
                     type={showPassword ? "text" : "password"}
                     name="password"
+                    label={tAuth("password")}
                     value={formData.password}
                     onChange={handleChange}
                     placeholder="Password"

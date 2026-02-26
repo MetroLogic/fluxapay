@@ -15,6 +15,9 @@ vi.mock('@/i18n/routing', () => ({
     <a href={href}>{children}</a>
   ),
 }));
+vi.mock('next-intl', () => ({
+  useTranslations: () => (key: string) => key,
+}));
 
 describe('SignUpForm', () => {
   beforeEach(() => {
