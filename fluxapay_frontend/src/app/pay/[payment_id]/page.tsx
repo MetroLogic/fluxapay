@@ -11,7 +11,7 @@ import { PaymentStatus } from '@/components/checkout/PaymentStatus';
 /**
  * Main checkout page for FluxaPay payment gateway
  * Handles all payment states: loading, error, pending, confirmed, expired
- * Implements real-time status polling and auto-redirect on confirmation
+ * Implements real-time status updates (SSE with polling fallback) and auto-redirect on confirmation
  */
 export default function CheckoutPage() {
   const params = useParams();
@@ -31,16 +31,16 @@ export default function CheckoutPage() {
 
   // Handle timer expiration
   const handleExpire = () => {
-    // The polling will update the status to 'expired' automatically
+    // The status updates will change the status to 'expired' automatically
     // This callback is mainly for any additional logic if needed
   };
 
   // LOADING STATE
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center" role="status" aria-live="polite">
         <div className="flex flex-col items-center gap-4">
-          <Loader2 className="w-12 h-12 text-blue-600 animate-spin" />
+          <Loader2 aria-hidden="true" className="w-12 h-12 text-blue-600 animate-spin" />
           <p className="text-gray-600 text-lg">Loading payment details...</p>
         </div>
       </div>
@@ -50,9 +50,9 @@ export default function CheckoutPage() {
   // ERROR STATE
   if (error || !payment) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4" role="alert">
         <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
-          <XCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+          <XCircle aria-hidden="true" className="w-16 h-16 text-red-500 mx-auto mb-4" />
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Payment Not Found</h1>
           <p className="text-gray-600 mb-4">
             {error || 'The payment you are looking for does not exist or has been removed.'}
@@ -68,9 +68,9 @@ export default function CheckoutPage() {
   // CONFIRMED STATE
   if (payment.status === 'confirmed') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4" role="status" aria-live="polite">
         <div className="bg-white rounded-2xl shadow-xl p-8 max-w-2xl w-full text-center">
-          <CheckCircle className="w-20 h-20 text-green-500 mx-auto mb-6 animate-pulse" />
+          <CheckCircle aria-hidden="true" className="w-20 h-20 text-green-500 mx-auto mb-6 animate-pulse" />
           <h1 className="text-3xl font-bold text-gray-900 mb-4">Payment Confirmed!</h1>
           <p className="text-lg text-gray-600 mb-2">
             Your payment has been successfully processed.
@@ -86,9 +86,9 @@ export default function CheckoutPage() {
   // EXPIRED STATE
   if (payment.status === 'expired') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4" role="alert">
         <div className="bg-white rounded-2xl shadow-xl p-8 max-w-2xl w-full text-center">
-          <XCircle className="w-20 h-20 text-red-500 mx-auto mb-6" />
+          <XCircle aria-hidden="true" className="w-20 h-20 text-red-500 mx-auto mb-6" />
           <h1 className="text-3xl font-bold text-gray-900 mb-4">Payment Expired</h1>
           <p className="text-lg text-gray-600 mb-2">
             This payment link has expired.
@@ -104,9 +104,9 @@ export default function CheckoutPage() {
   // FAILED STATE
   if (payment.status === 'failed') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4" role="alert">
         <div className="bg-white rounded-2xl shadow-xl p-8 max-w-2xl w-full text-center">
-          <XCircle className="w-20 h-20 text-red-500 mx-auto mb-6" />
+          <XCircle aria-hidden="true" className="w-20 h-20 text-red-500 mx-auto mb-6" />
           <h1 className="text-3xl font-bold text-gray-900 mb-4">Payment Failed</h1>
           <p className="text-lg text-gray-600 mb-2">
             The payment could not be processed.
@@ -122,10 +122,10 @@ export default function CheckoutPage() {
   // PENDING STATE (Waiting for payment)
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl p-8 max-w-2xl w-full">
+      <div className="bg-white rounded-2xl shadow-xl p-6 sm:p-8 max-w-2xl w-full">
         {/* Header */}
         <div className="text-center mb-6">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
             Complete Your Payment
           </h1>
           {payment.merchantName && (
@@ -139,9 +139,9 @@ export default function CheckoutPage() {
         </div>
 
         {/* Amount Display */}
-        <div className="text-center mb-8">
+        <div className="text-center mb-8" aria-label={`Amount to pay: ${payment.amount} ${payment.currency}`}>
           <p className="text-sm text-gray-500 mb-2">Amount to Pay</p>
-          <p className="text-4xl font-bold text-gray-900">
+          <p className="text-3xl sm:text-4xl font-bold text-gray-900">
             {payment.amount} {payment.currency}
           </p>
           {payment.description && (
@@ -159,31 +159,31 @@ export default function CheckoutPage() {
         </div>
 
         {/* Instructions */}
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6">
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 sm:p-6 mb-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">
             How to Pay:
           </h2>
-          <ol className="space-y-3 text-gray-700">
+          <ol className="space-y-3 text-gray-700" aria-label="Payment instructions">
             <li className="flex items-start gap-3">
-              <span className="flex-shrink-0 w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-semibold">
+              <span aria-hidden="true" className="flex-shrink-0 w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-semibold">
                 1
               </span>
               <span>Scan the QR code above with your Stellar wallet app</span>
             </li>
             <li className="flex items-start gap-3">
-              <span className="flex-shrink-0 w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-semibold">
+              <span aria-hidden="true" className="flex-shrink-0 w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-semibold">
                 2
               </span>
               <span>Confirm the amount and payment address match</span>
             </li>
             <li className="flex items-start gap-3">
-              <span className="flex-shrink-0 w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-semibold">
+              <span aria-hidden="true" className="flex-shrink-0 w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-semibold">
                 3
               </span>
               <span>Complete the transaction in your wallet</span>
             </li>
             <li className="flex items-start gap-3">
-              <span className="flex-shrink-0 w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-semibold">
+              <span aria-hidden="true" className="flex-shrink-0 w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-semibold">
                 4
               </span>
               <span>You will be automatically redirected after confirmation</span>
