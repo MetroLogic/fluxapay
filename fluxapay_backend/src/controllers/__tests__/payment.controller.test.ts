@@ -3,6 +3,7 @@ import { PaymentService } from "../../services/payment.service";
 
 jest.mock("../../services/payment.service", () => ({
   PaymentService: {
+    getRateLimitWindowSeconds: jest.fn(),
     checkRateLimit: jest.fn(),
     createPayment: jest.fn(),
   },
@@ -25,6 +26,7 @@ describe("createPayment controller", () => {
   });
 
   it("should return 429 and Retry-After header when rate limit is exceeded", async () => {
+    (PaymentService.getRateLimitWindowSeconds as jest.Mock).mockReturnValue(60);
     (PaymentService.checkRateLimit as jest.Mock).mockResolvedValue(false);
 
     const req: any = {
@@ -46,6 +48,7 @@ describe("createPayment controller", () => {
     await createPayment(req, res);
 
     expect(PaymentService.checkRateLimit).toHaveBeenCalledWith("merchant_1");
+    expect(PaymentService.getRateLimitWindowSeconds).toHaveBeenCalled();
     expect(res.setHeader).toHaveBeenCalledWith("Retry-After", "60");
     expect(res.status).toHaveBeenCalledWith(429);
     expect(res.json).toHaveBeenCalledWith({

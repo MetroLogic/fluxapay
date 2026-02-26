@@ -8,16 +8,24 @@ import { eventBus, AppEvents } from "./EventService";
 const prisma = new PrismaClient();
 
 export class PaymentService {
+    static getRateLimitWindowSeconds() {
+        const configuredWindow = Number(process.env.PAYMENT_RATE_LIMIT_WINDOW_SECONDS);
+        return Number.isFinite(configuredWindow) && configuredWindow > 0
+            ? Math.floor(configuredWindow)
+            : 60;
+    }
+
     static async checkRateLimit(merchantId: string) {
         const configuredLimit = Number(process.env.PAYMENT_RATE_LIMIT_PER_MINUTE);
         const maxPaymentsPerMinute =
             Number.isFinite(configuredLimit) && configuredLimit > 0 ? configuredLimit : 5;
 
-        const oneMinuteAgo = new Date(Date.now() - 60 * 1000);
+        const rateLimitWindowMs = this.getRateLimitWindowSeconds() * 1000;
+        const windowStart = new Date(Date.now() - rateLimitWindowMs);
         const count = await prisma.payment.count({
             where: {
                 merchantId,
-                createdAt: { gte: oneMinuteAgo },
+                createdAt: { gte: windowStart },
             },
         });
         return count < maxPaymentsPerMinute;
