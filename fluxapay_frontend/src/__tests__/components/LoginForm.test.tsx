@@ -32,6 +32,11 @@ vi.mock('next/image', () => ({
   default: ({ alt }: { alt: string }) => <img alt={alt} />,
 }));
 
+// Mock next-intl
+vi.mock('next-intl', () => ({
+  useTranslations: () => (key: string) => key,
+}));
+
 // Mock next/link
 vi.mock('next/link', () => ({
   default: ({ children, href }: { children: React.ReactNode; href: string }) => (

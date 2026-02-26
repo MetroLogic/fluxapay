@@ -6,5 +6,5 @@ export default createMiddleware(routing);
 export const config = {
   // Apply locale middleware only to locale entrypoints.
   // Non-localized app routes like /dashboard should bypass this.
-  matcher: ['/', '/(fr|pt)/:path*'],
+  matcher: ['/', '/(en|fr|pt)/:path*'],
 };
