@@ -175,26 +175,30 @@ export class FluxaPay {
      * Verify a webhook signature.
      *
      * FluxaPay signs webhook payloads using HMAC-SHA256.
-     * Pass the raw request body (as a string), the value of the
-     * `X-FluxaPay-Signature` header, and your webhook secret to verify
-     * the request is genuine.
+     * The signature covers the payload **and** the timestamp header, so
+     * provide the same `X-FluxaPay-Timestamp` value if you have it.
      *
      * @example
      * ```ts
-     * const isValid = client.webhooks.verify(rawBody, signature, webhookSecret);
+     * const isValid = client.webhooks.verify(rawBody, signature, webhookSecret, timestamp);
      * if (!isValid) throw new Error('Invalid webhook signature');
      * const event = JSON.parse(rawBody) as WebhookEvent;
      * ```
      */
-    verify: (rawBody: string, signature: string, webhookSecret: string): boolean => {
+    verify: (rawBody: string, signature: string, webhookSecret: string, timestamp?: string): boolean => {
       // Node.js crypto – works in Node 18+. Browser usage is not recommended
       // (never expose your webhook secret client-side).
       try {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const crypto = require('crypto') as typeof import('crypto');
+        // include timestamp if provided
+        let data = rawBody;
+        if (timestamp) {
+          data = `${timestamp}.${rawBody}`;
+        }
         const expected = crypto
           .createHmac('sha256', webhookSecret)
-          .update(rawBody)
+          .update(data)
           .digest('hex');
         // Timing-safe comparison
         const sigBuffer = Buffer.from(signature);

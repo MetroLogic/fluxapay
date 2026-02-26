@@ -260,7 +260,7 @@ export async function sendTestWebhookService(params: SendTestWebhookParams) {
     },
   });
 
-  // Attempt to deliver the webhook
+  // Attempt to deliver the webhook using the merchant-specific secret
   const secret = merchant.webhook_secret || process.env.WEBHOOK_SECRET || "webhook-secret";
   const result = await deliverWebhook(endpoint_url, testPayload, secret);
 
@@ -294,6 +294,10 @@ export async function sendTestWebhookService(params: SendTestWebhookParams) {
 }
 
 // Helper function to deliver webhook
+// Helper function to deliver webhook
+// Includes `X-FluxaPay-Timestamp` header and signs the payload
+// alongside the timestamp.  The signature algorithm concatenates the
+// timestamp and the JSON body with a dot (`timestamp.payload`).
 async function deliverWebhook(
   endpointUrl: string,
   payload: Record<string, any>,
@@ -308,12 +312,15 @@ async function deliverWebhook(
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 30000); // 30 second timeout
 
+    const timestamp = new Date().toISOString();
+    const signature = generateWebhookSignature(payload, secret, timestamp);
+
     const response = await fetch(endpointUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-FluxaPay-Signature": generateWebhookSignature(payload, secret),
-        "X-FluxaPay-Timestamp": new Date().toISOString(),
+        "X-FluxaPay-Signature": signature,
+        "X-FluxaPay-Timestamp": timestamp,
       },
       body: JSON.stringify(payload),
       signal: controller.signal,
@@ -338,11 +345,26 @@ async function deliverWebhook(
 
 // Helper function to generate webhook signature
 import crypto from "crypto";
-function generateWebhookSignature(payload: Record<string, unknown>, secret: string): string {
+/**
+ * Generate an HMAC-SHA256 signature for a webhook request.
+ *
+ * If a `timestamp` is supplied the string signed is
+ *   `${timestamp}.${JSON.stringify(payload)}`
+ * otherwise the plain JSON payload is signed (for backwards compatibility).
+ */
+export function generateWebhookSignature(
+  payload: Record<string, unknown>,
+  secret: string,
+  timestamp?: string
+): string {
   const hmac = crypto.createHmac("sha256", secret);
-  hmac.update(JSON.stringify(payload));
+  const data = timestamp ? `${timestamp}.${JSON.stringify(payload)}` : JSON.stringify(payload);
+  hmac.update(data);
   return hmac.digest("hex");
 }
+
+// re-export helpers for external use / testing
+export { deliverWebhook };
 
 // Helper function to generate test payload based on event type
 function generateTestPayload(

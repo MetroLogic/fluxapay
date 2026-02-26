@@ -43,9 +43,19 @@ assert(err.name === 'FluxaPayError', 'FluxaPayError.name is correct');
 const secret = 'webhook_secret_test';
 const rawBody = JSON.stringify({ event: 'payment_completed', payment_id: 'pay_1' });
 import crypto from 'crypto';
-const validSig = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
-assert(client.webhooks.verify(rawBody, validSig, secret), 'valid webhook signature passes');
-assert(!client.webhooks.verify(rawBody, 'bad_signature', secret), 'invalid signature fails');
+const timestamp = new Date().toISOString();
+const validSig = crypto
+  .createHmac('sha256', secret)
+  .update(`${timestamp}.${rawBody}`)
+  .digest('hex');
+assert(
+  client.webhooks.verify(rawBody, validSig, secret, timestamp),
+  'valid webhook signature passes'
+);
+assert(
+  !client.webhooks.verify(rawBody, 'bad_signature', secret, timestamp),
+  'invalid signature fails'
+);
 
 // Parse webhook
 const event = client.webhooks.parse(rawBody);
