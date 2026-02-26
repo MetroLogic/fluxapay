@@ -1,6 +1,8 @@
 "use client";
 
 import Image from "next/image";
+import { Link } from "@/i18n/routing";
+import { useTranslations } from "next-intl";
 import { DOCS_URLS } from "@/lib/docs";
 
 const FooterSection = ({
@@ -17,12 +19,12 @@ const FooterSection = ({
     <ul className="space-y-3">
       {links.map((link, idx) => (
         <li key={idx}>
-          <a
+          <Link
             href={link.href}
             className="text-[#A0A0A0] hover:text-white transition-colors duration-200 text-sm"
           >
             {link.label}
-          </a>
+          </Link>
         </li>
       ))}
     </ul>
@@ -30,22 +32,23 @@ const FooterSection = ({
 );
 
 export const Footer = () => {
+  const t = useTranslations("footer");
   const currentYear = new Date().getFullYear();
 
   const footerLinks = {
     legal: [
-      { label: "Privacy Policy", href: "/privacy" },
-      { label: "Terms of Use", href: "/terms" },
+      { label: t("privacy"), href: "/privacy" },
+      { label: t("terms"), href: "/terms" },
     ],
     product: [
-      { label: "Sign Up", href: "/signup" },
-      { label: "Log In", href: "/login" },
-      { label: "Pricing", href: DOCS_URLS.PRICING },
+      { label: t("signUp"), href: "/signup" },
+      { label: t("login"), href: "/login" },
+      { label: t("pricing"), href: DOCS_URLS.PRICING },
     ],
     resources: [
-      { label: "Docs", href: DOCS_URLS.FULL_DOCS },
-      { label: "FAQs / Support", href: DOCS_URLS.FAQS },
-      { label: "Contact us", href: DOCS_URLS.CONTACT },
+      { label: t("documentation"), href: DOCS_URLS.FULL_DOCS },
+      { label: t("faqs"), href: DOCS_URLS.FAQS },
+      { label: t("contact"), href: DOCS_URLS.CONTACT },
     ],
   };
 
@@ -65,15 +68,15 @@ export const Footer = () => {
           </div>
 
           {/* Footer Sections */}
-          <FooterSection title="Legal" links={footerLinks.legal} />
-          <FooterSection title="Product" links={footerLinks.product} />
-          <FooterSection title="Resources" links={footerLinks.resources} />
+          <FooterSection title={t("legal")} links={footerLinks.legal} />
+          <FooterSection title={t("product")} links={footerLinks.product} />
+          <FooterSection title={t("resources")} links={footerLinks.resources} />
         </div>
 
         {/* Copyright */}
         <div className="text-center">
           <p className="text-[#8A8A8A] text-sm">
-            © {currentYear} borderless. All rights reserved.
+            {t("copyright", { year: currentYear })}
           </p>
         </div>
       </div>

@@ -16,32 +16,12 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import EmptyState from "@/components/EmptyState";
-
-// Type definitions
-interface KycApplication {
-  id: string;
-  merchantName: string;
-  email: string;
-  country: string;
-  submittedDate: string;
-  status: "pending" | "approved" | "rejected" | "additional_info_required";
-  documents: {
-    type: string;
-    name: string;
-    url: string;
-    status: "verified" | "pending" | "rejected";
-  }[];
-  businessInfo: {
-    registrationNumber: string;
-    address: string;
-    type: string;
-  };
-  beneficialOwners: {
-    name: string;
-    role: string;
-    ownership: number;
-  }[];
-}
+import { api } from "@/lib/api";
+import {
+  useKycSubmissions,
+  useKycDetails,
+  type KycApplicationShape,
+} from "@/hooks/useKycSubmissions";
 
 interface StatusConfig {
   color: string;
@@ -57,127 +37,22 @@ const AdminKycPage = () => {
 
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [selectedApplication, setSelectedApplication] =
-    useState<KycApplication | null>(null);
+  const [selectedMerchantId, setSelectedMerchantId] = useState<string | null>(
+    null,
+  );
   const [rejectionReason, setRejectionReason] = useState("");
   const [showRejectModal, setShowRejectModal] = useState(false);
 
-  // Dummy Data
-  const [applications, setApplications] = useState<KycApplication[]>([
-    {
-      id: "KYC-2024-001",
-      merchantName: "TechNova Solutions",
-      email: "admin@technova.com",
-      country: "Nigeria",
-      submittedDate: "2024-03-15",
-      status: "pending",
-      documents: [
-        {
-          type: "Business Registration",
-          name: "cac_cert.pdf",
-          url: "#",
-          status: "pending",
-        },
-        {
-          type: "Proof of Address",
-          name: "utility_bill.jpg",
-          url: "#",
-          status: "pending",
-        },
-        {
-          type: "Director ID",
-          name: "passport.jpg",
-          url: "#",
-          status: "pending",
-        },
-      ],
-      businessInfo: {
-        registrationNumber: "RC123456",
-        address: "123 Innovation Drive, Lekki Phase 1, Lagos",
-        type: "Limited Liability Company",
-      },
-      beneficialOwners: [
-        { name: "John Doe", role: "CEO", ownership: 60 },
-        { name: "Jane Smith", role: "CTO", ownership: 40 },
-      ],
-    },
-    {
-      id: "KYC-2024-002",
-      merchantName: "GreenLeaf Retail",
-      email: "info@greenleaf.com",
-      country: "Kenya",
-      submittedDate: "2024-03-14",
-      status: "approved",
-      documents: [
-        {
-          type: "Business Registration",
-          name: "reg_cert.pdf",
-          url: "#",
-          status: "verified",
-        },
-        { type: "Tax PIN", name: "tax_pin.pdf", url: "#", status: "verified" },
-      ],
-      businessInfo: {
-        registrationNumber: "P051123456Z",
-        address: "45 Green Way, Westlands, Nairobi",
-        type: "Partnership",
-      },
-      beneficialOwners: [
-        { name: "Michael Kamau", role: "Managing Partner", ownership: 100 },
-      ],
-    },
-    {
-      id: "KYC-2024-003",
-      merchantName: "SwiftPay Logistics",
-      email: "support@swiftpay.com",
-      country: "South Africa",
-      submittedDate: "2024-03-10",
-      status: "rejected",
-      documents: [
-        {
-          type: "Business Registration",
-          name: "cipc_doc.pdf",
-          url: "#",
-          status: "rejected",
-        },
-      ],
-      businessInfo: {
-        registrationNumber: "2024/123456/07",
-        address: "78 Logistics Park, Midrand, Johannesburg",
-        type: "Private Company",
-      },
-      beneficialOwners: [
-        { name: "Sara Williams", role: "Director", ownership: 50 },
-        { name: "David Jones", role: "Director", ownership: 50 },
-      ],
-    },
-    {
-      id: "KYC-2024-004",
-      merchantName: "CryptoFlow Exchange",
-      email: "verification@cryptoflow.io",
-      country: "Nigeria",
-      submittedDate: "2024-03-16",
-      status: "additional_info_required",
-      documents: [
-        {
-          type: "License",
-          name: "license_draft.pdf",
-          url: "#",
-          status: "pending",
-        },
-      ],
-      businessInfo: {
-        registrationNumber: "RC987654",
-        address: "5 Block-Chain Street, Abuja",
-        type: "Limited Liability Company",
-      },
-      beneficialOwners: [
-        { name: "Satoshi Nakamoto", role: "Founder", ownership: 100 },
-      ],
-    },
-  ]);
+  const { applications, isLoading, mutate } = useKycSubmissions({
+    status: statusFilter !== "all" ? statusFilter : undefined,
+    limit: 100,
+  });
+  const { application: selectedApplication } =
+    useKycDetails(selectedMerchantId);
 
-  const getStatusConfig = (status: KycApplication["status"]): StatusConfig => {
+  const getStatusConfig = (
+    status: KycApplicationShape["status"],
+  ): StatusConfig => {
     switch (status) {
       case "approved":
         return {
@@ -222,17 +97,24 @@ const AdminKycPage = () => {
     }
   };
 
-  const handleUpdateStatus = (
-    id: string,
-    newStatus: KycApplication["status"],
+  const handleUpdateStatus = async (
+    merchantId: string,
+    newStatus: "approved" | "rejected" | "additional_info_required",
+    rejection_reason?: string,
   ) => {
-    setApplications((apps) =>
-      apps.map((app) => (app.id === id ? { ...app, status: newStatus } : app)),
-    );
-    toast.success(`Application ${newStatus} successfully`);
-    setSelectedApplication(null);
-    setShowRejectModal(false);
-    setRejectionReason("");
+    try {
+      await api.kyc.admin.updateStatus(merchantId, {
+        status: newStatus,
+        rejection_reason,
+      });
+      toast.success(`Application ${newStatus} successfully`);
+      setSelectedMerchantId(null);
+      setShowRejectModal(false);
+      setRejectionReason("");
+      void mutate();
+    } catch {
+      toast.error("Failed to update application status");
+    }
   };
 
   const handleReject = () => {
@@ -241,18 +123,20 @@ const AdminKycPage = () => {
       toast.error("Please provide a reason for rejection");
       return;
     }
-    handleUpdateStatus(selectedApplication.id, "rejected");
+    void handleUpdateStatus(
+      selectedApplication.merchantId,
+      "rejected",
+      rejectionReason,
+    );
   };
 
   const filteredApplications = applications.filter((app) => {
     const matchesSearch =
+      !searchTerm ||
       app.merchantName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       app.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
       app.id.toLowerCase().includes(searchTerm.toLowerCase());
-
-    const matchesStatus = statusFilter === "all" || app.status === statusFilter;
-
-    return matchesSearch && matchesStatus;
+    return matchesSearch;
   });
 
   const getStats = () => {
@@ -264,6 +148,14 @@ const AdminKycPage = () => {
   };
 
   const stats = getStats();
+
+  if (isLoading && applications.length === 0) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="text-slate-600">Loading KYC applications...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -456,7 +348,9 @@ const AdminKycPage = () => {
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center gap-2">
                             <button
-                              onClick={() => setSelectedApplication(app)}
+                              onClick={() =>
+                                setSelectedMerchantId(app.merchantId)
+                              }
                               className="px-3 py-1.5 text-sm font-medium text-white rounded-lg transition-colors hover:opacity-90 flex items-center gap-2"
                               style={{ backgroundColor: primaryColor }}
                             >
@@ -482,7 +376,7 @@ const AdminKycPage = () => {
             {/* Close Button */}
             <button
               onClick={() => {
-                setSelectedApplication(null);
+                setSelectedMerchantId(null);
                 setShowRejectModal(false);
               }}
               className="absolute top-4 right-4 p-2 hover:bg-slate-100 rounded-full transition-colors z-10"
@@ -683,7 +577,10 @@ const AdminKycPage = () => {
                   </button>
                   <button
                     onClick={() =>
-                      handleUpdateStatus(selectedApplication.id, "approved")
+                      handleUpdateStatus(
+                        selectedApplication.merchantId,
+                        "approved",
+                      )
                     }
                     className="px-6 py-2 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors shadow-sm"
                   >

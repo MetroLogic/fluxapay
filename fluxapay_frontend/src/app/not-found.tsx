@@ -1,13 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { Navbar } from "@/features/landing/components/Navbar";
 
 export default function NotFound() {
   return (
     <div className="hero">
       <div className="py-8 h-screen flex flex-col relative overflow-hidden">
-        <Navbar />
+        <div className="w-full max-w-6xl mx-auto px-4 flex justify-between items-center">
+          <Link href="/" className="text-white text-lg font-semibold">
+            FluxaPay
+          </Link>
+          <Link
+            href="/login"
+            className="px-4 py-2 text-sm font-semibold text-black bg-white rounded-lg hover:opacity-90 transition-all"
+          >
+            Login
+          </Link>
+        </div>
 
         <div className="content flex-1 flex items-center justify-center h-full relative z-20 w-full max-w-6xl mx-auto px-4">
           <div className="text-center animate-fade-in">

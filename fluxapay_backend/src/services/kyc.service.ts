@@ -1,6 +1,7 @@
-import { PrismaClient, KYCStatus, DocumentType, BusinessType, GovernmentIdType } from "../generated/client/client";
+import { PrismaClient, KYCStatus, DocumentType, BusinessType, GovernmentIdType, Prisma } from "../generated/client/client";
 import { uploadToCloudinary, deleteFromCloudinary } from "./cloudinary.service";
 import { SubmitKycInput, UpdateKycStatusInput } from "../schemas/kyc.schema";
+import { logKycDecision } from "./audit.service";
 
 const prisma = new PrismaClient();
 
@@ -271,19 +272,42 @@ export async function updateKycStatusService(
     };
   }
 
-  const updatedKyc = await prisma.merchantKYC.update({
-    where: { merchantId },
-    data: {
-      kyc_status: data.status as KYCStatus,
-      rejection_reason: data.status === "rejected" ? data.rejection_reason : null,
-      reviewed_at: new Date(),
-      reviewed_by: reviewerId,
-    },
+  const previousStatus = kyc.kyc_status;
+  const newStatus = data.status as KYCStatus;
+  const action = data.status === "approved" ? "approve" : "reject";
+
+  // Use transaction to ensure atomicity
+  const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    // Update KYC status
+    const updatedKyc = await tx.merchantKYC.update({
+      where: { merchantId },
+      data: {
+        kyc_status: newStatus,
+        rejection_reason: data.status === "rejected" ? data.rejection_reason : null,
+        reviewed_at: new Date(),
+        reviewed_by: reviewerId,
+      },
+    });
+
+    // Create audit log entry
+    await logKycDecision(
+      {
+        adminId: reviewerId,
+        merchantId,
+        action,
+        previousStatus,
+        newStatus,
+        reason: data.rejection_reason,
+      },
+      tx
+    );
+
+    return updatedKyc;
   });
 
   return {
     message: `KYC ${data.status}`,
-    kyc: updatedKyc,
+    kyc: result,
   };
 }
 

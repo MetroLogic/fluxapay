@@ -61,13 +61,27 @@ export const getSettlementDetailsService = async (
 ) => {
     const settlement = await prisma.settlement.findUnique({
         where: { id: settlementId, merchantId },
+        include: { merchant: true },
     });
 
     if (!settlement) {
         throw new Error("Settlement not found");
     }
 
-    return settlement;
+    // Get related payments for this settlement period
+    const payments = await prisma.payment.findMany({
+        where: {
+            merchantId,
+            status: "confirmed",
+        },
+        orderBy: { createdAt: "desc" },
+        take: 50,
+    });
+
+    return {
+        ...settlement,
+        payments,
+    };
 };
 
 export const getSettlementSummaryService = async (merchantId: string) => {
@@ -130,21 +144,82 @@ export const exportSettlementService = async (
 ) => {
     const settlement = await prisma.settlement.findUnique({
         where: { id: settlementId, merchantId },
+        include: { merchant: true },
     });
 
     if (!settlement) {
         throw new Error("Settlement not found");
     }
 
+    // Get related payments
+    const payments = await prisma.payment.findMany({
+        where: {
+            merchantId,
+            status: "confirmed",
+        },
+        orderBy: { createdAt: "desc" },
+        take: 100,
+    });
+
     if (format === "csv") {
+        const headerRows = [
+            `Settlement Report - ${settlementId}`,
+            `Merchant: ${settlement.merchant.business_name}`,
+            `Date: ${settlement.created_at.toISOString().split('T')[0]}`,
+            `Status: ${settlement.status}`,
+            ``,
+            `SETTLEMENT SUMMARY`,
+            `Total Amount,${settlement.amount},${settlement.currency}`,
+            `Fees,${settlement.fees},${settlement.currency}`,
+            `Net Amount,${Number(settlement.amount) - Number(settlement.fees)},${settlement.currency}`,
+            `Bank Transfer ID,${settlement.bank_transfer_id || 'N/A'}`,
+            `Scheduled Date,${settlement.scheduled_date.toISOString().split('T')[0]}`,
+            `Processed Date,${settlement.processed_date ? settlement.processed_date.toISOString().split('T')[0] : 'Pending'}`,
+            ``,
+            `INCLUDED PAYMENTS`,
+            `Payment ID,Amount,Currency,Customer Email,Date,Status`,
+        ];
+
+        const paymentRows = payments.map((p: typeof payments[number]) =>
+            `${p.id},${p.amount},${p.currency},${p.customer_email},${p.createdAt.toISOString().split('T')[0]},${p.status}`
+        );
+
+        const csvContent = [...headerRows, ...paymentRows].join('\n');
+
         return {
             filename: `settlement-${settlementId}.csv`,
-            content: `ID,Date,Amount,Currency,Status,Fees\n${settlement.id},${settlement.created_at},${settlement.amount},${settlement.currency},${settlement.status},${settlement.fees}`
+            content: csvContent,
+            contentType: "text/csv",
         };
     }
 
+    // PDF format - return structured data for client-side PDF generation
     return {
         filename: `settlement-${settlementId}.pdf`,
-        content: "MOCK_PDF_CONTENT"
+        content: {
+            settlement: {
+                id: settlement.id,
+                merchant_name: settlement.merchant.business_name,
+                amount: Number(settlement.amount),
+                fees: Number(settlement.fees),
+                net_amount: Number(settlement.amount) - Number(settlement.fees),
+                currency: settlement.currency,
+                status: settlement.status,
+                bank_transfer_id: settlement.bank_transfer_id,
+                scheduled_date: settlement.scheduled_date,
+                processed_date: settlement.processed_date,
+                created_at: settlement.created_at,
+            },
+            payments: payments.map((p: typeof payments[number]) => ({
+                id: p.id,
+                amount: Number(p.amount),
+                currency: p.currency,
+                customer_email: p.customer_email,
+                date: p.createdAt,
+                status: p.status,
+            })),
+            generated_at: new Date().toISOString(),
+        },
+        contentType: "application/json",
     };
 };

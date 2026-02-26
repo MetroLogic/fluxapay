@@ -9,12 +9,21 @@ import {
   updateMerchantWebhook,
   rotateApiKey,
   rotateWebhookSecret,
+  adminListMerchants,
+  adminGetMerchant,
+  adminUpdateMerchantStatus,
+  updateSettlementSchedule,
+  addBankAccount,
 } from "../controllers/merchant.controller";
 import { validate } from "../middleware/validation.middleware";
 import * as merchantSchema from "../schemas/merchant.schema";
 import { authenticateToken } from "../middleware/auth.middleware";
+import { idempotencyMiddleware } from "../middleware/idempotency.middleware";
+import { authorizeAdmin } from "../middleware/admin.middleware";
+import { updateSettlementScheduleSchema, bankAccountSchema } from "../schemas/merchant.schema";
 
 const router = Router();
+
 
 /**
  * @swagger
@@ -54,7 +63,7 @@ const router = Router();
  *       400:
  *         description: Email or phone already exists
  */
-router.post("/signup", validate(merchantSchema.signupSchema), signupMerchant);
+router.post("/signup", idempotencyMiddleware, validate(merchantSchema.signupSchema), signupMerchant);
 
 /**
  * @swagger
@@ -114,7 +123,7 @@ router.post("/login", validate(merchantSchema.loginSchema), loginMerchant);
  *       400:
  *         description: Invalid or expired OTP
  */
-router.post("/verify-otp", validate(merchantSchema.verifyOtpSchema), verifyOtp);
+router.post("/verify-otp", idempotencyMiddleware, validate(merchantSchema.verifyOtpSchema), verifyOtp);
 /**
  * @swagger
  * /api/merchants/resend-otp:
@@ -142,7 +151,7 @@ router.post("/verify-otp", validate(merchantSchema.verifyOtpSchema), verifyOtp);
  *       404:
  *         description: Merchant not found
  */
-router.post("/resend-otp", validate(merchantSchema.resendOtpSchema), resendOtp);
+router.post("/resend-otp", idempotencyMiddleware, validate(merchantSchema.resendOtpSchema), resendOtp);
 
 /**
  * @swagger
@@ -274,6 +283,99 @@ router.post(
   "/keys/rotate-webhook-secret",
   authenticateToken,
   rotateWebhookSecret,
+);
+
+// ── Admin routes ──────────────────────────────────────────────────────────────
+router.get("/admin/list", authorizeAdmin, adminListMerchants);
+router.get("/admin/:merchantId", authorizeAdmin, adminGetMerchant);
+router.patch("/admin/:merchantId/status", authorizeAdmin, adminUpdateMerchantStatus);
+/**
+ * @swagger
+ * /api/merchants/me/settlement-schedule:
+ *   patch:
+ *     summary: Update merchant settlement schedule
+ *     tags: [Merchants]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - settlement_schedule
+ *             properties:
+ *               settlement_schedule:
+ *                 type: string
+ *                 enum: [daily, weekly]
+ *               settlement_day:
+ *                 type: integer
+ *                 minimum: 0
+ *                 maximum: 6
+ *                 description: "0=Sun, 1=Mon … 6=Sat. Required when schedule is weekly."
+ *     responses:
+ *       200:
+ *         description: Schedule updated
+ *       400:
+ *         description: Validation error (e.g. missing settlement_day for weekly)
+ *       401:
+ *         description: Unauthorized
+ */
+router.patch(
+  "/me/settlement-schedule",
+  authenticateToken,
+  validate(updateSettlementScheduleSchema),
+  updateSettlementSchedule,
+);
+
+
+/**
+ * @swagger
+ * /api/merchants/me/bank-account:
+ *   post:
+ *     summary: Add or update merchant bank account
+ *     tags: [Merchants]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - account_name
+ *               - account_number
+ *               - bank_name
+ *               - currency
+ *               - country
+ *             properties:
+ *               account_name:
+ *                 type: string
+ *               account_number:
+ *                 type: string
+ *               bank_name:
+ *                 type: string
+ *               bank_code:
+ *                 type: string
+ *               currency:
+ *                 type: string
+ *               country:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: Bank account saved successfully
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Merchant not found
+ */
+router.post(
+  "/me/bank-account",
+  authenticateToken,
+  validate(bankAccountSchema),
+  addBankAccount,
 );
 
 export default router;
