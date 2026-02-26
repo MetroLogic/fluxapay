@@ -19,7 +19,11 @@ export function PaymentQRCode({ address, amount, size = 256 }: PaymentQRCodeProp
   return (
     <div className="flex flex-col items-center space-y-4">
       {/* QR Code Card */}
-      <div className="bg-white rounded-lg shadow-lg p-6 flex items-center justify-center">
+      <div
+        role="img"
+        aria-label={`QR code for Stellar payment of ${amount} to address ${address}`}
+        className="bg-white rounded-lg shadow-lg p-6 flex items-center justify-center"
+      >
         <QRCodeCanvas
           value={stellarUri}
           size={size}
@@ -31,8 +35,11 @@ export function PaymentQRCode({ address, amount, size = 256 }: PaymentQRCodeProp
 
       {/* Payment Address */}
       <div className="w-full max-w-md">
-        <p className="text-xs text-gray-500 text-center mb-1">Payment Address</p>
-        <p className="text-sm text-gray-700 text-center break-all font-mono bg-gray-50 px-3 py-2 rounded border">
+        <p className="text-xs text-gray-500 text-center mb-1" id="payment-address-label">Payment Address</p>
+        <p
+          className="text-sm text-gray-700 text-center break-all font-mono bg-gray-50 px-3 py-2 rounded border"
+          aria-labelledby="payment-address-label"
+        >
           {address}
         </p>
       </div>
