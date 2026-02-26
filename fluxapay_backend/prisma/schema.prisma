@@ -243,6 +243,11 @@ model Payment {
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 
+  // HD wallet derivation fields
+  payment_index        Int?    // The payment_index used in BIP44 path
+  derivation_path      String? // e.g. "m/44'/148'/3'/7'"
+  encrypted_key_data   String? // KMS-encrypted JSON: { merchantIndex, paymentIndex } for sweep recovery
+
   @@index([status])
   @@index([customer_email])
   @@index([createdAt])
@@ -512,6 +517,28 @@ enum AuditEntityType {
   system_config
   sweep_operation
   settlement_batch
+}
+
+// ─── HD Wallet Index Tracking ─────────────────────────────────────────────────
+
+/// Tracks the stable merchant_index assigned to each merchant (assigned once, never changes)
+/// and the payment_counter which is atomically incremented per payment.
+model MerchantHDIndex {
+  id              String   @id @default(cuid())
+  merchantId      String   @unique
+  merchant_index  Int      // Assigned sequentially; stable forever
+  payment_counter Int      @default(0) // Incremented atomically per payment
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  @@index([merchantId])
+}
+
+/// Global counter for assigning unique merchant_index values.
+/// There is exactly one row with id = "global".
+model HDIndexCounter {
+  id                  String @id @default("global")
+  next_merchant_index Int    @default(0)
 }
 
 model ManualIntervention {

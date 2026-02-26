@@ -24,4 +24,15 @@ export interface IKMSProvider {
    * Health check for KMS availability
    */
   healthCheck(): Promise<boolean>;
+
+  /**
+   * Encrypts arbitrary data using the KMS key material.
+   * Used to encrypt derivation path indices before storing on Payment rows.
+   */
+  encrypt?(data: string): Promise<string>;
+
+  /**
+   * Decrypts data previously encrypted with encrypt().
+   */
+  decrypt?(data: string): Promise<string>;
 }

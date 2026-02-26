@@ -59,9 +59,11 @@ export class SweepService {
   private hdWalletService: HDWalletService;
 
   constructor() {
-    const horizonUrl = process.env.STELLAR_HORIZON_URL || "https://horizon-testnet.stellar.org";
+    const horizonUrl =
+      process.env.STELLAR_HORIZON_URL || "https://horizon-testnet.stellar.org";
     this.server = new Horizon.Server(horizonUrl);
-    this.networkPassphrase = process.env.STELLAR_NETWORK_PASSPHRASE || Networks.TESTNET;
+    this.networkPassphrase =
+      process.env.STELLAR_NETWORK_PASSPHRASE || Networks.TESTNET;
 
     const issuer =
       process.env.USDC_ISSUER_PUBLIC_KEY ||
@@ -97,7 +99,9 @@ export class SweepService {
     mergeDestination?: string;
   }): Promise<string> {
     const sourceKeypair = Keypair.fromSecret(params.sourceSecret);
-    const sourceAccount = await this.server.loadAccount(sourceKeypair.publicKey());
+    const sourceAccount = await this.server.loadAccount(
+      sourceKeypair.publicKey(),
+    );
 
     const builder = new TransactionBuilder(sourceAccount, {
       fee: "100",
@@ -131,7 +135,9 @@ export class SweepService {
    *
    * For safety and simplicity, this submits **one tx per payment address**.
    */
-  public async sweepPaidPayments(options: SweepOptions = {}): Promise<SweepResult> {
+  public async sweepPaidPayments(
+    options: SweepOptions = {},
+  ): Promise<SweepResult> {
     const startedAt = new Date();
     const sweepId = `sweep_${startedAt.getTime()}`;
 
@@ -157,9 +163,12 @@ export class SweepService {
     let addressesSwept = 0;
 
     const enableAccountMerge =
-      options.enableAccountMerge ?? process.env.SWEEP_ENABLE_ACCOUNT_MERGE === "true";
+      options.enableAccountMerge ??
+      process.env.SWEEP_ENABLE_ACCOUNT_MERGE === "true";
 
-    const mergeDestination = enableAccountMerge ? process.env.FUNDER_PUBLIC_KEY : undefined;
+    const mergeDestination = enableAccountMerge
+      ? process.env.FUNDER_PUBLIC_KEY
+      : undefined;
 
     if (enableAccountMerge && !mergeDestination) {
       console.warn(
@@ -176,7 +185,29 @@ export class SweepService {
         }
 
         // Recreate source secret for the derived payment address.
-        const kp = await this.hdWalletService.regenerateKeypair(p.merchantId, p.id);
+        // Priority:
+        //   1. derivation_path (stored at payment creation — fastest, no extra DB query)
+        //   2. encrypted_key_data (decrypt indices, then derive)
+        //   3. Legacy fallback: DB index lookup via merchantId/paymentId
+        let kp: { publicKey: string; secretKey: string };
+
+        if (p.derivation_path) {
+          // Fast path: re-derive directly from the stored BIP44 path
+          kp = await this.hdWalletService.regenerateKeypairFromPath(
+            p.derivation_path,
+          );
+        } else if (p.encrypted_key_data) {
+          // Decrypt indices and derive
+          const { merchantIndex, paymentIndex } =
+            await this.hdWalletService.decryptKeyData(p.encrypted_key_data);
+          kp = await this.hdWalletService.regenerateKeypair(
+            merchantIndex,
+            paymentIndex,
+          );
+        } else {
+          // Legacy: look up indices from DB (payments created before this feature)
+          kp = await this.hdWalletService.regenerateKeypair(p.merchantId, p.id);
+        }
 
         // Ensure address matches DB (defense in depth)
         if (p.stellar_address && kp.publicKey !== p.stellar_address) {
@@ -222,7 +253,8 @@ export class SweepService {
     if (auditLog) {
       await updateSweepCompletion({
         auditLogId: auditLog.id,
-        status: skipped.length > 0 && addressesSwept === 0 ? "failed" : "completed",
+        status:
+          skipped.length > 0 && addressesSwept === 0 ? "failed" : "completed",
         statistics: {
           addresses_swept: addressesSwept,
           total_amount: total.toFixed(7),
