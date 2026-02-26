@@ -1,67 +1,123 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Payment } from '@/types/payment';
+
+type ConnectionType = 'sse' | 'polling' | null;
 
 interface UsePaymentStatusReturn {
   payment: Payment | null;
   loading: boolean;
   error: string | null;
+  connectionType: ConnectionType;
 }
 
 /**
- * Custom hook to fetch and poll payment status
- * Fetches initial payment details and polls for status updates every 3 seconds
+ * Custom hook to fetch and stream payment status.
+ * Tries SSE (EventSource) first for instant updates.
+ * Falls back to 3-second polling if SSE is unavailable.
  */
 export function usePaymentStatus(paymentId: string): UsePaymentStatusReturn {
   const [payment, setPayment] = useState<Payment | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [connectionType, setConnectionType] = useState<ConnectionType>(null);
+  const eventSourceRef = useRef<EventSource | null>(null);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Polling fallback
   const pollStatus = useCallback(async () => {
-    // Don't poll if payment is already confirmed, expired, or failed
-    if (payment && ['confirmed', 'expired', 'failed'].includes(payment.status)) {
+    try {
+      const response = await fetch(`/api/payments/${paymentId}/status`);
+      if (!response.ok) return;
+
+      const data = await response.json();
+
+      setPayment((prev) => {
+        if (!prev) return prev;
+        if (prev.status !== data.status) {
+          return { ...prev, status: data.status };
+        }
+        return prev;
+      });
+    } catch (err) {
+      console.error('Polling error:', err);
+    }
+  }, [paymentId]);
+
+  // Start polling fallback
+  const startPolling = useCallback(() => {
+    if (pollingRef.current) return; // Already polling
+    setConnectionType('polling');
+    pollingRef.current = setInterval(pollStatus, 3000);
+  }, [pollStatus]);
+
+  // Stop polling
+  const stopPolling = useCallback(() => {
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
+  }, []);
+
+  // Connect SSE
+  const connectSSE = useCallback(() => {
+    if (typeof window === 'undefined' || !('EventSource' in window)) {
+      startPolling();
       return;
     }
 
     try {
-      const response = await fetch(`/api/payments/${paymentId}/status`);
-      
-      if (!response.ok) {
-        return; // Silently fail polling, don't update error state
-      }
+      const es = new EventSource(`/api/payments/${paymentId}/stream`);
+      eventSourceRef.current = es;
 
-      const data = await response.json();
-      
-      setPayment((prev) => {
-        if (!prev) return prev;
-        
-        // Only update if status changed
-        if (prev.status !== data.status) {
-          return {
-            ...prev,
-            status: data.status,
-          };
+      es.onopen = () => {
+        setConnectionType('sse');
+      };
+
+      es.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          setPayment((prev) => {
+            if (!prev) return prev;
+            if (prev.status !== data.status) {
+              return { ...prev, status: data.status };
+            }
+            return prev;
+          });
+
+          // Close SSE on terminal states
+          if (['confirmed', 'expired', 'failed'].includes(data.status)) {
+            es.close();
+            eventSourceRef.current = null;
+          }
+        } catch {
+          // Ignore parse errors
         }
-        
-        return prev;
-      });
-    } catch (err) {
-      // Silently fail polling errors
-      console.error('Polling error:', err);
-    }
-  }, [paymentId, payment]);
+      };
 
-  // Initial fetch - moved inline to avoid setState-in-effect lint error
+      es.onerror = () => {
+        // SSE failed — close and fall back to polling
+        es.close();
+        eventSourceRef.current = null;
+        startPolling();
+      };
+    } catch {
+      // EventSource construction failed — fall back to polling
+      startPolling();
+    }
+  }, [paymentId, startPolling]);
+
+  // Initial fetch
   useEffect(() => {
     let isMounted = true;
 
     async function fetchPayment() {
       try {
         const response = await fetch(`/api/payments/${paymentId}`);
-        
+
         if (!isMounted) return;
-        
+
         if (!response.ok) {
           if (response.status === 404) {
             setError('Payment not found');
@@ -73,15 +129,14 @@ export function usePaymentStatus(paymentId: string): UsePaymentStatusReturn {
         }
 
         const data = await response.json();
-        
+
         if (!isMounted) return;
-        
-        // Convert expiresAt string to Date object
+
         const paymentData: Payment = {
           ...data,
           expiresAt: new Date(data.expiresAt),
         };
-        
+
         setPayment(paymentData);
         setError(null);
         setLoading(false);
@@ -99,22 +154,28 @@ export function usePaymentStatus(paymentId: string): UsePaymentStatusReturn {
     };
   }, [paymentId]);
 
-  // Polling interval
+  // Start SSE/polling after initial fetch
   useEffect(() => {
-    // Don't start polling until initial fetch is complete
     if (loading || !payment) return;
 
-    // Don't poll if payment is in terminal state
+    // Don't connect if payment is in terminal state
     if (['confirmed', 'expired', 'failed'].includes(payment.status)) {
       return;
     }
 
-    const interval = setInterval(() => {
-      pollStatus();
-    }, 3000); // Poll every 3 seconds
+    // Try SSE first, falls back to polling internally
+    connectSSE();
 
-    return () => clearInterval(interval);
-  }, [loading, payment, pollStatus]);
+    return () => {
+      // Clean up SSE
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
+      // Clean up polling
+      stopPolling();
+    };
+  }, [loading, payment?.status, connectSSE, stopPolling]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  return { payment, loading, error };
+  return { payment, loading, error, connectionType };
 }

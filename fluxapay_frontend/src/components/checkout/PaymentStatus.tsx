@@ -52,16 +52,21 @@ export function PaymentStatus({ status, message }: PaymentStatusProps) {
   const config = getStatusConfig();
   const Icon = config.icon;
   const isPending = status === 'pending';
+  const statusMessage = message || config.defaultMessage;
 
   return (
     <div
+      role="status"
+      aria-live="polite"
+      aria-label={`Payment status: ${statusMessage}`}
       className={`flex flex-col items-center justify-center gap-3 px-6 py-4 rounded-lg border ${config.bgColor} ${config.borderColor}`}
     >
       <Icon
+        aria-hidden="true"
         className={`w-8 h-8 ${config.iconColor} ${isPending ? 'animate-spin' : ''}`}
       />
       <p className={`font-semibold ${config.iconColor}`}>
-        {message || config.defaultMessage}
+        {statusMessage}
       </p>
     </div>
   );
