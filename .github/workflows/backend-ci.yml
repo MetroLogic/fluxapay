@@ -36,6 +36,14 @@ jobs:
       - name: Format Check (Lint)
         run: npm run lint
 
+      - name: Run Tests
+        run: npm test
+        env:
+          KMS_PROVIDER: local
+          KMS_ENCRYPTION_PASSPHRASE: ci-test-passphrase-for-hd-wallet-secure
+          HD_WALLET_MASTER_SEED: ci-test-master-seed-32chars-long-padded!!
+          DISABLE_CRON: "true"
+
       - name: Build Check
         run: npm run build
         # Verification that the backend TypeScript application builds successfully.
