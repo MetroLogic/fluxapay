@@ -4,7 +4,6 @@ import swaggerUi from "swagger-ui-express";
 import { specs } from "./docs/swagger";
 import { PrismaClient } from "./generated/client/client";
 import merchantRoutes from "./routes/merchant.route";
-indempotency-rate-limiting
 import paymentRoutes from "./routes/payment.route";
 import dashboardRoutes from "./routes/dashboard.route";
 import settlementRoutes from "./routes/settlement.route";
@@ -12,14 +11,11 @@ import kycRoutes from "./routes/kyc.route";
 import webhookRoutes from "./routes/webhook.route";
 import reconciliationRoutes from "./routes/reconciliation.route";
 import settlementBatchRoutes from "./routes/settlementBatch.route";
-import paymentRoutes from "./routes/payment.route";
 import keysRoutes from "./routes/keys.route";
 import refundRoutes from "./routes/refund.route";
 import invoiceRoutes from "./routes/invoice.route";
 import auditRoutes from "./routes/audit.route";
 import sweepRoutes from "./routes/sweep.route";
-main
-
 const app = express();
 const prisma = new PrismaClient();
 
@@ -31,7 +27,6 @@ app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(specs));
 
 // API Routes
 app.use("/api/merchants", merchantRoutes);
-indempotency-rate-limiting
 app.use("/api/payments", paymentRoutes);
 app.use("/api/v1/merchants", merchantRoutes); // Alias for frontend consistency
 app.use("/api/dashboard", dashboardRoutes);
@@ -47,8 +42,6 @@ app.use("/api/refunds", refundRoutes);
 app.use("/api/invoices", invoiceRoutes);
 app.use("/api/admin", auditRoutes);
 app.use("/api/admin/sweep", sweepRoutes);
-main
-
 // Basic health check
 app.get("/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date() });
@@ -72,7 +65,9 @@ app.get("/ready", async (req, res) => {
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 3000);
-      const horizonRes = await fetch(`${horizonUrl}`, { signal: controller.signal });
+      const horizonRes = await fetch(`${horizonUrl}`, {
+        signal: controller.signal,
+      });
       clearTimeout(timeout);
       checks.horizon = horizonRes.ok ? "ok" : "degraded";
     } catch {
