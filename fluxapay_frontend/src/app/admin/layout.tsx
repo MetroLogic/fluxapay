@@ -1,26 +1,36 @@
-import { AdminSidebar } from '../../features/admin/payments/components/AdminSidebar';
-import AdminGuard from './AdminGuard';
+import { Metadata } from "next";
+import { AdminSidebar } from "../../features/admin/payments/components/AdminSidebar";
+import AdminGuard from "./AdminGuard";
+
+export const metadata: Metadata = {
+  title: "Admin Dashboard | FluxaPay",
+  description: "FluxaPay administrative dashboard for platform management.",
+  robots: {
+    index: false,
+    follow: false,
+  },
+};
 
 export default function AdminLayout({
-    children,
+  children,
 }: {
-    children: React.ReactNode;
+  children: React.ReactNode;
 }) {
-    return (
-        <AdminGuard>
-            <div className="flex min-h-screen bg-slate-50">
-                {/* Sidebar component handles its own responsive visibility */}
-                <AdminSidebar />
+  return (
+    <AdminGuard>
+      <div className="flex min-h-screen bg-slate-50">
+        {/* Sidebar component handles its own responsive visibility */}
+        <AdminSidebar />
 
-                {/* Main Content Area */}
-                <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-                    <div className="flex-1 overflow-y-auto p-4 md:p-8">
-                        {/* Added a spacer for mobile so content isn't hidden under the toggle button */}
-                        <div className="h-12 lg:hidden" />
-                        {children}
-                    </div>
-                </main>
-            </div>
-        </AdminGuard>
-    );
+        {/* Main Content Area */}
+        <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
+          <div className="flex-1 overflow-y-auto p-4 md:p-8">
+            {/* Added a spacer for mobile so content isn't hidden under the toggle button */}
+            <div className="h-12 lg:hidden" />
+            {children}
+          </div>
+        </main>
+      </div>
+    </AdminGuard>
+  );
 }

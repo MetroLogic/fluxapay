@@ -23,7 +23,9 @@ import { funderMonitorService } from "./funderMonitor.service";
 
 const SETTLEMENT_CRON_EXPR = process.env.SETTLEMENT_CRON ?? "0 0 * * *";
 const BILLING_CRON_EXPR = process.env.BILLING_CRON ?? "0 1 * * *";
-const SWEEP_CRON_EXPR = process.env.SWEEP_CRON ?? "55 23 * * *"; // 23:55 UTC daily (5 min before settlement)
+// Sweep job defaults to every 5 minutes (high-frequency treasury sweeping).
+// Override with SWEEP_CRON in env for less frequent schedules.
+const SWEEP_CRON_EXPR = process.env.SWEEP_CRON ?? "*/5 * * * *"; // every 5 minutes
 const FUNDER_MONITOR_CRON_EXPR = process.env.FUNDER_MONITOR_CRON ?? "*/10 * * * *"; // every 10 minutes
 
 let settlementTask: ScheduledTask | null = null;
