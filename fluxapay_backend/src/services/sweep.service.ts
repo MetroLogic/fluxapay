@@ -215,14 +215,27 @@ export class SweepService {
           continue;
         }
 
-        if (dryRun) {
-          addressesSwept += 1;
-          total += expected;
+        // Load current on-chain account state and use actual USDC balance.
+        const account = await this.server.loadAccount(kp.publicKey);
+        const usdcBalanceEntry = account.balances.find((b) =>
+          b.asset_type === "credit_alphanum4" &&
+          b.asset_code === "USDC" &&
+          b.asset_issuer === this.usdcAsset.issuer,
+        );
+
+        const accountUsdcAmount = Number(usdcBalanceEntry?.balance ?? "0");
+        if (!Number.isFinite(accountUsdcAmount) || accountUsdcAmount <= 0) {
+          skipped.push({ paymentId: p.id, reason: "No USDC balance to sweep" });
           continue;
         }
 
-        // Sweep the expected amount.
-        const amountStr = expected.toFixed(7);
+        if (dryRun) {
+          addressesSwept += 1;
+          total += accountUsdcAmount;
+          continue;
+        }
+
+        const amountStr = accountUsdcAmount.toFixed(7);
         const hash = await this.submitUsdcSweepTx({
           sourceSecret: kp.secretKey,
           destination: this.vaultKeypair.publicKey(),
@@ -241,7 +254,7 @@ export class SweepService {
 
         txHashes.push(hash);
         addressesSwept += 1;
-        total += expected;
+        total += accountUsdcAmount;
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
         skipped.push({ paymentId: p.id, reason: msg });
