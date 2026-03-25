@@ -93,3 +93,40 @@ export const WebhookStatus = {
 } as const
 
 export type WebhookStatus = (typeof WebhookStatus)[keyof typeof WebhookStatus]
+
+
+export const RefundStatus = {
+  pending: 'pending',
+  processing: 'processing',
+  completed: 'completed',
+  failed: 'failed'
+} as const
+
+export type RefundStatus = (typeof RefundStatus)[keyof typeof RefundStatus]
+
+
+export const InvoiceStatus = {
+  pending: 'pending',
+  paid: 'paid',
+  cancelled: 'cancelled',
+  overdue: 'overdue'
+} as const
+
+export type InvoiceStatus = (typeof InvoiceStatus)[keyof typeof InvoiceStatus]
+
+
+export const ReconciliationStatus = {
+  ok: 'ok',
+  discrepancy_detected: 'discrepancy_detected'
+} as const
+
+export type ReconciliationStatus = (typeof ReconciliationStatus)[keyof typeof ReconciliationStatus]
+
+
+export const AlertSeverity = {
+  low: 'low',
+  medium: 'medium',
+  high: 'high'
+} as const
+
+export type AlertSeverity = (typeof AlertSeverity)[keyof typeof AlertSeverity]

@@ -6,6 +6,7 @@ import {
     getSettlementDetailsService,
     getSettlementSummaryService,
     exportSettlementService,
+    getSettlementBatchService,
 } from "../services/settlement.service";
 import { AuthRequest } from "../types/express";
 import { validateUserId } from "../helpers/request.helper";
@@ -14,6 +15,7 @@ type ListSettlementsRequest = z.infer<typeof settlementSchema.listSettlementsSch
 type SettlementDetailsRequest = z.infer<typeof settlementSchema.settlementDetailsSchema>;
 type SettlementSummaryRequest = z.infer<typeof settlementSchema.settlementSummarySchema>;
 type ExportSettlementRequest = z.infer<typeof settlementSchema.exportSettlementSchema>;
+type SettlementBatchRequest = z.infer<typeof settlementSchema.settlementBatchSchema>;
 
 export const listSettlements = createController<ListSettlementsRequest>(
     async (req: any, _reqOriginal: AuthRequest) => {
@@ -53,5 +55,14 @@ export const exportSettlement = createController<ExportSettlementRequest>(
         const { settlement_id } = req.params;
         const { format } = req.query;
         return exportSettlementService(merchantId, settlement_id, format);
+    }
+);
+
+export const getSettlementBatch = createController<SettlementBatchRequest>(
+    async (req: any, _reqOriginal: AuthRequest) => {
+        const merchantId = await validateUserId(_reqOriginal);
+        const { date_from, date_to } = req.query || {};
+
+        return getSettlementBatchService(merchantId, date_from, date_to);
     }
 );

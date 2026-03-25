@@ -174,9 +174,11 @@ export async function retryWebhookService(params: RetryWebhookParams) {
   }
 
   // Attempt to deliver the webhook
+  const merchant = await prisma.merchant.findUnique({ where: { id: merchantId } });
   const result = await deliverWebhook(
     log.endpoint_url,
-    log.request_payload as Record<string, any>
+    log.request_payload as Record<string, any>,
+    merchant?.webhook_secret
   );
 
   const newRetryCount = log.retry_count + 1;
@@ -252,7 +254,7 @@ export async function sendTestWebhookService(params: SendTestWebhookParams) {
   });
 
   // Attempt to deliver the webhook
-  const result = await deliverWebhook(endpoint_url, testPayload);
+  const result = await deliverWebhook(endpoint_url, testPayload, merchant.webhook_secret);
 
   const status: WebhookStatus = result.success ? "delivered" : "failed";
 
@@ -286,7 +288,8 @@ export async function sendTestWebhookService(params: SendTestWebhookParams) {
 // Helper function to deliver webhook
 async function deliverWebhook(
   endpointUrl: string,
-  payload: Record<string, any>
+  payload: Record<string, any>,
+  merchantSecret?: string
 ): Promise<{
   success: boolean;
   httpStatus?: number;
@@ -301,7 +304,7 @@ async function deliverWebhook(
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-Webhook-Signature": generateWebhookSignature(payload),
+        "X-Webhook-Signature": generateWebhookSignature(payload, merchantSecret),
         "X-Webhook-Timestamp": new Date().toISOString(),
       },
       body: JSON.stringify(payload),
@@ -327,8 +330,11 @@ async function deliverWebhook(
 
 // Helper function to generate webhook signature
 import crypto from "crypto";
-function generateWebhookSignature(payload: Record<string, unknown>): string {
-  const secret = process.env.WEBHOOK_SECRET || "webhook-secret";
+function generateWebhookSignature(
+  payload: Record<string, unknown>,
+  merchantSecret?: string
+): string {
+  const secret = merchantSecret || process.env.WEBHOOK_SECRET || "webhook-secret";
   const hmac = crypto.createHmac("sha256", secret);
   hmac.update(JSON.stringify(payload));
   return hmac.digest("hex");
@@ -425,6 +431,8 @@ export async function createAndDeliverWebhook(
   payload: Record<string, any>,
   paymentId?: string
 ) {
+  const merchant = await prisma.merchant.findUnique({ where: { id: merchantId } });
+
   const webhookLog = await prisma.webhookLog.create({
     data: {
       merchantId,
@@ -436,12 +444,24 @@ export async function createAndDeliverWebhook(
     },
   });
 
-  const result = await deliverWebhook(endpointUrl, payload);
+  const result = await deliverWebhook(endpointUrl, payload, merchant?.webhook_secret);
   const status: WebhookStatus = result.success ? "delivered" : "retrying";
 
   const nextRetryAt = status === "retrying" 
     ? new Date(Date.now() + 60 * 1000) // First retry in 1 minute
     : null;
+
+  const retryCount = result.success ? 0 : 1;
+
+  await prisma.webhookRetryAttempt.create({
+    data: {
+      webhookLogId: webhookLog.id,
+      attempt_number: 1,
+      http_status: result.httpStatus,
+      response_body: result.responseBody,
+      error_message: result.error,
+    },
+  });
 
   await prisma.webhookLog.update({
     where: { id: webhookLog.id },
@@ -449,6 +469,7 @@ export async function createAndDeliverWebhook(
       status,
       http_status: result.httpStatus,
       response_body: result.responseBody,
+      retry_count: retryCount,
       next_retry_at: nextRetryAt,
     },
   });

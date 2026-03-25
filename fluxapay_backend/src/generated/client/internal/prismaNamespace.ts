@@ -397,7 +397,12 @@ export const ModelName = {
   KYCDocument: 'KYCDocument',
   WebhookLog: 'WebhookLog',
   WebhookRetryAttempt: 'WebhookRetryAttempt',
-  Payment: 'Payment'
+  Payment: 'Payment',
+  Refund: 'Refund',
+  Invoice: 'Invoice',
+  ReconciliationRecord: 'ReconciliationRecord',
+  DiscrepancyThreshold: 'DiscrepancyThreshold',
+  DiscrepancyAlert: 'DiscrepancyAlert'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -413,7 +418,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "merchant" | "oTP" | "settlement" | "merchantKYC" | "kYCDocument" | "webhookLog" | "webhookRetryAttempt" | "payment"
+    modelProps: "merchant" | "oTP" | "settlement" | "merchantKYC" | "kYCDocument" | "webhookLog" | "webhookRetryAttempt" | "payment" | "refund" | "invoice" | "reconciliationRecord" | "discrepancyThreshold" | "discrepancyAlert"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -1009,6 +1014,376 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    Refund: {
+      payload: Prisma.$RefundPayload<ExtArgs>
+      fields: Prisma.RefundFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.RefundFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$RefundPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.RefundFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$RefundPayload>
+        }
+        findFirst: {
+          args: Prisma.RefundFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$RefundPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.RefundFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$RefundPayload>
+        }
+        findMany: {
+          args: Prisma.RefundFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$RefundPayload>[]
+        }
+        create: {
+          args: Prisma.RefundCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$RefundPayload>
+        }
+        createMany: {
+          args: Prisma.RefundCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.RefundCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$RefundPayload>[]
+        }
+        delete: {
+          args: Prisma.RefundDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$RefundPayload>
+        }
+        update: {
+          args: Prisma.RefundUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$RefundPayload>
+        }
+        deleteMany: {
+          args: Prisma.RefundDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.RefundUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.RefundUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$RefundPayload>[]
+        }
+        upsert: {
+          args: Prisma.RefundUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$RefundPayload>
+        }
+        aggregate: {
+          args: Prisma.RefundAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateRefund>
+        }
+        groupBy: {
+          args: Prisma.RefundGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.RefundGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.RefundCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.RefundCountAggregateOutputType> | number
+        }
+      }
+    }
+    Invoice: {
+      payload: Prisma.$InvoicePayload<ExtArgs>
+      fields: Prisma.InvoiceFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.InvoiceFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$InvoicePayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.InvoiceFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$InvoicePayload>
+        }
+        findFirst: {
+          args: Prisma.InvoiceFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$InvoicePayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.InvoiceFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$InvoicePayload>
+        }
+        findMany: {
+          args: Prisma.InvoiceFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$InvoicePayload>[]
+        }
+        create: {
+          args: Prisma.InvoiceCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$InvoicePayload>
+        }
+        createMany: {
+          args: Prisma.InvoiceCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.InvoiceCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$InvoicePayload>[]
+        }
+        delete: {
+          args: Prisma.InvoiceDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$InvoicePayload>
+        }
+        update: {
+          args: Prisma.InvoiceUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$InvoicePayload>
+        }
+        deleteMany: {
+          args: Prisma.InvoiceDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.InvoiceUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.InvoiceUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$InvoicePayload>[]
+        }
+        upsert: {
+          args: Prisma.InvoiceUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$InvoicePayload>
+        }
+        aggregate: {
+          args: Prisma.InvoiceAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateInvoice>
+        }
+        groupBy: {
+          args: Prisma.InvoiceGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.InvoiceGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.InvoiceCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.InvoiceCountAggregateOutputType> | number
+        }
+      }
+    }
+    ReconciliationRecord: {
+      payload: Prisma.$ReconciliationRecordPayload<ExtArgs>
+      fields: Prisma.ReconciliationRecordFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.ReconciliationRecordFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReconciliationRecordPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.ReconciliationRecordFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReconciliationRecordPayload>
+        }
+        findFirst: {
+          args: Prisma.ReconciliationRecordFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReconciliationRecordPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.ReconciliationRecordFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReconciliationRecordPayload>
+        }
+        findMany: {
+          args: Prisma.ReconciliationRecordFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReconciliationRecordPayload>[]
+        }
+        create: {
+          args: Prisma.ReconciliationRecordCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReconciliationRecordPayload>
+        }
+        createMany: {
+          args: Prisma.ReconciliationRecordCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.ReconciliationRecordCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReconciliationRecordPayload>[]
+        }
+        delete: {
+          args: Prisma.ReconciliationRecordDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReconciliationRecordPayload>
+        }
+        update: {
+          args: Prisma.ReconciliationRecordUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReconciliationRecordPayload>
+        }
+        deleteMany: {
+          args: Prisma.ReconciliationRecordDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.ReconciliationRecordUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.ReconciliationRecordUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReconciliationRecordPayload>[]
+        }
+        upsert: {
+          args: Prisma.ReconciliationRecordUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ReconciliationRecordPayload>
+        }
+        aggregate: {
+          args: Prisma.ReconciliationRecordAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateReconciliationRecord>
+        }
+        groupBy: {
+          args: Prisma.ReconciliationRecordGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.ReconciliationRecordGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.ReconciliationRecordCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.ReconciliationRecordCountAggregateOutputType> | number
+        }
+      }
+    }
+    DiscrepancyThreshold: {
+      payload: Prisma.$DiscrepancyThresholdPayload<ExtArgs>
+      fields: Prisma.DiscrepancyThresholdFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.DiscrepancyThresholdFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$DiscrepancyThresholdPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.DiscrepancyThresholdFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$DiscrepancyThresholdPayload>
+        }
+        findFirst: {
+          args: Prisma.DiscrepancyThresholdFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$DiscrepancyThresholdPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.DiscrepancyThresholdFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$DiscrepancyThresholdPayload>
+        }
+        findMany: {
+          args: Prisma.DiscrepancyThresholdFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$DiscrepancyThresholdPayload>[]
+        }
+        create: {
+          args: Prisma.DiscrepancyThresholdCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$DiscrepancyThresholdPayload>
+        }
+        createMany: {
+          args: Prisma.DiscrepancyThresholdCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.DiscrepancyThresholdCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$DiscrepancyThresholdPayload>[]
+        }
+        delete: {
+          args: Prisma.DiscrepancyThresholdDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$DiscrepancyThresholdPayload>
+        }
+        update: {
+          args: Prisma.DiscrepancyThresholdUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$DiscrepancyThresholdPayload>
+        }
+        deleteMany: {
+          args: Prisma.DiscrepancyThresholdDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.DiscrepancyThresholdUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.DiscrepancyThresholdUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$DiscrepancyThresholdPayload>[]
+        }
+        upsert: {
+          args: Prisma.DiscrepancyThresholdUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$DiscrepancyThresholdPayload>
+        }
+        aggregate: {
+          args: Prisma.DiscrepancyThresholdAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateDiscrepancyThreshold>
+        }
+        groupBy: {
+          args: Prisma.DiscrepancyThresholdGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.DiscrepancyThresholdGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.DiscrepancyThresholdCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.DiscrepancyThresholdCountAggregateOutputType> | number
+        }
+      }
+    }
+    DiscrepancyAlert: {
+      payload: Prisma.$DiscrepancyAlertPayload<ExtArgs>
+      fields: Prisma.DiscrepancyAlertFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.DiscrepancyAlertFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$DiscrepancyAlertPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.DiscrepancyAlertFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$DiscrepancyAlertPayload>
+        }
+        findFirst: {
+          args: Prisma.DiscrepancyAlertFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$DiscrepancyAlertPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.DiscrepancyAlertFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$DiscrepancyAlertPayload>
+        }
+        findMany: {
+          args: Prisma.DiscrepancyAlertFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$DiscrepancyAlertPayload>[]
+        }
+        create: {
+          args: Prisma.DiscrepancyAlertCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$DiscrepancyAlertPayload>
+        }
+        createMany: {
+          args: Prisma.DiscrepancyAlertCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.DiscrepancyAlertCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$DiscrepancyAlertPayload>[]
+        }
+        delete: {
+          args: Prisma.DiscrepancyAlertDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$DiscrepancyAlertPayload>
+        }
+        update: {
+          args: Prisma.DiscrepancyAlertUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$DiscrepancyAlertPayload>
+        }
+        deleteMany: {
+          args: Prisma.DiscrepancyAlertDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.DiscrepancyAlertUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.DiscrepancyAlertUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$DiscrepancyAlertPayload>[]
+        }
+        upsert: {
+          args: Prisma.DiscrepancyAlertUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$DiscrepancyAlertPayload>
+        }
+        aggregate: {
+          args: Prisma.DiscrepancyAlertAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateDiscrepancyAlert>
+        }
+        groupBy: {
+          args: Prisma.DiscrepancyAlertGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.DiscrepancyAlertGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.DiscrepancyAlertCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.DiscrepancyAlertCountAggregateOutputType> | number
+        }
+      }
+    }
   }
 } & {
   other: {
@@ -1055,6 +1430,7 @@ export const MerchantScalarFieldEnum = {
   phone_number: 'phone_number',
   country: 'country',
   settlement_currency: 'settlement_currency',
+  webhook_secret: 'webhook_secret',
   password: 'password',
   status: 'status',
   created_at: 'created_at',
@@ -1181,6 +1557,87 @@ export const PaymentScalarFieldEnum = {
 } as const
 
 export type PaymentScalarFieldEnum = (typeof PaymentScalarFieldEnum)[keyof typeof PaymentScalarFieldEnum]
+
+
+export const RefundScalarFieldEnum = {
+  id: 'id',
+  merchantId: 'merchantId',
+  paymentId: 'paymentId',
+  amount: 'amount',
+  currency: 'currency',
+  reason: 'reason',
+  status: 'status',
+  failed_reason: 'failed_reason',
+  created_at: 'created_at',
+  updated_at: 'updated_at'
+} as const
+
+export type RefundScalarFieldEnum = (typeof RefundScalarFieldEnum)[keyof typeof RefundScalarFieldEnum]
+
+
+export const InvoiceScalarFieldEnum = {
+  id: 'id',
+  merchantId: 'merchantId',
+  invoice_number: 'invoice_number',
+  amount: 'amount',
+  currency: 'currency',
+  customer_email: 'customer_email',
+  metadata: 'metadata',
+  payment_id: 'payment_id',
+  payment_link: 'payment_link',
+  status: 'status',
+  due_date: 'due_date',
+  created_at: 'created_at',
+  updated_at: 'updated_at'
+} as const
+
+export type InvoiceScalarFieldEnum = (typeof InvoiceScalarFieldEnum)[keyof typeof InvoiceScalarFieldEnum]
+
+
+export const ReconciliationRecordScalarFieldEnum = {
+  id: 'id',
+  merchantId: 'merchantId',
+  period_start: 'period_start',
+  period_end: 'period_end',
+  expected_total: 'expected_total',
+  actual_total: 'actual_total',
+  discrepancy_amount: 'discrepancy_amount',
+  discrepancy_percent: 'discrepancy_percent',
+  status: 'status',
+  created_at: 'created_at',
+  updated_at: 'updated_at'
+} as const
+
+export type ReconciliationRecordScalarFieldEnum = (typeof ReconciliationRecordScalarFieldEnum)[keyof typeof ReconciliationRecordScalarFieldEnum]
+
+
+export const DiscrepancyThresholdScalarFieldEnum = {
+  id: 'id',
+  merchantId: 'merchantId',
+  amount_threshold: 'amount_threshold',
+  percent_threshold: 'percent_threshold',
+  is_active: 'is_active',
+  created_at: 'created_at',
+  updated_at: 'updated_at'
+} as const
+
+export type DiscrepancyThresholdScalarFieldEnum = (typeof DiscrepancyThresholdScalarFieldEnum)[keyof typeof DiscrepancyThresholdScalarFieldEnum]
+
+
+export const DiscrepancyAlertScalarFieldEnum = {
+  id: 'id',
+  merchantId: 'merchantId',
+  reconciliationRecordId: 'reconciliationRecordId',
+  thresholdId: 'thresholdId',
+  severity: 'severity',
+  message: 'message',
+  is_resolved: 'is_resolved',
+  resolved_at: 'resolved_at',
+  created_at: 'created_at',
+  updated_at: 'updated_at'
+} as const
+
+export type DiscrepancyAlertScalarFieldEnum = (typeof DiscrepancyAlertScalarFieldEnum)[keyof typeof DiscrepancyAlertScalarFieldEnum]
 
 
 export const SortOrder = {
@@ -1434,6 +1891,69 @@ export type ListEnumWebhookStatusFieldRefInput<$PrismaModel> = FieldRefInputType
 
 
 /**
+ * Reference to a field of type 'RefundStatus'
+ */
+export type EnumRefundStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'RefundStatus'>
+    
+
+
+/**
+ * Reference to a field of type 'RefundStatus[]'
+ */
+export type ListEnumRefundStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'RefundStatus[]'>
+    
+
+
+/**
+ * Reference to a field of type 'InvoiceStatus'
+ */
+export type EnumInvoiceStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'InvoiceStatus'>
+    
+
+
+/**
+ * Reference to a field of type 'InvoiceStatus[]'
+ */
+export type ListEnumInvoiceStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'InvoiceStatus[]'>
+    
+
+
+/**
+ * Reference to a field of type 'ReconciliationStatus'
+ */
+export type EnumReconciliationStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'ReconciliationStatus'>
+    
+
+
+/**
+ * Reference to a field of type 'ReconciliationStatus[]'
+ */
+export type ListEnumReconciliationStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'ReconciliationStatus[]'>
+    
+
+
+/**
+ * Reference to a field of type 'Boolean'
+ */
+export type BooleanFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Boolean'>
+    
+
+
+/**
+ * Reference to a field of type 'AlertSeverity'
+ */
+export type EnumAlertSeverityFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'AlertSeverity'>
+    
+
+
+/**
+ * Reference to a field of type 'AlertSeverity[]'
+ */
+export type ListEnumAlertSeverityFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'AlertSeverity[]'>
+    
+
+
+/**
  * Reference to a field of type 'Float'
  */
 export type FloatFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Float'>
@@ -1541,6 +2061,11 @@ export type GlobalOmitConfig = {
   webhookLog?: Prisma.WebhookLogOmit
   webhookRetryAttempt?: Prisma.WebhookRetryAttemptOmit
   payment?: Prisma.PaymentOmit
+  refund?: Prisma.RefundOmit
+  invoice?: Prisma.InvoiceOmit
+  reconciliationRecord?: Prisma.ReconciliationRecordOmit
+  discrepancyThreshold?: Prisma.DiscrepancyThresholdOmit
+  discrepancyAlert?: Prisma.DiscrepancyAlertOmit
 }
 
 /* Types for Logging */

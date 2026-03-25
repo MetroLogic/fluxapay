@@ -5,6 +5,7 @@ import { sendOtpEmail } from "./email.service";
 import { isDevEnv } from "../helpers/env.helper";
 import { generateToken } from "../helpers/jwt.helper";
 import { merchantRegistryService } from "./merchantRegistry.service";
+import crypto from "crypto";
 
 
 const prisma = new PrismaClient();
@@ -44,6 +45,7 @@ export async function signupMerchantService(data: {
       phone_number,
       country,
       settlement_currency,
+      webhook_secret: crypto.randomBytes(32).toString("hex"),
       password: hashedPassword,
     },
   });

@@ -15,21 +15,27 @@ datasource db {
 }
 
 model Merchant {
-  id                  String         @id @default(cuid())
-  business_name       String
-  email               String         @unique
-  phone_number        String         @unique
-  country             String
-  settlement_currency String
-  password            String
-  status              MerchantStatus @default(pending_verification)
-  created_at          DateTime       @default(now())
-  updated_at          DateTime       @updatedAt
-  otps                OTP[]
-  settlements         Settlement[]
-  kyc                 MerchantKYC?
-  webhookLogs         WebhookLog[]
-  payments            Payment[]
+  id                    String                 @id @default(cuid())
+  business_name         String
+  email                 String                 @unique
+  phone_number          String                 @unique
+  country               String
+  settlement_currency   String
+  webhook_secret        String
+  password              String
+  status                MerchantStatus         @default(pending_verification)
+  created_at            DateTime               @default(now())
+  updated_at            DateTime               @updatedAt
+  otps                  OTP[]
+  settlements           Settlement[]
+  kyc                   MerchantKYC?
+  webhookLogs           WebhookLog[]
+  payments              Payment[]
+  refunds               Refund[]
+  invoices              Invoice[]
+  reconciliationRecords ReconciliationRecord[]
+  discrepancyThresholds DiscrepancyThreshold[]
+  discrepancyAlerts     DiscrepancyAlert[]
 }
 
 model OTP {
@@ -139,6 +145,91 @@ model Payment {
   status         String
   checkout_url   String
   createdAt      DateTime @default(now())
+  refunds        Refund[]
+  invoice        Invoice?
+}
+
+model Refund {
+  id            String       @id @default(cuid())
+  merchant      Merchant     @relation(fields: [merchantId], references: [id])
+  merchantId    String
+  payment       Payment      @relation(fields: [paymentId], references: [id])
+  paymentId     String
+  amount        Decimal
+  currency      String
+  reason        String?
+  status        RefundStatus @default(pending)
+  failed_reason String?
+  created_at    DateTime     @default(now())
+  updated_at    DateTime     @updatedAt
+}
+
+model Invoice {
+  id             String        @id @default(cuid())
+  merchant       Merchant      @relation(fields: [merchantId], references: [id])
+  merchantId     String
+  invoice_number String        @unique
+  amount         Decimal
+  currency       String
+  customer_email String
+  metadata       Json?
+  payment        Payment?      @relation(fields: [payment_id], references: [id])
+  payment_id     String?       @unique
+  payment_link   String
+  status         InvoiceStatus @default(pending)
+  due_date       DateTime?
+  created_at     DateTime      @default(now())
+  updated_at     DateTime      @updatedAt
+}
+
+model ReconciliationRecord {
+  id                  String               @id @default(cuid())
+  merchant            Merchant             @relation(fields: [merchantId], references: [id])
+  merchantId          String
+  period_start        DateTime
+  period_end          DateTime
+  expected_total      Decimal
+  actual_total        Decimal
+  discrepancy_amount  Decimal
+  discrepancy_percent Decimal
+  status              ReconciliationStatus @default(ok)
+  alerts              DiscrepancyAlert[]
+  created_at          DateTime             @default(now())
+  updated_at          DateTime             @updatedAt
+
+  @@unique([merchantId, period_start, period_end])
+}
+
+model DiscrepancyThreshold {
+  id                String             @id @default(cuid())
+  merchant          Merchant?          @relation(fields: [merchantId], references: [id])
+  merchantId        String?
+  amount_threshold  Decimal            @default(0)
+  percent_threshold Decimal            @default(0)
+  is_active         Boolean            @default(true)
+  created_at        DateTime           @default(now())
+  updated_at        DateTime           @updatedAt
+  alerts            DiscrepancyAlert[]
+
+  @@index([merchantId, is_active])
+}
+
+model DiscrepancyAlert {
+  id                     String                @id @default(cuid())
+  merchant               Merchant              @relation(fields: [merchantId], references: [id])
+  merchantId             String
+  reconciliationRecord   ReconciliationRecord  @relation(fields: [reconciliationRecordId], references: [id])
+  reconciliationRecordId String
+  threshold              DiscrepancyThreshold? @relation(fields: [thresholdId], references: [id])
+  thresholdId            String?
+  severity               AlertSeverity
+  message                String
+  is_resolved            Boolean               @default(false)
+  resolved_at            DateTime?
+  created_at             DateTime              @default(now())
+  updated_at             DateTime              @updatedAt
+
+  @@index([merchantId, is_resolved])
 }
 
 // ...existing code...
@@ -200,4 +291,29 @@ enum WebhookStatus {
   delivered
   failed
   retrying
+}
+
+enum RefundStatus {
+  pending
+  processing
+  completed
+  failed
+}
+
+enum InvoiceStatus {
+  pending
+  paid
+  cancelled
+  overdue
+}
+
+enum ReconciliationStatus {
+  ok
+  discrepancy_detected
+}
+
+enum AlertSeverity {
+  low
+  medium
+  high
 }

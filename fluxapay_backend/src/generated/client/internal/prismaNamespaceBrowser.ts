@@ -56,7 +56,12 @@ export const ModelName = {
   KYCDocument: 'KYCDocument',
   WebhookLog: 'WebhookLog',
   WebhookRetryAttempt: 'WebhookRetryAttempt',
-  Payment: 'Payment'
+  Payment: 'Payment',
+  Refund: 'Refund',
+  Invoice: 'Invoice',
+  ReconciliationRecord: 'ReconciliationRecord',
+  DiscrepancyThreshold: 'DiscrepancyThreshold',
+  DiscrepancyAlert: 'DiscrepancyAlert'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -82,6 +87,7 @@ export const MerchantScalarFieldEnum = {
   phone_number: 'phone_number',
   country: 'country',
   settlement_currency: 'settlement_currency',
+  webhook_secret: 'webhook_secret',
   password: 'password',
   status: 'status',
   created_at: 'created_at',
@@ -208,6 +214,87 @@ export const PaymentScalarFieldEnum = {
 } as const
 
 export type PaymentScalarFieldEnum = (typeof PaymentScalarFieldEnum)[keyof typeof PaymentScalarFieldEnum]
+
+
+export const RefundScalarFieldEnum = {
+  id: 'id',
+  merchantId: 'merchantId',
+  paymentId: 'paymentId',
+  amount: 'amount',
+  currency: 'currency',
+  reason: 'reason',
+  status: 'status',
+  failed_reason: 'failed_reason',
+  created_at: 'created_at',
+  updated_at: 'updated_at'
+} as const
+
+export type RefundScalarFieldEnum = (typeof RefundScalarFieldEnum)[keyof typeof RefundScalarFieldEnum]
+
+
+export const InvoiceScalarFieldEnum = {
+  id: 'id',
+  merchantId: 'merchantId',
+  invoice_number: 'invoice_number',
+  amount: 'amount',
+  currency: 'currency',
+  customer_email: 'customer_email',
+  metadata: 'metadata',
+  payment_id: 'payment_id',
+  payment_link: 'payment_link',
+  status: 'status',
+  due_date: 'due_date',
+  created_at: 'created_at',
+  updated_at: 'updated_at'
+} as const
+
+export type InvoiceScalarFieldEnum = (typeof InvoiceScalarFieldEnum)[keyof typeof InvoiceScalarFieldEnum]
+
+
+export const ReconciliationRecordScalarFieldEnum = {
+  id: 'id',
+  merchantId: 'merchantId',
+  period_start: 'period_start',
+  period_end: 'period_end',
+  expected_total: 'expected_total',
+  actual_total: 'actual_total',
+  discrepancy_amount: 'discrepancy_amount',
+  discrepancy_percent: 'discrepancy_percent',
+  status: 'status',
+  created_at: 'created_at',
+  updated_at: 'updated_at'
+} as const
+
+export type ReconciliationRecordScalarFieldEnum = (typeof ReconciliationRecordScalarFieldEnum)[keyof typeof ReconciliationRecordScalarFieldEnum]
+
+
+export const DiscrepancyThresholdScalarFieldEnum = {
+  id: 'id',
+  merchantId: 'merchantId',
+  amount_threshold: 'amount_threshold',
+  percent_threshold: 'percent_threshold',
+  is_active: 'is_active',
+  created_at: 'created_at',
+  updated_at: 'updated_at'
+} as const
+
+export type DiscrepancyThresholdScalarFieldEnum = (typeof DiscrepancyThresholdScalarFieldEnum)[keyof typeof DiscrepancyThresholdScalarFieldEnum]
+
+
+export const DiscrepancyAlertScalarFieldEnum = {
+  id: 'id',
+  merchantId: 'merchantId',
+  reconciliationRecordId: 'reconciliationRecordId',
+  thresholdId: 'thresholdId',
+  severity: 'severity',
+  message: 'message',
+  is_resolved: 'is_resolved',
+  resolved_at: 'resolved_at',
+  created_at: 'created_at',
+  updated_at: 'updated_at'
+} as const
+
+export type DiscrepancyAlertScalarFieldEnum = (typeof DiscrepancyAlertScalarFieldEnum)[keyof typeof DiscrepancyAlertScalarFieldEnum]
 
 
 export const SortOrder = {
