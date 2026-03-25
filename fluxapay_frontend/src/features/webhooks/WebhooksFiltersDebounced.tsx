@@ -1,7 +1,14 @@
+/**
+ * Example: Debounced version of WebhooksFilters
+ * Use this version if you want to add debouncing to search input
+ * to reduce the number of filter operations during typing
+ */
+
 import { Input } from "@/components/Input";
 import { Select } from "@/components/Select";
 import { Search } from "lucide-react";
-import { memo, useCallback } from "react";
+import { memo, useCallback, useState, useEffect } from "react";
+import { useDebounce } from "@/lib/performance";
 
 interface WebhooksFiltersProps {
     onSearchChange: (value: string) => void;
@@ -9,14 +16,25 @@ interface WebhooksFiltersProps {
     onEventTypeChange: (value: string) => void;
 }
 
-export const WebhooksFilters = memo(({
+export const WebhooksFiltersDebounced = memo(({
     onSearchChange,
     onStatusChange,
     onEventTypeChange,
 }: WebhooksFiltersProps) => {
+    // Local state for immediate UI updates
+    const [searchValue, setSearchValue] = useState("");
+    
+    // Debounced value for actual filtering (300ms delay)
+    const debouncedSearch = useDebounce(searchValue, 300);
+
+    // Update parent when debounced value changes
+    useEffect(() => {
+        onSearchChange(debouncedSearch);
+    }, [debouncedSearch, onSearchChange]);
+
     const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-        onSearchChange(e.target.value);
-    }, [onSearchChange]);
+        setSearchValue(e.target.value);
+    }, []);
 
     const handleStatusChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
         onStatusChange(e.target.value);
@@ -25,6 +43,7 @@ export const WebhooksFilters = memo(({
     const handleEventTypeChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
         onEventTypeChange(e.target.value);
     }, [onEventTypeChange]);
+
     return (
         <div className="flex flex-col md:flex-row gap-4 mb-6">
             <div className="relative flex-1">
@@ -32,6 +51,7 @@ export const WebhooksFilters = memo(({
                 <Input
                     placeholder="Search by Webhook ID or Payment ID..."
                     className="pl-10"
+                    value={searchValue}
                     onChange={handleSearchChange}
                 />
             </div>
@@ -54,7 +74,6 @@ export const WebhooksFilters = memo(({
                     <option value="payment.failed">payment.failed</option>
                     <option value="payout.completed">payout.completed</option>
                 </Select>
-                {/* Simplified Date Range filter as a placeholder, could use a proper Date Picker component if available */}
                 <Input
                     type="date"
                     className="w-[150px]"
@@ -64,4 +83,4 @@ export const WebhooksFilters = memo(({
         </div>
     );
 });
-WebhooksFilters.displayName = "WebhooksFilters";
+WebhooksFiltersDebounced.displayName = "WebhooksFiltersDebounced";

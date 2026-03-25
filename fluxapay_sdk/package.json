@@ -18,6 +18,8 @@
   "scripts": {
     "build": "tsc",
     "test": "node --experimental-vm-modules node_modules/.bin/jest",
+    "test:unit": "node src/__tests__/sdk.test.ts",
+    "test:integration": "node src/__tests__/integration.test.ts",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
