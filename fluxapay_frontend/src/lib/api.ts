@@ -244,6 +244,36 @@ export const api = {
     },
     summary: () => fetchWithAuth("/api/settlements/summary"),
     getById: (id: string) => fetchWithAuth(`/api/settlements/${id}`),
+    export: (settlementId: string, format: "pdf" | "csv" = "pdf") =>
+      fetchWithAuth(`/api/settlements/${settlementId}/export?format=${format}`),
+    exportRange: async (params: {
+      date_from?: string;
+      date_to?: string;
+      format?: "pdf" | "csv";
+    }): Promise<Blob> => {
+      const sp = new URLSearchParams();
+      if (params.date_from) sp.set("date_from", params.date_from);
+      if (params.date_to) sp.set("date_to", params.date_to);
+      sp.set("format", params.format || "csv");
+      
+      const response = await fetch(
+        `${API_BASE_URL}/api/settlements/export?${sp.toString()}`,
+        {
+          headers: {
+            Authorization: `Bearer ${getToken()}`,
+          },
+        }
+      );
+      
+      if (!response.ok) {
+        throw new ApiError(
+          response.status,
+          `Failed to export settlements: ${response.statusText}`
+        );
+      }
+      
+      return response.blob();
+    },
   },
 
   // KYC admin
