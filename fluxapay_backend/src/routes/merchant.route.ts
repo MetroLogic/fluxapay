@@ -19,7 +19,7 @@ import { validate } from "../middleware/validation.middleware";
 import * as merchantSchema from "../schemas/merchant.schema";
 import { authenticateToken } from "../middleware/auth.middleware";
 import { idempotencyMiddleware } from "../middleware/idempotency.middleware";
-import { authorizeAdmin } from "../middleware/admin.middleware";
+import { adminAuth } from "../middleware/adminAuth.middleware";
 import { updateSettlementScheduleSchema, bankAccountSchema } from "../schemas/merchant.schema";
 
 const router = Router();
@@ -286,9 +286,81 @@ router.post(
 );
 
 // ── Admin routes ──────────────────────────────────────────────────────────────
-router.get("/admin/list", authorizeAdmin, adminListMerchants);
-router.get("/admin/:merchantId", authorizeAdmin, adminGetMerchant);
-router.patch("/admin/:merchantId/status", authorizeAdmin, adminUpdateMerchantStatus);
+
+/**
+ * @swagger
+ * /api/merchants/admin/list:
+ *   get:
+ *     summary: List all merchants (Admin only)
+ *     tags: [Admin - Merchants]
+ *     security:
+ *       - adminSecret: []
+ *     responses:
+ *       200:
+ *         description: List of merchants
+ *       401:
+ *         description: Unauthorized
+ */
+router.get("/admin/list", adminAuth, adminListMerchants);
+
+/**
+ * @swagger
+ * /api/merchants/admin/{merchantId}:
+ *   get:
+ *     summary: Get merchant details by ID (Admin only)
+ *     tags: [Admin - Merchants]
+ *     security:
+ *       - adminSecret: []
+ *     parameters:
+ *       - in: path
+ *         name: merchantId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Merchant found
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Merchant not found
+ */
+router.get("/admin/:merchantId", adminAuth, adminGetMerchant);
+
+/**
+ * @swagger
+ * /api/merchants/admin/{merchantId}/status:
+ *   patch:
+ *     summary: Update merchant account status (Admin only)
+ *     tags: [Admin - Merchants]
+ *     security:
+ *       - adminSecret: []
+ *     parameters:
+ *       - in: path
+ *         name: merchantId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [status]
+ *             properties:
+ *               status:
+ *                 type: string
+ *                 enum: [pending, active, suspended, rejected]
+ *     responses:
+ *       200:
+ *         description: Status updated
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Merchant not found
+ */
+router.patch("/admin/:merchantId/status", adminAuth, adminUpdateMerchantStatus);
 /**
  * @swagger
  * /api/merchants/me/settlement-schedule:

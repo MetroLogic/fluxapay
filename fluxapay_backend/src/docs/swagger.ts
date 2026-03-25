@@ -21,6 +21,12 @@ const options: swaggerJsdoc.Options = {
                     scheme: 'bearer',
                     bearerFormat: 'JWT',
                 },
+                adminSecret: {
+                   type: 'apiKey',
+                   in: 'header',
+                   name: 'X-Admin-Secret',
+                   description: 'Standardized admin secret for operator endpoints'
+                }
             },
         },
         tags: [

@@ -7,31 +7,38 @@
 
 import { Router, Request, Response } from "express";
 import { sweepService } from "../services/sweep.service";
+import { adminAuth } from "../middleware/adminAuth.middleware";
 
 const router = Router();
 
-function requireAdminSecret(req: Request, res: Response, next: () => void) {
-  const secret = process.env.ADMIN_INTERNAL_SECRET;
-  const provided = req.headers["x-admin-secret"];
-
-  if (!secret) {
-    if (process.env.NODE_ENV === "production") {
-      res.status(503).json({ message: "Admin endpoints are disabled in production when ADMIN_INTERNAL_SECRET is not set." });
-      return;
-    }
-  } else if (provided !== secret) {
-    res.status(401).json({ message: "Unauthorized. Invalid admin secret." });
-    return;
-  }
-
-  next();
-}
-
 /**
- * POST /api/admin/sweep/run
- * Optional JSON body: { limit?: number, dry_run?: boolean }
+ * @swagger
+ * /api/admin/sweep/run:
+ *   post:
+ *     summary: Manually trigger a sweep of paid payments
+ *     tags: [Admin - Sweep]
+ *     security:
+ *       - adminSecret: []
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               limit:
+ *                 type: integer
+ *               dry_run:
+ *                 type: boolean
+ *     responses:
+ *       200:
+ *         description: Sweep completed
+ *       401:
+ *         description: Unauthorized - missing or invalid admin secret
+ *       500:
+ *         description: Sweep failed
  */
-router.post("/run", requireAdminSecret, async (req: Request, res: Response) => {
+router.post("/run", adminAuth, async (req: Request, res: Response) => {
   try {
     const limit = req.body?.limit;
     const dryRun = req.body?.dry_run === true;
