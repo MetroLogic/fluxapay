@@ -55,6 +55,14 @@ class ApiError extends Error {
   }
 }
 
+function getToken(): string {
+  const token = localStorage.getItem("token");
+  if (!token) {
+    throw new ApiError(401, "No authentication token found");
+  }
+  return token;
+}
+
 async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
   const token = localStorage.getItem("token");
 
@@ -113,7 +121,7 @@ export const api = {
   // Authentication
   auth: {
     signup: (data: AuthSignupRequest) =>
-      fetch(`${API_BASE_URL}/api/v1/auth/signup`, {
+      fetch(`${API_BASE_URL}/api/merchants/signup`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
@@ -122,7 +130,7 @@ export const api = {
         return res.json();
       }),
     login: (data: AuthLoginRequest) =>
-      fetch(`${API_BASE_URL}/api/v1/auth/login`, {
+      fetch(`${API_BASE_URL}/api/merchants/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
@@ -134,7 +142,7 @@ export const api = {
 
   // Merchant endpoints
   merchant: {
-    getMe: () => fetchWithAuth("/api/v1/merchants/me"),
+    getMe: () => fetchWithAuth("/api/merchants/me"),
 
     updateProfile: (data: {
       business_name?: string;
@@ -142,13 +150,13 @@ export const api = {
       settlement_schedule?: "daily" | "weekly";
       settlement_day?: number;
     }) =>
-      fetchWithAuth("/api/v1/merchants/me", {
+      fetchWithAuth("/api/merchants/me", {
         method: "PATCH",
         body: JSON.stringify(data),
       }),
 
     updateWebhook: (webhook_url: string) =>
-      fetchWithAuth("/api/v1/merchants/me/webhook", {
+      fetchWithAuth("/api/merchants/me/webhook", {
         method: "PATCH",
         body: JSON.stringify({ webhook_url }),
       }),
