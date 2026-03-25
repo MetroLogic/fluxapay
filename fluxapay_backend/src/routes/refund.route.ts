@@ -6,7 +6,7 @@ import {
 } from "../controllers/refund.controller";
 import { validate, validateQuery } from "../middleware/validation.middleware";
 import { authenticateToken } from "../middleware/auth.middleware";
-import { authorizeAdmin } from "../middleware/admin.middleware";
+import { adminAuth } from "../middleware/adminAuth.middleware";
 import * as refundSchema from "../schemas/refund.schema";
 
 const router = Router();
@@ -19,13 +19,7 @@ const router = Router();
  *     tags: [Refunds]
  *     security:
  *       - bearerAuth: []
- *     parameters:
- *       - in: header
- *         name: X-Admin-API-Key
- *         required: true
- *         schema:
- *           type: string
- *         description: Admin API key for authorization
+ *       - adminSecret: []
  *     requestBody:
  *       required: true
  *       content:
@@ -62,8 +56,10 @@ const router = Router();
  *         description: Refund initiated and completed
  *       400:
  *         description: Validation error
+ *       401:
+ *         description: Unauthorized - missing or invalid admin secret
  *       403:
- *         description: Unauthorized - missing or invalid admin API key
+ *         description: Unauthorized - missing or invalid merchant token
  *       409:
  *         description: Duplicate refund for this payment
  *       502:
@@ -72,7 +68,7 @@ const router = Router();
 router.post(
   "/",
   authenticateToken,
-  authorizeAdmin,
+  adminAuth,
   validate(refundSchema.initiateRefundSchema),
   initiateRefundController,
 );
@@ -85,12 +81,8 @@ router.post(
  *     tags: [Refunds]
  *     security:
  *       - bearerAuth: []
+ *       - adminSecret: []
  *     parameters:
- *       - in: header
- *         name: X-Admin-API-Key
- *         required: true
- *         schema:
- *           type: string
  *       - in: query
  *         name: paymentId
  *         schema:
@@ -117,13 +109,15 @@ router.post(
  *     responses:
  *       200:
  *         description: List of refunds with pagination
+ *       401:
+ *         description: Unauthorized - missing or invalid admin secret
  *       403:
- *         description: Unauthorized
+ *         description: Unauthorized - missing or invalid merchant token
  */
 router.get(
   "/",
   authenticateToken,
-  authorizeAdmin,
+  adminAuth,
   validateQuery(refundSchema.listRefundsSchema),
   listRefundsController,
 );
@@ -136,12 +130,8 @@ router.get(
  *     tags: [Refunds]
  *     security:
  *       - bearerAuth: []
+ *       - adminSecret: []
  *     parameters:
- *       - in: header
- *         name: X-Admin-API-Key
- *         required: true
- *         schema:
- *           type: string
  *       - in: path
  *         name: refundId
  *         required: true
@@ -150,15 +140,17 @@ router.get(
  *     responses:
  *       200:
  *         description: Refund details
+ *       401:
+ *         description: Unauthorized - missing or invalid admin secret
  *       403:
- *         description: Unauthorized
+ *         description: Unauthorized - missing or invalid merchant token
  *       404:
  *         description: Refund not found
  */
 router.get(
   "/:refundId",
   authenticateToken,
-  authorizeAdmin,
+  adminAuth,
   getRefundController,
 );
 
