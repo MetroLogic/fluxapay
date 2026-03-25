@@ -186,6 +186,8 @@ model WebhookLog {
   created_at      DateTime              @default(now())
   updated_at      DateTime              @updatedAt
   retryAttempts   WebhookRetryAttempt[]
+
+  @@index([merchantId, created_at])
 }
 
 model WebhookRetryAttempt {
@@ -252,6 +254,7 @@ model Payment {
   @@index([customer_email])
   @@index([createdAt])
   @@index([stellar_address])
+  @@index([merchantId, createdAt])
 }
 
 model Invoice {
@@ -274,6 +277,7 @@ model Invoice {
   @@index([merchantId])
   @@index([status])
   @@index([due_date])
+  @@index([merchantId, created_at])
 }
 
 model Refund {
