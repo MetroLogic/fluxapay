@@ -58,6 +58,8 @@ function requireAdminSecret(req: Request, res: Response, next: () => void) {
  *                   type: integer
  *                 totalMerchantsFailed:
  *                   type: integer
+ *                 totalMerchantsSkipped:
+ *                   type: integer
  *                 durationMs:
  *                   type: integer
  *       500:
@@ -76,6 +78,7 @@ router.post("/run", requireAdminSecret, async (_req: Request, res: Response) => 
             totalMerchantsProcessed: result.totalMerchantsProcessed,
             totalMerchantsSucceeded: result.totalMerchantsSucceeded,
             totalMerchantsFailed: result.totalMerchantsFailed,
+            totalMerchantsSkipped: result.totalMerchantsSkipped,
             merchantResults: result.merchantResults,
         });
     } catch (err: unknown) {
