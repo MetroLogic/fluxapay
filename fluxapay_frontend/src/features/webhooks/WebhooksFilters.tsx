@@ -1,6 +1,7 @@
 import { Input } from "@/components/Input";
 import { Select } from "@/components/Select";
 import { Search } from "lucide-react";
+import { memo, useCallback } from "react";
 
 interface WebhooksFiltersProps {
     onSearchChange: (value: string) => void;
@@ -8,11 +9,22 @@ interface WebhooksFiltersProps {
     onEventTypeChange: (value: string) => void;
 }
 
-export const WebhooksFilters = ({
+export const WebhooksFilters = memo(({
     onSearchChange,
     onStatusChange,
     onEventTypeChange,
 }: WebhooksFiltersProps) => {
+    const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+        onSearchChange(e.target.value);
+    }, [onSearchChange]);
+
+    const handleStatusChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
+        onStatusChange(e.target.value);
+    }, [onStatusChange]);
+
+    const handleEventTypeChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
+        onEventTypeChange(e.target.value);
+    }, [onEventTypeChange]);
     return (
         <div className="flex flex-col md:flex-row gap-4 mb-6">
             <div className="relative flex-1">
@@ -20,13 +32,13 @@ export const WebhooksFilters = ({
                 <Input
                     placeholder="Search by Webhook ID or Payment ID..."
                     className="pl-10"
-                    onChange={(e) => onSearchChange(e.target.value)}
+                    onChange={handleSearchChange}
                 />
             </div>
             <div className="flex gap-4">
                 <Select
                     className="w-[150px]"
-                    onChange={(e) => onStatusChange(e.target.value)}
+                    onChange={handleStatusChange}
                 >
                     <option value="all">All Statuses</option>
                     <option value="delivered">Delivered</option>
@@ -35,7 +47,7 @@ export const WebhooksFilters = ({
                 </Select>
                 <Select
                     className="w-[180px]"
-                    onChange={(e) => onEventTypeChange(e.target.value)}
+                    onChange={handleEventTypeChange}
                 >
                     <option value="all">All Event Types</option>
                     <option value="payment.success">payment.success</option>
@@ -51,4 +63,5 @@ export const WebhooksFilters = ({
             </div>
         </div>
     );
-};
+});
+WebhooksFilters.displayName = "WebhooksFilters";

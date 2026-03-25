@@ -1,6 +1,7 @@
 import { Input } from "@/components/Input";
 import { Select } from "@/components/Select";
 import { Search } from "lucide-react";
+import { memo, useCallback } from "react";
 
 interface PaymentsFiltersProps {
     onSearchChange: (value: string) => void;
@@ -8,11 +9,22 @@ interface PaymentsFiltersProps {
     onCurrencyChange: (value: string) => void;
 }
 
-export const PaymentsFilters = ({
+export const PaymentsFilters = memo(({
     onSearchChange,
     onStatusChange,
     onCurrencyChange,
 }: PaymentsFiltersProps) => {
+    const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+        onSearchChange(e.target.value);
+    }, [onSearchChange]);
+
+    const handleStatusChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
+        onStatusChange(e.target.value);
+    }, [onStatusChange]);
+
+    const handleCurrencyChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
+        onCurrencyChange(e.target.value);
+    }, [onCurrencyChange]);
     return (
         <div className="flex flex-col md:flex-row gap-4 mb-6">
             <div className="relative flex-1">
@@ -20,13 +32,13 @@ export const PaymentsFilters = ({
                 <Input
                     placeholder="Search by ID, Order ID, or customer..."
                     className="pl-10"
-                    onChange={(e) => onSearchChange(e.target.value)}
+                    onChange={handleSearchChange}
                 />
             </div>
             <div className="flex gap-4">
                 <Select
                     className="w-[150px]"
-                    onChange={(e) => onStatusChange(e.target.value)}
+                    onChange={handleStatusChange}
                 >
                     <option value="all">All Statuses</option>
                     <option value="pending">Pending</option>
@@ -36,7 +48,7 @@ export const PaymentsFilters = ({
                 </Select>
                 <Select
                     className="w-[120px]"
-                    onChange={(e) => onCurrencyChange(e.target.value)}
+                    onChange={handleCurrencyChange}
                 >
                     <option value="all">All Currencies</option>
                     <option value="USDC">USDC</option>
@@ -46,4 +58,5 @@ export const PaymentsFilters = ({
             </div>
         </div>
     );
-};
+});
+PaymentsFilters.displayName = "PaymentsFilters";

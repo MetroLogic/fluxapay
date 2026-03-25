@@ -2,7 +2,7 @@ import { Badge } from "@/components/Badge";
 import EmptyState from "@/components/EmptyState";
 import { WebhookEvent, WebhookStatus } from "./webhooks-mock";
 import { ChevronDown, ChevronUp, Copy, Eye } from "lucide-react";
-import { useState } from "react";
+import { useState, useMemo, memo, useCallback } from "react";
 
 interface WebhooksTableProps {
     webhooks: WebhookEvent[];
@@ -17,7 +17,7 @@ interface SortIconProps {
     } | null;
 }
 
-const SortIcon = ({ column, sortConfig }: SortIconProps) => {
+const SortIcon = memo(({ column, sortConfig }: SortIconProps) => {
     if (sortConfig?.key !== column)
         return <ChevronDown className="h-4 w-4 opacity-30" />;
     return sortConfig.direction === "asc" ? (
@@ -25,7 +25,88 @@ const SortIcon = ({ column, sortConfig }: SortIconProps) => {
     ) : (
         <ChevronDown className="h-4 w-4" />
     );
-};
+});
+SortIcon.displayName = "SortIcon";
+
+const getStatusBadge = memo(({ status }: { status: WebhookStatus }) => {
+    switch (status) {
+        case "delivered":
+            return <Badge variant="success">Delivered</Badge>;
+        case "pending":
+            return <Badge variant="warning">Pending</Badge>;
+        case "failed":
+            return <Badge variant="error">Failed</Badge>;
+        default:
+            return <Badge>{status}</Badge>;
+    }
+});
+getStatusBadge.displayName = "StatusBadge";
+
+interface WebhookRowProps {
+    webhook: WebhookEvent;
+    onRowClick: (webhook: WebhookEvent) => void;
+}
+
+const WebhookRow = memo(({ webhook, onRowClick }: WebhookRowProps) => {
+    const handleCopyId = useCallback((e: React.MouseEvent) => {
+        e.stopPropagation();
+        navigator.clipboard.writeText(webhook.id);
+    }, [webhook.id]);
+
+    const handleViewDetails = useCallback((e: React.MouseEvent) => {
+        e.stopPropagation();
+        onRowClick(webhook);
+    }, [webhook, onRowClick]);
+
+    const handleRowClick = useCallback(() => {
+        onRowClick(webhook);
+    }, [webhook, onRowClick]);
+
+    return (
+        <tr
+            className="group hover:bg-muted/50 cursor-pointer transition-colors"
+            onClick={handleRowClick}
+        >
+            <td className="px-4 py-4 font-mono text-xs max-w-[120px] truncate" title={webhook.id}>
+                {webhook.id}
+            </td>
+            <td className="px-4 py-4 font-medium">
+                {webhook.eventType}
+            </td>
+            <td className="px-4 py-4">
+                <getStatusBadge status={webhook.status} />
+            </td>
+            <td className="px-4 py-4 max-w-[200px] truncate text-muted-foreground" title={webhook.endpoint}>
+                {webhook.endpoint}
+            </td>
+            <td className="px-4 py-4 text-center tabular-nums">
+                {webhook.attempts}
+            </td>
+            <td className="px-4 py-4 text-right tabular-nums text-muted-foreground whitespace-nowrap">
+                {new Date(webhook.createdAt).toLocaleString()}
+            </td>
+            <td className="px-4 py-4 text-center">
+                <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                        className="p-1 hover:bg-muted rounded"
+                        title="View Details"
+                        onClick={handleViewDetails}
+                    >
+                        <Eye className="h-4 w-4" />
+                    </button>
+                    <button
+                        className="p-1 hover:bg-muted rounded text-primary"
+                        title="Copy ID"
+                        onClick={handleCopyId}
+                    >
+                        <Copy className="h-4 w-4" />
+                    </button>
+                </div>
+            </td>
+        </tr>
+    );
+});
+WebhookRow.displayName = "WebhookRow";
 
 export const WebhooksTable = ({ webhooks, onRowClick }: WebhooksTableProps) => {
     const [sortConfig, setSortConfig] = useState<{
@@ -33,40 +114,25 @@ export const WebhooksTable = ({ webhooks, onRowClick }: WebhooksTableProps) => {
         direction: "asc" | "desc";
     } | null>({ key: "createdAt", direction: "desc" });
 
-    const handleSort = (key: keyof WebhookEvent) => {
-        let direction: "asc" | "desc" = "asc";
-        if (
-            sortConfig &&
-            sortConfig.key === key &&
-            sortConfig.direction === "asc"
-        ) {
-            direction = "desc";
-        }
-        setSortConfig({ key, direction });
-    };
+    const handleSort = useCallback((key: keyof WebhookEvent) => {
+        setSortConfig((prev) => {
+            if (prev?.key === key && prev.direction === "asc") {
+                return { key, direction: "desc" };
+            }
+            return { key, direction: "asc" };
+        });
+    }, []);
 
-    const sortedWebhooks = [...webhooks].sort((a, b) => {
-        if (!sortConfig) return 0;
-        const { key, direction } = sortConfig;
-
-        // Special handling for nested properties or specific types can go here
-        if (a[key]! < b[key]!) return direction === "asc" ? -1 : 1;
-        if (a[key]! > b[key]!) return direction === "asc" ? 1 : -1;
-        return 0;
-    });
-
-    const getStatusBadge = (status: WebhookStatus) => {
-        switch (status) {
-            case "delivered":
-                return <Badge variant="success">Delivered</Badge>;
-            case "pending":
-                return <Badge variant="warning">Pending</Badge>;
-            case "failed":
-                return <Badge variant="error">Failed</Badge>;
-            default:
-                return <Badge>{status}</Badge>;
-        }
-    };
+    const sortedWebhooks = useMemo(() => {
+        if (!sortConfig) return webhooks;
+        
+        return [...webhooks].sort((a, b) => {
+            const { key, direction } = sortConfig;
+            if (a[key]! < b[key]!) return direction === "asc" ? -1 : 1;
+            if (a[key]! > b[key]!) return direction === "asc" ? 1 : -1;
+            return 0;
+        });
+    }, [webhooks, sortConfig]);
 
     return (
         <div className="rounded-xl border bg-card overflow-hidden">
@@ -120,54 +186,11 @@ export const WebhooksTable = ({ webhooks, onRowClick }: WebhooksTableProps) => {
                             />
                         ) : (
                             sortedWebhooks.map((webhook) => (
-                                <tr
+                                <WebhookRow
                                     key={webhook.id}
-                                    className="group hover:bg-muted/50 cursor-pointer transition-colors"
-                                    onClick={() => onRowClick(webhook)}
-                                >
-                                    <td className="px-4 py-4 font-mono text-xs max-w-[120px] truncate" title={webhook.id}>
-                                        {webhook.id}
-                                    </td>
-                                    <td className="px-4 py-4 font-medium">
-                                        {webhook.eventType}
-                                    </td>
-                                    <td className="px-4 py-4">
-                                        {getStatusBadge(webhook.status)}
-                                    </td>
-                                    <td className="px-4 py-4 max-w-[200px] truncate text-muted-foreground" title={webhook.endpoint}>
-                                        {webhook.endpoint}
-                                    </td>
-                                    <td className="px-4 py-4 text-center tabular-nums">
-                                        {webhook.attempts}
-                                    </td>
-                                    <td className="px-4 py-4 text-right tabular-nums text-muted-foreground whitespace-nowrap">
-                                        {new Date(webhook.createdAt).toLocaleString()}
-                                    </td>
-                                    <td className="px-4 py-4 text-center">
-                                        <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <button
-                                                className="p-1 hover:bg-muted rounded"
-                                                title="View Details"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    onRowClick(webhook);
-                                                }}
-                                            >
-                                                <Eye className="h-4 w-4" />
-                                            </button>
-                                            <button
-                                                className="p-1 hover:bg-muted rounded text-primary"
-                                                title="Copy ID"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    navigator.clipboard.writeText(webhook.id);
-                                                }}
-                                            >
-                                                <Copy className="h-4 w-4" />
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
+                                    webhook={webhook}
+                                    onRowClick={onRowClick}
+                                />
                             ))
                         )}
                     </tbody>
