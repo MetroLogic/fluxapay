@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { paymentStatusStore } from '../paymentStatusStore';
-
 /**
- * Mock API endpoint to poll payment status
- * In production, this would check the actual payment status from your backend/blockchain
+ * Backend proxy for checkout payment status polling.
  */
 export async function GET(
   request: NextRequest,
@@ -12,43 +9,25 @@ export async function GET(
 ) {
   const { payment_id: paymentId } = await params;
 
-  // Simulate network delay
-  await new Promise((resolve) => setTimeout(resolve, 200));
+  const backendBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
-  // Get or initialize payment status
-  let paymentStatus = paymentStatusStore.get(paymentId);
+  const upstream = await fetch(
+    `${backendBaseUrl}/api/payments/${encodeURIComponent(paymentId)}/status`,
+    {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      cache: 'no-store',
+    },
+  );
 
-  if (!paymentStatus) {
-    // Initialize with pending status
-    paymentStatus = {
-      status: 'pending',
-      createdAt: Date.now(),
-    };
-    paymentStatusStore.set(paymentId, paymentStatus);
-  }
+  const contentType = upstream.headers.get('content-type') || 'application/json';
+  const body = await upstream.text();
 
-  // Simulate status change after 10 seconds (for testing)
-  // In production, this would check actual blockchain/backend status
-  const timeSinceCreation = Date.now() - paymentStatus.createdAt;
-  
-  // For demo purposes: auto-confirm after 10 seconds if still pending
-  if (paymentStatus.status === 'pending' && timeSinceCreation > 10000) {
-    paymentStatus.status = 'confirmed';
-    paymentStatusStore.set(paymentId, paymentStatus);
-  }
-
-  // Handle special test cases
-  if (paymentId === 'expired') {
-    return NextResponse.json({ status: 'expired' });
-  }
-
-  if (paymentId === 'confirmed') {
-    return NextResponse.json({ status: 'confirmed' });
-  }
-
-  if (paymentId === 'failed') {
-    return NextResponse.json({ status: 'failed' });
-  }
-
-  return NextResponse.json({ status: paymentStatus.status });
+  return new NextResponse(body, {
+    status: upstream.status,
+    headers: {
+      'Content-Type': contentType,
+      'Cache-Control': 'no-store',
+    },
+  });
 }

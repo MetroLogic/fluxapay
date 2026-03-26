@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 /**
- * Mock API endpoint to fetch payment details
- * In production, this would connect to your backend service
+ * Backend proxy for checkout payment details.
  */
 export async function GET(
   request: NextRequest,
@@ -10,60 +9,25 @@ export async function GET(
 ) {
   const { payment_id: paymentId } = await params;
 
-  // Simulate network delay
-  await new Promise((resolve) => setTimeout(resolve, 500));
+  const backendBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
-  // Mock payment data
-  // In production, fetch from your database/backend
-  const mockPayment = {
-    id: paymentId,
-    amount: 100,
-    currency: 'USDC',
-    address: 'GABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890ABCDEFGH',
-    memoType: undefined as 'text' | 'id' | 'hash' | 'return' | undefined,
-    memo: undefined as string | undefined,
-    memoRequired: false,
-    expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(), // 15 minutes from now
-    status: 'pending' as const,
-    successUrl: 'https://example.com/success',
-    merchantName: 'FluxaPay Merchant',
-    description: 'Payment for services',
-  };
+  const upstream = await fetch(`${backendBaseUrl}/api/payments/${encodeURIComponent(paymentId)}`, {
+    method: 'GET',
+    headers: {
+      Accept: 'application/json',
+    },
+    cache: 'no-store',
+  });
 
-  // Simulate payment not found for specific IDs
-  if (paymentId === 'not-found' || paymentId === '404') {
-    return NextResponse.json(
-      { error: 'Payment not found' },
-      { status: 404 }
-    );
-  }
+  const contentType = upstream.headers.get('content-type') || 'application/json';
 
-  // Simulate expired payment
-  if (paymentId === 'expired') {
-    return NextResponse.json({
-      ...mockPayment,
-      status: 'expired',
-      expiresAt: new Date(Date.now() - 1000).toISOString(),
-    });
-  }
-
-  // Simulate confirmed payment
-  if (paymentId === 'confirmed') {
-    return NextResponse.json({
-      ...mockPayment,
-      status: 'confirmed',
-    });
-  }
-
-  // Simulate memo/tag-required flows (some Stellar destinations require memo)
-  if (paymentId === 'memo-required' || paymentId === 'memo') {
-    return NextResponse.json({
-      ...mockPayment,
-      memoType: 'text',
-      memo: 'INV-10001',
-      memoRequired: true,
-    });
-  }
-
-  return NextResponse.json(mockPayment);
+  // Return the upstream response body/status as-is so the client can handle 404/500, etc.
+  const body = await upstream.text();
+  return new NextResponse(body, {
+    status: upstream.status,
+    headers: {
+      'Content-Type': contentType,
+      'Cache-Control': 'no-store',
+    },
+  });
 }
