@@ -24,6 +24,8 @@ model Merchant {
   webhook_secret        String
   password              String
   status                MerchantStatus         @default(pending_verification)
+  api_key_hashed        String?
+  api_key_last_four     String?
   created_at            DateTime               @default(now())
   updated_at            DateTime               @updatedAt
   otps                  OTP[]
