@@ -28,7 +28,7 @@ const SortIcon = memo(({ column, sortConfig }: SortIconProps) => {
 });
 SortIcon.displayName = "SortIcon";
 
-const getStatusBadge = memo(({ status }: { status: PaymentStatus }) => {
+const StatusBadge = memo(({ status }: { status: PaymentStatus }) => {
   switch (status) {
     case "confirmed":
       return <Badge variant="success">Confirmed</Badge>;
@@ -42,7 +42,7 @@ const getStatusBadge = memo(({ status }: { status: PaymentStatus }) => {
       return <Badge>{status}</Badge>;
   }
 });
-getStatusBadge.displayName = "StatusBadge";
+StatusBadge.displayName = "StatusBadge";
 
 interface PaymentRowProps {
   payment: Payment;
@@ -84,7 +84,7 @@ const PaymentRow = memo(({ payment, onRowClick }: PaymentRowProps) => {
         {formattedAmount}
       </td>
       <td className="px-4 py-4">
-        <getStatusBadge status={payment.status} />
+        <StatusBadge status={payment.status} />
       </td>
       <td className="px-4 py-4">
         <div className="flex flex-col">
