@@ -184,3 +184,71 @@ export async function rotateApiKeyService(data: {
 }) {
   return regenerateApiKeyService(data); // Same logic as regenerate
 }
+
+export async function updateMerchantProfileService(data: {
+  merchantId: string;
+  business_name?: string;
+  email?: string;
+}) {
+  const { merchantId, ...updateData } = data;
+  const merchant = await prisma.merchant.update({
+    where: { id: merchantId },
+    data: updateData,
+  });
+  return { message: "Profile updated", merchant };
+}
+
+export async function updateMerchantWebhookService(data: {
+  merchantId: string;
+  webhook_url: string;
+}) {
+  const { merchantId, webhook_url } = data;
+  await prisma.merchant.update({
+    where: { id: merchantId },
+    data: { webhook_url },
+  });
+  return { message: "Webhook URL updated", webhook_url };
+}
+
+export async function rotateWebhookSecretService(data: {
+  merchantId: string;
+}) {
+  const { merchantId } = data;
+  const newSecret = crypto.randomBytes(32).toString("hex");
+  await prisma.merchant.update({
+    where: { id: merchantId },
+    data: { webhook_secret: newSecret },
+  });
+  return { message: "Webhook secret rotated", webhook_secret: newSecret };
+}
+
+export async function updateSettlementScheduleService(data: {
+  merchantId: string;
+  settlement_schedule: "daily" | "weekly";
+  settlement_day?: number;
+}) {
+  const { merchantId, settlement_schedule, settlement_day } = data;
+  await prisma.merchant.update({
+    where: { id: merchantId },
+    data: { settlement_schedule, settlement_day },
+  });
+  return { message: "Settlement schedule updated", settlement_schedule, settlement_day };
+}
+
+export async function addBankAccountService(data: {
+  merchantId: string;
+  account_name: string;
+  account_number: string;
+  bank_name: string;
+  bank_code?: string;
+  currency: string;
+  country: string;
+}) {
+  const { merchantId, ...bankData } = data;
+  const bankAccount = await prisma.bankAccount.upsert({
+    where: { merchantId },
+    create: { merchantId, ...bankData },
+    update: bankData,
+  });
+  return { message: "Bank account updated", bankAccount };
+}

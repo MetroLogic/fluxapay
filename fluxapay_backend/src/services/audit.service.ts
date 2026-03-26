@@ -1,4 +1,4 @@
-import { PrismaClient, AuditActionType, AuditEntityType, KYCStatus, Prisma } from '../generated/client';
+import { PrismaClient, AuditActionType, AuditEntityType, KYCStatus, Prisma } from '../generated/client/client';
 import {
   CreateAuditLogParams,
   QueryAuditLogsParams,
@@ -139,8 +139,8 @@ export async function logKycDecision(params: {
   return await createAuditLog(
     {
       admin_id: params.adminId,
-      action_type: params.action === 'approve' ? AuditActionType.kyc_approve : AuditActionType.kyc_reject,
-      entity_type: AuditEntityType.merchant_kyc,
+      action_type: AuditActionType.kyc_decision,
+      entity_type: AuditEntityType.merchant,
       entity_id: params.merchantId,
       details,
     },
@@ -196,8 +196,8 @@ export async function logSweepTrigger(params: {
 
   return await createAuditLog({
     admin_id: params.adminId,
-    action_type: AuditActionType.sweep_trigger,
-    entity_type: AuditEntityType.sweep_operation,
+    action_type: AuditActionType.sweep_operation,
+    entity_type: AuditEntityType.payment_gateway,
     entity_id: sweepId,
     details,
   });
@@ -236,9 +236,7 @@ export async function updateSweepCompletion(params: {
       where: { id: params.auditLogId },
       data: {
         details: updatedDetails,
-        action_type: params.status === 'completed' 
-          ? AuditActionType.sweep_complete 
-          : AuditActionType.sweep_fail,
+        action_type: AuditActionType.sweep_operation,
       },
     });
 
@@ -262,8 +260,8 @@ export async function logSettlementBatch(params: {
 
   return await createAuditLog({
     admin_id: params.adminId,
-    action_type: AuditActionType.settlement_batch_initiate,
-    entity_type: AuditEntityType.settlement_batch,
+    action_type: AuditActionType.settlement_batch,
+    entity_type: AuditEntityType.settlement,
     entity_id: params.batchId,
     details,
   });
@@ -303,9 +301,7 @@ export async function updateSettlementBatchCompletion(params: {
       where: { id: params.auditLogId },
       data: {
         details: updatedDetails,
-        action_type: params.status === 'completed'
-          ? AuditActionType.settlement_batch_complete
-          : AuditActionType.settlement_batch_fail,
+        action_type: AuditActionType.settlement_batch,
       },
     });
 

@@ -1,4 +1,4 @@
-import { AuditActionType, AuditEntityType, KYCStatus } from '../generated/client';
+import { AuditActionType, AuditEntityType, KYCStatus } from '../generated/client/client';
 
 export interface AuditLog {
   id: string;
