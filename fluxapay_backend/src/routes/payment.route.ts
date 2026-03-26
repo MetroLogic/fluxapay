@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { createPayment, getPaymentById } from '../controllers/payment.controller';
+import { createPayment, getPayments, getPaymentById } from '../controllers/payment.controller';
 import { validatePayment } from '../validators/payment.validator';
 import { authenticateToken } from '../middleware/auth.middleware';
 
@@ -7,7 +7,7 @@ const router = Router();
 
 /**
  * @swagger
- * /api/payments:
+ * /api/v1/payments:
  *   post:
  *     summary: Create payment intent
  *     tags: [Payments]
@@ -33,6 +33,59 @@ router.post('/', authenticateToken, validatePayment, createPayment);
  * /api/payments/{id}:
  *   get:
  *     summary: Get payment by ID (merchant-scoped)
+ * /api/payments:
+ *   get:
+ *     summary: List payments for the authenticated merchant
+ *     tags: [Payments]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema: { type: integer }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer }
+ *       - in: query
+ *         name: status
+ *         schema: { type: string }
+ *       - in: query
+ *         name: currency
+ *         schema: { type: string }
+ *       - in: query
+ *         name: search
+ *         schema: { type: string }
+ *       - in: query
+ *         name: date_from
+ *         schema: { type: string, format: date-time }
+ *       - in: query
+ *         name: date_to
+ *         schema: { type: string, format: date-time }
+ *     responses:
+ *       200:
+ *         description: Paginated list of payments
+ */
+router.get('/', authenticateToken, getPayments);
+
+/**
+ * @swagger
+ * /api/payments/export:
+ *   get:
+ *     summary: Export payments as CSV
+ *     tags: [Payments]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: CSV file download
+ */
+router.get('/export', authenticateToken, getPayments);
+
+/**
+ * @swagger
+ * /api/payments/{id}:
+ *   get:
+ *     summary: Get a single payment by ID
  *     tags: [Payments]
  *     security:
  *       - bearerAuth: []

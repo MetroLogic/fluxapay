@@ -18,7 +18,7 @@ const router = Router();
 
 /**
  * @swagger
- * /api/admin/settlement/run:
+ * /api/v1/admin/settlement/run:
  *   post:
  *     summary: Manually trigger a settlement batch run
  *     tags: [Admin - Settlement]
@@ -72,7 +72,7 @@ router.post("/run", adminAuth, async (_req: Request, res: Response) => {
 
 /**
  * @swagger
- * /api/admin/settlement/status:
+ * /api/v1/admin/settlement/status:
  *   get:
  *     summary: Settlement system status
  *     tags: [Admin - Settlement]

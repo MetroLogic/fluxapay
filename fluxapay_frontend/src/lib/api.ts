@@ -343,7 +343,7 @@ export const api = {
       }),
   },
 
-  // Payments (merchant-scoped payment link creation)
+  // Payments (merchant-scoped)
   payments: {
     create: (data: {
       amount: number;
@@ -356,6 +356,47 @@ export const api = {
         method: "POST",
         body: JSON.stringify(data),
       }),
+
+    list: (params?: {
+      page?: number;
+      limit?: number;
+      status?: string;
+      currency?: string;
+      search?: string;
+      date_from?: string;
+      date_to?: string;
+    }) => {
+      const sp = new URLSearchParams();
+      if (params?.page != null) sp.set("page", String(params.page));
+      if (params?.limit != null) sp.set("limit", String(params.limit));
+      if (params?.status && params.status !== "all") sp.set("status", params.status);
+      if (params?.currency && params.currency !== "all") sp.set("currency", params.currency);
+      if (params?.search) sp.set("search", params.search);
+      if (params?.date_from) sp.set("date_from", params.date_from);
+      if (params?.date_to) sp.set("date_to", params.date_to);
+      return fetchWithAuth(`/api/payments?${sp.toString()}`);
+    },
+
+    export: async (params?: {
+      status?: string;
+      currency?: string;
+      search?: string;
+      date_from?: string;
+      date_to?: string;
+    }): Promise<Blob> => {
+      const sp = new URLSearchParams();
+      if (params?.status && params.status !== "all") sp.set("status", params.status);
+      if (params?.currency && params.currency !== "all") sp.set("currency", params.currency);
+      if (params?.search) sp.set("search", params.search);
+      if (params?.date_from) sp.set("date_from", params.date_from);
+      if (params?.date_to) sp.set("date_to", params.date_to);
+      const response = await fetch(
+        `${API_BASE_URL}/api/payments/export?${sp.toString()}`,
+        { headers: { Authorization: `Bearer ${getToken()}` } },
+      );
+      if (!response.ok) throw new ApiError(response.status, "Export failed");
+      return response.blob();
+    },
   },
 
   // Webhooks (merchant-scoped webhook delivery logs)
