@@ -1,16 +1,18 @@
 import { Router } from "express";
-import {
-    runReconciliation,
-    listReconciliations,
-    getReconciliationDetails,
-    listAlerts,
-    acknowledgeAlert,
-    reviewReconciliation,
-    getReconciliationSummary,
-} from "../controllers/reconciliation.controller";
 import { authenticateToken } from "../middleware/auth.middleware";
-import { validate } from "../middleware/validation.middleware";
-import * as reconciliationSchema from "../schemas/reconciliation.schema";
+import { validate, validateQuery } from "../middleware/validation.middleware";
+import {
+  discrepancyAlertsQuerySchema,
+  reconciliationSummaryQuerySchema,
+  resolveAlertSchema,
+  upsertThresholdSchema,
+} from "../schemas/reconciliation.schema";
+import {
+  getReconciliationSummary,
+  listDiscrepancyAlerts,
+  resolveDiscrepancyAlert,
+  upsertDiscrepancyThreshold,
+} from "../controllers/reconciliation.controller";
 
 const router = Router();
 
@@ -18,59 +20,53 @@ router.use(authenticateToken);
 
 /**
  * @swagger
- * /api/reconciliation/summary:
+ * /api/admin/reconciliation/summary:
  *   get:
- *     summary: Get reconciliation dashboard summary
- *     tags: [Reconciliation]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Reconciliation summary stats
- */
-router.get("/summary", getReconciliationSummary);
-
-/**
- * @swagger
- * /api/reconciliation/run:
- *   post:
- *     summary: Run a new reconciliation
- *     tags: [Reconciliation]
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - period_start
- *               - period_end
- *             properties:
- *               period_start:
- *                 type: string
- *                 format: date
- *               period_end:
- *                 type: string
- *                 format: date
- *               actual_balance:
- *                 type: number
- *     responses:
- *       200:
- *         description: Reconciliation result
- */
-router.post("/run", validate(reconciliationSchema.runReconciliationSchema), runReconciliation);
-
-/**
- * @swagger
- * /api/reconciliation:
- *   get:
- *     summary: List reconciliation records
+ *     summary: Get reconciliation period summary and detect discrepancies
  *     tags: [Reconciliation]
  *     security:
  *       - bearerAuth: []
  *     parameters:
+ *       - in: query
+ *         name: merchant_id
+ *         schema:
+ *           type: string
+ *         description: Optional merchant filter
+ *       - in: query
+ *         name: period_start
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *       - in: query
+ *         name: period_end
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *     responses:
+ *       200:
+ *         description: Reconciliation summary generated
+ */
+router.get("/summary", validateQuery(reconciliationSummaryQuerySchema), getReconciliationSummary);
+
+/**
+ * @swagger
+ * /api/admin/reconciliation/alerts:
+ *   get:
+ *     summary: List discrepancy alerts for admin UI
+ *     tags: [Reconciliation]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: merchant_id
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: is_resolved
+ *         schema:
+ *           type: boolean
  *       - in: query
  *         name: page
  *         schema:
@@ -79,65 +75,17 @@ router.post("/run", validate(reconciliationSchema.runReconciliationSchema), runR
  *         name: limit
  *         schema:
  *           type: integer
- *       - in: query
- *         name: status
- *         schema:
- *           type: string
- *           enum: [all, pending, matched, discrepancy, reviewed, resolved]
- *       - in: query
- *         name: date_from
- *         schema:
- *           type: string
- *           format: date
- *       - in: query
- *         name: date_to
- *         schema:
- *           type: string
- *           format: date
  *     responses:
  *       200:
- *         description: List of reconciliation records
+ *         description: Discrepancy alerts retrieved
  */
-router.get("/", listReconciliations);
+router.get("/alerts", validateQuery(discrepancyAlertsQuerySchema), listDiscrepancyAlerts);
 
 /**
  * @swagger
- * /api/reconciliation/alerts:
- *   get:
- *     summary: List reconciliation alerts
- *     tags: [Reconciliation]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: query
- *         name: page
- *         schema:
- *           type: integer
- *       - in: query
- *         name: limit
- *         schema:
- *           type: integer
- *       - in: query
- *         name: severity
- *         schema:
- *           type: string
- *           enum: [all, low, medium, high, critical]
- *       - in: query
- *         name: acknowledged
- *         schema:
- *           type: string
- *           enum: [true, false]
- *     responses:
- *       200:
- *         description: List of reconciliation alerts
- */
-router.get("/alerts", listAlerts);
-
-/**
- * @swagger
- * /api/reconciliation/alerts/{alert_id}/acknowledge:
- *   post:
- *     summary: Acknowledge a reconciliation alert
+ * /api/admin/reconciliation/alerts/{alert_id}/resolve:
+ *   patch:
+ *     summary: Resolve or reopen discrepancy alert
  *     tags: [Reconciliation]
  *     security:
  *       - bearerAuth: []
@@ -147,62 +95,40 @@ router.get("/alerts", listAlerts);
  *         required: true
  *         schema:
  *           type: string
- *     responses:
- *       200:
- *         description: Alert acknowledged
- *       404:
- *         description: Alert not found
- */
-router.post("/alerts/:alert_id/acknowledge", acknowledgeAlert);
-
-/**
- * @swagger
- * /api/reconciliation/{reconciliation_id}:
- *   get:
- *     summary: Get reconciliation details
- *     tags: [Reconciliation]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: reconciliation_id
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: Reconciliation details
- *       404:
- *         description: Reconciliation not found
- */
-router.get("/:reconciliation_id", getReconciliationDetails);
-
-/**
- * @swagger
- * /api/reconciliation/{reconciliation_id}/review:
- *   post:
- *     summary: Mark reconciliation as reviewed
- *     tags: [Reconciliation]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: reconciliation_id
- *         required: true
- *         schema:
- *           type: string
  *     requestBody:
+ *       required: true
  *       content:
  *         application/json:
  *           schema:
  *             type: object
  *             properties:
- *               notes:
- *                 type: string
+ *               is_resolved:
+ *                 type: boolean
+ *                 example: true
  *     responses:
  *       200:
- *         description: Reconciliation reviewed
+ *         description: Alert state updated
  */
-router.post("/:reconciliation_id/review", reviewReconciliation);
+router.patch("/alerts/:alert_id/resolve", validate(resolveAlertSchema), resolveDiscrepancyAlert);
+
+/**
+ * @swagger
+ * /api/admin/reconciliation/thresholds:
+ *   post:
+ *     summary: Create or update discrepancy threshold configuration
+ *     tags: [Reconciliation]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/UpsertDiscrepancyThresholdRequest'
+ *     responses:
+ *       200:
+ *         description: Threshold saved
+ */
+router.post("/thresholds", validate(upsertThresholdSchema), upsertDiscrepancyThreshold);
 
 export default router;

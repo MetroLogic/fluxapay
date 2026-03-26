@@ -1,103 +1,109 @@
-import { PrismaClient, InvoiceStatus } from "../generated/client/client";
+import { PrismaClient } from "../generated/client/client";
+import crypto from "crypto";
 
 const prisma = new PrismaClient();
 
-export interface LineItem {
-  description: string;
-  quantity: number;
-  unit_price: number;
+function buildInvoiceNumber() {
+  const d = new Date();
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  const suffix = crypto.randomBytes(3).toString("hex").toUpperCase();
+  return `INV-${y}${m}${day}-${suffix}`;
 }
 
-export interface CreateInvoiceData {
-  customer_name: string;
-  customer_email: string;
-  line_items: LineItem[];
+export async function createInvoiceService(params: {
+  merchantId: string;
+  amount: number;
   currency: string;
-  due_date: string;
-  notes?: string;
-}
+  customer_email: string;
+  metadata?: Record<string, unknown>;
+  due_date?: string;
+}) {
+  const { merchantId, amount, currency, customer_email, metadata, due_date } = params;
 
-function generateInvoiceNumber(): string {
-  const date = new Date();
-  const yyyymmdd = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, "0")}${String(date.getDate()).padStart(2, "0")}`;
-  const random = Math.floor(1000 + Math.random() * 9000);
-  return `INV-${yyyymmdd}-${random}`;
-}
+  const paymentId = crypto.randomUUID();
 
-function computeTotal(lineItems: LineItem[]): number {
-  return lineItems.reduce((sum, item) => sum + item.quantity * item.unit_price, 0);
-}
-
-export const InvoiceService = {
-  async createInvoice(data: CreateInvoiceData, merchantId: string) {
-    const invoice_number = generateInvoiceNumber();
-    const total_amount = computeTotal(data.line_items);
-    const appUrl = process.env.APP_URL || "http://localhost:3001";
-    const payment_link = `${appUrl}/pay/invoice/${invoice_number}`;
-
-    return prisma.invoice.create({
-      data: {
-        merchantId,
-        invoice_number,
-        customer_name: data.customer_name,
-        customer_email: data.customer_email,
-        line_items: data.line_items as object[],
-        total_amount,
-        currency: data.currency,
-        due_date: new Date(data.due_date),
-        notes: data.notes,
-        payment_link,
-        status: "unpaid",
-      },
-    });
-  },
-
-  async getInvoices(
-    merchantId: string,
-    filters: { status?: string; search?: string; page?: number; limit?: number }
-  ) {
-    const page = filters.page || 1;
-    const limit = filters.limit || 10;
-
-    const where: Record<string, unknown> = {
+  const payment = await prisma.payment.create({
+    data: {
+      id: paymentId,
       merchantId,
-      ...(filters.status && filters.status !== "all" && { status: filters.status as InvoiceStatus }),
-      ...(filters.search && {
-        OR: [
-          { invoice_number: { contains: filters.search, mode: "insensitive" } },
-          { customer_name: { contains: filters.search, mode: "insensitive" } },
-          { customer_email: { contains: filters.search, mode: "insensitive" } },
-        ],
-      }),
-    };
+      amount,
+      currency,
+      customer_email,
+      metadata: metadata ?? {},
+      expiration: due_date ? new Date(due_date) : new Date(Date.now() + 15 * 60 * 1000),
+      status: "pending",
+      checkout_url: `/pay/${paymentId}`,
+    },
+  });
 
-    const [data, total] = await Promise.all([
-      prisma.invoice.findMany({
-        where,
-        skip: (page - 1) * limit,
-        take: limit,
-        orderBy: { created_at: "desc" },
-      }),
-      prisma.invoice.count({ where }),
-    ]);
+  const invoice = await prisma.invoice.create({
+    data: {
+      merchantId,
+      invoice_number: buildInvoiceNumber(),
+      amount,
+      currency,
+      customer_email,
+      metadata: metadata ?? {},
+      payment_id: payment.id,
+      payment_link: `/pay/${payment.id}`,
+      due_date: due_date ? new Date(due_date) : null,
+      status: "pending",
+    },
+  });
 
-    return { data, meta: { total, page, limit } };
-  },
+  return {
+    message: "Invoice created with payment intent",
+    data: {
+      id: invoice.id,
+      invoice_number: invoice.invoice_number,
+      amount: invoice.amount,
+      currency: invoice.currency,
+      customer_email: invoice.customer_email,
+      payment_id: invoice.payment_id,
+      payment_link: invoice.payment_link,
+      status: invoice.status,
+      due_date: invoice.due_date,
+      created_at: invoice.created_at,
+    },
+  };
+}
 
-  async getInvoiceById(id: string, merchantId: string) {
-    const invoice = await prisma.invoice.findFirst({
-      where: { id, merchantId },
-    });
-    return invoice;
-  },
+export async function listInvoicesService(params: {
+  merchantId: string;
+  page: number;
+  limit: number;
+  status?: "pending" | "paid" | "cancelled" | "overdue";
+}) {
+  const { merchantId, page, limit, status } = params;
+  const skip = (page - 1) * limit;
 
-  async updateInvoiceStatus(id: string, status: InvoiceStatus, merchantId: string) {
-    const invoice = await prisma.invoice.findFirst({ where: { id, merchantId } });
-    if (!invoice) return null;
+  const where: Record<string, unknown> = { merchantId };
+  if (status) {
+    where.status = status;
+  }
 
-    return prisma.invoice.update({
-      where: { id },
-      data: { status },
-    });
-  },
-};
+  const [invoices, total] = await Promise.all([
+    prisma.invoice.findMany({
+      where,
+      skip,
+      take: limit,
+      orderBy: { created_at: "desc" },
+    }),
+    prisma.invoice.count({ where }),
+  ]);
+
+  return {
+    message: "Invoices retrieved",
+    data: {
+      invoices,
+      pagination: {
+        page,
+        limit,
+        total,
+        total_pages: Math.ceil(total / limit),
+      },
+    },
+  };
+}

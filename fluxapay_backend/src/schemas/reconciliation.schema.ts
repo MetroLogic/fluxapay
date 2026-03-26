@@ -1,53 +1,25 @@
 import { z } from "zod";
 
-export const runReconciliationSchema = z.object({
-    body: z.object({
-        period_start: z.string().min(1, "Period start date is required"),
-        period_end: z.string().min(1, "Period end date is required"),
-        actual_balance: z.number().optional(),
-    }),
+export const reconciliationSummaryQuerySchema = z.object({
+  merchant_id: z.string().optional(),
+  period_start: z.string().datetime(),
+  period_end: z.string().datetime(),
 });
 
-export const listReconciliationsSchema = z.object({
-    query: z.object({
-        page: z.string().optional().default("1"),
-        limit: z.string().optional().default("10"),
-        status: z.enum(["all", "pending", "matched", "discrepancy", "reviewed", "resolved"]).optional(),
-        date_from: z.string().optional(),
-        date_to: z.string().optional(),
-    }).optional(),
+export const discrepancyAlertsQuerySchema = z.object({
+  merchant_id: z.string().optional(),
+  is_resolved: z.coerce.boolean().optional(),
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().positive().max(100).default(10),
 });
 
-export const reconciliationDetailsSchema = z.object({
-    params: z.object({
-        reconciliation_id: z.string(),
-    }),
+export const upsertThresholdSchema = z.object({
+  merchant_id: z.string().optional(),
+  amount_threshold: z.coerce.number().nonnegative(),
+  percent_threshold: z.coerce.number().nonnegative(),
+  is_active: z.boolean().default(true),
 });
 
-export const listAlertsSchema = z.object({
-    query: z.object({
-        page: z.string().optional().default("1"),
-        limit: z.string().optional().default("10"),
-        severity: z.enum(["all", "low", "medium", "high", "critical"]).optional(),
-        acknowledged: z.string().optional(),
-    }).optional(),
-});
-
-export const acknowledgeAlertSchema = z.object({
-    params: z.object({
-        alert_id: z.string(),
-    }),
-});
-
-export const reviewReconciliationSchema = z.object({
-    params: z.object({
-        reconciliation_id: z.string(),
-    }),
-    body: z.object({
-        notes: z.string().optional(),
-    }).optional(),
-});
-
-export const reconciliationSummarySchema = z.object({
-    query: z.object({}).optional(),
+export const resolveAlertSchema = z.object({
+  is_resolved: z.boolean().default(true),
 });

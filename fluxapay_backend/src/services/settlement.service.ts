@@ -223,3 +223,53 @@ export const exportSettlementService = async (
         contentType: "application/json",
     };
 };
+
+export const getSettlementBatchService = async (
+    merchantId: string,
+    date_from?: string,
+    date_to?: string
+) => {
+    const where: any = { merchantId };
+
+    if (date_from || date_to) {
+        where.scheduled_date = {};
+        if (date_from) where.scheduled_date.gte = new Date(date_from);
+        if (date_to) where.scheduled_date.lte = new Date(date_to);
+    }
+
+    const settlements = await prisma.settlement.findMany({
+        where,
+        orderBy: { scheduled_date: "desc" },
+    });
+
+    const batches = settlements.reduce((acc: Record<string, {
+        scheduled_date: string;
+        total_amount: number;
+        total_fees: number;
+        settlement_count: number;
+        statuses: Record<string, number>;
+    }>, item) => {
+        const batchKey = item.scheduled_date.toISOString().slice(0, 10);
+
+        if (!acc[batchKey]) {
+            acc[batchKey] = {
+                scheduled_date: batchKey,
+                total_amount: 0,
+                total_fees: 0,
+                settlement_count: 0,
+                statuses: {},
+            };
+        }
+
+        acc[batchKey].total_amount += Number(item.amount);
+        acc[batchKey].total_fees += Number(item.fees);
+        acc[batchKey].settlement_count += 1;
+        acc[batchKey].statuses[item.status] = (acc[batchKey].statuses[item.status] || 0) + 1;
+
+        return acc;
+    }, {});
+
+    return {
+        batches: Object.values(batches),
+    };
+};
