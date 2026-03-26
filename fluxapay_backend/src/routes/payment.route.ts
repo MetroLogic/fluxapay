@@ -7,7 +7,7 @@ const router = Router();
 
 /**
  * @swagger
- * /api/payments:
+ * /api/v1/payments:
  *   post:
  *     summary: Create payment intent
  *     tags: [Payments]

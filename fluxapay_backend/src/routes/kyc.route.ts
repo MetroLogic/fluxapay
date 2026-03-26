@@ -143,7 +143,7 @@ const upload = multer({
 
 /**
  * @swagger
- * /api/merchants/kyc:
+ * /api/v1/merchants/kyc:
  *   post:
  *     summary: Submit KYC information
  *     description: Submit merchant KYC details for verification. This is the first step in the KYC process.
@@ -184,7 +184,7 @@ router.post(
 
 /**
  * @swagger
- * /api/merchants/kyc/documents:
+ * /api/v1/merchants/kyc/documents:
  *   post:
  *     summary: Upload KYC document
  *     description: Upload a document for KYC verification. Supported types are government_id, proof_of_business_registration, and proof_of_address.
@@ -235,7 +235,7 @@ router.post(
 
 /**
  * @swagger
- * /api/merchants/kyc/status:
+ * /api/v1/merchants/kyc/status:
  *   get:
  *     summary: Get KYC status
  *     description: Get the current KYC status and submitted information for the logged-in merchant
@@ -256,7 +256,7 @@ router.get("/status", authenticateToken, getKycStatus);
 
 /**
  * @swagger
- * /api/merchants/kyc/admin/submissions:
+ * /api/v1/merchants/kyc/admin/submissions:
  *   get:
  *     summary: Get all KYC submissions (Admin)
  *     description: Retrieve all KYC submissions with optional filtering by status. Admin only endpoint.
@@ -314,7 +314,7 @@ router.get("/admin/submissions", authenticateToken, getAllKycSubmissions);
 
 /**
  * @swagger
- * /api/merchants/kyc/admin/{merchantId}:
+ * /api/v1/merchants/kyc/admin/{merchantId}:
  *   get:
  *     summary: Get KYC details by merchant ID (Admin)
  *     description: Retrieve detailed KYC information for a specific merchant. Admin only endpoint.
@@ -340,7 +340,7 @@ router.get("/admin/:merchantId", authenticateToken, getKycDetailsByMerchantId);
 
 /**
  * @swagger
- * /api/merchants/kyc/admin/{merchantId}/status:
+ * /api/v1/merchants/kyc/admin/{merchantId}/status:
  *   patch:
  *     summary: Update KYC status (Admin)
  *     description: Approve or reject a merchant's KYC submission. Admin only endpoint.

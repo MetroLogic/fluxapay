@@ -20,7 +20,7 @@ router.use(authenticateToken);
 
 /**
  * @swagger
- * /api/admin/reconciliation/summary:
+ * /api/v1/admin/reconciliation/summary:
  *   get:
  *     summary: Get reconciliation period summary and detect discrepancies
  *     tags: [Reconciliation]
@@ -52,7 +52,7 @@ router.get("/summary", validateQuery(reconciliationSummaryQuerySchema), getRecon
 
 /**
  * @swagger
- * /api/admin/reconciliation/alerts:
+ * /api/v1/admin/reconciliation/alerts:
  *   get:
  *     summary: List discrepancy alerts for admin UI
  *     tags: [Reconciliation]
@@ -83,7 +83,7 @@ router.get("/alerts", validateQuery(discrepancyAlertsQuerySchema), listDiscrepan
 
 /**
  * @swagger
- * /api/admin/reconciliation/alerts/{alert_id}/resolve:
+ * /api/v1/admin/reconciliation/alerts/{alert_id}/resolve:
  *   patch:
  *     summary: Resolve or reopen discrepancy alert
  *     tags: [Reconciliation]
@@ -113,7 +113,7 @@ router.patch("/alerts/:alert_id/resolve", validate(resolveAlertSchema), resolveD
 
 /**
  * @swagger
- * /api/admin/reconciliation/thresholds:
+ * /api/v1/admin/reconciliation/thresholds:
  *   post:
  *     summary: Create or update discrepancy threshold configuration
  *     tags: [Reconciliation]

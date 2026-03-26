@@ -11,7 +11,7 @@ router.use(adminAuth);
 
 /**
  * @swagger
- * /api/admin/audit-logs:
+ * /api/v1/admin/audit-logs:
  *   get:
  *     summary: Query audit logs with filters (Admin only)
  *     tags: [Admin - Audit]
@@ -37,7 +37,7 @@ router.get('/audit-logs', getAuditLogs);
 
 /**
  * @swagger
- * /api/admin/audit-logs/{id}:
+ * /api/v1/admin/audit-logs/{id}:
  *   get:
  *     summary: Get specific audit log by ID (Admin only)
  *     tags: [Admin - Audit]
