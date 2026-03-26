@@ -358,6 +358,41 @@ export const api = {
       }),
   },
 
+  // Webhooks (merchant-scoped webhook delivery logs)
+  webhooks: {
+    logs: (params?: {
+      event_type?: string;
+      status?: string;
+      date_from?: string;
+      date_to?: string;
+      search?: string;
+      page?: number;
+      limit?: number;
+    }) => {
+      const sp = new URLSearchParams();
+      if (params?.event_type && params.event_type !== "all") sp.set("event_type", params.event_type);
+      if (params?.status && params.status !== "all") sp.set("status", params.status);
+      if (params?.date_from) sp.set("date_from", params.date_from);
+      if (params?.date_to) sp.set("date_to", params.date_to);
+      if (params?.search) sp.set("search", params.search);
+      if (params?.page != null) sp.set("page", String(params.page));
+      if (params?.limit != null) sp.set("limit", String(params.limit));
+      return fetchWithAuth(`/api/webhooks/logs?${sp.toString()}`);
+    },
+    logDetails: (logId: string) => fetchWithAuth(`/api/webhooks/logs/${logId}`),
+    retry: (logId: string) =>
+      fetchWithAuth(`/api/webhooks/logs/${logId}/retry`, { method: "POST" }),
+    sendTest: (data: {
+      event_type: string;
+      endpoint_url: string;
+      payload_override?: Record<string, unknown>;
+    }) =>
+      fetchWithAuth("/api/webhooks/test", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+  },
+
   // Dashboard overview (metrics, charts, activity)
   dashboard: {
     overviewMetrics: (params?: { from?: string; to?: string }) => {

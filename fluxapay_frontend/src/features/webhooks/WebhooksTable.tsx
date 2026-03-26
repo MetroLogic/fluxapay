@@ -7,6 +7,7 @@ import { useState, useMemo, memo, useCallback } from "react";
 interface WebhooksTableProps {
     webhooks: WebhookEvent[];
     onRowClick: (webhook: WebhookEvent) => void;
+    loading?: boolean;
 }
 
 interface SortIconProps {
@@ -36,6 +37,8 @@ const StatusBadge = memo(({ status }: { status: WebhookStatus }) => {
             return <Badge variant="warning">Pending</Badge>;
         case "failed":
             return <Badge variant="error">Failed</Badge>;
+        case "retrying":
+            return <Badge variant="warning">Retrying</Badge>;
         default:
             return <Badge>{status}</Badge>;
     }
@@ -108,7 +111,7 @@ const WebhookRow = memo(({ webhook, onRowClick }: WebhookRowProps) => {
 });
 WebhookRow.displayName = "WebhookRow";
 
-export const WebhooksTable = ({ webhooks, onRowClick }: WebhooksTableProps) => {
+export const WebhooksTable = ({ webhooks, onRowClick, loading = false }: WebhooksTableProps) => {
     const [sortConfig, setSortConfig] = useState<{
         key: keyof WebhookEvent;
         direction: "asc" | "desc";
@@ -182,7 +185,7 @@ export const WebhooksTable = ({ webhooks, onRowClick }: WebhooksTableProps) => {
                             <EmptyState
                                 colSpan={7}
                                 className="px-4 py-12 text-muted-foreground"
-                                message="No webhooks found matching your filters."
+                                message={loading ? "Loading webhook logs..." : "No webhooks found matching your filters."}
                             />
                         ) : (
                             sortedWebhooks.map((webhook) => (

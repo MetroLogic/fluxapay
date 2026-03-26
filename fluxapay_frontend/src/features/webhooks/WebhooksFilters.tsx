@@ -7,12 +7,16 @@ interface WebhooksFiltersProps {
     onSearchChange: (value: string) => void;
     onStatusChange: (value: string) => void;
     onEventTypeChange: (value: string) => void;
+    onDateFromChange: (value: string) => void;
+    onDateToChange: (value: string) => void;
 }
 
 export const WebhooksFilters = memo(({
     onSearchChange,
     onStatusChange,
     onEventTypeChange,
+    onDateFromChange,
+    onDateToChange,
 }: WebhooksFiltersProps) => {
     const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
         onSearchChange(e.target.value);
@@ -25,6 +29,14 @@ export const WebhooksFilters = memo(({
     const handleEventTypeChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
         onEventTypeChange(e.target.value);
     }, [onEventTypeChange]);
+
+    const handleDateFromChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+        onDateFromChange(e.target.value);
+    }, [onDateFromChange]);
+
+    const handleDateToChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+        onDateToChange(e.target.value);
+    }, [onDateToChange]);
     return (
         <div className="flex flex-col md:flex-row gap-4 mb-6">
             <div className="relative flex-1">
@@ -50,15 +62,23 @@ export const WebhooksFilters = memo(({
                     onChange={handleEventTypeChange}
                 >
                     <option value="all">All Event Types</option>
-                    <option value="payment.success">payment.success</option>
-                    <option value="payment.failed">payment.failed</option>
-                    <option value="payout.completed">payout.completed</option>
+                    <option value="payment_completed">payment_completed</option>
+                    <option value="payment_failed">payment_failed</option>
+                    <option value="payment_pending">payment_pending</option>
+                    <option value="refund_completed">refund_completed</option>
+                    <option value="refund_failed">refund_failed</option>
                 </Select>
-                {/* Simplified Date Range filter as a placeholder, could use a proper Date Picker component if available */}
                 <Input
                     type="date"
                     className="w-[150px]"
                     title="Start Date"
+                    onChange={handleDateFromChange}
+                />
+                <Input
+                    type="date"
+                    className="w-[150px]"
+                    title="End Date"
+                    onChange={handleDateToChange}
                 />
             </div>
         </div>
