@@ -3,6 +3,9 @@ export interface Payment {
   amount: number;
   currency: string;
   address: string; // Stellar payment address
+  memoType?: 'text' | 'id' | 'hash' | 'return';
+  memo?: string;
+  memoRequired?: boolean;
   expiresAt: Date;
   status: 'pending' | 'confirmed' | 'expired' | 'failed';
   successUrl?: string;

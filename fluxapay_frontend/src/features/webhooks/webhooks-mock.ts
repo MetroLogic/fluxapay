@@ -1,4 +1,4 @@
-export type WebhookStatus = 'delivered' | 'pending' | 'failed';
+export type WebhookStatus = 'delivered' | 'pending' | 'failed' | 'retrying';
 
 export interface WebhookEvent {
   id: string;

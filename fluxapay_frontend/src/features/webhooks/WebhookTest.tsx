@@ -4,6 +4,8 @@ import { Select } from "@/components/Select";
 import { Input } from "@/components/Input";
 import { useState } from "react";
 import { Send, CheckCircle2 } from "lucide-react";
+import toast from "react-hot-toast";
+import { api } from "@/lib/api";
 
 interface WebhookTestProps {
     isOpen: boolean;
@@ -11,7 +13,7 @@ interface WebhookTestProps {
 }
 
 export const WebhookTest = ({ isOpen, onClose }: WebhookTestProps) => {
-    const [eventType, setEventType] = useState("payment.success");
+    const [eventType, setEventType] = useState("payment_completed");
     const [endpoint, setEndpoint] = useState("");
     const [isTesting, setIsTesting] = useState(false);
     const [testResult, setTestResult] = useState<{
@@ -21,9 +23,9 @@ export const WebhookTest = ({ isOpen, onClose }: WebhookTestProps) => {
 
     const getMockPayload = (type: string) => {
         switch (type) {
-            case "payment.success":
+            case "payment_completed":
                 return {
-                    event: "payment.success",
+                    event_type: "payment_completed",
                     data: {
                         paymentId: "pay_test_123",
                         amount: 500,
@@ -31,9 +33,9 @@ export const WebhookTest = ({ isOpen, onClose }: WebhookTestProps) => {
                         status: "confirmed",
                     },
                 };
-            case "payment.failed":
+            case "payment_failed":
                 return {
-                    event: "payment.failed",
+                    event_type: "payment_failed",
                     data: {
                         paymentId: "pay_test_456",
                         amount: 100,
@@ -42,18 +44,19 @@ export const WebhookTest = ({ isOpen, onClose }: WebhookTestProps) => {
                         reason: "insufficient_funds",
                     },
                 };
-            case "payout.completed":
+            case "refund_completed":
                 return {
-                    event: "payout.completed",
+                    event_type: "refund_completed",
                     data: {
-                        payoutId: "po_test_789",
-                        amount: 10000,
+                        refundId: "rf_test_789",
+                        paymentId: "pay_test_123",
+                        amount: 50,
                         currency: "USDC",
                         status: "completed",
                     },
                 };
             default:
-                return { event: type, data: {} };
+                return { event_type: type, data: {} };
         }
     };
 
@@ -62,12 +65,21 @@ export const WebhookTest = ({ isOpen, onClose }: WebhookTestProps) => {
         setIsTesting(true);
         setTestResult(null);
 
-        // Simulate API call for testing the webhook
-        setTimeout(() => {
+        try {
+            const res = await api.webhooks.sendTest({
+                event_type: eventType,
+                endpoint_url: endpoint,
+            });
+            // Backend returns { message, data: { http_status, response_body, ... } }
+            const httpStatus = Number(res?.data?.http_status ?? 200);
+            setTestResult({ status: httpStatus, message: "OK" });
+            toast.success("Test webhook sent.");
+        } catch (e) {
+            toast.error(e instanceof Error ? e.message : "Failed to send test webhook");
+            setTestResult({ status: 0, message: "Failed" });
+        } finally {
             setIsTesting(false);
-            // Simulate success
-            setTestResult({ status: 200, message: "OK" });
-        }, 1500);
+        }
     };
 
     return (
@@ -88,9 +100,11 @@ export const WebhookTest = ({ isOpen, onClose }: WebhookTestProps) => {
                             value={eventType}
                             onChange={(e) => setEventType(e.target.value)}
                         >
-                            <option value="payment.success">payment.success</option>
-                            <option value="payment.failed">payment.failed</option>
-                            <option value="payout.completed">payout.completed</option>
+                            <option value="payment_completed">payment_completed</option>
+                            <option value="payment_failed">payment_failed</option>
+                            <option value="payment_pending">payment_pending</option>
+                            <option value="refund_completed">refund_completed</option>
+                            <option value="refund_failed">refund_failed</option>
                         </Select>
                     </div>
 
