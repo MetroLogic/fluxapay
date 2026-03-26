@@ -2,18 +2,14 @@ import { Request, Response } from "express";
 import { PrismaClient } from "../generated/client/client";
 import { PaymentService } from "../services/payment.service";
 import { AuthRequest } from "../types/express";
+import { validateUserId } from "../helpers/request.helper";
 
 const prisma = new PrismaClient();
 
 export const createPayment = async (req: Request, res: Response) => {
     try {
         const { order_id, amount, currency, customer_email, metadata, success_url, cancel_url } = req.body;
-        const authReq = req as AuthRequest;
-        const merchantId = authReq.merchantId;
-
-        if (!merchantId) {
-            return res.status(401).json({ error: "Unauthorized: Merchant ID missing" });
-        }
+        const merchantId = await validateUserId(req as AuthRequest);
 
         const isWithinRateLimit = await PaymentService.checkRateLimit(merchantId);
         if (!isWithinRateLimit) {
@@ -44,8 +40,7 @@ export const createPayment = async (req: Request, res: Response) => {
 
 export const getPayments = async (req: Request, res: Response) => {
     try {
-        const authReq = req as AuthRequest;
-        const merchantId = authReq.merchantId;
+        const merchantId = await validateUserId(req as AuthRequest);
 
         // 1. Destructure with explicit type casting immediately
         const query = req.query as Record<string, unknown>;
@@ -117,12 +112,7 @@ export const getPayments = async (req: Request, res: Response) => {
 
 export const getPaymentById = async (req: Request, res: Response) => {
     try {
-        const authReq = req as AuthRequest;
-        const merchantId = authReq.merchantId;
-
-        if (!merchantId) {
-            return res.status(401).json({ error: "Unauthorized: Merchant ID missing" });
-        }
+        const merchantId = await validateUserId(req as AuthRequest);
 
         // Endpoint: GET /api/payments/v1/payments/:id
         // Support both 'id' and 'payment_id' parameters

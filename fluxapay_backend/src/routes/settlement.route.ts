@@ -6,13 +6,13 @@ import {
     exportSettlement,
     getSettlementBatch,
 } from "../controllers/settlement.controller";
-import { authenticateToken } from "../middleware/auth.middleware";
+import { authenticateApiKey } from "../middleware/apiKeyAuth.middleware";
 import { validate } from "../middleware/validation.middleware";
 import * as settlementSchema from "../schemas/settlement.schema";
 
 const router = Router();
 
-router.use(authenticateToken);
+router.use(authenticateApiKey);
 
 /**
  * @swagger
@@ -21,7 +21,7 @@ router.use(authenticateToken);
  *     summary: List settlements
  *     tags: [Settlements]
  *     security:
- *       - bearerAuth: []
+ *       - apiKeyAuth: []
  *     parameters:
  *       - in: query
  *         name: page
@@ -65,7 +65,7 @@ router.get("/", validate(settlementSchema.listSettlementsSchema), listSettlement
  *     summary: Get settlement summary
  *     tags: [Settlements]
  *     security:
- *       - bearerAuth: []
+ *       - apiKeyAuth: []
  *     parameters:
  *       - in: query
  *         name: month
@@ -88,7 +88,7 @@ router.get("/summary", validate(settlementSchema.settlementSummarySchema), getSe
  *     summary: Get settlement batch summary by scheduled date
  *     tags: [Settlements]
  *     security:
- *       - bearerAuth: []
+ *       - apiKeyAuth: []
  *     parameters:
  *       - in: query
  *         name: date_from

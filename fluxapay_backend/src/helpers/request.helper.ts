@@ -1,8 +1,9 @@
 import { AuthRequest } from "../types/express";
 
 export const validateUserId = async (req: AuthRequest) => {
-  if (!req?.user?.id) {
+  const merchantId = req.merchantId || req?.user?.id;
+  if (!merchantId) {
     throw { status: 401, message: "Unauthorized" };
   }
-  return req.user.id;
+  return merchantId;
 };
