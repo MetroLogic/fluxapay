@@ -154,9 +154,25 @@ export default function CheckoutPage() {
           <PaymentQRCode
             address={payment.address}
             amount={payment.amount}
+            memoType={payment.memoType}
+            memo={payment.memo}
             size={256}
           />
         </div>
+
+        {/* Memo required warning */}
+        {payment.memoRequired && (
+          <div
+            className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-900"
+            role="alert"
+            aria-live="polite"
+          >
+            <p className="font-semibold">Memo required</p>
+            <p className="text-sm mt-1">
+              This payment destination requires a memo/tag. Please include the memo exactly as shown, or your payment may not be credited.
+            </p>
+          </div>
+        )}
 
         {/* Instructions */}
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 sm:p-6 mb-6">
@@ -174,7 +190,12 @@ export default function CheckoutPage() {
               <span aria-hidden="true" className="flex-shrink-0 w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-semibold">
                 2
               </span>
-              <span>Confirm the amount and payment address match</span>
+              <span>
+                Confirm the amount and payment address match
+                {payment.memoRequired && payment.memo && (
+                  <> (and include the required memo)</>
+                )}
+              </span>
             </li>
             <li className="flex items-start gap-3">
               <span aria-hidden="true" className="flex-shrink-0 w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-semibold">

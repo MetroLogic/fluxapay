@@ -20,6 +20,9 @@ export async function GET(
     amount: 100,
     currency: 'USDC',
     address: 'GABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890ABCDEFGH',
+    memoType: undefined as 'text' | 'id' | 'hash' | 'return' | undefined,
+    memo: undefined as string | undefined,
+    memoRequired: false,
     expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(), // 15 minutes from now
     status: 'pending' as const,
     successUrl: 'https://example.com/success',
@@ -49,6 +52,16 @@ export async function GET(
     return NextResponse.json({
       ...mockPayment,
       status: 'confirmed',
+    });
+  }
+
+  // Simulate memo/tag-required flows (some Stellar destinations require memo)
+  if (paymentId === 'memo-required' || paymentId === 'memo') {
+    return NextResponse.json({
+      ...mockPayment,
+      memoType: 'text',
+      memo: 'INV-10001',
+      memoRequired: true,
     });
   }
 
