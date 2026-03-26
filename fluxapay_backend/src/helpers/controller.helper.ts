@@ -12,7 +12,13 @@ export function createController<T>(
 ): ControllerHandler<T> {
   return async (req: Request, res: Response) => {
     try {
-      const result = await serviceFn(req.body, req);
+      const requestData = {
+        ...(typeof req.body === "object" && req.body !== null ? req.body : {}),
+        params: req.params,
+        query: req.query,
+      } as T;
+
+      const result = await serviceFn(requestData, req);
       res.status(successStatus).json(result);
     } catch (err) {
       console.error(err);

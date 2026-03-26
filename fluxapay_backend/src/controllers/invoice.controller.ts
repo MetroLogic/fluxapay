@@ -1,98 +1,36 @@
 import { Request, Response } from "express";
-import { InvoiceService } from "../services/invoice.service";
+import { validateUserId } from "../helpers/request.helper";
 import { AuthRequest } from "../types/express";
-import { InvoiceStatus } from "../generated/client/client";
+import { createInvoiceService, listInvoicesService } from "../services/invoice.service";
 
-/**
- * Helper function to extract merchantId from authenticated request.
- * Supports both JWT (from dashboard) and API key (from server integrations) authentication.
- */
-function getMerchantId(req: Request): string | null {
-  const authReq = req as AuthRequest;
-  return authReq.merchantId || null;
+export async function createInvoice(req: AuthRequest, res: Response) {
+  try {
+    const merchantId = await validateUserId(req);
+    const result = await createInvoiceService({
+      merchantId,
+      amount: req.body.amount,
+      currency: req.body.currency,
+      customer_email: req.body.customer_email,
+      metadata: req.body.metadata,
+      due_date: req.body.due_date,
+    });
+    res.status(201).json(result);
+  } catch (err: any) {
+    res.status(err.status || 500).json({ message: err.message || "Server error" });
+  }
 }
 
-export const createInvoice = async (req: Request, res: Response) => {
+export async function listInvoices(req: Request, res: Response) {
   try {
-    const merchantId = getMerchantId(req);
-
-    if (!merchantId) {
-      return res.status(401).json({ error: "Unauthorized: Merchant ID missing" });
-    }
-
-    const invoice = await InvoiceService.createInvoice(req.body, merchantId);
-    res.status(201).json(invoice);
-  } catch (error: unknown) {
-    console.error("Error creating invoice:", error);
-    res.status(500).json({ error: "Failed to create invoice" });
-  }
-};
-
-export const getInvoices = async (req: Request, res: Response) => {
-  try {
-    const merchantId = getMerchantId(req);
-
-    if (!merchantId) {
-      return res.status(401).json({ error: "Unauthorized: Merchant ID missing" });
-    }
-
-    const query = req.query as Record<string, unknown>;
-    const page = Number(query.page) || 1;
-    const limit = Number(query.limit) || 10;
-    const status = query.status ? String(query.status) : undefined;
-    const search = query.search ? String(query.search) : undefined;
-
-    const result = await InvoiceService.getInvoices(merchantId, {
-      status,
-      search,
-      page,
-      limit,
+    const merchantId = await validateUserId(req as AuthRequest);
+    const result = await listInvoicesService({
+      merchantId,
+      page: Number(req.query.page) || 1,
+      limit: Number(req.query.limit) || 10,
+      status: req.query.status as "pending" | "paid" | "cancelled" | "overdue" | undefined,
     });
-
-    res.json(result);
-  } catch (error: unknown) {
-    console.error("Error listing invoices:", error);
-    res.status(500).json({ error: "Failed to list invoices" });
+    res.status(200).json(result);
+  } catch (err: any) {
+    res.status(err.status || 500).json({ message: err.message || "Server error" });
   }
-};
-
-export const getInvoiceById = async (req: Request, res: Response) => {
-  try {
-    const merchantId = getMerchantId(req);
-
-    if (!merchantId) {
-      return res.status(401).json({ error: "Unauthorized: Merchant ID missing" });
-    }
-
-    const { id } = req.params;
-
-    const invoice = await InvoiceService.getInvoiceById(id as string, merchantId);
-    if (!invoice) return res.status(404).json({ error: "Invoice not found" });
-
-    res.json(invoice);
-  } catch (error: unknown) {
-    console.error("Error fetching invoice:", error);
-    res.status(500).json({ error: "Failed to fetch invoice" });
-  }
-};
-
-export const updateInvoiceStatus = async (req: Request, res: Response) => {
-  try {
-    const merchantId = getMerchantId(req);
-
-    if (!merchantId) {
-      return res.status(401).json({ error: "Unauthorized: Merchant ID missing" });
-    }
-
-    const { id } = req.params;
-    const { status } = req.body as { status: InvoiceStatus };
-
-    const invoice = await InvoiceService.updateInvoiceStatus(id as string, status, merchantId);
-    if (!invoice) return res.status(404).json({ error: "Invoice not found" });
-
-    res.json(invoice);
-  } catch (error: unknown) {
-    console.error("Error updating invoice status:", error);
-    res.status(500).json({ error: "Failed to update invoice status" });
-  }
-};
+}

@@ -32,3 +32,10 @@ export const exportSettlementSchema = z.object({
         format: z.enum(["pdf", "csv"]).default("pdf"),
     }),
 });
+
+export const settlementBatchSchema = z.object({
+    query: z.object({
+        date_from: z.string().optional(),
+        date_to: z.string().optional(),
+    }).optional(),
+});

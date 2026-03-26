@@ -74,6 +74,7 @@ export class FluxaPayError extends Error {
 // ── Client ───────────────────────────────────────────────────────────────────
 
 const DEFAULT_BASE_URL = 'https://api.fluxapay.com';
+const API_VERSION = 'v1';
 
 async function request<T>(
   baseUrl: string,
@@ -88,6 +89,7 @@ async function request<T>(
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`,
+      'X-API-Version': API_VERSION,
     },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
@@ -140,32 +142,151 @@ export class FluxaPay {
     /**
      * Create a new payment link.
      * Returns a `checkout_url` your customer should be redirected to.
+     * 
+     * Canonical route: POST /api/payments
      */
     create: (params: CreatePaymentParams): Promise<Payment> =>
       request<Payment>(this.baseUrl, this.apiKey, 'POST', '/api/payments', params),
 
     /**
      * Retrieve a payment by its ID.
+     * 
+     * Canonical route: GET /api/payments/:payment_id
      */
     get: (paymentId: string): Promise<Payment> =>
       request<Payment>(this.baseUrl, this.apiKey, 'GET', `/api/payments/${paymentId}`),
 
     /**
      * Poll the current status of a payment.
+     * 
+     * Canonical route: GET /api/payments/:payment_id
+     * (Status is included in the payment object)
      */
     getStatus: (paymentId: string): Promise<PaymentStatus> =>
-      request<PaymentStatus>(this.baseUrl, this.apiKey, 'GET', `/api/payments/${paymentId}/status`),
+      request<PaymentStatus>(this.baseUrl, this.apiKey, 'GET', `/api/payments/${paymentId}`),
 
     /**
      * List recent payments.
+     * 
+     * Canonical route: GET /api/payments
      */
     list: (params?: { page?: number; limit?: number; status?: string }): Promise<{ payments: Payment[]; total: number }> => {
       const qs = new URLSearchParams();
       if (params?.page) qs.set('page', String(params.page));
       if (params?.limit) qs.set('limit', String(params.limit));
       if (params?.status) qs.set('status', params.status);
-      return request(this.baseUrl, this.apiKey, 'GET', `/api/payments?${qs.toString()}`);
+      const query = qs.toString();
+      return request(this.baseUrl, this.apiKey, 'GET', `/api/payments${query ? `?${query}` : ''}`);
     },
+  };
+
+  // ── settlements ─────────────────────────────────────────────────────────────
+
+  readonly settlements = {
+    /**
+     * List settlements for the authenticated merchant.
+     * 
+     * Canonical route: GET /api/settlements
+     */
+    list: (params?: {
+      page?: number;
+      limit?: number;
+      status?: string;
+      currency?: string;
+      date_from?: string;
+      date_to?: string;
+    }): Promise<{ settlements: unknown[]; total: number }> => {
+      const qs = new URLSearchParams();
+      if (params?.page) qs.set('page', String(params.page));
+      if (params?.limit) qs.set('limit', String(params.limit));
+      if (params?.status) qs.set('status', params.status);
+      if (params?.currency) qs.set('currency', params.currency);
+      if (params?.date_from) qs.set('date_from', params.date_from);
+      if (params?.date_to) qs.set('date_to', params.date_to);
+      const query = qs.toString();
+      return request(this.baseUrl, this.apiKey, 'GET', `/api/settlements${query ? `?${query}` : ''}`);
+    },
+
+    /**
+     * Get settlement summary statistics.
+     * 
+     * Canonical route: GET /api/settlements/summary
+     */
+    summary: (): Promise<unknown> =>
+      request(this.baseUrl, this.apiKey, 'GET', '/api/settlements/summary'),
+
+    /**
+     * Get a specific settlement by ID.
+     * 
+     * Canonical route: GET /api/settlements/:settlement_id
+     */
+    get: (settlementId: string): Promise<unknown> =>
+      request(this.baseUrl, this.apiKey, 'GET', `/api/settlements/${settlementId}`),
+
+    /**
+     * Export settlement report.
+     * 
+     * Canonical route: GET /api/settlements/:settlement_id/export
+     */
+    export: (settlementId: string, format: 'pdf' | 'csv' = 'pdf'): Promise<Blob> =>
+      request(this.baseUrl, this.apiKey, 'GET', `/api/settlements/${settlementId}/export?format=${format}`),
+  };
+
+  // ── merchant ────────────────────────────────────────────────────────────────
+
+  readonly merchant = {
+    /**
+     * Get the authenticated merchant's profile.
+     * 
+     * Canonical route: GET /api/merchants/me
+     */
+    getProfile: (): Promise<unknown> =>
+      request(this.baseUrl, this.apiKey, 'GET', '/api/merchants/me'),
+
+    /**
+     * Update the authenticated merchant's profile.
+     * 
+     * Canonical route: PATCH /api/merchants/me
+     */
+    updateProfile: (data: {
+      business_name?: string;
+      email?: string;
+      settlement_schedule?: 'daily' | 'weekly';
+      settlement_day?: number;
+    }): Promise<unknown> =>
+      request(this.baseUrl, this.apiKey, 'PATCH', '/api/merchants/me', data),
+
+    /**
+     * Update webhook URL.
+     * 
+     * Canonical route: PATCH /api/merchants/me/webhook
+     */
+    updateWebhook: (webhook_url: string): Promise<unknown> =>
+      request(this.baseUrl, this.apiKey, 'PATCH', '/api/merchants/me/webhook', { webhook_url }),
+
+    /**
+     * Update settlement schedule.
+     * 
+     * Canonical route: PATCH /api/merchants/me/settlement-schedule
+     */
+    updateSettlementSchedule: (data: {
+      settlement_schedule: 'daily' | 'weekly';
+      settlement_day?: number;
+    }): Promise<unknown> =>
+      request(this.baseUrl, this.apiKey, 'PATCH', '/api/merchants/me/settlement-schedule', data),
+
+    /**
+     * Add a bank account for settlements.
+     * 
+     * Canonical route: POST /api/merchants/me/bank-account
+     */
+    addBankAccount: (data: {
+      account_number: string;
+      bank_name: string;
+      bank_code: string;
+      account_name?: string;
+    }): Promise<unknown> =>
+      request(this.baseUrl, this.apiKey, 'POST', '/api/merchants/me/bank-account', data),
   };
 
   // ── webhooks ────────────────────────────────────────────────────────────────

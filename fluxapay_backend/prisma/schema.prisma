@@ -5,7 +5,7 @@
 // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
 
 generator client {
-  provider = "prisma-client-js"
+  provider = "prisma-client"
   output   = "../src/generated/client"
 }
 
@@ -15,78 +15,27 @@ datasource db {
 }
 
 model Merchant {
-  id                  String                 @id @default(cuid())
-  business_name       String
-  email               String                 @unique
-  phone_number        String                 @unique
-  country             String
-  settlement_currency String
-  password            String
-  status              MerchantStatus         @default(pending_verification)
-  api_key             String?                @unique
-  webhook_url         String?
-  created_at          DateTime               @default(now())
-  updated_at          DateTime               @updatedAt
-  otps                OTP[]
-  settlements         Settlement[]
-  settlement_schedule SettlementSchedule     @default(daily)
-  settlement_day      Int?
-  kyc                 MerchantKYC?
-  webhookLogs         WebhookLog[]
-  payments            Payment[]
-  invoices            Invoice[]
-  webhook_secret      String?            @default(cuid())
-  api_key_hashed      String?            @unique
-  api_key_last_four   String?
-  bankAccount         BankAccount?
-  subscriptions       MerchantSubscription[]
-  manualInterventions ManualIntervention[]
-}
-
-model Plan {
-  id            String                 @id @default(cuid())
-  name          String
-  slug          String                 @unique
-  description   String?
-  amount        Decimal                @db.Decimal(20, 7)
-  currency      String                 @default("USD")
-  interval      BillingInterval
-  created_at    DateTime               @default(now())
-  updated_at    DateTime               @updatedAt
-  subscriptions MerchantSubscription[]
-}
-
-model MerchantSubscription {
-  id                   String             @id @default(cuid())
-  merchant             Merchant           @relation(fields: [merchantId], references: [id])
-  merchantId           String
-  plan                 Plan               @relation(fields: [planId], references: [id])
-  planId               String
-  status               SubscriptionStatus @default(active)
-  billing_cycle        BillingInterval
-  current_period_start DateTime
-  current_period_end   DateTime
-  next_billing_date    DateTime
-  created_at           DateTime           @default(now())
-  updated_at           DateTime           @updatedAt
-
-  @@unique([merchantId, planId])
-  @@index([next_billing_date])
-  @@index([merchantId])
-}
-
-model BankAccount {
-  id             String   @id @default(cuid())
-  merchant       Merchant @relation(fields: [merchantId], references: [id])
-  merchantId     String   @unique
-  account_name   String
-  account_number String
-  bank_name      String
-  bank_code      String?
-  currency       String
-  country        String
-  created_at     DateTime @default(now())
-  updated_at     DateTime @updatedAt
+  id                    String                 @id @default(cuid())
+  business_name         String
+  email                 String                 @unique
+  phone_number          String                 @unique
+  country               String
+  settlement_currency   String
+  webhook_secret        String
+  password              String
+  status                MerchantStatus         @default(pending_verification)
+  created_at            DateTime               @default(now())
+  updated_at            DateTime               @updatedAt
+  otps                  OTP[]
+  settlements           Settlement[]
+  kyc                   MerchantKYC?
+  webhookLogs           WebhookLog[]
+  payments              Payment[]
+  refunds               Refund[]
+  invoices              Invoice[]
+  reconciliationRecords ReconciliationRecord[]
+  discrepancyThresholds DiscrepancyThreshold[]
+  discrepancyAlerts     DiscrepancyAlert[]
 }
 
 model OTP {
@@ -105,31 +54,16 @@ model Settlement {
   id               String           @id @default(cuid())
   merchant         Merchant         @relation(fields: [merchantId], references: [id])
   merchantId       String
-  // USDC gross amount received
-  usdc_amount      Decimal
-  // Fiat gross before fees
   amount           Decimal
   currency         String
-  // FluxaPay settlement fee (fiat)
-  fees             Decimal
-  // Fiat net amount transferred to merchant
-  net_amount       Decimal
   status           SettlementStatus @default(pending)
+  fees             Decimal
   breakdown        Json?
-  // Exchange / payout partner details
-  exchange_partner String?
-  exchange_rate    Decimal?
-  exchange_ref     String?
-  // Bank transfer / payout reference
   bank_transfer_id String?
-  // payment IDs included in this batch (JSON array of strings)
-  payment_ids      Json             @default("[]")
   scheduled_date   DateTime
   processed_date   DateTime?
-  failure_reason   String?
   created_at       DateTime         @default(now())
   updated_at       DateTime         @updatedAt
-  payments         Payment[]
 }
 
 model MerchantKYC {
@@ -186,8 +120,6 @@ model WebhookLog {
   created_at      DateTime              @default(now())
   updated_at      DateTime              @updatedAt
   retryAttempts   WebhookRetryAttempt[]
-
-  @@index([merchantId, created_at])
 }
 
 model WebhookRetryAttempt {
@@ -202,59 +134,34 @@ model WebhookRetryAttempt {
 }
 
 model Payment {
-  id             String        @id @default(cuid())
-  merchant       Merchant      @relation(fields: [merchantId], references: [id])
+  id             String   @id @default(cuid())
+  merchant       Merchant @relation(fields: [merchantId], references: [id])
   merchantId     String
-  order_id       String?       @unique
   amount         Decimal
   currency       String
   customer_email String
   metadata       Json
   expiration     DateTime
-  status         PaymentStatus @default(pending)
+  status         String
   checkout_url   String
-  success_url    String?
-  cancel_url     String?
-  timeline       Json?
+  createdAt      DateTime @default(now())
+  refunds        Refund[]
+  invoice        Invoice?
+}
 
-  // Stellar address for this payment
-  stellar_address   String?
-  last_paging_token String?
-
-  // sweeping fields
-  swept              Boolean   @default(false)
-  swept_at           DateTime?
-  sweep_tx_hash      String?
-  transaction_hash   String?
-  onchain_verified   Boolean   @default(false)
-  contract_tx_hash   String?
-  verification_error String?
-  payer_address      String?
-  confirmed_at       DateTime?
-
-  // settlement fields
-  settled                  Boolean   @default(false)
-  settled_at               DateTime?
-  settlement_ref           String?
-  settlement_fiat_amount   Decimal?
-  settlement_fiat_currency String?
-
-  // link to settlement batch
-  settlement   Settlement? @relation(fields: [settlementId], references: [id])
-  settlementId String?
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
-
-  // HD wallet derivation fields
-  payment_index        Int?    // The payment_index used in BIP44 path
-  derivation_path      String? // e.g. "m/44'/148'/3'/7'"
-  encrypted_key_data   String? // KMS-encrypted JSON: { merchantIndex, paymentIndex } for sweep recovery
-
-  @@index([status])
-  @@index([customer_email])
-  @@index([createdAt])
-  @@index([stellar_address])
-  @@index([merchantId, createdAt])
+model Refund {
+  id            String       @id @default(cuid())
+  merchant      Merchant     @relation(fields: [merchantId], references: [id])
+  merchantId    String
+  payment       Payment      @relation(fields: [paymentId], references: [id])
+  paymentId     String
+  amount        Decimal
+  currency      String
+  reason        String?
+  status        RefundStatus @default(pending)
+  failed_reason String?
+  created_at    DateTime     @default(now())
+  updated_at    DateTime     @updatedAt
 }
 
 model Invoice {
@@ -262,126 +169,79 @@ model Invoice {
   merchant       Merchant      @relation(fields: [merchantId], references: [id])
   merchantId     String
   invoice_number String        @unique
-  customer_name  String
+  amount         Decimal
+  currency       String
   customer_email String
-  line_items     Json
-  total_amount   Decimal       @db.Decimal(20, 2)
-  currency       String        @default("USD")
-  due_date       DateTime
-  notes          String?
-  status         InvoiceStatus @default(unpaid)
-  payment_link   String?
+  metadata       Json?
+  payment        Payment?      @relation(fields: [payment_id], references: [id])
+  payment_id     String?       @unique
+  payment_link   String
+  status         InvoiceStatus @default(pending)
+  due_date       DateTime?
   created_at     DateTime      @default(now())
   updated_at     DateTime      @updatedAt
-
-  @@index([merchantId])
-  @@index([status])
-  @@index([due_date])
-  @@index([merchantId, created_at])
-}
-
-model Refund {
-  id               String       @id @default(cuid())
-  payment_id       String
-  merchant_id      String
-  amount           Decimal      @db.Decimal(20, 7)
-  currency         String
-  customer_address String
-  reason           RefundReason
-  reason_note      String?
-  status           RefundStatus @default(initiated)
-  stellar_tx_hash  String?
-  error_message    String?
-  error_code       String?
-  initiated_by     String
-  created_at       DateTime     @default(now())
-  updated_at       DateTime     @updatedAt
-
-  @@index([payment_id])
-  @@index([merchant_id])
-  @@index([status])
 }
 
 model ReconciliationRecord {
-  id                  String                @id @default(cuid())
+  id                  String               @id @default(cuid())
+  merchant            Merchant             @relation(fields: [merchantId], references: [id])
+  merchantId          String
   period_start        DateTime
   period_end          DateTime
-  total_usdc_swept    Decimal
-  total_fiat_payouts  Decimal
-  total_fees          Decimal
-  expected_balance    Decimal
-  actual_balance      Decimal
-  discrepancy         Decimal
-  discrepancy_percent Float
-  status              ReconciliationStatus  @default(pending)
-  settlements_count   Int
-  payments_count      Int
-  notes               String?
-  reviewed_by         String?
-  reviewed_at         DateTime?
-  alerts              ReconciliationAlert[]
-  created_at          DateTime              @default(now())
-  updated_at          DateTime              @updatedAt
+  expected_total      Decimal
+  actual_total        Decimal
+  discrepancy_amount  Decimal
+  discrepancy_percent Decimal
+  status              ReconciliationStatus @default(ok)
+  alerts              DiscrepancyAlert[]
+  created_at          DateTime             @default(now())
+  updated_at          DateTime             @updatedAt
+
+  @@unique([merchantId, period_start, period_end])
 }
 
-model ReconciliationAlert {
-  id               String                  @id @default(cuid())
-  reconciliation   ReconciliationRecord    @relation(fields: [reconciliationId], references: [id])
-  reconciliationId String
-  alert_type       ReconciliationAlertType
-  severity         AlertSeverity
-  message          String
-  details          Json?
-  acknowledged     Boolean                 @default(false)
-  acknowledged_by  String?
-  acknowledged_at  DateTime?
-  created_at       DateTime                @default(now())
+model DiscrepancyThreshold {
+  id                String             @id @default(cuid())
+  merchant          Merchant?          @relation(fields: [merchantId], references: [id])
+  merchantId        String?
+  amount_threshold  Decimal            @default(0)
+  percent_threshold Decimal            @default(0)
+  is_active         Boolean            @default(true)
+  created_at        DateTime           @default(now())
+  updated_at        DateTime           @updatedAt
+  alerts            DiscrepancyAlert[]
+
+  @@index([merchantId, is_active])
 }
 
-model AuditLog {
-  id          String          @id @default(cuid())
-  admin_id    String
-  action_type AuditActionType
-  entity_type AuditEntityType
-  entity_id   String
-  details     Json
-  created_at  DateTime        @default(now())
+model DiscrepancyAlert {
+  id                     String                @id @default(cuid())
+  merchant               Merchant              @relation(fields: [merchantId], references: [id])
+  merchantId             String
+  reconciliationRecord   ReconciliationRecord  @relation(fields: [reconciliationRecordId], references: [id])
+  reconciliationRecordId String
+  threshold              DiscrepancyThreshold? @relation(fields: [thresholdId], references: [id])
+  thresholdId            String?
+  severity               AlertSeverity
+  message                String
+  is_resolved            Boolean               @default(false)
+  resolved_at            DateTime?
+  created_at             DateTime              @default(now())
+  updated_at             DateTime              @updatedAt
 
-  @@index([created_at])
-  @@index([admin_id])
-  @@index([action_type])
-  @@index([entity_id])
-  @@index([entity_type, entity_id])
+  @@index([merchantId, is_resolved])
 }
 
-// ─── Enums ────────────────────────────────────────────────────────────────────
+// ...existing code...
 
 enum MerchantStatus {
   pending_verification
   active
 }
 
-enum SettlementSchedule {
-  daily
-  weekly
-}
-
 enum OTPChannel {
   email
   phone
-}
-
-model IdempotencyRecord {
-  id              String   @id @default(cuid())
-  idempotency_key String   @unique
-  user_id         String?
-  request_hash    String // To detect if the body changed for the same key
-  response_code   Int
-  response_body   Json
-  created_at      DateTime @default(now())
-
-  @@index([user_id])
-  @@index([idempotency_key])
 }
 
 enum SettlementStatus {
@@ -419,14 +279,11 @@ enum WebhookEventType {
   payment_completed
   payment_failed
   payment_pending
-  payment_confirmed
   refund_completed
   refund_failed
   subscription_created
   subscription_cancelled
   subscription_renewed
-  settlement_completed
-  settlement_failed
 }
 
 enum WebhookStatus {
@@ -436,138 +293,27 @@ enum WebhookStatus {
   retrying
 }
 
-enum BillingInterval {
-  monthly
-  yearly
-}
-
-enum SubscriptionStatus {
-  active
-  cancelled
-  past_due
-}
-
-enum PaymentStatus {
-  pending
-  paid
-  overpaid
-  partially_paid
-  confirmed
-  failed
-  expired
-}
-
-
-enum InvoiceStatus {
-  unpaid
-  pending
-  paid
-  overdue
-}
-
 enum RefundStatus {
-  initiated
+  pending
   processing
   completed
   failed
 }
 
-enum RefundReason {
-  customer_request
-  duplicate_payment
-  failed_delivery
-  merchant_request
-  dispute_resolution
+enum InvoiceStatus {
+  pending
+  paid
+  cancelled
+  overdue
 }
 
 enum ReconciliationStatus {
-  pending
-  matched
-  discrepancy
-  reviewed
-  resolved
-}
-
-enum ReconciliationAlertType {
-  amount_mismatch
-  missing_settlement
-  duplicate_payment
-  fee_discrepancy
-  timing_anomaly
-  threshold_exceeded
+  ok
+  discrepancy_detected
 }
 
 enum AlertSeverity {
   low
   medium
   high
-  critical
-}
-
-enum AuditActionType {
-  kyc_approve
-  kyc_reject
-  config_change
-  sweep_trigger
-  sweep_complete
-  sweep_fail
-  settlement_batch_initiate
-  settlement_batch_complete
-  settlement_batch_fail
-}
-
-enum AuditEntityType {
-  merchant_kyc
-  system_config
-  sweep_operation
-  settlement_batch
-}
-
-// ─── HD Wallet Index Tracking ─────────────────────────────────────────────────
-
-/// Tracks the stable merchant_index assigned to each merchant (assigned once, never changes)
-/// and the payment_counter which is atomically incremented per payment.
-model MerchantHDIndex {
-  id              String   @id @default(cuid())
-  merchantId      String   @unique
-  merchant_index  Int      // Assigned sequentially; stable forever
-  payment_counter Int      @default(0) // Incremented atomically per payment
-  created_at      DateTime @default(now())
-  updated_at      DateTime @updatedAt
-
-  @@index([merchantId])
-}
-
-/// Global counter for assigning unique merchant_index values.
-/// There is exactly one row with id = "global".
-model HDIndexCounter {
-  id                  String @id @default("global")
-  next_merchant_index Int    @default(0)
-}
-
-model ManualIntervention {
-  id               String                   @id @default(cuid())
-  merchant         Merchant                 @relation(fields: [merchantId], references: [id])
-  merchantId       String
-  issue_type       InterventionIssueType
-  description      String
-  status           InterventionStatus       @default(pending)
-  resolution_notes String?
-  resolved_at      DateTime?
-  created_at       DateTime                 @default(now())
-  updated_at       DateTime                 @updatedAt
-
-  @@index([merchantId])
-  @@index([status])
-}
-
-enum InterventionIssueType {
-  onchain_registration_failed
-  other
-}
-
-enum InterventionStatus {
-  pending
-  resolving
-  resolved
 }
