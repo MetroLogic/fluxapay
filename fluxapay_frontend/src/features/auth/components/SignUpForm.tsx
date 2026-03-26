@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import toast from "react-hot-toast";
+import { toastApiError } from "@/lib/toastApiError";
 import Image from "next/image";
 import * as yup from "yup";
 import Input from "@/components/Input";
@@ -142,11 +143,7 @@ const SignUpForm = () => {
         return;
       }
 
-      const message =
-        err instanceof Error
-          ? err.message
-          : "Unable to create your account right now. Please try again.";
-      toast.error(message);
+      toastApiError(err);
     } finally {
       setIsSubmitting(false);
     }
