@@ -28,7 +28,7 @@ const SortIcon = memo(({ column, sortConfig }: SortIconProps) => {
 });
 SortIcon.displayName = "SortIcon";
 
-const getStatusBadge = memo(({ status }: { status: WebhookStatus }) => {
+const StatusBadge = memo(({ status }: { status: WebhookStatus }) => {
     switch (status) {
         case "delivered":
             return <Badge variant="success">Delivered</Badge>;
@@ -40,7 +40,7 @@ const getStatusBadge = memo(({ status }: { status: WebhookStatus }) => {
             return <Badge>{status}</Badge>;
     }
 });
-getStatusBadge.displayName = "StatusBadge";
+StatusBadge.displayName = "StatusBadge";
 
 interface WebhookRowProps {
     webhook: WebhookEvent;
@@ -74,7 +74,7 @@ const WebhookRow = memo(({ webhook, onRowClick }: WebhookRowProps) => {
                 {webhook.eventType}
             </td>
             <td className="px-4 py-4">
-                <getStatusBadge status={webhook.status} />
+                <StatusBadge status={webhook.status} />
             </td>
             <td className="px-4 py-4 max-w-[200px] truncate text-muted-foreground" title={webhook.endpoint}>
                 {webhook.endpoint}
