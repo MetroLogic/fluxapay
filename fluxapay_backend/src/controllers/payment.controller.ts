@@ -33,16 +33,9 @@ export const createPayment = async (req: Request, res: Response) => {
             cancel_url,
         });
 
-        // Update with order_id and timeline if provided
-        const updatedPayment = await prisma.payment.update({
-            where: { id: payment.id },
-            data: {
-                order_id,
-                timeline: [{ event: "payment_created", timestamp: new Date() }]
-            }
-        });
-
-        res.status(201).json(updatedPayment);
+        // We no longer store order_id/timeline as explicit Payment columns in the current schema.
+        // Keep logic simple and return the created payment directly.
+        res.status(201).json(payment);
     } catch (error: unknown) {
         console.error('Error creating payment:', error);
         res.status(500).json({ error: "Failed to create payment" });
@@ -96,9 +89,9 @@ export const getPayments = async (req: Request, res: Response) => {
                 where,
                 orderBy: { [sortBy]: sortOrder }
             });
-            const header = "ID,OrderID,Amount,Currency,Status,Email,Date\n";
+            const header = "ID,MerchantID,Amount,Currency,Status,Email,Date\n";
             const csv = payments.map((p: typeof payments[number]) =>
-                `${p.id},${p.order_id || ''},${p.amount},${p.currency},${p.status},${p.customer_email},${p.createdAt}`
+                `${p.id},${p.merchantId},${p.amount},${p.currency},${p.status},${p.customer_email},${p.createdAt}`
             ).join("\n");
             res.setHeader("Content-Type", "text/csv");
             res.attachment("payments_history.csv");
@@ -136,19 +129,19 @@ export const getPaymentById = async (req: Request, res: Response) => {
                 id: payment_id,
                 merchantId: merchantId
             },
-            include: { merchant: true, settlement: true }
+            include: { merchant: true }
         });
 
         if (!payment) return res.status(404).json({ error: "Payment not found" });
 
-        // Add explorer link if transaction_hash exists
+        // Add explorer link if transaction_hash exists (not present in current Payment model).
         const explorerBase = (process.env.STELLAR_HORIZON_URL || "").includes("testnet")
             ? "https://stellar.expert/explorer/testnet/tx/"
             : "https://stellar.expert/explorer/public/tx/";
 
         const responseData = {
             ...payment,
-            stellar_expert_url: payment.transaction_hash ? `${explorerBase}${payment.transaction_hash}` : null
+            stellar_expert_url: null
         };
 
         res.json(responseData);

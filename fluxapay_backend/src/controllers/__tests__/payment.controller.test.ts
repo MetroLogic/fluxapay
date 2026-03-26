@@ -30,8 +30,8 @@ describe("createPayment controller", () => {
     (PaymentService.checkRateLimit as jest.Mock).mockResolvedValue(false);
 
     const req: any = {
+      merchantId: "merchant_1",
       body: {
-        merchantId: "merchant_1",
         amount: 100,
         currency: "USDC",
         customer_email: "test@example.com",

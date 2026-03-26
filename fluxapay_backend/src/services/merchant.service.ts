@@ -5,8 +5,8 @@ import { sendOtpEmail } from "./email.service";
 import { isDevEnv } from "../helpers/env.helper";
 import { generateToken } from "../helpers/jwt.helper";
 import { merchantRegistryService } from "./merchantRegistry.service";
-import crypto from "crypto";
-
+import { generateApiKey, hashKey, getLastFour } from "../helpers/crypto.helper";
+import * as crypto from "crypto";
 
 const prisma = new PrismaClient();
 
@@ -37,6 +37,11 @@ export async function signupMerchantService(data: {
   // Hash password
   const hashedPassword = await bcrypt.hash(password, 10);
 
+  // Generate API key
+  const apiKey = generateApiKey();
+  const apiKeyHashed = await hashKey(apiKey);
+  const apiKeyLastFour = getLastFour(apiKey);
+
   // Create merchant
   const merchant = await prisma.merchant.create({
     data: {
@@ -47,6 +52,8 @@ export async function signupMerchantService(data: {
       settlement_currency,
       webhook_secret: crypto.randomBytes(32).toString("hex"),
       password: hashedPassword,
+      api_key_hashed: apiKeyHashed,
+      api_key_last_four: apiKeyLastFour,
     },
   });
 
@@ -71,6 +78,7 @@ export async function signupMerchantService(data: {
   return {
     message: "Merchant registered. Verify OTP to activate.",
     merchantId: merchant.id,
+    apiKey,
   };
 }
 
@@ -139,6 +147,40 @@ export async function getMerchantUserService(data: {
 
   if (!merchant) throw { status: 404, message: "Merchant not found" };
 
+  const { api_key_hashed, api_key_last_four, ...merchantData } = merchant;
+  const apiKeyMasked = merchant.api_key_last_four ? `sk_live_****${merchant.api_key_last_four}` : null;
 
-  return { message: "Merchant found", merchant };
+  return {
+    message: "Merchant found",
+    merchant: {
+      ...merchantData,
+      api_key_masked: apiKeyMasked,
+    }
+  };
+}
+
+export async function regenerateApiKeyService(data: {
+  merchantId: string;
+}) {
+  const { merchantId } = data;
+
+  const apiKey = generateApiKey();
+  const apiKeyHashed = await hashKey(apiKey);
+  const apiKeyLastFour = getLastFour(apiKey);
+
+  await prisma.merchant.update({
+    where: { id: merchantId },
+    data: {
+      api_key_hashed: apiKeyHashed,
+      api_key_last_four: apiKeyLastFour,
+    },
+  });
+
+  return { message: "API key regenerated", apiKey };
+}
+
+export async function rotateApiKeyService(data: {
+  merchantId: string;
+}) {
+  return regenerateApiKeyService(data); // Same logic as regenerate
 }
