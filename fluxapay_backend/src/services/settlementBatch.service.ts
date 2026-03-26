@@ -39,6 +39,7 @@ interface SettlementBatchResult {
     totalMerchantsProcessed: number;
     totalMerchantsSucceeded: number;
     totalMerchantsFailed: number;
+    totalMerchantsSkipped: number;
 }
 
 interface MerchantSettlementResult {
@@ -102,13 +103,34 @@ interface MerchantAggregate {
     totalUsdc: number;
 }
 
-async function getUnsettledPaymentsByMerchant(): Promise<MerchantAggregate[]> {
+async function getUnsettledPaymentsByMerchant(runAt: Date): Promise<MerchantAggregate[]> {
+    // Pre-compute which merchant IDs are due today so we skip loading
+    // payments for merchants whose schedule doesn't fall on this run date.
+    const todayUTCDay = runAt.getUTCDay(); // 0=Sun … 6=Sat
+
+    const dueMerchants = await prisma.merchant.findMany({
+        where: {
+            OR: [
+                // Daily merchants are always due
+                { settlement_schedule: "daily" },
+                // Weekly merchants are due only on their designated day
+                { settlement_schedule: "weekly", settlement_day: todayUTCDay },
+            ],
+        },
+        select: { id: true },
+    });
+
+    if (dueMerchants.length === 0) return [];
+
+    const dueMerchantIds = dueMerchants.map((m) => m.id);
+
     // Raw grouping query – Prisma's groupBy aggregation doesn't easily return ids,
     // so we fetch payment rows and group in-process.
     const payments = await prisma.payment.findMany({
         where: {
             swept: true,
             settled: false,
+            merchantId: { in: dueMerchantIds },
         },
         select: {
             id: true,
@@ -409,7 +431,7 @@ export async function runSettlementBatch(
         reason: 'Scheduled settlement batch run',
     });
 
-    const aggregates = await getUnsettledPaymentsByMerchant();
+    const aggregates = await getUnsettledPaymentsByMerchant(runAt);
 
     if (aggregates.length === 0) {
         const completedAt = new Date();
@@ -436,6 +458,7 @@ export async function runSettlementBatch(
             totalMerchantsProcessed: 0,
             totalMerchantsSucceeded: 0,
             totalMerchantsFailed: 0,
+            totalMerchantsSkipped: 0,
         };
     }
 
@@ -488,5 +511,6 @@ export async function runSettlementBatch(
         totalMerchantsProcessed: merchantResults.length,
         totalMerchantsSucceeded: succeeded,
         totalMerchantsFailed: failed,
+        totalMerchantsSkipped: skipped,
     };
 }

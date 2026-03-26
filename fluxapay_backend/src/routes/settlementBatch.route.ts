@@ -40,6 +40,8 @@ const router = Router();
  *                   type: integer
  *                 totalMerchantsFailed:
  *                   type: integer
+ *                 totalMerchantsSkipped:
+ *                   type: integer
  *                 durationMs:
  *                   type: integer
  *       500:
@@ -58,6 +60,7 @@ router.post("/run", adminAuth, async (_req: Request, res: Response) => {
             totalMerchantsProcessed: result.totalMerchantsProcessed,
             totalMerchantsSucceeded: result.totalMerchantsSucceeded,
             totalMerchantsFailed: result.totalMerchantsFailed,
+            totalMerchantsSkipped: result.totalMerchantsSkipped,
             merchantResults: result.merchantResults,
         });
     } catch (err: unknown) {
