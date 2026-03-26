@@ -4,6 +4,7 @@ import {
     getSettlementDetails,
     getSettlementSummary,
     exportSettlement,
+    getSettlementBatch,
 } from "../controllers/settlement.controller";
 import { authenticateToken } from "../middleware/auth.middleware";
 import { validate } from "../middleware/validation.middleware";
@@ -79,6 +80,31 @@ router.get("/", validate(settlementSchema.listSettlementsSchema), listSettlement
  *         description: Settlement summary stats
  */
 router.get("/summary", validate(settlementSchema.settlementSummarySchema), getSettlementSummary);
+
+/**
+ * @swagger
+ * /api/settlements/batch:
+ *   get:
+ *     summary: Get settlement batch summary by scheduled date
+ *     tags: [Settlements]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: date_from
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *       - in: query
+ *         name: date_to
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *     responses:
+ *       200:
+ *         description: Settlement batches returned
+ */
+router.get("/batch", validate(settlementSchema.settlementBatchSchema), getSettlementBatch);
 
 /**
  * @swagger

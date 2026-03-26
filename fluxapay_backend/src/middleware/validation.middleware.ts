@@ -3,7 +3,13 @@ import { ZodType } from "zod";
 
 export function validate<T extends ZodType>(schema: T) {
   return (req: Request, res: Response, next: NextFunction) => {
-    const result = schema.safeParse(req.body);
+    const payload = {
+      ...(typeof req.body === "object" && req.body !== null ? req.body : {}),
+      params: req.params,
+      query: req.query,
+    };
+
+    const result = schema.safeParse(payload);
 
     if (!result.success) {
       const errors = result.error.issues.map((issue) => ({
@@ -14,7 +20,14 @@ export function validate<T extends ZodType>(schema: T) {
       return res.status(400).json({ message: "Validation failed", errors });
     }
 
-    req.body = result.data; // parsed and safe data
+    const parsed = result.data as any;
+    req.body = parsed;
+    if (parsed?.params) {
+      req.params = parsed.params;
+    }
+    if (parsed?.query) {
+      req.query = parsed.query;
+    }
     next();
   };
 }

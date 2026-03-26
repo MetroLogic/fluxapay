@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { useTranslations } from "next-intl";
 import animationSvg from "@/assets/animationsvg.svg";
 
 interface WhyCardProps {
@@ -19,20 +20,20 @@ const WhyCard = ({ title, description, active = false }: WhyCardProps) => (
 );
 
 export const WhyFluxapay = () => {
+  const t = useTranslations("whyFluxapay");
+  
   return (
     <section className="py-24 bg-white">
       <div className="container mx-auto px-4 max-w-7xl">
         <div className="mb-20">
           <span className="inline-block px-4 py-2 rounded-xl bg-[#F1EFFF] text-[#5F44EC] text-sm font-bold mb-8">
-            Why Fluxapay Exists?
+            {t("title")}
           </span>
           <h2 className="text-5xl md:text-6xl font-black text-[#2E3539] leading-[1.1] max-w-2xl">
-            Crypto Adoption Is Growing. <br />
-            <span className="text-[#5F44EC] font-caveat font-normal">Commerce</span> Isn&apos;t Keeping Up.
+            {t("subtitle")}
           </h2>
           <p className="mt-8 text-xl text-[#8A8A8A] max-w-2xl leading-relaxed relative">
-            Despite growing crypto adoption, everyday commerce is still mostly fiat-based. 
-            Crypto users are forced to offramp every time they want to pay, causing:
+            {t("subtitle")}
             
             {/* Dotted Arrow */}
             <svg className="absolute -bottom-16 left-0 w-24 h-16 text-[#5F44EC]" viewBox="0 0 100 60" fill="none">
@@ -45,17 +46,17 @@ export const WhyFluxapay = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
           <div className="space-y-6">
             <WhyCard 
-              title="Extra offramp & FX fees" 
-              description="Paying multiple intermediaries just to convert crypto into spendable cash."
+              title={t("instant.title")}
+              description={t("instant.description")}
               active={true}
             />
             <WhyCard 
-              title="Poor checkout experience" 
-              description="Users are forced off-platform to swap, bridge, or cash out before paying."
+              title={t("lowFees.title")}
+              description={t("lowFees.description")}
             />
             <WhyCard 
-              title="Lost sales for merchants" 
-              description="Customers drop off when paying with crypto feels harder than fiat."
+              title={t("global.title")}
+              description={t("global.description")}
             />
           </div>
 
