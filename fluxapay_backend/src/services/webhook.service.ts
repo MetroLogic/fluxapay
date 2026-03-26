@@ -173,12 +173,15 @@ export async function retryWebhookService(params: RetryWebhookParams) {
     throw { status: 400, message: "Webhook already delivered successfully" };
   }
 
-  // Attempt to deliver the webhook
+  // Attempt to deliver the webhook using the original stored payload
   const merchant = await prisma.merchant.findUnique({ where: { id: merchantId } });
+  if (!merchant?.webhook_secret) {
+    throw { status: 400, message: "Merchant webhook secret not configured" };
+  }
   const result = await deliverWebhook(
     log.endpoint_url,
     log.request_payload as Record<string, any>,
-    merchant?.webhook_secret
+    merchant.webhook_secret
   );
 
   const newRetryCount = log.retry_count + 1;
@@ -286,10 +289,12 @@ export async function sendTestWebhookService(params: SendTestWebhookParams) {
 }
 
 // Helper function to deliver webhook
-async function deliverWebhook(
+import crypto from "crypto";
+
+export async function deliverWebhook(
   endpointUrl: string,
   payload: Record<string, any>,
-  merchantSecret?: string
+  merchantSecret: string
 ): Promise<{
   success: boolean;
   httpStatus?: number;
@@ -298,14 +303,17 @@ async function deliverWebhook(
 }> {
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+    const timeout = setTimeout(() => controller.abort(), 30000);
+
+    const timestamp = new Date().toISOString();
+    const signature = generateWebhookSignature(payload, merchantSecret, timestamp);
 
     const response = await fetch(endpointUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-Webhook-Signature": generateWebhookSignature(payload, merchantSecret),
-        "X-Webhook-Timestamp": new Date().toISOString(),
+        "X-FluxaPay-Signature": signature,
+        "X-FluxaPay-Timestamp": timestamp,
       },
       body: JSON.stringify(payload),
       signal: controller.signal,
@@ -318,7 +326,7 @@ async function deliverWebhook(
     return {
       success: response.ok,
       httpStatus: response.status,
-      responseBody: responseBody.substring(0, 10000), // Limit response body size
+      responseBody: responseBody.substring(0, 10000),
     };
   } catch (error: any) {
     return {
@@ -328,16 +336,14 @@ async function deliverWebhook(
   }
 }
 
-// Helper function to generate webhook signature
-import crypto from "crypto";
-function generateWebhookSignature(
+// Signs with per-merchant secret using timestamp.payload signing string
+export function generateWebhookSignature(
   payload: Record<string, unknown>,
-  merchantSecret?: string
+  merchantSecret: string,
+  timestamp: string
 ): string {
-  const secret = merchantSecret || process.env.WEBHOOK_SECRET || "webhook-secret";
-  const hmac = crypto.createHmac("sha256", secret);
-  hmac.update(JSON.stringify(payload));
-  return hmac.digest("hex");
+  const signingString = `${timestamp}.${JSON.stringify(payload)}`;
+  return crypto.createHmac("sha256", merchantSecret).update(signingString).digest("hex");
 }
 
 // Helper function to generate test payload based on event type
@@ -427,11 +433,19 @@ function generateTestPayload(
 export async function createAndDeliverWebhook(
   merchantId: string,
   eventType: WebhookEventType,
-  endpointUrl: string,
   payload: Record<string, any>,
   paymentId?: string
 ) {
   const merchant = await prisma.merchant.findUnique({ where: { id: merchantId } });
+
+  if (!merchant?.webhook_secret) {
+    throw new Error(`Merchant ${merchantId} has no webhook_secret configured`);
+  }
+
+  const endpointUrl = merchant.webhook_url;
+  if (!endpointUrl) {
+    throw new Error(`Merchant ${merchantId} has no webhook_url configured`);
+  }
 
   const webhookLog = await prisma.webhookLog.create({
     data: {
@@ -444,11 +458,11 @@ export async function createAndDeliverWebhook(
     },
   });
 
-  const result = await deliverWebhook(endpointUrl, payload, merchant?.webhook_secret);
+  const result = await deliverWebhook(endpointUrl, payload, merchant.webhook_secret);
   const status: WebhookStatus = result.success ? "delivered" : "retrying";
 
-  const nextRetryAt = status === "retrying" 
-    ? new Date(Date.now() + 60 * 1000) // First retry in 1 minute
+  const nextRetryAt = status === "retrying"
+    ? new Date(Date.now() + 60 * 1000)
     : null;
 
   const retryCount = result.success ? 0 : 1;
