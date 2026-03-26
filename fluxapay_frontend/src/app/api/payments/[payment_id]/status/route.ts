@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// In-memory store to simulate payment status changes
-// In production, this would be stored in a database
-const paymentStatusStore = new Map<string, { status: string; createdAt: number }>();
+import { paymentStatusStore } from '../paymentStatusStore';
 
 /**
  * Mock API endpoint to poll payment status

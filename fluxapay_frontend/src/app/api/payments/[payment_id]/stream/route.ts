@@ -1,7 +1,6 @@
 import { NextRequest } from 'next/server';
 
-// Reuse the same in-memory store from the status route
-const paymentStatusStore = new Map<string, { status: string; createdAt: number }>();
+import { paymentStatusStore } from '../paymentStatusStore';
 
 /**
  * SSE endpoint for real-time payment status streaming.
