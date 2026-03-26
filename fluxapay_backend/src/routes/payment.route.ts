@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { createPayment, getPayments, getPaymentById } from '../controllers/payment.controller';
 import { validatePayment } from '../validators/payment.validator';
 import { authenticateToken } from '../middleware/auth.middleware';
+import { idempotencyMiddleware } from '../middleware/idempotency.middleware';
 
 const router = Router();
 
@@ -26,7 +27,7 @@ const router = Router();
  *       429:
  *         description: Rate limit exceeded
  */
-router.post('/', authenticateToken, validatePayment, createPayment);
+router.post('/', authenticateToken, idempotencyMiddleware, validatePayment, createPayment);
 
 /**
  * @swagger

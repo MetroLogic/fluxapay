@@ -144,7 +144,7 @@ model Payment {
   customer_email String
   metadata       Json
   expiration     DateTime
-  status         String
+  status         PaymentStatus @default(pending)
   checkout_url   String
   createdAt      DateTime @default(now())
   refunds        Refund[]
@@ -232,6 +232,25 @@ model DiscrepancyAlert {
   updated_at             DateTime              @updatedAt
 
   @@index([merchantId, is_resolved])
+}
+
+enum PaymentStatus {
+  pending
+  partially_paid
+  confirmed
+  overpaid
+  expired
+  failed
+}
+
+model IdempotencyRecord {
+  idempotency_key  String   @id
+  user_id          String?
+  request_hash     String
+  response_code    Int
+  response_body    Json
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
 }
 
 // ...existing code...
