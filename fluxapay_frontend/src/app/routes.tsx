@@ -4,5 +4,6 @@ export const ROUTES = {
   SIGNUP: "/signup",
   DASHBOARD: "/dashboard",
   PAYMENTS: "/payments",
+  WEBHOOKS: "/dashboard/webhooks",
   SETTINGS: "/settings",
 };

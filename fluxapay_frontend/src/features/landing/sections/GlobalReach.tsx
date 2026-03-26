@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { useTranslations } from "next-intl";
 import * as Flags from "country-flag-icons/react/3x2";
 
 const FlagItem = ({ country }: { country: string }) => {
@@ -20,18 +21,19 @@ const countries = [
 ];
 
 export const GlobalReach = () => {
+  const t = useTranslations("globalReach");
+  
   return (
     <section className="py-24 bg-[#FFFBEE] overflow-hidden relative">
       <div className="container mx-auto px-4 max-w-7xl">
         <div className="flex flex-col lg:flex-row items-center justify-between gap-16">
           <div className="max-w-xl text-center lg:text-left">
             <span className="inline-block px-4 py-1.5 rounded-full text-[13px] font-bold mb-8 bg-linear-to-r from-[#FEE9A4] to-[#FAFAFA9E] border border-[#FEE9A4]">
-              Supercharged for 127+ countries 🚀
+              {t("countries")} 🚀
             </span>
             <h2 className="text-5xl md:text-6xl font-black text-[#2E3539] leading-[1.1] mb-6">
-              From Tokyo to <br />
-              Timbuktu, we’ve got <br />
-              you <span className="text-[#B62619]">covered</span>
+              {t("title")} <br />
+              {t("subtitle")}
             </h2>
           </div>
 

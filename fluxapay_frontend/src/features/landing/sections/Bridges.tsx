@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { 
   PaperPlaneIcon, 
   FileTextIcon, 
@@ -36,21 +37,23 @@ const FeatureCard = ({ icon: Icon, title, description }: FeatureCardProps) => (
 );
 
 export const Bridges = () => {
+  const t = useTranslations("bridges");
+  
   const features = [
     {
       icon: PaperPlaneIcon,
-      title: "USDC-to-Fiat Settlement",
-      description: "Accept USDC payments and get settled in your local currency. No volatility, no crypto handling required."
+      title: t("crypto.title"),
+      description: t("crypto.description")
     },
     {
       icon: BackpackIcon,
-      title: "Merchant Dashboard & Analytics",
-      description: "Monitor transactions, payouts, and performance with built-in analytics and reconciliation reports."
+      title: t("fiat.title"),
+      description: t("fiat.description")
     },
     {
       icon: FileTextIcon,
-      title: "Payment Links & Invoicing",
-      description: "Get paid via shareable links and invoices perfect for social commerce, freelancers, and B2B billing."
+      title: t("settlement.title"),
+      description: t("settlement.description")
     },
     {
       icon: UpdateIcon,
@@ -74,10 +77,10 @@ export const Bridges = () => {
       <div className="container mx-auto px-4 max-w-7xl">
         <div className="text-center max-w-3xl mx-auto mb-20">
           <h2 className="text-4xl md:text-5xl font-black text-[#2E3539] mb-6 leading-tight">
-            Fluxapay Bridges Crypto Payments and <br className="hidden md:block" /> Real-World Commerce
+            {t("title")}
           </h2>
           <p className="text-xl text-[#8A8A8A]">
-            Stablecoin payments, as easy to integrate as Stripe.
+            {t("subtitle")}
           </p>
         </div>
 

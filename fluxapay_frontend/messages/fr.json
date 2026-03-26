@@ -1,0 +1,259 @@
+{
+  "common": {
+    "getStarted": "Commencer",
+    "learnMore": "En savoir plus",
+    "contactUs": "Contactez-nous",
+    "signUp": "S'inscrire",
+    "signIn": "Se connecter",
+    "dashboard": "Tableau de bord",
+    "logout": "Déconnexion",
+    "loading": "Chargement...",
+    "error": "Erreur",
+    "success": "Succès",
+    "cancel": "Annuler",
+    "confirm": "Confirmer",
+    "save": "Enregistrer",
+    "delete": "Supprimer",
+    "edit": "Modifier",
+    "view": "Voir",
+    "search": "Rechercher",
+    "filter": "Filtrer",
+    "export": "Exporter",
+    "import": "Importer",
+    "download": "Télécharger",
+    "upload": "Téléverser"
+  },
+  "nav": {
+    "home": "Accueil",
+    "features": "Fonctionnalités",
+    "pricing": "Tarifs",
+    "about": "À propos",
+    "contact": "Contact",
+    "docs": "Documentation",
+    "login": "Connexion",
+    "joinFluxapay": "Rejoindre Fluxapay"
+  },
+  "hero": {
+    "title": "Infrastructure de Paiement Mondiale",
+    "subtitle": "Acceptez les paiements crypto et fiat de manière transparente sur les marchés émergents",
+    "description": "Fluxapay permet aux commerçants d'accepter les paiements USDC sur Stellar et d'être réglés en fiat local avec une API de type Stripe et sans complexité on-chain.",
+    "cta": "Rejoindre Fluxapay",
+    "secondaryCta": "Voir la Documentation",
+    "transfer": "Transfert",
+    "mainTitle": "Acceptez",
+    "crypto": "Crypto",
+    "mainSubtitle": "Soyez Payé en Fiat Instantanément"
+  },
+  "whyFluxapay": {
+    "title": "Pourquoi FluxaPay?",
+    "subtitle": "Conçu pour l'avenir du commerce mondial",
+    "instant": {
+      "title": "Règlements Instantanés",
+      "description": "Soyez payé en quelques secondes, pas en jours. Règlement en temps réel sur votre portefeuille."
+    },
+    "lowFees": {
+      "title": "Frais de Transaction Bas",
+      "description": "Économisez jusqu'à 70% sur les frais de traitement par rapport aux fournisseurs traditionnels."
+    },
+    "global": {
+      "title": "Portée Mondiale",
+      "description": "Acceptez les paiements du monde entier avec support multi-devises."
+    },
+    "secure": {
+      "title": "Sécurité Bancaire",
+      "description": "Sécurité de niveau entreprise avec portefeuilles multi-signatures et cryptage."
+    }
+  },
+  "bridges": {
+    "title": "Pont entre Traditionnel et Crypto",
+    "subtitle": "Connectez de manière transparente les paiements fiat et crypto",
+    "crypto": {
+      "title": "Paiements Crypto",
+      "description": "Acceptez Bitcoin, Ethereum, USDC et plus"
+    },
+    "fiat": {
+      "title": "Intégration Fiat",
+      "description": "Convertissez en monnaie locale instantanément"
+    },
+    "settlement": {
+      "title": "Règlement Flexible",
+      "description": "Choisissez comment et quand vous êtes payé"
+    }
+  },
+  "globalReach": {
+    "title": "Vraiment Mondial",
+    "subtitle": "Au service des marchés émergents du monde entier",
+    "africa": "Afrique",
+    "latinAmerica": "Amérique Latine",
+    "asia": "Asie",
+    "countries": "Pays Supportés",
+    "currencies": "Devises",
+    "transactions": "Transactions Traitées"
+  },
+  "useCases": {
+    "title": "Conçu pour Chaque Entreprise",
+    "subtitle": "Des startups aux grandes entreprises",
+    "ecommerce": {
+      "title": "E-Commerce",
+      "description": "Acceptez les paiements sur votre boutique en ligne avec une intégration simple"
+    },
+    "marketplace": {
+      "title": "Marketplaces",
+      "description": "Divisez les paiements entre plusieurs vendeurs automatiquement"
+    },
+    "subscription": {
+      "title": "Abonnements",
+      "description": "Facturation récurrente simplifiée avec paiements automatisés"
+    },
+    "remittance": {
+      "title": "Transferts",
+      "description": "Transferts transfrontaliers avec frais minimaux"
+    }
+  },
+  "faq": {
+    "title": "Questions Fréquemment Posées",
+    "subtitle": "Tout ce que vous devez savoir",
+    "q1": {
+      "question": "Combien de temps faut-il pour intégrer?",
+      "answer": "La plupart des marchands complètent l'intégration en moins de 2 heures avec notre API et SDK simples."
+    },
+    "q2": {
+      "question": "Quels sont les frais?",
+      "answer": "Nous facturons 1,5% par transaction sans frais cachés ni frais mensuels."
+    },
+    "q3": {
+      "question": "Quelles cryptomonnaies supportez-vous?",
+      "answer": "Nous supportons Bitcoin, Ethereum, USDC, USDT et tous les principaux actifs Stellar."
+    },
+    "q4": {
+      "question": "Comment fonctionnent les règlements?",
+      "answer": "Vous pouvez choisir un règlement instantané sur votre portefeuille ou des règlements groupés selon un calendrier."
+    },
+    "q5": {
+      "question": "Est-ce sécurisé?",
+      "answer": "Oui, nous utilisons un cryptage de niveau bancaire, des portefeuilles multi-signatures et respectons les normes de sécurité internationales."
+    }
+  },
+  "footer": {
+    "tagline": "L'avenir des paiements mondiaux",
+    "product": "Produit",
+    "features": "Fonctionnalités",
+    "pricing": "Tarifs",
+    "security": "Sécurité",
+    "company": "Entreprise",
+    "about": "À Propos",
+    "careers": "Carrières",
+    "blog": "Blog",
+    "developers": "Développeurs",
+    "documentation": "Documentation",
+    "apiReference": "Référence API",
+    "support": "Support",
+    "legal": "Légal",
+    "privacy": "Politique de Confidentialité",
+    "terms": "Conditions d'Utilisation",
+    "copyright": "© {year} borderless. Tous droits réservés.",
+    "signUp": "S'inscrire",
+    "login": "Se connecter",
+    "faqs": "FAQs / Support",
+    "contact": "Contactez-nous",
+    "resources": "Ressources"
+  },
+  "dashboard": {
+    "overview": "Aperçu",
+    "payments": "Paiements",
+    "settlements": "Règlements",
+    "analytics": "Analytiques",
+    "developers": "Développeurs",
+    "settings": "Paramètres",
+    "webhooks": "Webhooks",
+    "totalRevenue": "Revenu Total",
+    "successfulPayments": "Paiements Réussis",
+    "pendingSettlements": "Règlements en Attente",
+    "activeCustomers": "Clients Actifs",
+    "recentTransactions": "Transactions Récentes",
+    "amount": "Montant",
+    "status": "Statut",
+    "date": "Date",
+    "customer": "Client",
+    "viewAll": "Voir Tout"
+  },
+  "payment": {
+    "title": "Complétez Votre Paiement",
+    "amount": "Montant",
+    "merchant": "Marchand",
+    "description": "Description",
+    "payWith": "Payer avec",
+    "crypto": "Cryptomonnaie",
+    "card": "Carte de Crédit/Débit",
+    "processing": "Traitement du paiement...",
+    "success": "Paiement réussi!",
+    "failed": "Échec du paiement",
+    "expired": "Lien de paiement expiré",
+    "scanQR": "Scannez le code QR pour payer",
+    "orCopyAddress": "Ou copiez l'adresse ci-dessous",
+    "copyAddress": "Copier l'Adresse",
+    "addressCopied": "Adresse copiée!",
+    "waitingForPayment": "En attente du paiement...",
+    "confirmations": "Confirmations",
+    "timeRemaining": "Temps restant"
+  },
+  "auth": {
+    "login": "Connexion",
+    "signup": "Inscription",
+    "email": "Email",
+    "password": "Mot de passe",
+    "confirmPassword": "Confirmer le Mot de Passe",
+    "forgotPassword": "Mot de passe oublié?",
+    "noAccount": "Vous n'avez pas de compte?",
+    "hasAccount": "Vous avez déjà un compte?",
+    "businessName": "Nom de l'Entreprise",
+    "fullName": "Nom Complet",
+    "country": "Pays",
+    "createAccount": "Créer un Compte",
+    "signingIn": "Connexion en cours...",
+    "creatingAccount": "Création du compte..."
+  },
+  "settings": {
+    "profile": "Profil",
+    "security": "Sécurité",
+    "apiKeys": "Clés API",
+    "billing": "Facturation",
+    "notifications": "Notifications",
+    "team": "Équipe",
+    "updateProfile": "Mettre à Jour le Profil",
+    "changePassword": "Changer le Mot de Passe",
+    "twoFactor": "Authentification à Deux Facteurs",
+    "generateKey": "Générer une Nouvelle Clé",
+    "revokeKey": "Révoquer la Clé"
+  },
+  "currency": {
+    "usd": "Dollar Américain",
+    "eur": "Euro",
+    "gbp": "Livre Sterling",
+    "ngn": "Naira Nigérian",
+    "kes": "Shilling Kenyan",
+    "zar": "Rand Sud-Africain",
+    "brl": "Réal Brésilien",
+    "mxn": "Peso Mexicain",
+    "btc": "Bitcoin",
+    "eth": "Ethereum",
+    "usdc": "USD Coin",
+    "usdt": "Tether"
+  },
+  "status": {
+    "pending": "En Attente",
+    "processing": "En Traitement",
+    "completed": "Terminé",
+    "failed": "Échoué",
+    "cancelled": "Annulé",
+    "expired": "Expiré"
+  },
+  "errors": {
+    "generic": "Une erreur s'est produite. Veuillez réessayer.",
+    "network": "Erreur réseau. Veuillez vérifier votre connexion.",
+    "unauthorized": "Vous n'êtes pas autorisé à effectuer cette action.",
+    "notFound": "La ressource demandée n'a pas été trouvée.",
+    "validation": "Veuillez vérifier votre saisie et réessayer.",
+    "paymentFailed": "Le traitement du paiement a échoué. Veuillez réessayer."
+  }
+}
