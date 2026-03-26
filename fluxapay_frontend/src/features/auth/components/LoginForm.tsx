@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import toast from "react-hot-toast";
+import { toastApiError } from "@/lib/toastApiError";
 import Image from "next/image";
 import Link from "next/link";
 import * as yup from "yup";
@@ -90,7 +91,7 @@ const LoginForm = () => {
         return;
       }
 
-      toast.error("Unable to sign in right now. Please try again.");
+      toastApiError(err);
     } finally {
       setIsSubmitting(false);
     }

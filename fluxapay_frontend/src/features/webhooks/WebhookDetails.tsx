@@ -5,6 +5,7 @@ import { WebhookEvent, WebhookStatus } from "./webhooks-mock";
 import { Copy, RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
+import { toastApiError, toastApiErrorWithRetry } from "@/lib/toastApiError";
 import { api } from "@/lib/api";
 
 interface WebhookDetailsProps {
@@ -59,7 +60,7 @@ export const WebhookDetails = ({
                     })),
                 });
             } catch (e) {
-                if (!cancelled) toast.error(e instanceof Error ? e.message : "Failed to load webhook details");
+                if (!cancelled) toastApiError(e);
             } finally {
                 if (!cancelled) setLoading(false);
             }
@@ -220,7 +221,7 @@ export const WebhookDetails = ({
                                     setDetails((prev) => prev ? { ...prev, status: d.status } : prev);
                                 }
                             } catch (e) {
-                                toast.error(e instanceof Error ? e.message : "Retry failed");
+                                toastApiErrorWithRetry(e, () => api.webhooks.retry(webhook.id));
                             } finally {
                                 setLoading(false);
                             }

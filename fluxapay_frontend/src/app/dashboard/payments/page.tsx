@@ -18,6 +18,7 @@ import { Button } from "@/components/Button";
 import { Download, Plus } from "lucide-react";
 import { Suspense } from "react";
 import toast from "react-hot-toast";
+import { toastApiError, toastApiErrorWithRetry } from "@/lib/toastApiError";
 import { api } from "@/lib/api";
 import { QRCodeCanvas } from "qrcode.react";
 
@@ -201,11 +202,7 @@ function PaymentsContent() {
 
       toast.success("Payment link created successfully.");
     } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Unable to create payment link. Please try again.";
-      toast.error(message);
+      toastApiError(error);
     } finally {
       setIsGeneratingLink(false);
     }
@@ -249,11 +246,7 @@ function PaymentsContent() {
       setRefunds((prev) => [createdRefund, ...prev]);
       toast.success("Refund submitted successfully.");
     } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Unable to submit refund at this time.";
-      toast.error(message);
+      toastApiErrorWithRetry(error, () => handleInitiateRefund(payload));
       throw error;
     }
   };

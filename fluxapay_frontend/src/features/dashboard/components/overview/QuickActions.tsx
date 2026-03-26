@@ -8,6 +8,7 @@ import { Link, FileText, Download, Loader2 } from "lucide-react";
 import { DOCS_URLS } from "@/lib/docs";
 import { api } from "@/lib/api";
 import toast from "react-hot-toast";
+import { toastApiError } from "@/lib/toastApiError";
 
 function toIsoDate(value: Date) {
   return value.toISOString().split("T")[0];
@@ -56,11 +57,7 @@ export const QuickActions = () => {
       setIsReportModalOpen(false);
     } catch (error) {
       console.error("Error downloading settlement report:", error);
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "Failed to download settlement report. Please try again."
-      );
+      toastApiError(error);
     } finally {
       setIsDownloading(false);
     }
