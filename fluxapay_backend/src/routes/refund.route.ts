@@ -16,7 +16,7 @@ const router = Router();
 
 /**
  * @swagger
- * /api/refunds:
+ * /api/v1/refunds:
  *   post:
  *     summary: Create a refund
  *     tags: [Refunds]
@@ -59,7 +59,7 @@ router.get("/", authenticateToken, validateQuery(listRefundsQuerySchema), listRe
 
 /**
  * @swagger
- * /api/refunds/{refund_id}/status:
+ * /api/v1/refunds/{refund_id}/status:
  *   patch:
  *     summary: Update refund status and emit webhook
  *     tags: [Refunds]

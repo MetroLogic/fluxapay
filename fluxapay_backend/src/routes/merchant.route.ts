@@ -27,7 +27,7 @@ const router = Router();
 
 /**
  * @swagger
- * /api/merchants/signup:
+ * /api/v1/merchants/signup:
  *   post:
  *     summary: Register a new merchant
  *     tags: [Merchants]
@@ -67,7 +67,7 @@ router.post("/signup", idempotencyMiddleware, validate(merchantSchema.signupSche
 
 /**
  * @swagger
- * /api/merchants/login:
+ * /api/v1/merchants/login:
  *   post:
  *     summary: Login a merchant
  *     tags: [Merchants]
@@ -95,7 +95,7 @@ router.post("/login", validate(merchantSchema.loginSchema), loginMerchant);
 
 /**
  * @swagger
- * /api/merchants/verify-otp:
+ * /api/v1/merchants/verify-otp:
  *   post:
  *     summary: Verify OTP for merchant activation
  *     tags: [Merchants]
@@ -126,7 +126,7 @@ router.post("/login", validate(merchantSchema.loginSchema), loginMerchant);
 router.post("/verify-otp", idempotencyMiddleware, validate(merchantSchema.verifyOtpSchema), verifyOtp);
 /**
  * @swagger
- * /api/merchants/resend-otp:
+ * /api/v1/merchants/resend-otp:
  *   post:
  *     summary: Resend OTP
  *     tags: [Merchants]
@@ -155,7 +155,7 @@ router.post("/resend-otp", idempotencyMiddleware, validate(merchantSchema.resend
 
 /**
  * @swagger
- * /api/merchants/me:
+ * /api/v1/merchants/me:
  *   get:
  *     summary: Get the currently logged-in merchant
  *     tags: [Merchants]
@@ -182,7 +182,7 @@ router.get("/me", authenticateToken, getLoggedInMerchant);
 
 /**
  * @swagger
- * /api/merchants/me:
+ * /api/v1/merchants/me:
  *   patch:
  *     summary: Update merchant profile
  *     tags: [Merchants]
@@ -209,7 +209,7 @@ router.patch("/me", authenticateToken, updateMerchantProfile);
 
 /**
  * @swagger
- * /api/merchants/me/webhook:
+ * /api/v1/merchants/me/webhook:
  *   patch:
  *     summary: Update merchant webhook URL
  *     tags: [Merchants]
@@ -237,7 +237,7 @@ router.patch("/me/webhook", authenticateToken, updateMerchantWebhook);
 
 /**
  * @swagger
- * /api/merchants/keys/rotate-api-key:
+ * /api/v1/merchants/keys/rotate-api-key:
  *   post:
  *     summary: Rotate merchant API key
  *     tags: [Merchants]
@@ -260,7 +260,7 @@ router.post("/keys/rotate-api-key", authenticateToken, rotateApiKey);
 
 /**
  * @swagger
- * /api/merchants/keys/rotate-webhook-secret:
+ * /api/v1/merchants/keys/rotate-webhook-secret:
  *   post:
  *     summary: Rotate merchant webhook secret
  *     tags: [Merchants]
@@ -289,7 +289,7 @@ router.post(
 
 /**
  * @swagger
- * /api/merchants/admin/list:
+ * /api/v1/merchants/admin/list:
  *   get:
  *     summary: List all merchants (Admin only)
  *     tags: [Admin - Merchants]
@@ -305,7 +305,7 @@ router.get("/admin/list", adminAuth, adminListMerchants);
 
 /**
  * @swagger
- * /api/merchants/admin/{merchantId}:
+ * /api/v1/merchants/admin/{merchantId}:
  *   get:
  *     summary: Get merchant details by ID (Admin only)
  *     tags: [Admin - Merchants]
@@ -329,7 +329,7 @@ router.get("/admin/:merchantId", adminAuth, adminGetMerchant);
 
 /**
  * @swagger
- * /api/merchants/admin/{merchantId}/status:
+ * /api/v1/merchants/admin/{merchantId}/status:
  *   patch:
  *     summary: Update merchant account status (Admin only)
  *     tags: [Admin - Merchants]
@@ -363,7 +363,7 @@ router.get("/admin/:merchantId", adminAuth, adminGetMerchant);
 router.patch("/admin/:merchantId/status", adminAuth, adminUpdateMerchantStatus);
 /**
  * @swagger
- * /api/merchants/me/settlement-schedule:
+ * /api/v1/merchants/me/settlement-schedule:
  *   patch:
  *     summary: Update merchant settlement schedule
  *     tags: [Merchants]
@@ -404,7 +404,7 @@ router.patch(
 
 /**
  * @swagger
- * /api/merchants/me/bank-account:
+ * /api/v1/merchants/me/bank-account:
  *   post:
  *     summary: Add or update merchant bank account
  *     tags: [Merchants]

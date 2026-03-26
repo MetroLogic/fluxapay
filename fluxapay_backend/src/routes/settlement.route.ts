@@ -16,7 +16,7 @@ router.use(authenticateToken);
 
 /**
  * @swagger
- * /api/settlements:
+ * /api/v1/settlements:
  *   get:
  *     summary: List settlements
  *     tags: [Settlements]
@@ -60,7 +60,7 @@ router.get("/", validate(settlementSchema.listSettlementsSchema), listSettlement
 
 /**
  * @swagger
- * /api/settlements/summary:
+ * /api/v1/settlements/summary:
  *   get:
  *     summary: Get settlement summary
  *     tags: [Settlements]
@@ -83,7 +83,7 @@ router.get("/summary", validate(settlementSchema.settlementSummarySchema), getSe
 
 /**
  * @swagger
- * /api/settlements/batch:
+ * /api/v1/settlements/batch:
  *   get:
  *     summary: Get settlement batch summary by scheduled date
  *     tags: [Settlements]
@@ -108,7 +108,7 @@ router.get("/batch", validate(settlementSchema.settlementBatchSchema), getSettle
 
 /**
  * @swagger
- * /api/settlements/{settlement_id}:
+ * /api/v1/settlements/{settlement_id}:
  *   get:
  *     summary: Get settlement details
  *     tags: [Settlements]
@@ -130,7 +130,7 @@ router.get("/:settlement_id", validate(settlementSchema.settlementDetailsSchema)
 
 /**
  * @swagger
- * /api/settlements/{settlement_id}/export:
+ * /api/v1/settlements/{settlement_id}/export:
  *   get:
  *     summary: Export settlement report
  *     tags: [Settlements]
