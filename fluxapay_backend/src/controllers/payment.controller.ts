@@ -120,6 +120,10 @@ export const getPaymentById = async (req: Request, res: Response) => {
         const authReq = req as AuthRequest;
         const merchantId = authReq.merchantId;
 
+        if (!merchantId) {
+            return res.status(401).json({ error: "Unauthorized: Merchant ID missing" });
+        }
+
         // Endpoint: GET /api/payments/v1/payments/:id
         // Support both 'id' and 'payment_id' parameters
         const payment_id = String(req.params.id || req.params.payment_id);

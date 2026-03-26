@@ -31,6 +31,9 @@ router.post('/', authenticateToken, idempotencyMiddleware, validatePayment, crea
 
 /**
  * @swagger
+ * /api/payments/{id}:
+ *   get:
+ *     summary: Get payment by ID (merchant-scoped)
  * /api/payments:
  *   get:
  *     summary: List payments for the authenticated merchant
@@ -91,10 +94,13 @@ router.get('/export', authenticateToken, getPayments);
  *       - in: path
  *         name: id
  *         required: true
- *         schema: { type: string }
+ *         schema:
+ *           type: string
  *     responses:
  *       200:
  *         description: Payment details
+ *       401:
+ *         description: Unauthorized
  *       404:
  *         description: Payment not found
  */
