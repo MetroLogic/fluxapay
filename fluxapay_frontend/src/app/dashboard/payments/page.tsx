@@ -1,13 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import {
-  MOCK_PAYMENTS,
-} from "@/features/dashboard/payments/payments-mock";
 import { PaymentsTable } from "@/features/dashboard/payments/PaymentsTable";
 import { PaymentsFilters } from "@/features/dashboard/payments/PaymentsFilters";
 import { PaymentDetails } from "@/features/dashboard/payments/PaymentDetails";
+import { type Payment } from "@/features/dashboard/payments/payments-mock";
 import {
   MOCK_REFUNDS,
   type RefundRecord,
@@ -20,6 +18,21 @@ import { Suspense } from "react";
 import toast from "react-hot-toast";
 import { api } from "@/lib/api";
 import { QRCodeCanvas } from "qrcode.react";
+
+const PAGE_SIZE = 20;
+
+interface BackendPayment {
+  id: string;
+  amount: number;
+  currency: string;
+  status: Payment["status"];
+  merchantId: string;
+  customer_email: string;
+  order_id?: string;
+  createdAt: string;
+  depositAddress?: string;
+  transaction_hash?: string;
+}
 
 interface BackendRefund {
   id: string;
@@ -35,64 +48,25 @@ interface BackendRefund {
   created_at: string;
 }
 
-function PaymentsContent() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const shouldOpenCreateLink =
-    searchParams.get("action") === "create-payment-link";
-  const paymentIdFromQuery = searchParams.get("paymentId");
+function mapBackendPayment(p: BackendPayment): Payment {
+  return {
+    id: p.id,
+    amount: p.amount,
+    currency: p.currency,
+    status: p.status,
+    merchantId: p.merchantId,
+    customerName: "",
+    customerEmail: p.customer_email ?? "",
+    customerAddress: "",
+    orderId: p.order_id ?? "",
+    createdAt: p.createdAt,
+    depositAddress: p.depositAddress ?? "",
+    txHash: p.transaction_hash,
+  };
+}
 
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [currencyFilter, setCurrencyFilter] = useState("all");
-  const [selectedPaymentId, setSelectedPaymentId] = useState<string | null>(
-    paymentIdFromQuery || null,
-  );
-  const [refunds, setRefunds] = useState<RefundRecord[]>(MOCK_REFUNDS);
-  const [showCreateLinkModal, setShowCreateLinkModal] =
-    useState(shouldOpenCreateLink);
-  const [linkAmount, setLinkAmount] = useState("100");
-  const [linkCurrency, setLinkCurrency] = useState("USD");
-  const [linkDescription, setLinkDescription] = useState("Invoice payment");
-  const [linkSuccessUrl, setLinkSuccessUrl] = useState("");
-  const [linkCancelUrl, setLinkCancelUrl] = useState("");
-  const [generatedLink, setGeneratedLink] = useState("");
-  const [isGeneratingLink, setIsGeneratingLink] = useState(false);
-  const [recentLinks, setRecentLinks] = useState<
-    {
-      id: string;
-      url: string;
-      amount: number;
-      currency: string;
-      description?: string;
-      createdAt: string;
-    }[]
-  >([]);
-
-  const filteredPayments = useMemo(() => {
-    return MOCK_PAYMENTS.filter((payment) => {
-      const matchesSearch =
-        payment.id.toLowerCase().includes(search.toLowerCase()) ||
-        payment.orderId.toLowerCase().includes(search.toLowerCase()) ||
-        payment.customerEmail.toLowerCase().includes(search.toLowerCase()) ||
-        payment.customerName.toLowerCase().includes(search.toLowerCase());
-
-      const matchesStatus =
-        statusFilter === "all" || payment.status === statusFilter;
-      const matchesCurrency =
-        currencyFilter === "all" || payment.currency === currencyFilter;
-
-      return matchesSearch && matchesStatus && matchesCurrency;
-    });
-  }, [search, statusFilter, currencyFilter]);
-
-  const selectedPayment = useMemo(() => {
-    const id = selectedPaymentId ?? paymentIdFromQuery;
-    if (!id) return null;
-    return MOCK_PAYMENTS.find((item) => item.id === id) ?? null;
-  }, [selectedPaymentId, paymentIdFromQuery]);
-
-  const mapBackendRefund = (refund: BackendRefund): RefundRecord => ({
+function mapBackendRefund(refund: BackendRefund): RefundRecord {
+  return {
     id: refund.id,
     paymentId: refund.payment_id,
     merchantId: refund.merchant_id,
@@ -104,50 +78,103 @@ function PaymentsContent() {
     status: refund.status,
     stellarTxHash: refund.stellar_tx_hash,
     createdAt: refund.created_at,
-  });
+  };
+}
 
-  const handleExportCSV = () => {
-    const headers = [
-      "ID",
-      "Amount",
-      "Currency",
-      "Status",
-      "Customer",
-      "Email",
-      "OrderID",
-      "Date",
-    ];
-    const rows = filteredPayments.map((p) => [
-      p.id,
-      p.amount,
-      p.currency,
-      p.status,
-      p.customerName,
-      p.customerEmail,
-      p.orderId,
-      p.createdAt,
-    ]);
+function PaymentsContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const shouldOpenCreateLink = searchParams.get("action") === "create-payment-link";
+  const paymentIdFromQuery = searchParams.get("paymentId");
 
-    const csvContent = [headers, ...rows].map((e) => e.join(",")).join("\n");
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute(
-      "download",
-      `payments_export_${new Date().toISOString().split("T")[0]}.csv`,
-    );
-    link.style.visibility = "hidden";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(false);
+
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [currencyFilter, setCurrencyFilter] = useState("all");
+
+  const [selectedPaymentId, setSelectedPaymentId] = useState<string | null>(paymentIdFromQuery || null);
+  const [refunds, setRefunds] = useState<RefundRecord[]>(MOCK_REFUNDS);
+
+  const [showCreateLinkModal, setShowCreateLinkModal] = useState(shouldOpenCreateLink);
+  const [linkAmount, setLinkAmount] = useState("100");
+  const [linkCurrency, setLinkCurrency] = useState("USD");
+  const [linkDescription, setLinkDescription] = useState("Invoice payment");
+  const [linkSuccessUrl, setLinkSuccessUrl] = useState("");
+  const [linkCancelUrl, setLinkCancelUrl] = useState("");
+  const [generatedLink, setGeneratedLink] = useState("");
+  const [isGeneratingLink, setIsGeneratingLink] = useState(false);
+  const [recentLinks, setRecentLinks] = useState<
+    { id: string; url: string; amount: number; currency: string; description?: string; createdAt: string }[]
+  >([]);
+
+  // Debounce search
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  const handleSearchChange = useCallback((value: string) => {
+    setSearch(value);
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = setTimeout(() => setDebouncedSearch(value), 400);
+  }, []);
+
+  const fetchPayments = useCallback(async () => {
+    setLoading(true);
+    try {
+      const result = (await api.payments.list({
+        page,
+        limit: PAGE_SIZE,
+        status: statusFilter,
+        currency: currencyFilter,
+        search: debouncedSearch || undefined,
+      })) as { data: BackendPayment[]; meta: { total: number } };
+      setPayments(result.data.map(mapBackendPayment));
+      setTotal(result.meta.total);
+    } catch {
+      toast.error("Failed to load payments.");
+    } finally {
+      setLoading(false);
+    }
+  }, [page, statusFilter, currencyFilter, debouncedSearch]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter, currencyFilter, debouncedSearch]);
+
+  useEffect(() => {
+    fetchPayments();
+  }, [fetchPayments]);
+
+  const selectedPayment = useMemo(() => {
+    const id = selectedPaymentId ?? paymentIdFromQuery;
+    if (!id) return null;
+    return payments.find((p) => p.id === id) ?? null;
+  }, [selectedPaymentId, paymentIdFromQuery, payments]);
+
+  const handleExportCSV = async () => {
+    try {
+      const blob = await api.payments.export({
+        status: statusFilter,
+        currency: currencyFilter,
+        search: debouncedSearch || undefined,
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `payments_export_${new Date().toISOString().split("T")[0]}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error("Export failed. Please try again.");
+    }
   };
 
   const handleOpenCreateLink = () => {
     setShowCreateLinkModal(true);
-    if (searchParams.get("action")) {
-      router.replace("/dashboard/payments");
-    }
+    if (searchParams.get("action")) router.replace("/dashboard/payments");
   };
 
   const handleGenerateLink = async () => {
@@ -156,30 +183,18 @@ function PaymentsContent() {
       toast.error("Please enter a valid amount.");
       return;
     }
-
     setIsGeneratingLink(true);
     try {
-      const payload = {
+      const response = (await api.payments.create({
         amount: amountNumber,
         currency: linkCurrency,
         description: linkDescription || undefined,
         success_url: linkSuccessUrl || undefined,
         cancel_url: linkCancelUrl || undefined,
-      };
-
-      const response = (await api.payments.create(payload)) as {
-        payment?: {
-          id: string;
-          checkoutUrl?: string;
-          checkout_url?: string;
-          status?: string;
-        };
-      };
+      })) as { payment?: { id: string; checkoutUrl?: string; checkout_url?: string } };
 
       const payment = response?.payment;
-      if (!payment?.id) {
-        throw new Error("Payment link could not be created.");
-      }
+      if (!payment?.id) throw new Error("Payment link could not be created.");
 
       const url =
         payment.checkoutUrl ??
@@ -187,34 +202,16 @@ function PaymentsContent() {
         `${window.location.origin}/pay/${payment.id}`;
 
       setGeneratedLink(url);
-      setRecentLinks((prev) => [
-        {
-          id: payment.id,
-          url,
-          amount: amountNumber,
-          currency: linkCurrency,
-          description: linkDescription || undefined,
-          createdAt: new Date().toISOString(),
-        },
-        ...prev,
-      ].slice(0, 5));
-
+      setRecentLinks((prev) =>
+        [{ id: payment.id, url, amount: amountNumber, currency: linkCurrency, description: linkDescription || undefined, createdAt: new Date().toISOString() }, ...prev].slice(0, 5),
+      );
       toast.success("Payment link created successfully.");
+      fetchPayments();
     } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Unable to create payment link. Please try again.";
-      toast.error(message);
+      toast.error(error instanceof Error ? error.message : "Unable to create payment link.");
     } finally {
       setIsGeneratingLink(false);
     }
-  };
-
-  const handleCopyLink = async () => {
-    if (!generatedLink) return;
-    await navigator.clipboard.writeText(generatedLink);
-    toast.success("Payment link copied to clipboard.");
   };
 
   const handleInitiateRefund = async (payload: {
@@ -227,61 +224,45 @@ function PaymentsContent() {
     reasonNote?: string;
   }) => {
     try {
-      const response = (await api.refunds.initiate(payload)) as {
-        refund?: BackendRefund;
-      };
-
-      const createdRefund: RefundRecord = response.refund
+      const response = (await api.refunds.initiate(payload)) as { refund?: BackendRefund };
+      const created: RefundRecord = response.refund
         ? mapBackendRefund(response.refund)
         : {
-          id: `ref_${Date.now()}`,
-          paymentId: payload.paymentId,
-          merchantId: payload.merchantId,
-          amount: payload.amount,
-          currency: payload.currency,
-          customerAddress: payload.customerAddress,
-          reason: payload.reason,
-          reasonNote: payload.reasonNote,
-          status: "initiated",
-          createdAt: new Date().toISOString(),
-        };
-
-      setRefunds((prev) => [createdRefund, ...prev]);
+            id: `ref_${Date.now()}`,
+            paymentId: payload.paymentId,
+            merchantId: payload.merchantId,
+            amount: payload.amount,
+            currency: payload.currency,
+            customerAddress: payload.customerAddress,
+            reason: payload.reason,
+            reasonNote: payload.reasonNote,
+            status: "initiated",
+            createdAt: new Date().toISOString(),
+          };
+      setRefunds((prev) => [created, ...prev]);
       toast.success("Refund submitted successfully.");
     } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Unable to submit refund at this time.";
-      toast.error(message);
+      toast.error(error instanceof Error ? error.message : "Unable to submit refund.");
       throw error;
     }
   };
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">
-            Payments History
-          </h2>
+          <h2 className="text-2xl font-bold tracking-tight">Payments History</h2>
           <p className="text-muted-foreground">
             View and manage all transactions processed through Fluxapay.
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <Button
-            variant="secondary"
-            className="gap-2"
-            onClick={() => router.push("/dashboard/refunds")}
-          >
+          <Button variant="secondary" className="gap-2" onClick={() => router.push("/dashboard/refunds")}>
             Refunds
           </Button>
-          <Button
-            variant="secondary"
-            className="gap-2"
-            onClick={handleExportCSV}
-          >
+          <Button variant="secondary" className="gap-2" onClick={handleExportCSV}>
             <Download className="h-4 w-4" />
             Export CSV
           </Button>
@@ -295,13 +276,9 @@ function PaymentsContent() {
       <div className="bg-card rounded-2xl border p-6 shadow-sm">
         {recentLinks.length > 0 && (
           <div className="mb-6 space-y-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-semibold">Recent payment links</h3>
-                <p className="text-xs text-muted-foreground">
-                  Links you&apos;ve generated in this session.
-                </p>
-              </div>
+            <div>
+              <h3 className="text-sm font-semibold">Recent payment links</h3>
+              <p className="text-xs text-muted-foreground">Links you&apos;ve generated in this session.</p>
             </div>
             <div className="space-y-2">
               {recentLinks.map((link) => (
@@ -310,9 +287,7 @@ function PaymentsContent() {
                   className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 rounded-md border border-border bg-muted/40 px-3 py-2"
                 >
                   <div className="min-w-0">
-                    <p className="text-xs font-medium break-all">
-                      {link.url}
-                    </p>
+                    <p className="text-xs font-medium break-all">{link.url}</p>
                     <p className="mt-1 text-[11px] text-muted-foreground">
                       {link.amount} {link.currency}
                       {link.description ? ` • ${link.description}` : ""} •{" "}
@@ -337,25 +312,44 @@ function PaymentsContent() {
         )}
 
         <PaymentsFilters
-          onSearchChange={setSearch}
-          onStatusChange={setStatusFilter}
-          onCurrencyChange={setCurrencyFilter}
+          onSearchChange={handleSearchChange}
+          onStatusChange={(v) => setStatusFilter(v)}
+          onCurrencyChange={(v) => setCurrencyFilter(v)}
         />
 
-        <PaymentsTable
-          payments={filteredPayments}
-          onRowClick={(payment) => setSelectedPaymentId(payment.id)}
-        />
+        {loading ? (
+          <div className="flex items-center justify-center py-16">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+          </div>
+        ) : (
+          <PaymentsTable
+            payments={payments}
+            onRowClick={(payment) => setSelectedPaymentId(payment.id)}
+          />
+        )}
 
         <div className="mt-6 flex items-center justify-between text-sm text-muted-foreground">
           <p>
-            Showing {filteredPayments.length} of {MOCK_PAYMENTS.length} payments
+            Showing {payments.length} of {total} payments
           </p>
           <div className="flex items-center gap-2">
-            <Button variant="secondary" size="sm" disabled>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={page <= 1 || loading}
+              onClick={() => setPage((p) => p - 1)}
+            >
               Previous
             </Button>
-            <Button variant="secondary" size="sm" disabled>
+            <span className="text-xs">
+              {page} / {totalPages}
+            </span>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={page >= totalPages || loading}
+              onClick={() => setPage((p) => p + 1)}
+            >
               Next
             </Button>
           </div>
@@ -410,9 +404,7 @@ function PaymentsContent() {
             </select>
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium">
-              Description
-            </label>
+            <label className="mb-1 block text-sm font-medium">Description</label>
             <input
               type="text"
               value={linkDescription}
@@ -421,9 +413,7 @@ function PaymentsContent() {
             />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium">
-              Success URL (optional)
-            </label>
+            <label className="mb-1 block text-sm font-medium">Success URL (optional)</label>
             <input
               type="url"
               value={linkSuccessUrl}
@@ -433,9 +423,7 @@ function PaymentsContent() {
             />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium">
-              Cancel URL (optional)
-            </label>
+            <label className="mb-1 block text-sm font-medium">Cancel URL (optional)</label>
             <input
               type="url"
               value={linkCancelUrl}
@@ -444,43 +432,35 @@ function PaymentsContent() {
               className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
             />
           </div>
-
           <div className="flex gap-2">
-            <Button
-              className="flex-1"
-              onClick={handleGenerateLink}
-              disabled={isGeneratingLink}
-            >
+            <Button className="flex-1" onClick={handleGenerateLink} disabled={isGeneratingLink}>
               {isGeneratingLink ? "Generating..." : "Generate Link"}
             </Button>
             <Button
               className="flex-1"
               variant="secondary"
-              onClick={handleCopyLink}
+              onClick={async () => {
+                if (!generatedLink) return;
+                await navigator.clipboard.writeText(generatedLink);
+                toast.success("Payment link copied to clipboard.");
+              }}
               disabled={!generatedLink}
             >
               Copy Link
             </Button>
           </div>
-
-          {generatedLink ? (
+          {generatedLink && (
             <div className="space-y-3">
               <div className="rounded-md border border-border bg-muted p-3 text-xs break-all">
                 {generatedLink}
               </div>
               <div className="flex justify-center">
                 <div className="bg-background rounded-lg p-3 border">
-                  <QRCodeCanvas
-                    value={generatedLink}
-                    size={160}
-                    level="M"
-                    includeMargin
-                  />
+                  <QRCodeCanvas value={generatedLink} size={160} level="M" includeMargin />
                 </div>
               </div>
             </div>
-          ) : null}
-
+          )}
           <p className="text-xs text-muted-foreground">
             Draft link for {linkAmount || "0"} {linkCurrency}
             {linkDescription ? ` - ${linkDescription}` : ""}.
@@ -496,7 +476,7 @@ export default function PaymentsPage() {
     <Suspense
       fallback={
         <div className="flex items-center justify-center min-h-[400px]">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
         </div>
       }
     >
@@ -504,3 +484,4 @@ export default function PaymentsPage() {
     </Suspense>
   );
 }
+
