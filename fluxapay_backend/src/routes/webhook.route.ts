@@ -13,7 +13,7 @@ const router = Router();
 
 /**
  * @swagger
- * /api/webhooks/logs:
+ * /api/v1/webhooks/logs:
  *   get:
  *     summary: Get webhook logs list
  *     tags: [Webhooks]
@@ -102,7 +102,7 @@ router.get(
 
 /**
  * @swagger
- * /api/webhooks/logs/{log_id}:
+ * /api/v1/webhooks/logs/{log_id}:
  *   get:
  *     summary: Get webhook log details
  *     tags: [Webhooks]
@@ -155,7 +155,7 @@ router.get("/logs/:log_id", authenticateToken, getWebhookLogDetails);
 
 /**
  * @swagger
- * /api/webhooks/logs/{log_id}/retry:
+ * /api/v1/webhooks/logs/{log_id}/retry:
  *   post:
  *     summary: Retry a failed webhook
  *     tags: [Webhooks]
@@ -200,7 +200,7 @@ router.post("/logs/:log_id/retry", authenticateToken, retryWebhook);
 
 /**
  * @swagger
- * /api/webhooks/test:
+ * /api/v1/webhooks/test:
  *   post:
  *     summary: Send a test webhook
  *     tags: [Webhooks]

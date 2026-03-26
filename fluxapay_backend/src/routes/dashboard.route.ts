@@ -8,7 +8,7 @@ router.use(authenticateToken);
 
 /**
  * @swagger
- * /api/dashboard/overview/metrics:
+ * /api/v1/dashboard/overview/metrics:
  *   get:
  *     summary: Get dashboard summary metrics
  *     tags: [Dashboard]
@@ -59,7 +59,7 @@ router.get("/overview/metrics", dashboardController.overviewMetrics);
 
 /**
  * @swagger
- * /api/dashboard/overview/charts:
+ * /api/v1/dashboard/overview/charts:
  *   get:
  *     summary: Get dashboard analytics
  *     tags: [Dashboard]
@@ -117,7 +117,7 @@ router.get("/overview/charts", dashboardController.analytics);
 
 /**
  * @swagger
- * /api/dashboard/overview/activity:
+ * /api/v1/dashboard/overview/activity:
  *   get:
  *     summary: Get dashboard activity
  *     tags: [Dashboard]

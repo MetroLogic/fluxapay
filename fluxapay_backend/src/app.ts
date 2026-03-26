@@ -11,6 +11,11 @@ import paymentRoutes from "./routes/payment.route";
 import invoiceRoutes from "./routes/invoice.route";
 import refundRoutes from "./routes/refund.route";
 import reconciliationRoutes from "./routes/reconciliation.route";
+import sweepRoutes from "./routes/sweep.route";
+import keysRoutes from "./routes/keys.route";
+import settlementBatchRoutes from "./routes/settlementBatch.route";
+import dashboardRoutes from "./routes/dashboard.route";
+import auditRoutes from "./routes/audit.route";
 
 const app = express();
 const prisma = new PrismaClient();
@@ -21,14 +26,19 @@ app.use(express.json());
 // Swagger UI
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(specs));
 
-app.use("/api/merchants", merchantRoutes);
-app.use("/api/settlements", settlementRoutes);
-app.use("/api/merchants/kyc", kycRoutes);
-app.use("/api/webhooks", webhookRoutes);
-app.use("/api/payments", paymentRoutes);
-app.use("/api/invoices", invoiceRoutes);
-app.use("/api/refunds", refundRoutes);
-app.use("/api/admin/reconciliation", reconciliationRoutes);
+app.use("/api/v1/merchants", merchantRoutes);
+app.use("/api/v1/settlements", settlementRoutes);
+app.use("/api/v1/merchants/kyc", kycRoutes);
+app.use("/api/v1/webhooks", webhookRoutes);
+app.use("/api/v1/payments", paymentRoutes);
+app.use("/api/v1/invoices", invoiceRoutes);
+app.use("/api/v1/refunds", refundRoutes);
+app.use("/api/v1/keys", keysRoutes);
+app.use("/api/v1/dashboard", dashboardRoutes);
+app.use("/api/v1/admin/reconciliation", reconciliationRoutes);
+app.use("/api/v1/admin/settlement", settlementBatchRoutes);
+app.use("/api/v1/admin/sweep", sweepRoutes);
+app.use("/api/v1/admin", auditRoutes);
 
 // Basic health check
 app.get("/health", (req, res) => {
