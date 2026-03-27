@@ -1,74 +1,115 @@
-"use client";
-
 import useSWR from "swr";
 import { api } from "@/lib/api";
 
-/** Normalized shape for admin KYC list and detail (matches KycApplication where possible). */
+export interface KycDocument {
+  type: string;
+  name: string;
+  url?: string;
+}
+
+export interface BeneficialOwner {
+  name: string;
+  role: string;
+  ownership: number;
+}
+
+export interface BusinessInfo {
+  registrationNumber: string;
+  type: string;
+  address: string;
+}
+
+export interface AuditEntry {
+  action: string;
+  performedBy: string;
+  timestamp: string;
+  note?: string;
+}
+
+export type KycStatus =
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "additional_info_required";
+
 export interface KycApplicationShape {
   id: string;
   merchantId: string;
   merchantName: string;
   email: string;
   country: string;
+  status: KycStatus;
   submittedDate: string;
-  status: "pending" | "approved" | "rejected" | "additional_info_required";
-  documents: { type: string; name: string; url: string; status: "verified" | "pending" | "rejected" }[];
-  businessInfo: { registrationNumber: string; address: string; type: string };
-  beneficialOwners: { name: string; role: string; ownership: number }[];
+  documents: KycDocument[];
+  beneficialOwners: BeneficialOwner[];
+  businessInfo: BusinessInfo;
+  rejectionReason?: string;
+  auditTrail: AuditEntry[];
 }
 
-interface BackendSubmission {
-  id: string;
-  merchantId: string;
-  kyc_status: string;
-  created_at: string;
-  merchant?: { id: string; business_name: string; email: string; country: string };
-  documents?: Array<{ document_type: string; file_name: string; file_url?: string }>;
-  legal_business_name?: string;
-  business_registration_number?: string;
-  business_address?: string;
-  business_type?: string;
-  director_full_name?: string;
-}
+// ── normalise raw API response ──────────────────────────────────────────────
 
-function mapStatus(s: string): KycApplicationShape["status"] {
-  if (s === "approved") return "approved";
-  if (s === "rejected") return "rejected";
-  if (s === "pending_review") return "pending";
-  return "additional_info_required";
-}
-
-function mapSubmission(raw: BackendSubmission): KycApplicationShape {
-  const docs = (raw.documents ?? []).map((d) => ({
-    type: d.document_type ?? "",
-    name: d.file_name ?? "",
-    url: d.file_url ?? "#",
-    status: "pending" as const,
-  }));
+function normaliseSubmission(raw: Record<string, unknown>): KycApplicationShape {
   return {
-    id: raw.merchantId ?? raw.id,
-    merchantId: raw.merchantId,
-    merchantName: raw.merchant?.business_name ?? "",
-    email: raw.merchant?.email ?? "",
-    country: raw.merchant?.country ?? "",
-    submittedDate: raw.created_at?.slice(0, 10) ?? "",
-    status: mapStatus(raw.kyc_status),
-    documents: docs,
+    id: String(raw.id ?? raw._id ?? ""),
+    merchantId: String(raw.merchant_id ?? raw.merchantId ?? raw.id ?? ""),
+    merchantName: String(raw.business_name ?? raw.merchantName ?? raw.name ?? ""),
+    email: String(raw.email ?? ""),
+    country: String(raw.country ?? ""),
+    status: (raw.kyc_status ?? raw.status ?? "pending") as KycStatus,
+    submittedDate: raw.submitted_at
+      ? new Date(raw.submitted_at as string).toLocaleDateString()
+      : raw.created_at
+        ? new Date(raw.created_at as string).toLocaleDateString()
+        : "—",
+    documents: Array.isArray(raw.documents)
+      ? (raw.documents as Record<string, unknown>[]).map((d) => ({
+          type: String(d.type ?? "Document"),
+          name: String(d.name ?? d.filename ?? ""),
+          url: d.url ? String(d.url) : undefined,
+        }))
+      : [],
+    beneficialOwners: Array.isArray(raw.beneficial_owners)
+      ? (raw.beneficial_owners as Record<string, unknown>[]).map((o) => ({
+          name: String(o.name ?? ""),
+          role: String(o.role ?? ""),
+          ownership: Number(o.ownership ?? 0),
+        }))
+      : [],
     businessInfo: {
-      registrationNumber: raw.business_registration_number ?? "",
-      address: raw.business_address ?? "",
-      type: raw.business_type ?? "",
+      registrationNumber: String(
+        (raw.business_info as Record<string, unknown>)?.registration_number ??
+          raw.registration_number ??
+          "—",
+      ),
+      type: String(
+        (raw.business_info as Record<string, unknown>)?.type ??
+          raw.business_type ??
+          "—",
+      ),
+      address: String(
+        (raw.business_info as Record<string, unknown>)?.address ??
+          raw.business_address ??
+          "—",
+      ),
     },
-    beneficialOwners: raw.director_full_name
-      ? [{ name: raw.director_full_name, role: "Director", ownership: 100 }]
+    rejectionReason: raw.rejection_reason
+      ? String(raw.rejection_reason)
+      : undefined,
+    auditTrail: Array.isArray(raw.audit_trail)
+      ? (raw.audit_trail as Record<string, unknown>[]).map((e) => ({
+          action: String(e.action ?? ""),
+          performedBy: String(e.performed_by ?? e.performedBy ?? "admin"),
+          timestamp: e.timestamp
+            ? new Date(e.timestamp as string).toLocaleString()
+            : "",
+          note: e.note ? String(e.note) : undefined,
+        }))
       : [],
   };
 }
 
-interface KycSubmissionsResponse {
-  submissions: BackendSubmission[];
-  pagination: { page: number; limit: number; total: number; totalPages: number };
-}
+// ── list hook ───────────────────────────────────────────────────────────────
 
 interface UseKycSubmissionsParams {
   status?: string;
@@ -76,47 +117,60 @@ interface UseKycSubmissionsParams {
   limit?: number;
 }
 
-export function useKycSubmissions(params: UseKycSubmissionsParams = {}) {
-  const key =
-    params.status || params.page != null || params.limit != null
-      ? ["kyc-submissions", params]
-      : "kyc-submissions";
+interface UseKycSubmissionsResult {
+  applications: KycApplicationShape[];
+  isLoading: boolean;
+  error: unknown;
+  mutate: () => void;
+}
 
-  const { data, error, isLoading, mutate } = useSWR<KycSubmissionsResponse>(
+export function useKycSubmissions(
+  params: UseKycSubmissionsParams = {},
+): UseKycSubmissionsResult {
+  const key = ["kyc-submissions", params.status, params.page, params.limit];
+
+  const { data, error, isLoading, mutate } = useSWR(
     key,
-    () => api.kyc.admin.getSubmissions(params) as Promise<KycSubmissionsResponse>
+    () => api.kyc.admin.getSubmissions(params),
+    { revalidateOnFocus: false },
   );
 
-  const applications: KycApplicationShape[] = (data?.submissions ?? []).map(mapSubmission);
+  const raw: Record<string, unknown>[] = Array.isArray(data)
+    ? data
+    : Array.isArray(data?.submissions)
+      ? data.submissions
+      : Array.isArray(data?.data)
+        ? data.data
+        : [];
 
   return {
-    applications,
-    pagination: data?.pagination,
-    error,
+    applications: raw.map(normaliseSubmission),
     isLoading,
+    error,
     mutate,
   };
 }
 
-export function useKycDetails(merchantId: string | null) {
-  const { data, error, isLoading, mutate } = useSWR(
-    merchantId ? ["kyc-details", merchantId] : null,
-    () => api.kyc.admin.getByMerchantId(merchantId!)
+// ── detail hook ─────────────────────────────────────────────────────────────
+
+interface UseKycDetailsResult {
+  application: KycApplicationShape | null;
+  isLoading: boolean;
+  error: unknown;
+}
+
+export function useKycDetails(merchantId: string | null): UseKycDetailsResult {
+  const { data, error, isLoading } = useSWR(
+    merchantId ? ["kyc-detail", merchantId] : null,
+    () => api.kyc.admin.getByMerchantId(merchantId!),
+    { revalidateOnFocus: false },
   );
-  const application: KycApplicationShape | null = data?.kyc
-    ? mapSubmission({
-        ...data.kyc,
-        merchantId: data.kyc.merchantId ?? merchantId!,
-        merchant: data.kyc.merchant as BackendSubmission["merchant"],
-        documents: data.kyc.documents,
-        created_at: data.kyc.created_at,
-        kyc_status: data.kyc.kyc_status,
-        legal_business_name: data.kyc.legal_business_name,
-        business_registration_number: data.kyc.business_registration_number,
-        business_address: data.kyc.business_address,
-        business_type: data.kyc.business_type,
-        director_full_name: data.kyc.director_full_name,
-      } as BackendSubmission)
-    : null;
-  return { application, error, isLoading, mutate };
+
+  const raw = data?.submission ?? data?.data ?? data ?? null;
+
+  return {
+    application: raw ? normaliseSubmission(raw as Record<string, unknown>) : null,
+    isLoading,
+    error,
+  };
 }

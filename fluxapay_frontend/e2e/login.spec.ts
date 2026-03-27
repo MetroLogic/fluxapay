@@ -2,6 +2,7 @@ import { test, expect } from "@playwright/test";
 
 /**
  * E2E – Login flow
+ * Intercepts POST /api/merchants/login (matches backend route).
  */
 test.describe("Login flow", () => {
   test("@smoke - shows validation error for empty fields", async ({ page }) => {
@@ -48,7 +49,6 @@ test.describe("Login flow", () => {
     await page.getByLabel(/password/i).fill("password123");
     await page.getByRole("button", { name: /sign in/i }).click();
 
-    // Wait for dashboard redirect
     await expect(page).toHaveURL(/\/dashboard/, { timeout: 5000 });
   });
 });

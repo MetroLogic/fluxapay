@@ -1,19 +1,18 @@
+import React from "react";
+import { cn } from "@/lib/utils";
+
 interface EmptyStateProps {
-  colSpan: number;
-  message?: string;
+  message: string;
+  colSpan?: number;
   className?: string;
 }
 
-export default function EmptyState({
-  colSpan,
-  message = "No data available.",
-  className = "py-8",
-}: EmptyStateProps) {
-  return (
-    <tr>
-      <td colSpan={colSpan} className={`text-center text-gray-400 ${className}`}>
-        {message}
-      </td>
-    </tr>
-  );
-}
+const EmptyState = ({ message, colSpan = 1, className }: EmptyStateProps) => (
+  <tr>
+    <td colSpan={colSpan} className={cn("text-center text-sm text-slate-500", className)}>
+      {message}
+    </td>
+  </tr>
+);
+
+export default EmptyState;
