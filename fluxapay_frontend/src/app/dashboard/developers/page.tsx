@@ -13,6 +13,9 @@ import {
   Terminal,
   Braces,
   Shield,
+  RefreshCw,
+  AlertTriangle,
+  X,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { DOCS_URLS } from "@/lib/docs";
@@ -416,12 +419,56 @@ export default function DevelopersPage() {
   const [activeEndpoint, setActiveEndpoint] = useState<Endpoint>("create");
   const [apiKey, setApiKey] = useState("Loading...");
 
+  // Rotation state
+  const [rotatingApiKey, setRotatingApiKey] = useState(false);
+  const [rotatingWebhook, setRotatingWebhook] = useState(false);
+  const [newApiKey, setNewApiKey] = useState<string | null>(null);
+  const [newWebhookSecret, setNewWebhookSecret] = useState<string | null>(null);
+  const [showNewApiKey, setShowNewApiKey] = useState(false);
+  const [showNewWebhookSecret, setShowNewWebhookSecret] = useState(false);
+  const [confirmRotateApiKey, setConfirmRotateApiKey] = useState(false);
+  const [confirmRotateWebhook, setConfirmRotateWebhook] = useState(false);
+  const [rotateError, setRotateError] = useState<string | null>(null);
+
   useEffect(() => {
     api.merchant
       .getMe()
-      .then((r) => setApiKey(r.merchant.api_key || "No API key generated"))
+      .then((r) => setApiKey(r.merchant.api_key_masked || "No API key generated"))
       .catch(() => setApiKey("Failed to load API key"));
   }, []);
+
+  const handleRotateApiKey = async () => {
+    setRotatingApiKey(true);
+    setRotateError(null);
+    try {
+      const res = await api.keys.rotateApiKey();
+      setNewApiKey(res.apiKey);
+      setShowNewApiKey(false);
+      // Update masked display with last four from new key
+      const lastFour = res.apiKey.slice(-4);
+      setApiKey(`sk_live_****${lastFour}`);
+    } catch (e: any) {
+      setRotateError(e.message || "Failed to rotate API key");
+    } finally {
+      setRotatingApiKey(false);
+      setConfirmRotateApiKey(false);
+    }
+  };
+
+  const handleRotateWebhookSecret = async () => {
+    setRotatingWebhook(true);
+    setRotateError(null);
+    try {
+      const res = await api.keys.rotateWebhookSecret();
+      setNewWebhookSecret(res.webhookSecret);
+      setShowNewWebhookSecret(false);
+    } catch (e: any) {
+      setRotateError(e.message || "Failed to rotate webhook secret");
+    } finally {
+      setRotatingWebhook(false);
+      setConfirmRotateWebhook(false);
+    }
+  };
 
   const copyToClipboard = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
@@ -440,6 +487,7 @@ export default function DevelopersPage() {
       case "fetch":   return getFetchPayment(activeTab, baseUrl, apiKey);
       case "list":    return getListPayments(activeTab, baseUrl, apiKey);
       case "webhook": return getWebhookVerification(activeTab);
+      default:        return "";
     }
   })();
 
@@ -449,6 +497,7 @@ export default function DevelopersPage() {
       case "fetch":   return getFetchPaymentResponse();
       case "list":    return getListPaymentsResponse();
       case "webhook": return getWebhookPayload();
+      default:        return "";
     }
   })();
 
@@ -546,11 +595,105 @@ export default function DevelopersPage() {
               </button>
             </div>
 
-            <div style={{ backgroundColor: "#fef3c7", border: "1px solid #fcd34d", borderRadius: "0.5rem", padding: "0.875rem", marginBottom: "1.5rem" }}>
+            <div style={{ backgroundColor: "#fef3c7", border: "1px solid #fcd34d", borderRadius: "0.5rem", padding: "0.875rem", marginBottom: "1rem" }}>
               <p style={{ fontSize: "0.875rem", color: "#92400e", lineHeight: 1.5 }}>
                 ⚠️ Keep your API key secret. Never share it publicly or commit it to version control.
               </p>
             </div>
+
+            {/* Rotate API Key */}
+            {!confirmRotateApiKey ? (
+              <button
+                onClick={() => { setConfirmRotateApiKey(true); setNewApiKey(null); setRotateError(null); }}
+                style={{
+                  display: "flex", alignItems: "center", gap: "0.5rem",
+                  padding: "0.625rem 1rem", marginBottom: "1rem",
+                  border: "1px solid #fca5a5", borderRadius: "0.5rem",
+                  backgroundColor: "#fff1f2", color: "#b91c1c",
+                  cursor: "pointer", fontSize: "0.875rem", fontWeight: 600,
+                }}
+              >
+                <RefreshCw size={14} /> Rotate API Key
+              </button>
+            ) : (
+              <div style={{ backgroundColor: "#fff1f2", border: "1px solid #fca5a5", borderRadius: "0.5rem", padding: "1rem", marginBottom: "1rem" }}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem", marginBottom: "0.75rem" }}>
+                  <AlertTriangle size={16} style={{ color: "#b91c1c", flexShrink: 0, marginTop: "0.125rem" }} />
+                  <p style={{ fontSize: "0.875rem", color: "#b91c1c", lineHeight: 1.5, margin: 0 }}>
+                    This will immediately invalidate your current API key. All integrations using it will stop working.
+                  </p>
+                </div>
+                <div style={{ display: "flex", gap: "0.5rem" }}>
+                  <button
+                    onClick={handleRotateApiKey}
+                    disabled={rotatingApiKey}
+                    style={{
+                      padding: "0.5rem 1rem", borderRadius: "0.375rem",
+                      backgroundColor: "#b91c1c", color: "#fff",
+                      border: "none", cursor: rotatingApiKey ? "not-allowed" : "pointer",
+                      fontSize: "0.8125rem", fontWeight: 600, opacity: rotatingApiKey ? 0.7 : 1,
+                    }}
+                  >
+                    {rotatingApiKey ? "Rotating..." : "Yes, rotate it"}
+                  </button>
+                  <button
+                    onClick={() => setConfirmRotateApiKey(false)}
+                    style={{
+                      padding: "0.5rem 1rem", borderRadius: "0.375rem",
+                      backgroundColor: "#f3f4f6", color: "#1a1a3e",
+                      border: "1px solid #d1d5db", cursor: "pointer",
+                      fontSize: "0.8125rem", fontWeight: 600,
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* One-time new API key display */}
+            {newApiKey && (
+              <div style={{ backgroundColor: "#f0fdf4", border: "1px solid #86efac", borderRadius: "0.5rem", padding: "1rem", marginBottom: "1rem" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+                  <p style={{ fontSize: "0.8125rem", fontWeight: 600, color: "#166534", margin: 0 }}>
+                    New API key — copy it now, it won&apos;t be shown again.
+                  </p>
+                  <button onClick={() => setNewApiKey(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#166534" }}>
+                    <X size={14} />
+                  </button>
+                </div>
+                <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                  <input
+                    type={showNewApiKey ? "text" : "password"}
+                    value={newApiKey}
+                    readOnly
+                    style={{
+                      flex: 1, backgroundColor: "#dcfce7", border: "1px solid #86efac",
+                      borderRadius: "0.375rem", padding: "0.625rem 0.75rem",
+                      color: "#166534", fontFamily: "monospace", fontSize: "0.8125rem", outline: "none",
+                    }}
+                  />
+                  <button
+                    onClick={() => setShowNewApiKey(!showNewApiKey)}
+                    aria-label={showNewApiKey ? "Hide new key" : "Show new key"}
+                    style={{ padding: "0.625rem", backgroundColor: "#dcfce7", border: "1px solid #86efac", borderRadius: "0.375rem", cursor: "pointer" }}
+                  >
+                    {showNewApiKey ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
+                  <button
+                    onClick={() => copyToClipboard(newApiKey, "new-apikey")}
+                    aria-label="Copy new API key"
+                    style={{ padding: "0.625rem", backgroundColor: "#16a34a", border: "none", borderRadius: "0.375rem", cursor: "pointer", color: "#fff" }}
+                  >
+                    {copied === "new-apikey" ? <Check size={14} /> : <Copy size={14} />}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {rotateError && (
+              <p style={{ fontSize: "0.8125rem", color: "#b91c1c", marginBottom: "1rem" }}>{rotateError}</p>
+            )}
 
             {/* Sandbox / Live toggle */}
             <button
@@ -578,9 +721,7 @@ export default function DevelopersPage() {
                   {testMode ? "Sandbox Mode" : "Live Mode"}
                 </div>
                 <div style={{ fontSize: "0.75rem", color: "#6b7280" }}>
-                  {testMode
-                    ? `Using ${baseUrl}`
-                    : `Using ${baseUrl}`}
+                  {testMode ? `Using ${baseUrl}` : `Using ${baseUrl}`}
                 </div>
               </div>
             </button>
@@ -622,6 +763,113 @@ export default function DevelopersPage() {
                 </a>
               ))}
             </div>
+          </section>
+
+          {/* Webhook Secret */}
+          <section style={card}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1.5rem" }}>
+              <Shield style={{ width: "2rem", height: "2rem", color: "#fbbf24" }} />
+              <h2 style={{ fontSize: "1.5rem", fontWeight: "bold", color: "#1a1a3e" }}>Webhook Secret</h2>
+            </div>
+
+            <p style={{ fontSize: "0.875rem", color: "#6b7280", marginBottom: "1rem", lineHeight: 1.5 }}>
+              Used to verify webhook signatures. Rotate it if you suspect it has been compromised.
+            </p>
+
+            <div style={{ backgroundColor: "#fef3c7", border: "1px solid #fcd34d", borderRadius: "0.5rem", padding: "0.875rem", marginBottom: "1rem" }}>
+              <p style={{ fontSize: "0.875rem", color: "#92400e", lineHeight: 1.5, margin: 0 }}>
+                ⚠️ Rotating invalidates the current secret immediately. Update your server before rotating.
+              </p>
+            </div>
+
+            {!confirmRotateWebhook ? (
+              <button
+                onClick={() => { setConfirmRotateWebhook(true); setNewWebhookSecret(null); setRotateError(null); }}
+                style={{
+                  display: "flex", alignItems: "center", gap: "0.5rem",
+                  padding: "0.625rem 1rem", marginBottom: "1rem",
+                  border: "1px solid #fca5a5", borderRadius: "0.5rem",
+                  backgroundColor: "#fff1f2", color: "#b91c1c",
+                  cursor: "pointer", fontSize: "0.875rem", fontWeight: 600,
+                }}
+              >
+                <RefreshCw size={14} /> Rotate Webhook Secret
+              </button>
+            ) : (
+              <div style={{ backgroundColor: "#fff1f2", border: "1px solid #fca5a5", borderRadius: "0.5rem", padding: "1rem", marginBottom: "1rem" }}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem", marginBottom: "0.75rem" }}>
+                  <AlertTriangle size={16} style={{ color: "#b91c1c", flexShrink: 0, marginTop: "0.125rem" }} />
+                  <p style={{ fontSize: "0.875rem", color: "#b91c1c", lineHeight: 1.5, margin: 0 }}>
+                    All webhook deliveries will use the new secret. Existing signatures will be invalid.
+                  </p>
+                </div>
+                <div style={{ display: "flex", gap: "0.5rem" }}>
+                  <button
+                    onClick={handleRotateWebhookSecret}
+                    disabled={rotatingWebhook}
+                    style={{
+                      padding: "0.5rem 1rem", borderRadius: "0.375rem",
+                      backgroundColor: "#b91c1c", color: "#fff",
+                      border: "none", cursor: rotatingWebhook ? "not-allowed" : "pointer",
+                      fontSize: "0.8125rem", fontWeight: 600, opacity: rotatingWebhook ? 0.7 : 1,
+                    }}
+                  >
+                    {rotatingWebhook ? "Rotating..." : "Yes, rotate it"}
+                  </button>
+                  <button
+                    onClick={() => setConfirmRotateWebhook(false)}
+                    style={{
+                      padding: "0.5rem 1rem", borderRadius: "0.375rem",
+                      backgroundColor: "#f3f4f6", color: "#1a1a3e",
+                      border: "1px solid #d1d5db", cursor: "pointer",
+                      fontSize: "0.8125rem", fontWeight: 600,
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* One-time new webhook secret display */}
+            {newWebhookSecret && (
+              <div style={{ backgroundColor: "#f0fdf4", border: "1px solid #86efac", borderRadius: "0.5rem", padding: "1rem" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+                  <p style={{ fontSize: "0.8125rem", fontWeight: 600, color: "#166534", margin: 0 }}>
+                    New webhook secret — copy it now, it won&apos;t be shown again.
+                  </p>
+                  <button onClick={() => setNewWebhookSecret(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#166534" }}>
+                    <X size={14} />
+                  </button>
+                </div>
+                <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                  <input
+                    type={showNewWebhookSecret ? "text" : "password"}
+                    value={newWebhookSecret}
+                    readOnly
+                    style={{
+                      flex: 1, backgroundColor: "#dcfce7", border: "1px solid #86efac",
+                      borderRadius: "0.375rem", padding: "0.625rem 0.75rem",
+                      color: "#166534", fontFamily: "monospace", fontSize: "0.8125rem", outline: "none",
+                    }}
+                  />
+                  <button
+                    onClick={() => setShowNewWebhookSecret(!showNewWebhookSecret)}
+                    aria-label={showNewWebhookSecret ? "Hide secret" : "Show secret"}
+                    style={{ padding: "0.625rem", backgroundColor: "#dcfce7", border: "1px solid #86efac", borderRadius: "0.375rem", cursor: "pointer" }}
+                  >
+                    {showNewWebhookSecret ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
+                  <button
+                    onClick={() => copyToClipboard(newWebhookSecret, "new-webhook")}
+                    aria-label="Copy new webhook secret"
+                    style={{ padding: "0.625rem", backgroundColor: "#16a34a", border: "none", borderRadius: "0.375rem", cursor: "pointer", color: "#fff" }}
+                  >
+                    {copied === "new-webhook" ? <Check size={14} /> : <Copy size={14} />}
+                  </button>
+                </div>
+              </div>
+            )}
           </section>
 
           {/* API Status */}

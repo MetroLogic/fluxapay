@@ -5,7 +5,7 @@ import { sendOtpEmail } from "./email.service";
 import { isDevEnv } from "../helpers/env.helper";
 import { generateToken } from "../helpers/jwt.helper";
 import { merchantRegistryService } from "./merchantRegistry.service";
-import { generateApiKey, hashKey, getLastFour } from "../helpers/crypto.helper";
+import { generateApiKey, generateWebhookSecret, hashKey, getLastFour } from "../helpers/crypto.helper";
 import * as crypto from "crypto";
 
 const prisma = new PrismaClient();
@@ -183,4 +183,19 @@ export async function rotateApiKeyService(data: {
   merchantId: string;
 }) {
   return regenerateApiKeyService(data); // Same logic as regenerate
+}
+
+export async function rotateWebhookSecretService(data: {
+  merchantId: string;
+}) {
+  const { merchantId } = data;
+
+  const webhookSecret = generateWebhookSecret();
+
+  await prisma.merchant.update({
+    where: { id: merchantId },
+    data: { webhook_secret: webhookSecret },
+  });
+
+  return { message: "Webhook secret rotated", webhookSecret };
 }
