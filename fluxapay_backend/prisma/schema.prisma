@@ -136,8 +136,34 @@ model WebhookRetryAttempt {
 }
 
 model Payment {
-  id             String        @id @default(cuid())
-  merchant       Merchant      @relation(fields: [merchantId], references: [id])
+  id                 String    @id @default(cuid())
+  merchant           Merchant  @relation(fields: [merchantId], references: [id])
+  merchantId         String
+  amount             Decimal
+  currency           String
+  customer_email     String
+  metadata           Json
+  expiration         DateTime
+  status             String
+  checkout_url       String
+  createdAt          DateTime  @default(now())
+  // Stellar custody address assigned at payment creation
+  stellar_address    String?
+  // HD wallet derivation path (BIP44) for fast key re-derivation
+  derivation_path    String?
+  // Encrypted merchant/payment indices (legacy fallback)
+  encrypted_key_data String?
+  // Sweep tracking
+  swept              Boolean   @default(false)
+  swept_at           DateTime?
+  sweep_tx_hash      String?
+  confirmed_at       DateTime?
+  refunds            Refund[]
+  invoice            Invoice?
+
+  @@index([swept, status])
+  id             String   @id @default(cuid())
+  merchant       Merchant @relation(fields: [merchantId], references: [id])
   merchantId     String
   amount         Decimal
   currency       String
@@ -237,6 +263,26 @@ model DiscrepancyAlert {
   @@index([merchantId, is_resolved])
 }
 
+model CronLock {
+  job_name   String   @id
+  locked_at  DateTime
+  expires_at DateTime
+  locked_by  String   // hostname/pid for diagnostics
+}
+
+model AuditLog {
+  id          String           @id @default(cuid())
+  admin_id    String
+  action_type AuditActionType
+  entity_type AuditEntityType
+  entity_id   String
+  details     Json
+  created_at  DateTime         @default(now())
+
+  @@index([admin_id])
+  @@index([action_type])
+  @@index([entity_id])
+  @@index([created_at])
 enum PaymentStatus {
   pending
   partially_paid
