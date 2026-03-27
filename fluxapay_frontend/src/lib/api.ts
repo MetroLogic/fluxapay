@@ -6,11 +6,21 @@ export interface AuthSignupRequest {
   businessName: string;
   email: string;
   password: string;
+  phoneNumber: string;
   country: string;
   settlementCurrency: string;
+  // Bank account
+  accountName: string;
   accountNumber: string;
   bankName: string;
   bankCode: string;
+  bankCurrency: string;
+  bankCountry: string;
+}
+
+export interface VerifyOtpRequest {
+  email: string;
+  otp: string;
 }
 
 export interface AuthLoginRequest {
@@ -154,6 +164,15 @@ export const api = {
         body: JSON.stringify(data),
       }).then((res) => {
         if (!res.ok) throw new ApiError(res.status, "Login failed");
+        return res.json();
+      }),
+    verifyOtp: (data: VerifyOtpRequest) =>
+      fetch(`${API_BASE_URL}/api/merchants/verify-otp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      }).then((res) => {
+        if (!res.ok) throw new ApiError(res.status, "OTP verification failed");
         return res.json();
       }),
   },
