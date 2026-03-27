@@ -168,11 +168,14 @@ model Payment {
   amount         Decimal
   currency       String
   customer_email String
+  description    String?
   metadata       Json
   expiration     DateTime
   status         PaymentStatus @default(pending)
   checkout_url   String
-  createdAt      DateTime @default(now())
+  success_url    String?
+  cancel_url     String?
+  createdAt      DateTime      @default(now())
   refunds        Refund[]
   invoice        Invoice?
 }

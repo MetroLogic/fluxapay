@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Copy,
   Check,
@@ -12,31 +12,463 @@ import {
   ToggleRight,
   Terminal,
   Braces,
+  Shield,
+  RefreshCw,
+  AlertTriangle,
+  X,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { DOCS_URLS } from "@/lib/docs";
 
+type Lang = "curl" | "js" | "python";
+type Endpoint = "create" | "fetch" | "list" | "webhook";
+
+const TABS = [
+  { id: "curl" as Lang, label: "cURL", Icon: Terminal },
+  { id: "js" as Lang, label: "JavaScript", Icon: Braces },
+  { id: "python" as Lang, label: "Python", Icon: Code },
+];
+
+const ENDPOINTS: { id: Endpoint; label: string }[] = [
+  { id: "create", label: "Create Payment" },
+  { id: "fetch", label: "Fetch Payment" },
+  { id: "list", label: "List Payments" },
+  { id: "webhook", label: "Webhook Verification" },
+];
+
+// ─── Code block with copy button ────────────────────────────────────────────
+function CodeBlock({
+  code,
+  id,
+  copied,
+  onCopy,
+}: {
+  code: string;
+  id: string;
+  copied: string | null;
+  onCopy: (text: string, id: string) => void;
+}) {
+  return (
+    <div style={{ position: "relative" }}>
+      <div
+        style={{
+          backgroundColor: "#1a1a3e",
+          borderColor: "#3d3d6b",
+          borderWidth: "1px",
+          borderRadius: "0.5rem",
+          padding: "1rem",
+          overflowX: "auto",
+        }}
+      >
+        <pre
+          style={{
+            color: "#e0e0ff",
+            fontFamily: "monospace",
+            fontSize: "0.8125rem",
+            lineHeight: "1.6",
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-word",
+            margin: 0,
+          }}
+        >
+          {code}
+        </pre>
+      </div>
+      <button
+        onClick={() => onCopy(code, id)}
+        aria-label="Copy code"
+        style={{
+          marginTop: "0.5rem",
+          padding: "0.375rem 0.875rem",
+          borderRadius: "0.375rem",
+          backgroundColor: "#fbbf24",
+          color: "#1a1a3e",
+          border: "none",
+          cursor: "pointer",
+          fontSize: "0.8125rem",
+          fontWeight: "600",
+          display: "inline-flex",
+          alignItems: "center",
+          gap: "0.375rem",
+          transition: "background-color 0.15s",
+        }}
+        onMouseEnter={(e) => {
+          (e.currentTarget as HTMLButtonElement).style.backgroundColor = "#f59e0b";
+        }}
+        onMouseLeave={(e) => {
+          (e.currentTarget as HTMLButtonElement).style.backgroundColor = "#fbbf24";
+        }}
+      >
+        {copied === id ? (
+          <><Check size={14} /> Copied!</>
+        ) : (
+          <><Copy size={14} /> Copy</>
+        )}
+      </button>
+    </div>
+  );
+}
+
+// ─── Code generators ─────────────────────────────────────────────────────────
+function getCreatePayment(lang: Lang, baseUrl: string, apiKey: string): string {
+  const body = {
+    amount: 100,
+    currency: "USDC",
+    customer_email: "customer@example.com",
+    success_url: "https://yoursite.com/success",
+    cancel_url: "https://yoursite.com/cancel",
+    metadata: { order_id: "order_123", cart_id: "987" },
+  };
+
+  if (lang === "curl") {
+    return `curl -X POST ${baseUrl}/api/v1/payments \\
+  -H "Authorization: Bearer ${apiKey}" \\
+  -H "Content-Type: application/json" \\
+  -d '${JSON.stringify(body, null, 2)}'`;
+  }
+  if (lang === "js") {
+    return `const response = await fetch('${baseUrl}/api/v1/payments', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer ${apiKey}',
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify(${JSON.stringify(body, null, 2)}),
+});
+
+const payment = await response.json();
+console.log(payment.id); // pay_abc123...`;
+  }
+  return `import requests
+
+response = requests.post(
+    "${baseUrl}/api/v1/payments",
+    headers={
+        "Authorization": "Bearer ${apiKey}",
+        "Content-Type": "application/json",
+    },
+    json=${JSON.stringify(body, null, 4).replace(/"/g, '"')},
+)
+
+payment = response.json()
+print(payment["id"])  # pay_abc123...`;
+}
+
+function getCreatePaymentResponse(): string {
+  return `{
+  "id": "pay_abc123def456",
+  "amount": 100,
+  "currency": "USDC",
+  "status": "pending",
+  "checkout_url": "https://pay.fluxapay.com/pay_abc123def456",
+  "stellar_address": "GCKFBEIYV2U22IO2BJ4KVJOIP7XPWQGQFKKWXR6DUIISGASGESG6DKFS",
+  "customer_email": "customer@example.com",
+  "metadata": {
+    "order_id": "order_123",
+    "cart_id": "987"
+  },
+  "expires_at": "2026-03-27T15:00:00.000Z",
+  "created_at": "2026-03-27T14:45:00.000Z"
+}`;
+}
+
+function getFetchPayment(lang: Lang, baseUrl: string, apiKey: string): string {
+  const url = `${baseUrl}/api/v1/payments/pay_abc123def456`;
+  if (lang === "curl") {
+    return `curl -X GET ${url} \\
+  -H "Authorization: Bearer ${apiKey}"`;
+  }
+  if (lang === "js") {
+    return `const response = await fetch('${url}', {
+  headers: {
+    'Authorization': 'Bearer ${apiKey}',
+  },
+});
+
+const payment = await response.json();
+console.log(payment.status); // "paid"`;
+  }
+  return `import requests
+
+response = requests.get(
+    "${url}",
+    headers={"Authorization": "Bearer ${apiKey}"},
+)
+
+payment = response.json()
+print(payment["status"])  # "paid"`;
+}
+
+function getFetchPaymentResponse(): string {
+  return `{
+  "id": "pay_abc123def456",
+  "amount": 100,
+  "currency": "USDC",
+  "status": "paid",
+  "checkout_url": "https://pay.fluxapay.com/pay_abc123def456",
+  "stellar_address": "GCKFBEIYV2U22IO2BJ4KVJOIP7XPWQGQFKKWXR6DUIISGASGESG6DKFS",
+  "transaction_hash": "a1b2c3d4e5f6...",
+  "customer_email": "customer@example.com",
+  "metadata": { "order_id": "order_123" },
+  "confirmed_at": "2026-03-27T14:47:12.000Z",
+  "created_at": "2026-03-27T14:45:00.000Z"
+}`;
+}
+
+function getListPayments(lang: Lang, baseUrl: string, apiKey: string): string {
+  const url = `${baseUrl}/api/v1/payments?page=1&limit=10&status=paid&currency=USDC`;
+  if (lang === "curl") {
+    return `curl -X GET "${url}" \\
+  -H "Authorization: Bearer ${apiKey}"`;
+  }
+  if (lang === "js") {
+    return `const params = new URLSearchParams({
+  page: '1',
+  limit: '10',
+  status: 'paid',
+  currency: 'USDC',
+});
+
+const response = await fetch(
+  \`${baseUrl}/api/v1/payments?\${params}\`,
+  {
+    headers: { 'Authorization': 'Bearer ${apiKey}' },
+  }
+);
+
+const { data } = await response.json();
+console.log(data.payments);      // array of payments
+console.log(data.pagination);    // { page, limit, total, total_pages }`;
+  }
+  return `import requests
+
+response = requests.get(
+    "${baseUrl}/api/v1/payments",
+    headers={"Authorization": "Bearer ${apiKey}"},
+    params={"page": 1, "limit": 10, "status": "paid", "currency": "USDC"},
+)
+
+result = response.json()
+print(result["data"]["payments"])    # list of payments
+print(result["data"]["pagination"])  # page info`;
+}
+
+function getListPaymentsResponse(): string {
+  return `{
+  "data": {
+    "payments": [
+      {
+        "id": "pay_abc123def456",
+        "amount": 100,
+        "currency": "USDC",
+        "status": "paid",
+        "customer_email": "customer@example.com",
+        "created_at": "2026-03-27T14:45:00.000Z"
+      },
+      {
+        "id": "pay_xyz789ghi012",
+        "amount": 250,
+        "currency": "USDC",
+        "status": "paid",
+        "customer_email": "buyer2@example.com",
+        "created_at": "2026-03-26T10:20:00.000Z"
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "limit": 10,
+      "total": 42,
+      "total_pages": 5
+    }
+  }
+}`;
+}
+
+function getWebhookVerification(lang: Lang): string {
+  if (lang === "curl") {
+    return `# FluxaPay signs every webhook with HMAC-SHA256.
+# Headers sent with each delivery:
+#   X-FluxaPay-Signature  — hex-encoded HMAC-SHA256
+#   X-FluxaPay-Timestamp  — ISO 8601 timestamp
+#
+# Signing string: "\${timestamp}.\${raw_json_body}"
+#
+# Verify with openssl (for testing):
+TIMESTAMP="2026-03-27T14:47:00.000Z"
+PAYLOAD='{"event":"payment_confirmed","data":{"payment_id":"pay_abc123def456","amount":100}}'
+SECRET="whsec_your_webhook_secret"
+
+EXPECTED=$(echo -n "\${TIMESTAMP}.\${PAYLOAD}" \\
+  | openssl dgst -sha256 -hmac "\${SECRET}" -hex | cut -d' ' -f2)
+
+echo "Expected signature: \${EXPECTED}"`;
+  }
+  if (lang === "js") {
+    return `import crypto from 'crypto';
+import express from 'express';
+
+const app = express();
+
+// IMPORTANT: use raw body — do NOT parse JSON before verifying
+app.post(
+  '/webhooks/fluxapay',
+  express.raw({ type: 'application/json' }),
+  (req, res) => {
+    const signature = req.headers['x-fluxapay-signature'];
+    const timestamp  = req.headers['x-fluxapay-timestamp'];
+    const secret     = process.env.FLUXAPAY_WEBHOOK_SECRET;
+
+    if (!signature || !timestamp || !secret) {
+      return res.status(401).json({ error: 'Missing headers' });
+    }
+
+    // Reject webhooks older than 5 minutes (replay protection)
+    const ageSec = (Date.now() - new Date(timestamp).getTime()) / 1000;
+    if (ageSec > 300) return res.status(401).json({ error: 'Stale webhook' });
+
+    // Recompute HMAC-SHA256 over "\${timestamp}.\${rawBody}"
+    const signingString = \`\${timestamp}.\${req.body.toString()}\`;
+    const expected = crypto
+      .createHmac('sha256', secret)
+      .update(signingString)
+      .digest('hex');
+
+    // Constant-time comparison prevents timing attacks
+    const valid = crypto.timingSafeEqual(
+      Buffer.from(signature as string),
+      Buffer.from(expected),
+    );
+    if (!valid) return res.status(401).json({ error: 'Invalid signature' });
+
+    const event = JSON.parse(req.body.toString());
+    console.log('Verified event:', event.event, event.data.payment_id);
+
+    res.json({ received: true });
+  }
+);`;
+  }
+  return `import hashlib
+import hmac
+import json
+from datetime import datetime, timezone
+from flask import Flask, request, abort
+
+app = Flask(__name__)
+
+WEBHOOK_SECRET = "whsec_your_webhook_secret"
+REPLAY_WINDOW_SECONDS = 300
+
+@app.post("/webhooks/fluxapay")
+def handle_webhook():
+    signature = request.headers.get("X-FluxaPay-Signature", "")
+    timestamp  = request.headers.get("X-FluxaPay-Timestamp", "")
+    raw_body   = request.get_data()  # raw bytes — do NOT use request.json
+
+    # Replay protection
+    webhook_time = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+    age = (datetime.now(timezone.utc) - webhook_time).total_seconds()
+    if age > REPLAY_WINDOW_SECONDS:
+        abort(401, "Stale webhook")
+
+    # Recompute HMAC-SHA256 over "\${timestamp}.\${raw_body}"
+    signing_string = f"{timestamp}.{raw_body.decode()}"
+    expected = hmac.new(
+        WEBHOOK_SECRET.encode(),
+        signing_string.encode(),
+        hashlib.sha256,
+    ).hexdigest()
+
+    # Constant-time comparison
+    if not hmac.compare_digest(signature, expected):
+        abort(401, "Invalid signature")
+
+    event = json.loads(raw_body)
+    print(f"Verified event: {event['event']} — {event['data']['payment_id']}")
+
+    return {"received": True}`;
+}
+
+function getWebhookPayload(): string {
+  return `// Webhook payload delivered to your endpoint
+{
+  "event": "payment_confirmed",
+  "data": {
+    "payment_id": "pay_abc123def456",
+    "amount": 100,
+    "currency": "USDC",
+    "status": "paid",
+    "customer_email": "customer@example.com",
+    "transaction_hash": "a1b2c3d4e5f6...",
+    "confirmed_at": "2026-03-27T14:47:12.000Z"
+  }
+}
+
+// Other event types:
+// "payment_failed"   — payment expired or rejected
+// "payment_pending"  — awaiting on-chain confirmation
+// "refund_completed" — refund processed successfully
+// "refund_failed"    — refund could not be processed`;
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
 export default function DevelopersPage() {
   const [copied, setCopied] = useState<string | null>(null);
   const [showApiKey, setShowApiKey] = useState(false);
   const [testMode, setTestMode] = useState(true);
-  const [activeTab, setActiveTab] = useState("rest");
+  const [activeTab, setActiveTab] = useState<Lang>("curl");
+  const [activeEndpoint, setActiveEndpoint] = useState<Endpoint>("create");
   const [apiKey, setApiKey] = useState("Loading...");
-  const [activeEndpoint, setActiveEndpoint] = useState<"create" | "status">("create");
+
+  // Rotation state
+  const [rotatingApiKey, setRotatingApiKey] = useState(false);
+  const [rotatingWebhook, setRotatingWebhook] = useState(false);
+  const [newApiKey, setNewApiKey] = useState<string | null>(null);
+  const [newWebhookSecret, setNewWebhookSecret] = useState<string | null>(null);
+  const [showNewApiKey, setShowNewApiKey] = useState(false);
+  const [showNewWebhookSecret, setShowNewWebhookSecret] = useState(false);
+  const [confirmRotateApiKey, setConfirmRotateApiKey] = useState(false);
+  const [confirmRotateWebhook, setConfirmRotateWebhook] = useState(false);
+  const [rotateError, setRotateError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchApiKey = async () => {
-      try {
-        const response = await api.merchant.getMe();
-        setApiKey(response.merchant.api_key || "No API key generated");
-      } catch (error) {
-        console.error("Failed to fetch API key:", error);
-        setApiKey("Failed to load API key");
-      }
-    };
-
-    fetchApiKey();
+    api.merchant
+      .getMe()
+      .then((r) => setApiKey(r.merchant.api_key_masked || "No API key generated"))
+      .catch(() => setApiKey("Failed to load API key"));
   }, []);
+
+  const handleRotateApiKey = async () => {
+    setRotatingApiKey(true);
+    setRotateError(null);
+    try {
+      const res = await api.keys.rotateApiKey();
+      setNewApiKey(res.apiKey);
+      setShowNewApiKey(false);
+      // Update masked display with last four from new key
+      const lastFour = res.apiKey.slice(-4);
+      setApiKey(`sk_live_****${lastFour}`);
+    } catch (e: any) {
+      setRotateError(e.message || "Failed to rotate API key");
+    } finally {
+      setRotatingApiKey(false);
+      setConfirmRotateApiKey(false);
+    }
+  };
+
+  const handleRotateWebhookSecret = async () => {
+    setRotatingWebhook(true);
+    setRotateError(null);
+    try {
+      const res = await api.keys.rotateWebhookSecret();
+      setNewWebhookSecret(res.webhookSecret);
+      setShowNewWebhookSecret(false);
+    } catch (e: any) {
+      setRotateError(e.message || "Failed to rotate webhook secret");
+    } finally {
+      setRotatingWebhook(false);
+      setConfirmRotateWebhook(false);
+    }
+  };
 
   const copyToClipboard = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
@@ -44,195 +476,54 @@ export default function DevelopersPage() {
     setTimeout(() => setCopied(null), 2000);
   };
 
-  // const styles = {
-  //   container: `min-h-screen bg-slate-950 text-slate-50`,
-  //   header: `bg-gradient-to-r from-slate-900 to-slate-800 border-b border-slate-800 sticky top-0 z-50`,
-  //   headerContent: `max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6`,
-  //   headerTitle: `text-3xl sm:text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-100 to-slate-300 mb-2`,
-  //   headerSubtitle: `text-slate-400 text-lg`,
-
-  //   mainContent: `max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12`,
-  //   gridContainer: `grid grid-cols-1 lg:grid-cols-3 gap-8`,
-
-  //   section: `rounded-lg border border-slate-800 bg-slate-900/50 p-6 backdrop-blur`,
-  //   sectionTitle: `text-2xl font-bold text-slate-100 mb-6 flex items-center gap-3`,
-  //   sectionTitleIcon: `w-8 h-8 text-blue-400`,
-
-  //   card: `bg-slate-800/50 rounded-lg border border-slate-700 p-4 mb-4 hover:border-slate-600 transition`,
-  //   cardTitle: `text-lg font-semibold text-slate-100 mb-2`,
-  //   cardDesc: `text-slate-400 text-sm mb-4`,
-
-  //   button: `inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition`,
-  //   buttonPrimary: `bg-blue-600 text-white hover:bg-blue-700 active:scale-95`,
-  //   buttonSecondary: `bg-slate-700 text-slate-100 hover:bg-slate-600 active:scale-95`,
-  //   buttonIcon: `w-4 h-4`,
-
-  //   toggleButton: `flex items-center gap-3 p-3 rounded-lg bg-slate-800/50 border border-slate-700 cursor-pointer hover:border-slate-600 transition`,
-
-  //   badge: `inline-block px-3 py-1 rounded-full text-xs font-semibold bg-blue-600/20 text-blue-300 border border-blue-500/30`,
-
-  //   input: `w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition font-mono text-sm`,
-
-  //   codeBlock: `bg-slate-950 rounded-lg border border-slate-800 p-4 overflow-x-auto`,
-  //   codeText: `text-slate-300 font-mono text-sm leading-relaxed whitespace-pre-wrap break-words`,
-
-  //   tabContainer: `flex gap-2 mb-6 border-b border-slate-800 overflow-x-auto`,
-  //   tabButton: `px-4 py-2 font-medium text-sm border-b-2 transition whitespace-nowrap`,
-  //   tabButtonActive: `border-blue-500 text-blue-400`,
-  //   tabButtonInactive: `border-transparent text-slate-400 hover:text-slate-300`,
-
-  //   docLink: `inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-800 text-slate-100 hover:bg-slate-700 transition border border-slate-700`,
-  //   docLinkText: `text-sm font-medium`,
-  // };
-
   const baseUrl = testMode
     ? "https://sandbox-api.fluxapay.com"
     : "https://api.fluxapay.com";
 
-  const getCreatePaymentLines = (lang: "curl" | "js" | "python") => {
-    const body = {
-      amount: 100,
-      currency: "USDC",
-      customer_email: "customer@example.com",
-      order_id: "order_123",
-      success_url: "https://merchant.com/success",
-      cancel_url: "https://merchant.com/cancel",
-      metadata: { cart_id: "987" }
-    };
-
-    if (lang === "curl") {
-      return `curl -X POST ${baseUrl}/v1/payments \\
-  -H "Authorization: Bearer ${apiKey}" \\
-  -H "Content-Type: application/json" \\
-  -d '${JSON.stringify(body, null, 2)}'`;
+  // Derive request / response for the active endpoint + language
+  const requestCode = (() => {
+    switch (activeEndpoint) {
+      case "create":  return getCreatePayment(activeTab, baseUrl, apiKey);
+      case "fetch":   return getFetchPayment(activeTab, baseUrl, apiKey);
+      case "list":    return getListPayments(activeTab, baseUrl, apiKey);
+      case "webhook": return getWebhookVerification(activeTab);
+      default:        return "";
     }
+  })();
 
-    if (lang === "js") {
-      return `import fetch from 'node-fetch';
-
-const response = await fetch('${baseUrl}/v1/payments', {
-  method: 'POST',
-  headers: {
-    'Authorization': 'Bearer ${apiKey}',
-    'Content-Type': 'application/json'
-  },
-  body: JSON.stringify(${JSON.stringify(body, null, 2)})
-});
-
-const data = await response.json();
-console.log(data);`;
+  const responseCode = (() => {
+    switch (activeEndpoint) {
+      case "create":  return getCreatePaymentResponse();
+      case "fetch":   return getFetchPaymentResponse();
+      case "list":    return getListPaymentsResponse();
+      case "webhook": return getWebhookPayload();
+      default:        return "";
     }
+  })();
 
-    return `import requests
-import json
-
-url = "${baseUrl}/v1/payments"
-headers = {
-    "Authorization": "Bearer ${apiKey}",
-    "Content-Type": "application/json"
-}
-payload = ${JSON.stringify(body, null, 4)}
-
-response = requests.post(url, headers=headers, data=json.dumps(payload))
-print(response.json())`;
+  // ── Shared style tokens ──────────────────────────────────────────────────
+  const card: React.CSSProperties = {
+    borderColor: "#3d3d6b",
+    borderWidth: "1px",
+    borderStyle: "solid",
+    borderRadius: "0.5rem",
+    backgroundColor: "#ffffff",
+    padding: "1.5rem",
   };
-
-  const getStatusPaymentLines = (lang: "curl" | "js" | "python") => {
-    const paymentId = "pay_123abc456";
-    const url = `${baseUrl}/v1/payments/${paymentId}`;
-
-    if (lang === "curl") {
-      return `curl -X GET ${url} \\
-  -H "Authorization: Bearer ${apiKey}"`;
-    }
-
-    if (lang === "js") {
-      return `import fetch from 'node-fetch';
-
-const response = await fetch('${url}', {
-  method: 'GET',
-  headers: {
-    'Authorization': 'Bearer ${apiKey}'
-  }
-});
-
-const data = await response.json();
-console.log(data);`;
-    }
-
-    return `import requests
-
-url = "${url}"
-headers = {
-    "Authorization": "Bearer ${apiKey}"
-}
-
-response = requests.get(url, headers=headers)
-print(response.json())`;
-  };
-
-  const getActiveRequest = () => {
-    const lang = activeTab === "rest" ? "curl" : (activeTab as "js" | "python");
-    return activeEndpoint === "create" ? getCreatePaymentLines(lang) : getStatusPaymentLines(lang);
-  };
-
-  const getActiveResponse = () => {
-    if (activeEndpoint === "create") {
-      return `{
-  "id": "pay_123abc456",
-  "amount": 100,
-  "currency": "USDC",
-  "status": "pending",
-  "checkout_url": "https://pay.fluxapay.com/pay_123abc456",
-  "customer_email": "customer@example.com",
-  "order_id": "order_123",
-  "metadata": {
-    "cart_id": "987"
-  },
-  "created_at": "${new Date().toISOString()}"
-}`;
-    }
-    return `{
-  "id": "pay_123abc456",
-  "amount": 100,
-  "currency": "USDC",
-  "status": "paid",
-  "customer_email": "customer@example.com",
-  "order_id": "order_123",
-  "transaction_hash": "tx_abc123...",
-  "confirmed_at": "${new Date().toISOString()}"
-}`;
-  };
-
-  const restRequest = getActiveRequest();
-  const restResponse = getActiveResponse();
-  const jsRequest = getActiveRequest();
-  const pythonRequest = getActiveRequest();
 
   return (
-    <div
-      style={{ backgroundColor: "#ffffff", color: "#1a1a3e" }}
-      className="min-h-screen"
-    >
-      {/* Header */}
+    <div style={{ backgroundColor: "#ffffff", color: "#1a1a3e" }} className="min-h-screen">
+      {/* ── Header ── */}
       <header
         style={{
           backgroundImage: "linear-gradient(to right, #ffffff, #f9fafb)",
-          borderBottomColor: "#e5e7eb",
-          borderBottomWidth: "1px",
+          borderBottom: "1px solid #e5e7eb",
           position: "sticky",
           top: 0,
           zIndex: 50,
         }}
       >
-        <div
-          style={{
-            maxWidth: "80rem",
-            margin: "0 auto",
-            padding: "1.5rem 1rem",
-          }}
-          className="sm:px-6 lg:px-8"
-        >
+        <div style={{ maxWidth: "80rem", margin: "0 auto", padding: "1.5rem 1rem" }}>
           <h1
             style={{
               fontSize: "clamp(1.875rem, 5vw, 2.25rem)",
@@ -246,17 +537,14 @@ print(response.json())`;
             Developer Portal
           </h1>
           <p style={{ color: "#6b7280", fontSize: "1.125rem" }}>
-            Integrate with our API in minutes. Get started with comprehensive
-            documentation and examples.
+            Integrate with our API in minutes. Get started with comprehensive documentation and examples.
           </p>
         </div>
       </header>
 
-      {/* Main Content */}
-      <main
-        style={{ maxWidth: "80rem", margin: "0 auto", padding: "3rem 1rem" }}
-        className="sm:px-6 lg:px-8"
-      >
+      {/* ── Main ── */}
+      <main style={{ maxWidth: "80rem", margin: "0 auto", padding: "3rem 1rem" }}>
+        {/* Top 3-col grid */}
         <div
           style={{
             display: "grid",
@@ -264,1027 +552,457 @@ print(response.json())`;
             gap: "2rem",
           }}
         >
-          {/* API Key Management */}
-          <section
-            style={{
-              borderColor: "#3d3d6b",
-              borderWidth: "1px",
-              borderRadius: "0.5rem",
-              backgroundColor: "#ffffff",
-              padding: "1.5rem",
-              backdropFilter: "blur(10px)",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "0.75rem",
-                marginBottom: "1.5rem",
-              }}
-            >
-              <Code
-                style={{ width: "2rem", height: "2rem", color: "#fbbf24" }}
+          {/* API Key */}
+          <section style={card}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1.5rem" }}>
+              <Code style={{ width: "2rem", height: "2rem", color: "#fbbf24" }} />
+              <h2 style={{ fontSize: "1.5rem", fontWeight: "bold", color: "#1a1a3e" }}>API Key</h2>
+            </div>
+
+            <label style={{ display: "block", marginBottom: "0.5rem", color: "#1a1a3e", fontWeight: 500, fontSize: "0.875rem" }}>
+              Your {testMode ? "Sandbox" : "Live"} API Key
+            </label>
+            <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", marginBottom: "1rem" }}>
+              <input
+                type={showApiKey ? "text" : "password"}
+                value={apiKey}
+                readOnly
+                style={{
+                  flex: 1,
+                  backgroundColor: "#f3f4f6",
+                  border: "1px solid #d1d5db",
+                  borderRadius: "0.5rem",
+                  padding: "0.75rem 1rem",
+                  color: "#1a1a3e",
+                  fontFamily: "monospace",
+                  fontSize: "0.875rem",
+                  outline: "none",
+                }}
               />
-              <h2
-                style={{
-                  fontSize: "1.5rem",
-                  fontWeight: "bold",
-                  color: "#1a1a3e",
-                }}
+              <button
+                onClick={() => setShowApiKey(!showApiKey)}
+                aria-label={showApiKey ? "Hide API key" : "Show API key"}
+                style={{ padding: "0.75rem", backgroundColor: "#e5e7eb", border: "1px solid #d1d5db", borderRadius: "0.5rem", cursor: "pointer" }}
               >
-                API Key
-              </h2>
+                {showApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+              <button
+                onClick={() => copyToClipboard(apiKey, "apikey")}
+                aria-label="Copy API key"
+                style={{ padding: "0.75rem", backgroundColor: "#fbbf24", border: "none", borderRadius: "0.5rem", cursor: "pointer" }}
+              >
+                {copied === "apikey" ? <Check size={16} /> : <Copy size={16} />}
+              </button>
             </div>
 
-            <div style={{ marginBottom: "1.5rem" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "0.5rem",
-                  color: "#1a1a3e",
-                  fontWeight: "500",
-                  fontSize: "0.875rem",
-                }}
-              >
-                Your Live API Key
-              </label>
-              <div
-                style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}
-              >
-                <input
-                  type={showApiKey ? "text" : "password"}
-                  value={apiKey}
-                  readOnly
-                  style={{
-                    flex: 1,
-                    backgroundColor: "#f3f4f6",
-                    borderColor: "#d1d5db",
-                    borderWidth: "1px",
-                    borderRadius: "0.5rem",
-                    padding: "0.75rem 1rem",
-                    color: "#1a1a3e",
-                    fontFamily: "monospace",
-                    fontSize: "0.875rem",
-                    outline: "none",
-                  }}
-                />
-                <button
-                  onClick={() => setShowApiKey(!showApiKey)}
-                  style={{
-                    padding: "0.75rem",
-                    backgroundColor: "#e5e7eb",
-                    borderColor: "#d1d5db",
-                    borderWidth: "1px",
-                    borderRadius: "0.5rem",
-                    color: "#1a1a3e",
-                    cursor: "pointer",
-                    transition: "all 0.2s",
-                  }}
-                  onMouseEnter={(e) => {
-                    (e.target as HTMLElement).style.backgroundColor = "#d1d5db";
-                  }}
-                  onMouseLeave={(e) => {
-                    (e.target as HTMLElement).style.backgroundColor = "#e5e7eb";
-                  }}
-                >
-                  {showApiKey ? (
-                    <EyeOff style={{ width: "1rem", height: "1rem" }} />
-                  ) : (
-                    <Eye style={{ width: "1rem", height: "1rem" }} />
-                  )}
-                </button>
-                <button
-                  onClick={() => copyToClipboard(apiKey, "apikey")}
-                  style={{
-                    padding: "0.75rem",
-                    backgroundColor: "#fbbf24",
-                    borderColor: "#fbbf24",
-                    borderWidth: "1px",
-                    borderRadius: "0.5rem",
-                    color: "#1a1a3e",
-                    cursor: "pointer",
-                    transition: "all 0.2s",
-                    fontWeight: "600",
-                  }}
-                  onMouseEnter={(e) => {
-                    (e.target as HTMLElement).style.backgroundColor = "#f59e0b";
-                  }}
-                  onMouseLeave={(e) => {
-                    (e.target as HTMLElement).style.backgroundColor = "#fbbf24";
-                  }}
-                >
-                  {copied === "apikey" ? (
-                    <Check style={{ width: "1rem", height: "1rem" }} />
-                  ) : (
-                    <Copy style={{ width: "1rem", height: "1rem" }} />
-                  )}
-                </button>
-              </div>
-            </div>
-
-            <div
-              style={{
-                backgroundColor: "#fef3c7",
-                borderColor: "#fcd34d",
-                borderWidth: "1px",
-                borderRadius: "0.5rem",
-                padding: "1rem",
-                marginBottom: "1.5rem",
-              }}
-            >
-              <p
-                style={{
-                  fontSize: "0.875rem",
-                  color: "#92400e",
-                  lineHeight: "1.5",
-                }}
-              >
-                ⚠️ Keep your API key secret. Never share it publicly or commit
-                it to version control.
+            <div style={{ backgroundColor: "#fef3c7", border: "1px solid #fcd34d", borderRadius: "0.5rem", padding: "0.875rem", marginBottom: "1rem" }}>
+              <p style={{ fontSize: "0.875rem", color: "#92400e", lineHeight: 1.5 }}>
+                ⚠️ Keep your API key secret. Never share it publicly or commit it to version control.
               </p>
             </div>
 
-            {/* Test Mode Toggle */}
-            <div
+            {/* Rotate API Key */}
+            {!confirmRotateApiKey ? (
+              <button
+                onClick={() => { setConfirmRotateApiKey(true); setNewApiKey(null); setRotateError(null); }}
+                style={{
+                  display: "flex", alignItems: "center", gap: "0.5rem",
+                  padding: "0.625rem 1rem", marginBottom: "1rem",
+                  border: "1px solid #fca5a5", borderRadius: "0.5rem",
+                  backgroundColor: "#fff1f2", color: "#b91c1c",
+                  cursor: "pointer", fontSize: "0.875rem", fontWeight: 600,
+                }}
+              >
+                <RefreshCw size={14} /> Rotate API Key
+              </button>
+            ) : (
+              <div style={{ backgroundColor: "#fff1f2", border: "1px solid #fca5a5", borderRadius: "0.5rem", padding: "1rem", marginBottom: "1rem" }}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem", marginBottom: "0.75rem" }}>
+                  <AlertTriangle size={16} style={{ color: "#b91c1c", flexShrink: 0, marginTop: "0.125rem" }} />
+                  <p style={{ fontSize: "0.875rem", color: "#b91c1c", lineHeight: 1.5, margin: 0 }}>
+                    This will immediately invalidate your current API key. All integrations using it will stop working.
+                  </p>
+                </div>
+                <div style={{ display: "flex", gap: "0.5rem" }}>
+                  <button
+                    onClick={handleRotateApiKey}
+                    disabled={rotatingApiKey}
+                    style={{
+                      padding: "0.5rem 1rem", borderRadius: "0.375rem",
+                      backgroundColor: "#b91c1c", color: "#fff",
+                      border: "none", cursor: rotatingApiKey ? "not-allowed" : "pointer",
+                      fontSize: "0.8125rem", fontWeight: 600, opacity: rotatingApiKey ? 0.7 : 1,
+                    }}
+                  >
+                    {rotatingApiKey ? "Rotating..." : "Yes, rotate it"}
+                  </button>
+                  <button
+                    onClick={() => setConfirmRotateApiKey(false)}
+                    style={{
+                      padding: "0.5rem 1rem", borderRadius: "0.375rem",
+                      backgroundColor: "#f3f4f6", color: "#1a1a3e",
+                      border: "1px solid #d1d5db", cursor: "pointer",
+                      fontSize: "0.8125rem", fontWeight: 600,
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* One-time new API key display */}
+            {newApiKey && (
+              <div style={{ backgroundColor: "#f0fdf4", border: "1px solid #86efac", borderRadius: "0.5rem", padding: "1rem", marginBottom: "1rem" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+                  <p style={{ fontSize: "0.8125rem", fontWeight: 600, color: "#166534", margin: 0 }}>
+                    New API key — copy it now, it won&apos;t be shown again.
+                  </p>
+                  <button onClick={() => setNewApiKey(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#166534" }}>
+                    <X size={14} />
+                  </button>
+                </div>
+                <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                  <input
+                    type={showNewApiKey ? "text" : "password"}
+                    value={newApiKey}
+                    readOnly
+                    style={{
+                      flex: 1, backgroundColor: "#dcfce7", border: "1px solid #86efac",
+                      borderRadius: "0.375rem", padding: "0.625rem 0.75rem",
+                      color: "#166534", fontFamily: "monospace", fontSize: "0.8125rem", outline: "none",
+                    }}
+                  />
+                  <button
+                    onClick={() => setShowNewApiKey(!showNewApiKey)}
+                    aria-label={showNewApiKey ? "Hide new key" : "Show new key"}
+                    style={{ padding: "0.625rem", backgroundColor: "#dcfce7", border: "1px solid #86efac", borderRadius: "0.375rem", cursor: "pointer" }}
+                  >
+                    {showNewApiKey ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
+                  <button
+                    onClick={() => copyToClipboard(newApiKey, "new-apikey")}
+                    aria-label="Copy new API key"
+                    style={{ padding: "0.625rem", backgroundColor: "#16a34a", border: "none", borderRadius: "0.375rem", cursor: "pointer", color: "#fff" }}
+                  >
+                    {copied === "new-apikey" ? <Check size={14} /> : <Copy size={14} />}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {rotateError && (
+              <p style={{ fontSize: "0.8125rem", color: "#b91c1c", marginBottom: "1rem" }}>{rotateError}</p>
+            )}
+
+            {/* Sandbox / Live toggle */}
+            <button
               onClick={() => setTestMode(!testMode)}
               style={{
                 display: "flex",
                 alignItems: "center",
                 gap: "1rem",
                 padding: "0.75rem",
-                borderColor: "#d1d5db",
-                borderWidth: "1px",
+                border: "1px solid #d1d5db",
                 borderRadius: "0.5rem",
                 backgroundColor: "#f9fafb",
                 cursor: "pointer",
-                transition: "all 0.2s",
-              }}
-              onMouseEnter={(e) => {
-                (e.target as HTMLElement).style.borderColor = "#9ca3af";
-              }}
-              onMouseLeave={(e) => {
-                (e.target as HTMLElement).style.borderColor = "#d1d5db";
+                width: "100%",
+                textAlign: "left",
               }}
             >
+              {testMode ? (
+                <ToggleRight style={{ width: "1.5rem", height: "1.5rem", color: "#fbbf24", flexShrink: 0 }} />
+              ) : (
+                <ToggleLeft style={{ width: "1.5rem", height: "1.5rem", color: "#9ca3af", flexShrink: 0 }} />
+              )}
               <div>
-                {testMode ? (
-                  <ToggleRight
-                    style={{
-                      width: "1.5rem",
-                      height: "1.5rem",
-                      color: "#fbbf24",
-                    }}
-                  />
-                ) : (
-                  <ToggleLeft
-                    style={{
-                      width: "1.5rem",
-                      height: "1.5rem",
-                      color: "#9ca3af",
-                    }}
-                  />
-                )}
-              </div>
-              <div>
-                <div
-                  style={{
-                    fontSize: "0.875rem",
-                    fontWeight: "600",
-                    color: "#1a1a3e",
-                  }}
-                >
-                  Test Mode
+                <div style={{ fontSize: "0.875rem", fontWeight: 600, color: "#1a1a3e" }}>
+                  {testMode ? "Sandbox Mode" : "Live Mode"}
                 </div>
                 <div style={{ fontSize: "0.75rem", color: "#6b7280" }}>
-                  {testMode
-                    ? "Enabled - Requests are sandboxed"
-                    : "Disabled - Using live endpoint"}
+                  {testMode ? `Using ${baseUrl}` : `Using ${baseUrl}`}
                 </div>
               </div>
-            </div>
+            </button>
           </section>
 
           {/* Documentation */}
-          <section
-            style={{
-              borderColor: "#3d3d6b",
-              borderWidth: "1px",
-              borderRadius: "0.5rem",
-              backgroundColor: "#ffffff",
-              padding: "1.5rem",
-              backdropFilter: "blur(10px)",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "0.75rem",
-                marginBottom: "1.5rem",
-              }}
-            >
-              <FileJson
-                style={{ width: "2rem", height: "2rem", color: "#fbbf24" }}
-              />
-              <h2
-                style={{
-                  fontSize: "1.5rem",
-                  fontWeight: "bold",
-                  color: "#1a1a3e",
-                }}
-              >
-                Documentation
-              </h2>
+          <section style={card}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1.5rem" }}>
+              <FileJson style={{ width: "2rem", height: "2rem", color: "#fbbf24" }} />
+              <h2 style={{ fontSize: "1.5rem", fontWeight: "bold", color: "#1a1a3e" }}>Documentation</h2>
             </div>
-
-            <div
-              style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
-            >
-              <a
-                href={DOCS_URLS.API_REFERENCE}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "0.5rem",
-                  padding: "1rem",
-                  borderColor: "#e5e7eb",
-                  borderWidth: "1px",
-                  borderRadius: "0.5rem",
-                  backgroundColor: "#f9fafb",
-                  color: "#1a1a3e",
-                  textDecoration: "none",
-                  transition: "all 0.2s",
-                  cursor: "pointer",
-                }}
-                onMouseEnter={(e) => {
-                  (e.target as HTMLElement).style.backgroundColor = "#f3f4f6";
-                  (e.target as HTMLElement).style.borderColor = "#d1d5db";
-                }}
-                onMouseLeave={(e) => {
-                  (e.target as HTMLElement).style.backgroundColor = "#f9fafb";
-                  (e.target as HTMLElement).style.borderColor = "#e5e7eb";
-                }}
-              >
-                <span style={{ fontSize: "1.25rem" }}>📚</span>
-                <div>
-                  <div
-                    style={{
-                      fontSize: "0.875rem",
-                      fontWeight: "600",
-                      color: "#1a1a3e",
-                    }}
-                  >
-                    API Reference
-                  </div>
-                  <div style={{ fontSize: "0.75rem", color: "#6b7280" }}>
-                    Complete endpoint documentation
-                  </div>
-                </div>
-              </a>
-
-              <a
-                href={DOCS_URLS.GETTING_STARTED}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "0.5rem",
-                  padding: "1rem",
-                  borderColor: "#e5e7eb",
-                  borderWidth: "1px",
-                  borderRadius: "0.5rem",
-                  backgroundColor: "#f9fafb",
-                  color: "#1a1a3e",
-                  textDecoration: "none",
-                  transition: "all 0.2s",
-                  cursor: "pointer",
-                }}
-                onMouseEnter={(e) => {
-                  (e.target as HTMLElement).style.backgroundColor = "#f3f4f6";
-                  (e.target as HTMLElement).style.borderColor = "#d1d5db";
-                }}
-                onMouseLeave={(e) => {
-                  (e.target as HTMLElement).style.backgroundColor = "#f9fafb";
-                  (e.target as HTMLElement).style.borderColor = "#e5e7eb";
-                }}
-              >
-                <span style={{ fontSize: "1.25rem" }}>🚀</span>
-                <div>
-                  <div
-                    style={{
-                      fontSize: "0.875rem",
-                      fontWeight: "600",
-                      color: "#1a1a3e",
-                    }}
-                  >
-                    Getting Started
-                  </div>
-                  <div style={{ fontSize: "0.75rem", color: "#6b7280" }}>
-                    Setup guide and best practices
-                  </div>
-                </div>
-              </a>
-
-              <a
-                href={DOCS_URLS.AUTHENTICATION}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "0.5rem",
-                  padding: "1rem",
-                  borderColor: "#e5e7eb",
-                  borderWidth: "1px",
-                  borderRadius: "0.5rem",
-                  backgroundColor: "#f9fafb",
-                  color: "#1a1a3e",
-                  textDecoration: "none",
-                  transition: "all 0.2s",
-                  cursor: "pointer",
-                }}
-                onMouseEnter={(e) => {
-                  (e.target as HTMLElement).style.backgroundColor = "#f3f4f6";
-                  (e.target as HTMLElement).style.borderColor = "#d1d5db";
-                }}
-                onMouseLeave={(e) => {
-                  (e.target as HTMLElement).style.backgroundColor = "#f9fafb";
-                  (e.target as HTMLElement).style.borderColor = "#e5e7eb";
-                }}
-              >
-                <span style={{ fontSize: "1.25rem" }}>🔒</span>
-                <div>
-                  <div
-                    style={{
-                      fontSize: "0.875rem",
-                      fontWeight: "600",
-                      color: "#1a1a3e",
-                    }}
-                  >
-                    Authentication
-                  </div>
-                  <div style={{ fontSize: "0.75rem", color: "#6b7280" }}>
-                    Learn about API key security
-                  </div>
-                </div>
-              </a>
-
-              <a
-                href={DOCS_URLS.RATE_LIMITS}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "0.5rem",
-                  padding: "1rem",
-                  borderColor: "#e5e7eb",
-                  borderWidth: "1px",
-                  borderRadius: "0.5rem",
-                  backgroundColor: "#f9fafb",
-                  color: "#1a1a3e",
-                  textDecoration: "none",
-                  transition: "all 0.2s",
-                  cursor: "pointer",
-                }}
-                onMouseEnter={(e) => {
-                  (e.target as HTMLElement).style.backgroundColor = "#f3f4f6";
-                  (e.target as HTMLElement).style.borderColor = "#d1d5db";
-                }}
-                onMouseLeave={(e) => {
-                  (e.target as HTMLElement).style.backgroundColor = "#f9fafb";
-                  (e.target as HTMLElement).style.borderColor = "#e5e7eb";
-                }}
-              >
-                <span style={{ fontSize: "1.25rem" }}>⚡</span>
-                <div>
-                  <div
-                    style={{
-                      fontSize: "0.875rem",
-                      fontWeight: "600",
-                      color: "#1a1a3e",
-                    }}
-                  >
-                    Rate Limits
-                  </div>
-                  <div style={{ fontSize: "0.75rem", color: "#6b7280" }}>
-                    Understand API rate limiting
-                  </div>
-                </div>
-              </a>
-            </div>
-          </section>
-
-          {/* Quick Stats */}
-          <section
-            style={{
-              borderColor: "#3d3d6b",
-              borderWidth: "1px",
-              borderRadius: "0.5rem",
-              backgroundColor: "#ffffff",
-              padding: "1.5rem",
-              backdropFilter: "blur(10px)",
-            }}
-          >
-            <h2
-              style={{
-                fontSize: "1.5rem",
-                fontWeight: "bold",
-                color: "#1a1a3e",
-                marginBottom: "1.5rem",
-              }}
-            >
-              API Status
-            </h2>
-
-            <div
-              style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
-            >
-              <div
-                style={{
-                  backgroundColor: "#f9fafb",
-                  borderColor: "#e5e7eb",
-                  borderWidth: "1px",
-                  borderRadius: "0.5rem",
-                  padding: "1rem",
-                }}
-              >
-                <div
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+              {[
+                { href: DOCS_URLS.API_REFERENCE, icon: "📚", title: "API Reference", desc: "Complete endpoint documentation" },
+                { href: DOCS_URLS.GETTING_STARTED, icon: "🚀", title: "Getting Started", desc: "Setup guide and best practices" },
+                { href: DOCS_URLS.AUTHENTICATION, icon: "🔒", title: "Authentication", desc: "API key security and bearer tokens" },
+                { href: DOCS_URLS.RATE_LIMITS, icon: "⚡", title: "Rate Limits", desc: "Throttling and resilient client design" },
+              ].map(({ href, icon, title, desc }) => (
+                <a
+                  key={href}
+                  href={href}
                   style={{
                     display: "flex",
                     alignItems: "center",
-                    justifyContent: "space-between",
-                    marginBottom: "0.5rem",
+                    gap: "0.75rem",
+                    padding: "0.875rem",
+                    border: "1px solid #e5e7eb",
+                    borderRadius: "0.5rem",
+                    backgroundColor: "#f9fafb",
+                    color: "#1a1a3e",
+                    textDecoration: "none",
                   }}
                 >
-                  <span style={{ fontSize: "0.875rem", color: "#1a1a3e" }}>
-                    Status
-                  </span>
-                  <span
-                    style={{
-                      display: "inline-block",
-                      padding: "0.25rem 0.75rem",
-                      borderRadius: "9999px",
-                      fontSize: "0.75rem",
-                      fontWeight: "600",
-                      backgroundColor: "#d1fae5",
-                      color: "#065f46",
-                      borderColor: "#a7f3d0",
-                      borderWidth: "1px",
-                    }}
-                  >
-                    ● Operational
-                  </span>
-                </div>
-                <p style={{ fontSize: "0.75rem", color: "#6b7280" }}>
-                  All systems operational
-                </p>
-              </div>
+                  <span style={{ fontSize: "1.25rem" }}>{icon}</span>
+                  <div>
+                    <div style={{ fontSize: "0.875rem", fontWeight: 600 }}>{title}</div>
+                    <div style={{ fontSize: "0.75rem", color: "#6b7280" }}>{desc}</div>
+                  </div>
+                </a>
+              ))}
+            </div>
+          </section>
 
-              <div
+          {/* Webhook Secret */}
+          <section style={card}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "1.5rem" }}>
+              <Shield style={{ width: "2rem", height: "2rem", color: "#fbbf24" }} />
+              <h2 style={{ fontSize: "1.5rem", fontWeight: "bold", color: "#1a1a3e" }}>Webhook Secret</h2>
+            </div>
+
+            <p style={{ fontSize: "0.875rem", color: "#6b7280", marginBottom: "1rem", lineHeight: 1.5 }}>
+              Used to verify webhook signatures. Rotate it if you suspect it has been compromised.
+            </p>
+
+            <div style={{ backgroundColor: "#fef3c7", border: "1px solid #fcd34d", borderRadius: "0.5rem", padding: "0.875rem", marginBottom: "1rem" }}>
+              <p style={{ fontSize: "0.875rem", color: "#92400e", lineHeight: 1.5, margin: 0 }}>
+                ⚠️ Rotating invalidates the current secret immediately. Update your server before rotating.
+              </p>
+            </div>
+
+            {!confirmRotateWebhook ? (
+              <button
+                onClick={() => { setConfirmRotateWebhook(true); setNewWebhookSecret(null); setRotateError(null); }}
                 style={{
-                  backgroundColor: "#f9fafb",
-                  borderColor: "#e5e7eb",
-                  borderWidth: "1px",
-                  borderRadius: "0.5rem",
-                  padding: "1rem",
+                  display: "flex", alignItems: "center", gap: "0.5rem",
+                  padding: "0.625rem 1rem", marginBottom: "1rem",
+                  border: "1px solid #fca5a5", borderRadius: "0.5rem",
+                  backgroundColor: "#fff1f2", color: "#b91c1c",
+                  cursor: "pointer", fontSize: "0.875rem", fontWeight: 600,
                 }}
               >
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    marginBottom: "0.5rem",
-                  }}
-                >
-                  <span style={{ fontSize: "0.875rem", color: "#1a1a3e" }}>
-                    Uptime
-                  </span>
-                  <span
+                <RefreshCw size={14} /> Rotate Webhook Secret
+              </button>
+            ) : (
+              <div style={{ backgroundColor: "#fff1f2", border: "1px solid #fca5a5", borderRadius: "0.5rem", padding: "1rem", marginBottom: "1rem" }}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem", marginBottom: "0.75rem" }}>
+                  <AlertTriangle size={16} style={{ color: "#b91c1c", flexShrink: 0, marginTop: "0.125rem" }} />
+                  <p style={{ fontSize: "0.875rem", color: "#b91c1c", lineHeight: 1.5, margin: 0 }}>
+                    All webhook deliveries will use the new secret. Existing signatures will be invalid.
+                  </p>
+                </div>
+                <div style={{ display: "flex", gap: "0.5rem" }}>
+                  <button
+                    onClick={handleRotateWebhookSecret}
+                    disabled={rotatingWebhook}
                     style={{
-                      fontSize: "0.875rem",
-                      fontWeight: "600",
-                      color: "#fbbf24",
+                      padding: "0.5rem 1rem", borderRadius: "0.375rem",
+                      backgroundColor: "#b91c1c", color: "#fff",
+                      border: "none", cursor: rotatingWebhook ? "not-allowed" : "pointer",
+                      fontSize: "0.8125rem", fontWeight: 600, opacity: rotatingWebhook ? 0.7 : 1,
                     }}
                   >
-                    99.99%
-                  </span>
+                    {rotatingWebhook ? "Rotating..." : "Yes, rotate it"}
+                  </button>
+                  <button
+                    onClick={() => setConfirmRotateWebhook(false)}
+                    style={{
+                      padding: "0.5rem 1rem", borderRadius: "0.375rem",
+                      backgroundColor: "#f3f4f6", color: "#1a1a3e",
+                      border: "1px solid #d1d5db", cursor: "pointer",
+                      fontSize: "0.8125rem", fontWeight: 600,
+                    }}
+                  >
+                    Cancel
+                  </button>
                 </div>
-                <p style={{ fontSize: "0.75rem", color: "#6b7280" }}>
-                  Last 30 days
-                </p>
               </div>
+            )}
 
-              <div
-                style={{
-                  backgroundColor: "#f9fafb",
-                  borderColor: "#e5e7eb",
-                  borderWidth: "1px",
-                  borderRadius: "0.5rem",
-                  padding: "1rem",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    marginBottom: "0.5rem",
-                  }}
-                >
-                  <span style={{ fontSize: "0.875rem", color: "#1a1a3e" }}>
-                    Response Time
-                  </span>
-                  <span
-                    style={{
-                      fontSize: "0.875rem",
-                      fontWeight: "600",
-                      color: "#fbbf24",
-                    }}
-                  >
-                    145ms
-                  </span>
+            {/* One-time new webhook secret display */}
+            {newWebhookSecret && (
+              <div style={{ backgroundColor: "#f0fdf4", border: "1px solid #86efac", borderRadius: "0.5rem", padding: "1rem" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+                  <p style={{ fontSize: "0.8125rem", fontWeight: 600, color: "#166534", margin: 0 }}>
+                    New webhook secret — copy it now, it won&apos;t be shown again.
+                  </p>
+                  <button onClick={() => setNewWebhookSecret(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#166534" }}>
+                    <X size={14} />
+                  </button>
                 </div>
-                <p style={{ fontSize: "0.75rem", color: "#6b7280" }}>
-                  Average latency
-                </p>
+                <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                  <input
+                    type={showNewWebhookSecret ? "text" : "password"}
+                    value={newWebhookSecret}
+                    readOnly
+                    style={{
+                      flex: 1, backgroundColor: "#dcfce7", border: "1px solid #86efac",
+                      borderRadius: "0.375rem", padding: "0.625rem 0.75rem",
+                      color: "#166534", fontFamily: "monospace", fontSize: "0.8125rem", outline: "none",
+                    }}
+                  />
+                  <button
+                    onClick={() => setShowNewWebhookSecret(!showNewWebhookSecret)}
+                    aria-label={showNewWebhookSecret ? "Hide secret" : "Show secret"}
+                    style={{ padding: "0.625rem", backgroundColor: "#dcfce7", border: "1px solid #86efac", borderRadius: "0.375rem", cursor: "pointer" }}
+                  >
+                    {showNewWebhookSecret ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
+                  <button
+                    onClick={() => copyToClipboard(newWebhookSecret, "new-webhook")}
+                    aria-label="Copy new webhook secret"
+                    style={{ padding: "0.625rem", backgroundColor: "#16a34a", border: "none", borderRadius: "0.375rem", cursor: "pointer", color: "#fff" }}
+                  >
+                    {copied === "new-webhook" ? <Check size={14} /> : <Copy size={14} />}
+                  </button>
+                </div>
               </div>
+            )}
+          </section>
 
-              <div
-                style={{
-                  backgroundColor: "#f9fafb",
-                  borderColor: "#e5e7eb",
-                  borderWidth: "1px",
-                  borderRadius: "0.5rem",
-                  padding: "1rem",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    marginBottom: "0.5rem",
-                  }}
-                >
-                  <span style={{ fontSize: "0.875rem", color: "#1a1a3e" }}>
-                    Rate Limit
-                  </span>
-                  <span
-                    style={{
-                      fontSize: "0.875rem",
-                      fontWeight: "600",
-                      color: "#fbbf24",
-                    }}
-                  >
-                    10,000/min
-                  </span>
+          {/* API Status */}
+          <section style={card}>
+            <h2 style={{ fontSize: "1.5rem", fontWeight: "bold", color: "#1a1a3e", marginBottom: "1.5rem" }}>API Status</h2>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+              {(
+                [
+                  { label: "Status", value: "● Operational", valueStyle: { backgroundColor: "#d1fae5", color: "#065f46", border: "1px solid #a7f3d0", padding: "0.2rem 0.6rem", borderRadius: "9999px", fontSize: "0.75rem", fontWeight: 600 } as React.CSSProperties },
+                  { label: "Uptime", value: "99.99%", valueStyle: { color: "#fbbf24", fontWeight: 600 } as React.CSSProperties },
+                  { label: "Response Time", value: "145ms avg", valueStyle: { color: "#fbbf24", fontWeight: 600 } as React.CSSProperties },
+                  { label: "Rate Limit", value: "5 req/min", valueStyle: { color: "#fbbf24", fontWeight: 600 } as React.CSSProperties },
+                ] as { label: string; value: string; valueStyle: React.CSSProperties }[]
+              ).map(({ label, value, valueStyle }) => (
+                <div key={label} style={{ backgroundColor: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "0.5rem", padding: "0.875rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: "0.875rem", color: "#1a1a3e" }}>{label}</span>
+                  <span style={valueStyle}>{value}</span>
                 </div>
-                <p style={{ fontSize: "0.75rem", color: "#6b7280" }}>
-                  Per API key
-                </p>
-              </div>
+              ))}
             </div>
           </section>
         </div>
 
-        {/* Sample Requests & Responses */}
-        <section
-          style={{
-            marginTop: "3rem",
-            borderColor: "#3d3d6b",
-            borderWidth: "1px",
-            borderRadius: "0.5rem",
-            backgroundColor: "#ffffff",
-            padding: "1.5rem",
-            backdropFilter: "blur(10px)",
-          }}
-        >
-          <h2
-            style={{
-              fontSize: "1.875rem",
-              fontWeight: "bold",
-              color: "#1a1a3e",
-              marginBottom: "1.5rem",
-            }}
-          >
-            Sample Requests & Responses
+        {/* ── Sample Requests & Responses ── */}
+        <section style={{ ...card, marginTop: "3rem" }}>
+          <h2 style={{ fontSize: "1.875rem", fontWeight: "bold", color: "#1a1a3e", marginBottom: "1.5rem" }}>
+            Sample Requests &amp; Responses
           </h2>
 
-          <div style={{ display: "flex", gap: "1rem", marginBottom: "2rem" }}>
-            <button
-              onClick={() => setActiveEndpoint("create")}
-              style={{
-                padding: "0.75rem 1.5rem",
-                borderRadius: "0.5rem",
-                fontWeight: "600",
-                fontSize: "0.875rem",
-                backgroundColor: activeEndpoint === "create" ? "#fbbf24" : "#f3f4f6",
-                color: "#1a1a3e",
-                border: "none",
-                cursor: "pointer",
-                transition: "all 0.2s"
-              }}
-            >
-              Create Payment
-            </button>
-            <button
-              onClick={() => setActiveEndpoint("status")}
-              style={{
-                padding: "0.75rem 1.5rem",
-                borderRadius: "0.5rem",
-                fontWeight: "600",
-                fontSize: "0.875rem",
-                backgroundColor: activeEndpoint === "status" ? "#fbbf24" : "#f3f4f6",
-                color: "#1a1a3e",
-                border: "none",
-                cursor: "pointer",
-                transition: "all 0.2s"
-              }}
-            >
-              Get Payment Status
-            </button>
-          </div>
-
-          {/* Tabs */}
-          <div
-            style={{
-              display: "flex",
-              gap: "0.5rem",
-              marginBottom: "1.5rem",
-              borderBottomColor: "#e5e7eb",
-              borderBottomWidth: "1px",
-              overflowX: "auto",
-            }}
-          >
-            {[
-              { id: "rest", label: "cURL", Icon: Terminal },
-              { id: "js", label: "JavaScript", Icon: Braces },
-              { id: "python", label: "Python", Icon: Code },
-            ].map((tab) => (
+          {/* Endpoint selector */}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginBottom: "1.5rem" }}>
+            {ENDPOINTS.map(({ id, label }) => (
               <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                key={id}
+                onClick={() => setActiveEndpoint(id)}
                 style={{
-                  padding: "0.5rem 1rem",
-                  fontWeight: "500",
+                  padding: "0.5rem 1.125rem",
+                  borderRadius: "0.5rem",
+                  fontWeight: 600,
                   fontSize: "0.875rem",
-                  borderBottomWidth: "2px",
-                  borderBottomColor:
-                    activeTab === tab.id ? "#fbbf24" : "transparent",
-                  color: activeTab === tab.id ? "#fbbf24" : "#9ca3af",
-                  backgroundColor: "transparent",
+                  backgroundColor: activeEndpoint === id ? "#fbbf24" : "#f3f4f6",
+                  color: "#1a1a3e",
+                  border: "none",
                   cursor: "pointer",
-                  transition: "all 0.2s",
-                  whiteSpace: "nowrap",
-                }}
-                onMouseEnter={(e) => {
-                  if (activeTab !== tab.id) {
-                    (e.target as HTMLElement).style.color = "#6b7280";
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (activeTab !== tab.id) {
-                    (e.target as HTMLElement).style.color = "#9ca3af";
-                  }
+                  transition: "background-color 0.15s",
                 }}
               >
-                <tab.Icon
-                  style={{ marginRight: "0.25rem", display: "inline" }}
-                  size={16}
-                />
-                {tab.label}
+                {id === "webhook" && <Shield size={13} style={{ display: "inline", marginRight: "0.3rem", verticalAlign: "middle" }} />}
+                {label}
               </button>
             ))}
           </div>
 
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
-              gap: "2rem",
-            }}
-          >
-            {/* Request */}
-            <div>
-              <h3
-                style={{
-                  fontSize: "1.125rem",
-                  fontWeight: "600",
-                  color: "#1a1a3e",
-                  marginBottom: "1rem",
-                }}
-              >
-                Request
-              </h3>
-              <div
-                style={{
-                  backgroundColor: "#1a1a3e",
-                  borderColor: "#3d3d6b",
-                  borderWidth: "1px",
-                  borderRadius: "0.5rem",
-                  padding: "1rem",
-                  overflowX: "auto",
-                }}
-              >
-                <pre
-                  style={{
-                    color: "#e0e0ff",
-                    fontFamily: "monospace",
-                    fontSize: "0.875rem",
-                    lineHeight: "1.5",
-                    whiteSpace: "pre-wrap",
-                    wordBreak: "break-word",
-                    margin: 0,
-                  }}
-                >
-                  {activeTab === "rest" && restRequest}
-                  {activeTab === "js" && jsRequest}
-                  {activeTab === "python" && pythonRequest}
-                </pre>
-              </div>
-              <button
-                onClick={() =>
-                  copyToClipboard(
-                    activeTab === "rest"
-                      ? restRequest
-                      : activeTab === "js"
-                        ? jsRequest
-                        : pythonRequest,
-                    `request-${activeTab}`,
-                  )
-                }
-                style={{
-                  marginTop: "0.75rem",
-                  padding: "0.5rem 1rem",
-                  borderRadius: "0.375rem",
-                  backgroundColor: "#fbbf24",
-                  color: "#1a1a3e",
-                  border: "none",
-                  cursor: "pointer",
-                  fontSize: "0.875rem",
-                  fontWeight: "600",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.5rem",
-                  transition: "all 0.2s",
-                }}
-                onMouseEnter={(e) => {
-                  (e.target as HTMLElement).style.backgroundColor = "#f59e0b";
-                }}
-                onMouseLeave={(e) => {
-                  (e.target as HTMLElement).style.backgroundColor = "#fbbf24";
-                }}
-              >
-                {copied === `request-${activeTab}` ? (
-                  <>
-                    <Check style={{ width: "1rem", height: "1rem" }} />
-                    Copied!
-                  </>
-                ) : (
-                  <>
-                    <Copy style={{ width: "1rem", height: "1rem" }} />
-                    Copy
-                  </>
-                )}
-              </button>
-            </div>
+          {/* Endpoint meta */}
+          <div style={{ marginBottom: "1.25rem", padding: "0.75rem 1rem", backgroundColor: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "0.5rem", fontSize: "0.8125rem", color: "#6b7280", fontFamily: "monospace" }}>
+            {activeEndpoint === "create"  && <><span style={{ color: "#16a34a", fontWeight: 700 }}>POST</span>{"  "}{baseUrl}/api/v1/payments</>}
+            {activeEndpoint === "fetch"   && <><span style={{ color: "#2563eb", fontWeight: 700 }}>GET</span>{"   "}{baseUrl}/api/v1/payments/:id</>}
+            {activeEndpoint === "list"    && <><span style={{ color: "#2563eb", fontWeight: 700 }}>GET</span>{"   "}{baseUrl}/api/v1/payments</>}
+            {activeEndpoint === "webhook" && <><span style={{ color: "#7c3aed", fontWeight: 700 }}>POST</span>{"  "}https://yoursite.com/webhooks/fluxapay</>}
+          </div>
 
-            {/* Response */}
-            <div>
-              <h3
-                style={{
-                  fontSize: "1.125rem",
-                  fontWeight: "600",
-                  color: "#1a1a3e",
-                  marginBottom: "1rem",
-                }}
-              >
-                Response
-              </h3>
-              <div
-                style={{
-                  backgroundColor: "#1a1a3e",
-                  borderColor: "#3d3d6b",
-                  borderWidth: "1px",
-                  borderRadius: "0.5rem",
-                  padding: "1rem",
-                  overflowX: "auto",
-                }}
-              >
-                <pre
-                  style={{
-                    color: "#e0e0ff",
-                    fontFamily: "monospace",
-                    fontSize: "0.875rem",
-                    lineHeight: "1.5",
-                    whiteSpace: "pre-wrap",
-                    wordBreak: "break-word",
-                    margin: 0,
-                  }}
-                >
-                  {restResponse}
-                </pre>
-              </div>
+          {/* Language tabs */}
+          <div style={{ display: "flex", gap: "0", marginBottom: "1.25rem", borderBottom: "1px solid #e5e7eb" }}>
+            {TABS.map(({ id, label, Icon }) => (
               <button
-                onClick={() => copyToClipboard(restResponse, "response")}
+                key={id}
+                onClick={() => setActiveTab(id)}
                 style={{
-                  marginTop: "0.75rem",
                   padding: "0.5rem 1rem",
-                  borderRadius: "0.375rem",
-                  backgroundColor: "#fbbf24",
-                  color: "#1a1a3e",
-                  border: "none",
-                  cursor: "pointer",
+                  fontWeight: 500,
                   fontSize: "0.875rem",
-                  fontWeight: "600",
-                  display: "flex",
+                  borderTop: "none",
+                  borderLeft: "none",
+                  borderRight: "none",
+                  borderBottom: `2px solid ${activeTab === id ? "#fbbf24" : "transparent"}`,
+                  color: activeTab === id ? "#fbbf24" : "#9ca3af",
+                  backgroundColor: "transparent",
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                  display: "inline-flex",
                   alignItems: "center",
-                  gap: "0.5rem",
-                  transition: "all 0.2s",
-                }}
-                onMouseEnter={(e) => {
-                  (e.target as HTMLElement).style.backgroundColor = "#f59e0b";
-                }}
-                onMouseLeave={(e) => {
-                  (e.target as HTMLElement).style.backgroundColor = "#fbbf24";
+                  gap: "0.3rem",
                 }}
               >
-                {copied === "response" ? (
-                  <>
-                    <Check style={{ width: "1rem", height: "1rem" }} />
-                    Copied!
-                  </>
-                ) : (
-                  <>
-                    <Copy style={{ width: "1rem", height: "1rem" }} />
-                    Copy
-                  </>
-                )}
+                <Icon size={14} />
+                {label}
               </button>
+            ))}
+          </div>
+
+          {/* Request / Response side by side */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "2rem" }}>
+            <div>
+              <h3 style={{ fontSize: "1rem", fontWeight: 600, color: "#1a1a3e", marginBottom: "0.75rem" }}>
+                {activeEndpoint === "webhook" ? "Verification Handler" : "Request"}
+              </h3>
+              <CodeBlock
+                code={requestCode}
+                id={`req-${activeEndpoint}-${activeTab}`}
+                copied={copied}
+                onCopy={copyToClipboard}
+              />
+            </div>
+            <div>
+              <h3 style={{ fontSize: "1rem", fontWeight: 600, color: "#1a1a3e", marginBottom: "0.75rem" }}>
+                {activeEndpoint === "webhook" ? "Webhook Payload" : "Response"}
+              </h3>
+              <CodeBlock
+                code={responseCode}
+                id={`res-${activeEndpoint}`}
+                copied={copied}
+                onCopy={copyToClipboard}
+              />
             </div>
           </div>
         </section>
 
-        {/* Additional Resources */}
-        <section
-          style={{
-            marginTop: "3rem",
-            borderColor: "#3d3d6b",
-            borderWidth: "1px",
-            borderRadius: "0.5rem",
-            backgroundColor: "#ffffff",
-            padding: "1.5rem",
-            backdropFilter: "blur(10px)",
-          }}
-        >
-          <h2
-            style={{
-              fontSize: "1.875rem",
-              fontWeight: "bold",
-              color: "#1a1a3e",
-              marginBottom: "1.5rem",
-            }}
-          >
-            Need Help?
-          </h2>
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
-              gap: "1.5rem",
-            }}
-          >
-            <div
-              style={{
-                backgroundColor: "#f9fafb",
-                borderColor: "#e5e7eb",
-                borderWidth: "1px",
-                borderRadius: "0.5rem",
-                padding: "1.5rem",
-              }}
-            >
-              <div style={{ fontSize: "1.5rem", marginBottom: "0.5rem" }}>
-                📖
+        {/* ── Need Help ── */}
+        <section style={{ ...card, marginTop: "3rem" }}>
+          <h2 style={{ fontSize: "1.875rem", fontWeight: "bold", color: "#1a1a3e", marginBottom: "1.5rem" }}>Need Help?</h2>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: "1.5rem" }}>
+            {[
+              { icon: "📖", title: "Full Documentation", desc: "Comprehensive API docs with detailed examples and use cases.", href: DOCS_URLS.FULL_DOCS, cta: "Read docs →" },
+              { icon: "💬", title: "Community Support", desc: "Join our community forums and chat with other developers.", href: DOCS_URLS.COMMUNITY, cta: "Join community →" },
+              { icon: "⚙️", title: "Status & Support", desc: "Check system status and get technical support from our team.", href: DOCS_URLS.STATUS, cta: "Get help →" },
+            ].map(({ icon, title, desc, href, cta }) => (
+              <div key={title} style={{ backgroundColor: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "0.5rem", padding: "1.5rem" }}>
+                <div style={{ fontSize: "1.5rem", marginBottom: "0.5rem" }}>{icon}</div>
+                <h3 style={{ fontSize: "1.125rem", fontWeight: 600, color: "#1a1a3e", marginBottom: "0.5rem" }}>{title}</h3>
+                <p style={{ fontSize: "0.875rem", color: "#6b7280", marginBottom: "1rem", lineHeight: 1.5 }}>{desc}</p>
+                <a href={href} style={{ color: "#fbbf24", textDecoration: "none", fontSize: "0.875rem", fontWeight: 600 }}>{cta}</a>
               </div>
-              <h3
-                style={{
-                  fontSize: "1.125rem",
-                  fontWeight: "600",
-                  color: "#1a1a3e",
-                  marginBottom: "0.5rem",
-                }}
-              >
-                Full Documentation
-              </h3>
-              <p
-                style={{
-                  fontSize: "0.875rem",
-                  color: "#6b7280",
-                  marginBottom: "1rem",
-                  lineHeight: "1.5",
-                }}
-              >
-                Explore comprehensive API documentation with detailed examples
-                and use cases.
-              </p>
-              <a
-                href={DOCS_URLS.FULL_DOCS}
-                style={{
-                  color: "#fbbf24",
-                  textDecoration: "none",
-                  fontSize: "0.875rem",
-                  fontWeight: "600",
-                }}
-              >
-                Read docs →
-              </a>
-            </div>
-
-            <div
-              style={{
-                backgroundColor: "#f9fafb",
-                borderColor: "#e5e7eb",
-                borderWidth: "1px",
-                borderRadius: "0.5rem",
-                padding: "1.5rem",
-              }}
-            >
-              <div style={{ fontSize: "1.5rem", marginBottom: "0.5rem" }}>
-                💬
-              </div>
-              <h3
-                style={{
-                  fontSize: "1.125rem",
-                  fontWeight: "600",
-                  color: "#1a1a3e",
-                  marginBottom: "0.5rem",
-                }}
-              >
-                Community Support
-              </h3>
-              <p
-                style={{
-                  fontSize: "0.875rem",
-                  color: "#6b7280",
-                  marginBottom: "1rem",
-                  lineHeight: "1.5",
-                }}
-              >
-                Join our community forums and chat with other developers.
-              </p>
-              <a
-                href={DOCS_URLS.COMMUNITY}
-                style={{
-                  color: "#fbbf24",
-                  textDecoration: "none",
-                  fontSize: "0.875rem",
-                  fontWeight: "600",
-                }}
-              >
-                Join community →
-              </a>
-            </div>
-
-            <div
-              style={{
-                backgroundColor: "#f9fafb",
-                borderColor: "#e5e7eb",
-                borderWidth: "1px",
-                borderRadius: "0.5rem",
-                padding: "1.5rem",
-              }}
-            >
-              <div style={{ fontSize: "1.5rem", marginBottom: "0.5rem" }}>
-                ⚙️
-              </div>
-              <h3
-                style={{
-                  fontSize: "1.125rem",
-                  fontWeight: "600",
-                  color: "#1a1a3e",
-                  marginBottom: "0.5rem",
-                }}
-              >
-                Status & Support
-              </h3>
-              <p
-                style={{
-                  fontSize: "0.875rem",
-                  color: "#6b7280",
-                  marginBottom: "1rem",
-                  lineHeight: "1.5",
-                }}
-              >
-                Check system status and get technical support from our team.
-              </p>
-              <a
-                href={DOCS_URLS.STATUS}
-                style={{
-                  color: "#fbbf24",
-                  textDecoration: "none",
-                  fontSize: "0.875rem",
-                  fontWeight: "600",
-                }}
-              >
-                Get help →
-              </a>
-            </div>
+            ))}
           </div>
         </section>
       </main>

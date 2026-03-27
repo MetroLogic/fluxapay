@@ -138,6 +138,24 @@ export const api = {
         if (!res.ok) throw new ApiError(res.status, "Login failed");
         return res.json();
       }),
+    verifyOtp: (data: { merchantId: string; channel: "email" | "phone"; otp: string }) =>
+      fetch(`${API_BASE_URL}/api/merchants/verify-otp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      }).then((res) => {
+        if (!res.ok) throw new ApiError(res.status, "OTP verification failed");
+        return res.json();
+      }),
+    resendOtp: (data: { merchantId: string; channel: "email" | "phone" }) =>
+      fetch(`${API_BASE_URL}/api/merchants/resend-otp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      }).then((res) => {
+        if (!res.ok) throw new ApiError(res.status, "Failed to resend OTP");
+        return res.json();
+      }),
   },
 
   // Merchant endpoints
@@ -168,6 +186,14 @@ export const api = {
       fetchWithAuth("/api/v1/keys/regenerate", {
         method: "POST",
       }),
+    rotateApiKey: () =>
+      fetchWithAuth("/api/merchants/keys/rotate-api-key", {
+        method: "POST",
+      }),
+    rotateWebhookSecret: () =>
+      fetchWithAuth("/api/merchants/keys/rotate-webhook-secret", {
+        method: "POST",
+      }),
   },
 
   // Sweep / Settlement Batch endpoints (admin-only)
@@ -179,10 +205,11 @@ export const api = {
       }),
 
     /** Manually trigger a full accounts sweep (settlement batch) */
-    runSweep: (): Promise<Response> =>
-      fetch(`${API_BASE_URL}/api/admin/settlement/run`, {
+    runSweep: (dryRun?: boolean): Promise<Response> =>
+      fetch(`${API_BASE_URL}/api/admin/sweep/run`, {
         method: "POST",
         headers: adminHeaders(),
+        body: JSON.stringify({ dry_run: dryRun || false }),
       }),
   },
 
@@ -397,6 +424,46 @@ export const api = {
       if (!response.ok) throw new ApiError(response.status, "Export failed");
       return response.blob();
     },
+  },
+
+  // Invoices (merchant-scoped)
+  invoices: {
+    create: (data: {
+      customer_name: string;
+      customer_email: string;
+      line_items: Array<{
+        description: string;
+        quantity: number;
+        unit_price: number;
+      }>;
+      currency: string;
+      due_date: string;
+      notes?: string;
+    }) =>
+      fetchWithAuth("/api/v1/invoices", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+
+    list: (params?: {
+      page?: number;
+      limit?: number;
+      status?: string;
+    }) => {
+      const sp = new URLSearchParams();
+      if (params?.page != null) sp.set("page", String(params.page));
+      if (params?.limit != null) sp.set("limit", String(params.limit));
+      if (params?.status && params.status !== "all") sp.set("status", params.status);
+      return fetchWithAuth(`/api/v1/invoices?${sp.toString()}`);
+    },
+
+    getById: (invoiceId: string) => fetchWithAuth(`/api/v1/invoices/${invoiceId}`),
+
+    updateStatus: (invoiceId: string, status: string) =>
+      fetchWithAuth(`/api/v1/invoices/${invoiceId}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ status }),
+      }),
   },
 
   // Webhooks (merchant-scoped webhook delivery logs)

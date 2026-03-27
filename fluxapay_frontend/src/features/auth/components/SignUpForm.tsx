@@ -116,9 +116,14 @@ const SignUpForm = () => {
       setErrors({});
       setIsSubmitting(true);
 
-      await api.auth.signup(validData);
+      const response = await api.auth.signup(validData);
 
-      toast.success("Signup successful!");
+      toast.success("Signup successful! Please verify your account.");
+      
+      // Redirect to OTP verification page
+      if (response.merchantId) {
+        window.location.href = `/verify-otp?merchantId=${response.merchantId}&channel=email`;
+      }
     } catch (err) {
       if (err instanceof yup.ValidationError) {
         const fieldErrors: {
@@ -177,6 +182,8 @@ const SignUpForm = () => {
             {/* Form */}
             <form
               onSubmit={handleSubmit}
+              aria-label="Sign up form"
+              noValidate
               className="space-y-5 animate-fade-in [animation-delay:200ms]"
             >
               {/* Name */}
@@ -230,6 +237,8 @@ const SignUpForm = () => {
                   >
                     <SelectTrigger
                       aria-labelledby="country-label"
+                      aria-describedby={errors.country ? "country-error" : undefined}
+                      aria-invalid={errors.country ? "true" : undefined}
                       className={cn(
                         "w-full h-[46px] rounded-[10px] border px-4 text-sm bg-white focus:ring-2 focus:ring-[#5649DF] focus:border-[#5649DF]",
                         errors.country ? "border-red-500" : "border-[#D9D9D9]"
@@ -240,7 +249,7 @@ const SignUpForm = () => {
                       {COUNTRIES.map((country) => (
                         <SelectItem key={country.code} value={country.code}>
                           <div className="flex items-center gap-2">
-                            <country.Icon className="w-4 h-3" />
+                            <country.Icon className="w-4 h-3" aria-hidden="true" />
                             <span>{country.name}</span>
                           </div>
                         </SelectItem>
@@ -248,7 +257,7 @@ const SignUpForm = () => {
                     </SelectContent>
                   </Select>
                   {errors.country && (
-                    <span className="text-xs text-red-500">{errors.country}</span>
+                    <span id="country-error" role="alert" className="text-xs text-red-500">{errors.country}</span>
                   )}
                 </div>
 
@@ -313,6 +322,8 @@ const SignUpForm = () => {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    aria-pressed={showPassword}
                     className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-500 transition-colors"
                   >
                     {showPassword ? (
@@ -323,6 +334,7 @@ const SignUpForm = () => {
                         fill="none"
                         stroke="currentColor"
                         strokeWidth="2"
+                        aria-hidden="true"
                       >
                         <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
                         <line x1="1" y1="1" x2="23" y2="23" />
@@ -335,6 +347,7 @@ const SignUpForm = () => {
                         fill="none"
                         stroke="currentColor"
                         strokeWidth="2"
+                        aria-hidden="true"
                       >
                         <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
                         <circle cx="12" cy="12" r="3" />

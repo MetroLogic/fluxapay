@@ -45,6 +45,7 @@ export class PaymentService {
     currency,
     customer_email,
     merchantId,
+    description,
     metadata,
     success_url,
     cancel_url,
@@ -53,12 +54,15 @@ export class PaymentService {
     currency: string;
     customer_email: string;
     merchantId: string;
+    description?: string;
     metadata?: Record<string, unknown>;
     success_url?: string;
     cancel_url?: string;
   }) {
     const paymentId = uuidv4();
     const expiration = new Date(Date.now() + 15 * 60 * 1000); // 15 min expiry
+
+    // Build absolute checkout URL using PAY_CHECKOUT_BASE env var
     const checkoutBase = PaymentService.getCheckoutBaseUrl();
     const checkout_url = `${checkoutBase}/pay/${paymentId}`;
 
@@ -84,6 +88,7 @@ export class PaymentService {
         amount,
         currency,
         customer_email,
+        description: description ?? null,
         merchantId,
         metadata: (metadata ?? {}) as any,
         expiration,

@@ -38,11 +38,14 @@ const navItems = [
 
 export function Sidebar({ className, isOpen, onClose }: SidebarProps) {
   const pathname = usePathname();
+  // On mobile (isOpen is defined), hide from AT when closed.
+  // On desktop (md+), the sidebar is always visible via CSS, so never aria-hidden.
+  const ariaHidden = isOpen === false ? true : undefined;
 
   return (
     <aside
       aria-label="Main sidebar"
-      aria-hidden={!isOpen ? undefined : undefined}
+      aria-hidden={ariaHidden}
       className={cn(
         "flex h-full w-64 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-transform duration-300 ease-in-out md:translate-x-0",
         isOpen ? "translate-x-0" : "-translate-x-full",
