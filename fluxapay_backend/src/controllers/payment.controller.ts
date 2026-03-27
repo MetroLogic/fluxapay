@@ -7,7 +7,7 @@ const prisma = new PrismaClient();
 
 export const createPayment = async (req: Request, res: Response) => {
     try {
-        const { order_id, amount, currency, customer_email, metadata, success_url, cancel_url } = req.body;
+        const { order_id, amount, currency, customer_email, description, metadata, success_url, cancel_url } = req.body;
         const authReq = req as AuthRequest;
         const merchantId = authReq.merchantId;
 
@@ -28,14 +28,16 @@ export const createPayment = async (req: Request, res: Response) => {
             amount,
             currency,
             customer_email,
+            description,
             metadata: metadata || {},
             success_url,
             cancel_url,
         });
 
-        // We no longer store order_id/timeline as explicit Payment columns in the current schema.
-        // Keep logic simple and return the created payment directly.
-        res.status(201).json(payment);
+        res.status(201).json({
+            ...payment,
+            checkout_url: payment.checkout_url,
+        });
     } catch (error: unknown) {
         console.error('Error creating payment:', error);
         res.status(500).json({ error: "Failed to create payment" });

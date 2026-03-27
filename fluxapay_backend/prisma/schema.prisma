@@ -136,17 +136,20 @@ model WebhookRetryAttempt {
 }
 
 model Payment {
-  id             String   @id @default(cuid())
-  merchant       Merchant @relation(fields: [merchantId], references: [id])
+  id             String        @id @default(cuid())
+  merchant       Merchant      @relation(fields: [merchantId], references: [id])
   merchantId     String
   amount         Decimal
   currency       String
   customer_email String
+  description    String?
   metadata       Json
   expiration     DateTime
   status         PaymentStatus @default(pending)
   checkout_url   String
-  createdAt      DateTime @default(now())
+  success_url    String?
+  cancel_url     String?
+  createdAt      DateTime      @default(now())
   refunds        Refund[]
   invoice        Invoice?
 }
