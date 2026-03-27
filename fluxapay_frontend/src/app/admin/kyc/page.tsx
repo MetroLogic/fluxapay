@@ -499,30 +499,78 @@ const AdminKycPage = () => {
                 <h3 className="text-sm font-semibold text-slate-900 uppercase tracking-wider mb-4">
                   Submitted Documents
                 </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {selectedApplication.documents.map((doc, idx) => (
-                    <div
-                      key={idx}
-                      className="flex items-center justify-between p-4 border border-slate-200 rounded-xl hover:border-slate-300 transition-colors bg-white"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center">
-                          <FileText className="w-5 h-5 text-indigo-600" />
+                {selectedApplication.documents.length === 0 ? (
+                  <p className="text-sm text-slate-500">No documents submitted.</p>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {selectedApplication.documents.map((doc, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-center justify-between p-4 border border-slate-200 rounded-xl hover:border-slate-300 transition-colors bg-white"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center">
+                            <FileText className="w-5 h-5 text-indigo-600" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-slate-900">
+                              {doc.type}
+                            </p>
+                            <p className="text-xs text-slate-500">{doc.name}</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-sm font-medium text-slate-900">
-                            {doc.type}
-                          </p>
-                          <p className="text-xs text-slate-500">{doc.name}</p>
-                        </div>
+                        {doc.url ? (
+                          <a
+                            href={doc.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-sm text-indigo-600 font-medium hover:text-indigo-700"
+                          >
+                            View
+                          </a>
+                        ) : (
+                          <span className="text-sm text-slate-400">No URL</span>
+                        )}
                       </div>
-                      <button className="text-sm text-indigo-600 font-medium hover:text-indigo-700">
-                        View
-                      </button>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </section>
+
+              {/* Rejection Reason */}
+              {selectedApplication.rejectionReason && (
+                <section>
+                  <h3 className="text-sm font-semibold text-slate-900 uppercase tracking-wider mb-4">
+                    Rejection Reason
+                  </h3>
+                  <div className="bg-rose-50 border border-rose-200 rounded-xl p-4">
+                    <p className="text-sm text-rose-800">{selectedApplication.rejectionReason}</p>
+                  </div>
+                </section>
+              )}
+
+              {/* Audit Trail */}
+              {selectedApplication.auditTrail.length > 0 && (
+                <section>
+                  <h3 className="text-sm font-semibold text-slate-900 uppercase tracking-wider mb-4">
+                    Audit Trail
+                  </h3>
+                  <ol className="relative border-l border-slate-200 space-y-4 ml-3">
+                    {selectedApplication.auditTrail.map((entry, idx) => (
+                      <li key={idx} className="ml-4">
+                        <span className="absolute -left-1.5 mt-1.5 w-3 h-3 rounded-full bg-slate-300 border-2 border-white" />
+                        <p className="text-sm font-medium text-slate-900">{entry.action}</p>
+                        <p className="text-xs text-slate-500">
+                          {entry.performedBy} · {entry.timestamp}
+                        </p>
+                        {entry.note && (
+                          <p className="text-xs text-slate-600 mt-1 italic">{entry.note}</p>
+                        )}
+                      </li>
+                    ))}
+                  </ol>
+                </section>
+              )}
             </div>
 
             {/* Actions Footer */}
