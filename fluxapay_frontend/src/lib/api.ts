@@ -186,6 +186,14 @@ export const api = {
       fetchWithAuth("/api/v1/keys/regenerate", {
         method: "POST",
       }),
+    rotateApiKey: () =>
+      fetchWithAuth("/api/merchants/keys/rotate-api-key", {
+        method: "POST",
+      }),
+    rotateWebhookSecret: () =>
+      fetchWithAuth("/api/merchants/keys/rotate-webhook-secret", {
+        method: "POST",
+      }),
   },
 
   // Sweep / Settlement Batch endpoints (admin-only)
