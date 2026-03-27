@@ -1,0 +1,74 @@
+import express from "express";
+import cors from "cors";
+import swaggerUi from "swagger-ui-express";
+import { specs } from "./docs/swagger";
+import { PrismaClient } from "./generated/client/client";
+import { requestIdMiddleware } from "./middleware/requestId.middleware";
+import {
+  requestLoggingMiddleware,
+  errorLoggingMiddleware,
+} from "./middleware/requestLogging.middleware";
+import { metricsMiddleware } from "./middleware/metrics.middleware";
+import merchantRoutes from "./routes/merchant.route";
+import settlementRoutes from "./routes/settlement.route";
+import kycRoutes from "./routes/kyc.route";
+import webhookRoutes from "./routes/webhook.route";
+import paymentRoutes from "./routes/payment.route";
+import invoiceRoutes from "./routes/invoice.route";
+import refundRoutes from "./routes/refund.route";
+import reconciliationRoutes from "./routes/reconciliation.route";
+import sweepRoutes from "./routes/sweep.route";
+import keysRoutes from "./routes/keys.route";
+import settlementBatchRoutes from "./routes/settlementBatch.route";
+import dashboardRoutes from "./routes/dashboard.route";
+import auditRoutes from "./routes/audit.route";
+
+const app = express();
+const prisma = new PrismaClient();
+
+// Observability Middleware (must be first)
+app.use(requestIdMiddleware);
+app.use(requestLoggingMiddleware);
+app.use(metricsMiddleware);
+
+app.use(cors());
+app.use(express.json());
+
+// Swagger UI
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(specs));
+
+app.use("/api/v1/merchants", merchantRoutes);
+app.use("/api/v1/settlements", settlementRoutes);
+app.use("/api/v1/merchants/kyc", kycRoutes);
+app.use("/api/v1/webhooks", webhookRoutes);
+app.use("/api/v1/payments", paymentRoutes);
+app.use("/api/v1/invoices", invoiceRoutes);
+app.use("/api/v1/refunds", refundRoutes);
+app.use("/api/v1/keys", keysRoutes);
+app.use("/api/v1/dashboard", dashboardRoutes);
+app.use("/api/v1/admin/reconciliation", reconciliationRoutes);
+app.use("/api/v1/admin/settlement", settlementBatchRoutes);
+app.use("/api/v1/admin/sweep", sweepRoutes);
+app.use("/api/v1/admin", auditRoutes);
+
+// Basic health check
+app.get("/health", (req, res) => {
+  res.json({ status: "ok", timestamp: new Date() });
+});
+
+// Error logging middleware (must be last)
+app.use(errorLoggingMiddleware);
+
+// Example route
+/**
+ * @swagger
+ * /health:
+ *   get:
+ *     summary: Health check
+ *     description: Check if the server is running
+ *     responses:
+ *       200:
+ *         description: Server is up
+ */
+
+export { app, prisma };
