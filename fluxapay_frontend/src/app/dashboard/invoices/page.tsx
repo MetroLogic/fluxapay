@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { MOCK_INVOICES, Invoice } from "@/features/dashboard/invoices/invoices-mock";
+import { useState, useEffect, useCallback } from "react";
+import { Invoice } from "@/features/dashboard/invoices/invoices-mock";
 import { InvoicesTable } from "@/features/dashboard/invoices/InvoicesTable";
 import { InvoiceDetails } from "@/features/dashboard/invoices/InvoiceDetails";
 import { InvoiceForm } from "@/features/dashboard/invoices/InvoiceForm";
@@ -9,44 +9,86 @@ import { Modal } from "@/components/Modal";
 import { Button } from "@/components/Button";
 import { Plus } from "lucide-react";
 import { Suspense } from "react";
+import { api, ApiError } from "@/lib/api";
+import toast from "react-hot-toast";
 
 const ALL_STATUSES = ["all", "unpaid", "pending", "paid", "overdue"];
 
 function InvoicesContent() {
-  const [invoices, setInvoices] = useState<Invoice[]>(MOCK_INVOICES);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
 
-  const filteredInvoices = useMemo(() => {
-    return invoices.filter((invoice) => {
-      const matchesSearch =
-        invoice.invoice_number.toLowerCase().includes(search.toLowerCase()) ||
-        invoice.customer_name.toLowerCase().includes(search.toLowerCase()) ||
-        invoice.customer_email.toLowerCase().includes(search.toLowerCase());
-      const matchesStatus =
-        statusFilter === "all" || invoice.status === statusFilter;
-      return matchesSearch && matchesStatus;
-    });
-  }, [invoices, search, statusFilter]);
+  const fetchInvoices = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const response = await api.invoices.list({
+        page,
+        limit: 20,
+        status: statusFilter !== "all" ? statusFilter : undefined,
+      });
+      
+      if (page === 1) {
+        setInvoices(response.invoices || []);
+      } else {
+        setInvoices((prev) => [...prev, ...(response.invoices || [])]);
+      }
+      setHasMore(response.hasMore || false);
+    } catch (err) {
+      if (err instanceof ApiError) {
+        toast.error(err.message);
+      } else {
+        toast.error("Failed to load invoices");
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }, [page, statusFilter]);
 
-  const handleCreateInvoice = (
+  useEffect(() => {
+    fetchInvoices();
+  }, [fetchInvoices]);
+
+  const filteredInvoices = invoices.filter((invoice) => {
+    if (!search) return true;
+    return (
+      invoice.invoice_number?.toLowerCase().includes(search.toLowerCase()) ||
+      invoice.customer_name?.toLowerCase().includes(search.toLowerCase()) ||
+      invoice.customer_email?.toLowerCase().includes(search.toLowerCase())
+    );
+  });
+
+  const handleCreateInvoice = async (
     data: Omit<Invoice, "id" | "invoice_number" | "payment_link" | "created_at">
   ) => {
-    const now = new Date();
-    const yyyymmdd = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
-    const random = Math.floor(1000 + Math.random() * 9000);
-    const invoice_number = `INV-${yyyymmdd}-${random}`;
-    const newInvoice: Invoice = {
-      ...data,
-      id: `inv_${Date.now()}`,
-      invoice_number,
-      payment_link: `${window.location.origin}/pay/invoice/${invoice_number}`,
-      created_at: now.toISOString(),
-    };
-    setInvoices((prev) => [newInvoice, ...prev]);
-    setShowCreateModal(false);
+    try {
+      const response = await api.invoices.create({
+        customer_name: data.customer_name,
+        customer_email: data.customer_email,
+        line_items: data.line_items,
+        currency: data.currency,
+        due_date: data.due_date,
+        notes: data.notes,
+      });
+      
+      toast.success("Invoice created successfully!");
+      setShowCreateModal(false);
+      
+      // Refresh the list
+      setPage(1);
+      fetchInvoices();
+    } catch (err) {
+      if (err instanceof ApiError) {
+        toast.error(err.message);
+      } else {
+        toast.error("Failed to create invoice");
+      }
+    }
   };
 
   return (

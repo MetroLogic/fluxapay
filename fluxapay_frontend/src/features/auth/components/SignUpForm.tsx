@@ -116,9 +116,14 @@ const SignUpForm = () => {
       setErrors({});
       setIsSubmitting(true);
 
-      await api.auth.signup(validData);
+      const response = await api.auth.signup(validData);
 
-      toast.success("Signup successful!");
+      toast.success("Signup successful! Please verify your account.");
+      
+      // Redirect to OTP verification page
+      if (response.merchantId) {
+        window.location.href = `/verify-otp?merchantId=${response.merchantId}&channel=email`;
+      }
     } catch (err) {
       if (err instanceof yup.ValidationError) {
         const fieldErrors: {
