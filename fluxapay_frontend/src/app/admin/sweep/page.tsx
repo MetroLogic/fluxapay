@@ -133,6 +133,7 @@ export default function SweepPage() {
   const [sweepRunning, setSweepRunning] = useState(false);
   const [sweepResult, setSweepResult] = useState<SweepResult | null>(null);
   const [sweepError, setSweepError] = useState<string | null>(null);
+  const [dryRun, setDryRun] = useState(false);
 
   const [expandedMerchant, setExpandedMerchant] = useState<string | null>(null);
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -185,10 +186,10 @@ export default function SweepPage() {
     setSweepRunning(true);
     setSweepResult(null);
     setSweepError(null);
-    addLog("info", "▶ Triggering accounts sweep...");
+    addLog("info", dryRun ? "▶ Triggering dry-run sweep..." : "▶ Triggering accounts sweep...");
 
     try {
-      const res = await api.sweep.runSweep();
+      const res = await api.sweep.runSweep(dryRun);
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.message ?? data.error ?? `HTTP ${res.status}`);
@@ -269,6 +270,16 @@ export default function SweepPage() {
             Refresh Status
           </button>
 
+          <label className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition-all">
+            <input
+              type="checkbox"
+              checked={dryRun}
+              onChange={(e) => setDryRun(e.target.checked)}
+              className="w-4 h-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500"
+            />
+            Dry Run
+          </label>
+
           <button
             onClick={handleTriggerSweep}
             disabled={sweepRunning}
@@ -282,7 +293,7 @@ export default function SweepPage() {
             ) : (
               <>
                 <Zap className="w-4 h-4" />
-                Trigger Accounts Sweep
+                {dryRun ? "Run Dry Sweep" : "Trigger Accounts Sweep"}
               </>
             )}
           </button>
