@@ -18,7 +18,7 @@
 import { schedule, validate, type ScheduledTask } from "node-cron";
 import { runSettlementBatch } from "./settlementBatch.service";
 import { processBillingCycle } from "./plan.service";
-import { sweepService } from "./sweep.service";
+import { runSweepWithLock } from "./sweepCron.service";
 import { funderMonitorService } from "./funderMonitor.service";
 
 const SETTLEMENT_CRON_EXPR = process.env.SETTLEMENT_CRON ?? "0 0 * * *";
@@ -115,25 +115,14 @@ export function startCronJobs(): void {
     );
   }
 
-  // ── Daily Sweep Job (move USDC → master vault) ─────────────────────────────
+  // ── Periodic Sweep Job (move USDC → master vault) ─────────────────────────
   if (process.env.DISABLE_SWEEP_CRON !== "true") {
     if (validate(SWEEP_CRON_EXPR)) {
       sweepTask = schedule(
         SWEEP_CRON_EXPR,
         async () => {
           console.log(`[Cron] ⏰ Sweep triggered at ${new Date().toISOString()}`);
-          try {
-            const res = await sweepService.sweepPaidPayments({ adminId: "system" });
-            console.log(
-              `[Cron] ✅ Sweep finished: ${res.addressesSwept} address(es), total=${res.totalAmount} USDC.`,
-            );
-            if (res.skipped.length > 0) {
-              console.warn(`[Cron] Sweep skipped ${res.skipped.length} payment(s).`);
-            }
-          } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : String(err);
-            console.error(`[Cron] ❌ Sweep failed: ${msg}`);
-          }
+          await runSweepWithLock();
         },
         { timezone: "UTC" },
       );

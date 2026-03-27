@@ -136,19 +136,32 @@ model WebhookRetryAttempt {
 }
 
 model Payment {
-  id             String   @id @default(cuid())
-  merchant       Merchant @relation(fields: [merchantId], references: [id])
-  merchantId     String
-  amount         Decimal
-  currency       String
-  customer_email String
-  metadata       Json
-  expiration     DateTime
-  status         String
-  checkout_url   String
-  createdAt      DateTime @default(now())
-  refunds        Refund[]
-  invoice        Invoice?
+  id                 String    @id @default(cuid())
+  merchant           Merchant  @relation(fields: [merchantId], references: [id])
+  merchantId         String
+  amount             Decimal
+  currency           String
+  customer_email     String
+  metadata           Json
+  expiration         DateTime
+  status             String
+  checkout_url       String
+  createdAt          DateTime  @default(now())
+  // Stellar custody address assigned at payment creation
+  stellar_address    String?
+  // HD wallet derivation path (BIP44) for fast key re-derivation
+  derivation_path    String?
+  // Encrypted merchant/payment indices (legacy fallback)
+  encrypted_key_data String?
+  // Sweep tracking
+  swept              Boolean   @default(false)
+  swept_at           DateTime?
+  sweep_tx_hash      String?
+  confirmed_at       DateTime?
+  refunds            Refund[]
+  invoice            Invoice?
+
+  @@index([swept, status])
 }
 
 model Refund {
@@ -232,6 +245,28 @@ model DiscrepancyAlert {
   updated_at             DateTime              @updatedAt
 
   @@index([merchantId, is_resolved])
+}
+
+model CronLock {
+  job_name   String   @id
+  locked_at  DateTime
+  expires_at DateTime
+  locked_by  String   // hostname/pid for diagnostics
+}
+
+model AuditLog {
+  id          String           @id @default(cuid())
+  admin_id    String
+  action_type AuditActionType
+  entity_type AuditEntityType
+  entity_id   String
+  details     Json
+  created_at  DateTime         @default(now())
+
+  @@index([admin_id])
+  @@index([action_type])
+  @@index([entity_id])
+  @@index([created_at])
 }
 
 // ...existing code...
@@ -318,4 +353,23 @@ enum AlertSeverity {
   low
   medium
   high
+}
+
+enum AuditActionType {
+  kyc_approve
+  kyc_reject
+  config_change
+  sweep_trigger
+  sweep_complete
+  sweep_fail
+  settlement_batch_initiate
+  settlement_batch_complete
+  settlement_batch_fail
+}
+
+enum AuditEntityType {
+  merchant_kyc
+  system_config
+  sweep_operation
+  settlement_batch
 }
