@@ -8,7 +8,7 @@ const router = Router();
 
 /**
  * @swagger
- * /api/invoices:
+ * /api/v1/invoices:
  *   post:
  *     summary: Create invoice and payment intent
  *     tags: [Invoices]

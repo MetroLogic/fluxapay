@@ -162,6 +162,19 @@ model Payment {
   invoice            Invoice?
 
   @@index([swept, status])
+  id             String   @id @default(cuid())
+  merchant       Merchant @relation(fields: [merchantId], references: [id])
+  merchantId     String
+  amount         Decimal
+  currency       String
+  customer_email String
+  metadata       Json
+  expiration     DateTime
+  status         PaymentStatus @default(pending)
+  checkout_url   String
+  createdAt      DateTime @default(now())
+  refunds        Refund[]
+  invoice        Invoice?
 }
 
 model Refund {
@@ -267,6 +280,23 @@ model AuditLog {
   @@index([action_type])
   @@index([entity_id])
   @@index([created_at])
+enum PaymentStatus {
+  pending
+  partially_paid
+  confirmed
+  overpaid
+  expired
+  failed
+}
+
+model IdempotencyRecord {
+  idempotency_key  String   @id
+  user_id          String?
+  request_hash     String
+  response_code    Int
+  response_body    Json
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
 }
 
 // ...existing code...
@@ -353,6 +383,23 @@ enum AlertSeverity {
   low
   medium
   high
+}
+
+// Audit Logging
+model AuditLog {
+  id          String          @id @default(cuid())
+  admin_id    String
+  action_type AuditActionType
+  entity_type AuditEntityType
+  entity_id   String
+  details     Json
+  created_at  DateTime        @default(now())
+
+  @@index([created_at])
+  @@index([admin_id])
+  @@index([action_type])
+  @@index([entity_id])
+  @@index([entity_type, entity_id])
 }
 
 enum AuditActionType {

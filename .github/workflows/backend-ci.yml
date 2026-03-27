@@ -43,6 +43,8 @@ jobs:
           KMS_ENCRYPTION_PASSPHRASE: ci-test-passphrase-for-hd-wallet-secure
           HD_WALLET_MASTER_SEED: ci-test-master-seed-32chars-long-padded!!
           DISABLE_CRON: "true"
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/fluxapay_test
+          JWT_SECRET: ci-test-jwt-secret-key
 
       - name: Build Check
         run: npm run build
