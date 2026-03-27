@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { authenticateToken } from "../middleware/auth.middleware";
 import { validate, validateQuery } from "../middleware/validation.middleware";
+import { idempotencyMiddleware } from "../middleware/idempotency.middleware";
 import {
   createRefund,
   listRefunds,
@@ -54,8 +55,19 @@ const router = Router();
  *       200:
  *         description: Refunds retrieved
  */
-router.post("/", authenticateToken, validate(createRefundSchema), createRefund);
-router.get("/", authenticateToken, validateQuery(listRefundsQuerySchema), listRefunds);
+router.post(
+  "/",
+  authenticateToken,
+  idempotencyMiddleware,
+  validate(createRefundSchema),
+  createRefund,
+);
+router.get(
+  "/",
+  authenticateToken,
+  validateQuery(listRefundsQuerySchema),
+  listRefunds,
+);
 
 /**
  * @swagger
@@ -83,6 +95,11 @@ router.get("/", authenticateToken, validateQuery(listRefundsQuerySchema), listRe
  *       404:
  *         description: Refund not found
  */
-router.patch("/:refund_id/status", authenticateToken, validate(updateRefundStatusSchema), updateRefundStatus);
+router.patch(
+  "/:refund_id/status",
+  authenticateToken,
+  validate(updateRefundStatusSchema),
+  updateRefundStatus,
+);
 
 export default router;
