@@ -63,6 +63,23 @@ function getToken(): string {
   return token;
 }
 
+/** Persist auth token; uses sessionStorage when keepLoggedIn is false. */
+export function storeToken(token: string, keepLoggedIn = false): void {
+  if (keepLoggedIn) {
+    localStorage.setItem("token", token);
+  } else {
+    sessionStorage.setItem("token", token);
+    // Keep localStorage in sync so fetchWithAuth can find it
+    localStorage.setItem("token", token);
+  }
+}
+
+/** Remove auth token from all storage locations. */
+export function clearToken(): void {
+  localStorage.removeItem("token");
+  sessionStorage.removeItem("token");
+}
+
 async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
   const token = localStorage.getItem("token");
 
@@ -110,6 +127,7 @@ function adminFetch(endpoint: string, options: RequestInit = {}): Promise<Respon
     headers: { ...adminHeaders(), ...(options.headers as Record<string, string> || {}) },
   });
 }
+
 function refundAdminKeyHeader(): Record<string, string> {
   const header: Record<string, string> = {};
   const adminApiKey = process.env.NEXT_PUBLIC_ADMIN_API_KEY;
@@ -118,7 +136,7 @@ function refundAdminKeyHeader(): Record<string, string> {
 }
 
 export const api = {
-  // Authentication
+  // Authentication — routes match backend /api/merchants/*
   auth: {
     signup: (data: AuthSignupRequest) =>
       fetch(`${API_BASE_URL}/api/merchants/signup`, {
@@ -206,7 +224,6 @@ export const api = {
 
   // Sweep / Settlement Batch endpoints (admin-only)
   sweep: {
-    /** Fetch current sweep system status */
     getStatus: (): Promise<Response> =>
       fetch(`${API_BASE_URL}/api/admin/settlement/status`, {
         headers: adminHeaders(),
@@ -298,23 +315,13 @@ export const api = {
       if (params.date_from) sp.set("date_from", params.date_from);
       if (params.date_to) sp.set("date_to", params.date_to);
       sp.set("format", params.format || "csv");
-      
       const response = await fetch(
         `${API_BASE_URL}/api/settlements/export?${sp.toString()}`,
-        {
-          headers: {
-            Authorization: `Bearer ${getToken()}`,
-          },
-        }
+        { headers: { Authorization: `Bearer ${getToken()}` } },
       );
-      
       if (!response.ok) {
-        throw new ApiError(
-          response.status,
-          `Failed to export settlements: ${response.statusText}`
-        );
+        throw new ApiError(response.status, `Failed to export settlements: ${response.statusText}`);
       }
-      
       return response.blob();
     },
   },
@@ -322,27 +329,18 @@ export const api = {
   // KYC admin
   kyc: {
     admin: {
-      getSubmissions: (params?: {
-        status?: string;
-        page?: number;
-        limit?: number;
-      }) => {
+      getSubmissions: (params?: { status?: string; page?: number; limit?: number }) => {
         const sp = new URLSearchParams();
         if (params?.status) sp.set("status", params.status);
         if (params?.page != null) sp.set("page", String(params.page));
         if (params?.limit != null) sp.set("limit", String(params.limit));
-        return fetchWithAuth(
-          `/api/merchants/kyc/admin/submissions?${sp.toString()}`,
-        );
+        return fetchWithAuth(`/api/merchants/kyc/admin/submissions?${sp.toString()}`);
       },
       getByMerchantId: (merchantId: string) =>
         fetchWithAuth(`/api/merchants/kyc/admin/${merchantId}`),
       updateStatus: (
         merchantId: string,
-        body: {
-          status: "approved" | "rejected" | "additional_info_required";
-          rejection_reason?: string;
-        },
+        body: { status: "approved" | "rejected" | "additional_info_required"; rejection_reason?: string },
       ) =>
         fetchWithAuth(`/api/merchants/kyc/admin/${merchantId}/status`, {
           method: "PATCH",
@@ -351,7 +349,7 @@ export const api = {
     },
   },
 
-  // Refunds (admin-authorized backend flow)
+  // Refunds
   refunds: {
     initiate: (data: InitiateRefundRequest) =>
       fetchWithAuth("/api/refunds", {
@@ -366,16 +364,13 @@ export const api = {
       if (params?.status) sp.set("status", params.status);
       if (params?.page != null) sp.set("page", String(params.page));
       if (params?.limit != null) sp.set("limit", String(params.limit));
-
       const query = sp.toString();
       return fetchWithAuth(`/api/refunds${query ? `?${query}` : ""}`, {
         headers: refundAdminKeyHeader(),
       });
     },
     getById: (refundId: string) =>
-      fetchWithAuth(`/api/refunds/${refundId}`, {
-        headers: refundAdminKeyHeader(),
-      }),
+      fetchWithAuth(`/api/refunds/${refundId}`, { headers: refundAdminKeyHeader() }),
   },
 
   // Payments (merchant-scoped)
@@ -387,10 +382,7 @@ export const api = {
       success_url?: string;
       cancel_url?: string;
     }) =>
-      fetchWithAuth("/api/payments", {
-        method: "POST",
-        body: JSON.stringify(data),
-      }),
+      fetchWithAuth("/api/payments", { method: "POST", body: JSON.stringify(data) }),
 
     list: (params?: {
       page?: number;
@@ -503,22 +495,17 @@ export const api = {
       endpoint_url: string;
       payload_override?: Record<string, unknown>;
     }) =>
-      fetchWithAuth("/api/webhooks/test", {
-        method: "POST",
-        body: JSON.stringify(data),
-      }),
+      fetchWithAuth("/api/webhooks/test", { method: "POST", body: JSON.stringify(data) }),
   },
 
-  // Dashboard overview (metrics, charts, activity)
+  // Dashboard overview
   dashboard: {
     overviewMetrics: (params?: { from?: string; to?: string }) => {
       const sp = new URLSearchParams();
       if (params?.from) sp.set("from", params.from);
       if (params?.to) sp.set("to", params.to);
       const q = sp.toString();
-      return fetchWithAuth(
-        `/api/dashboard/overview/metrics${q ? `?${q}` : ""}`,
-      );
+      return fetchWithAuth(`/api/dashboard/overview/metrics${q ? `?${q}` : ""}`);
     },
     charts: (params?: { from?: string; to?: string }) => {
       const sp = new URLSearchParams();
@@ -532,9 +519,7 @@ export const api = {
       if (params?.from) sp.set("from", params.from);
       if (params?.to) sp.set("to", params.to);
       const q = sp.toString();
-      return fetchWithAuth(
-        `/api/dashboard/overview/activity${q ? `?${q}` : ""}`,
-      );
+      return fetchWithAuth(`/api/dashboard/overview/activity${q ? `?${q}` : ""}`);
     },
   },
 
@@ -551,8 +536,7 @@ export const api = {
         if (params?.page != null) sp.set("page", String(params.page));
         if (params?.limit != null) sp.set("limit", String(params.limit));
         if (params?.kycStatus) sp.set("kycStatus", params.kycStatus);
-        if (params?.accountStatus)
-          sp.set("accountStatus", params.accountStatus);
+        if (params?.accountStatus) sp.set("accountStatus", params.accountStatus);
         return fetchWithAuth(`/api/admin/merchants?${sp.toString()}`);
       },
       updateStatus: (merchantId: string, status: "active" | "suspended") =>

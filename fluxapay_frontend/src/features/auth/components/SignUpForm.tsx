@@ -9,7 +9,7 @@ import Input from "@/components/Input";
 import { Button } from "@/components/Button";
 import { Link, useRouter } from "@/i18n/routing";
 import { cn } from "@/lib/utils";
-import { api } from "@/lib/api";
+import { api, storeToken } from "@/lib/api";
 import {
   Select,
   SelectContent,
@@ -77,17 +77,9 @@ const SignUpForm = () => {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-
+    setFormData((prev) => ({ ...prev, [name]: value }));
     if (errors[name as keyof typeof errors]) {
-      setErrors((prev) => ({
-        ...prev,
-        [name]: "",
-      }));
+      setErrors((prev) => ({ ...prev, [name]: "" }));
     }
   };
 
@@ -98,21 +90,14 @@ const SignUpForm = () => {
       country: value,
       settlementCurrency: selectedCountry?.currency || "",
     }));
-
-    setErrors((prev) => ({
-      ...prev,
-      country: "",
-      settlementCurrency: "",
-    }));
+    setErrors((prev) => ({ ...prev, country: "", settlementCurrency: "" }));
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     try {
-      const validData = await signupSchema.validate(formData, {
-        abortEarly: false,
-      });
+      const validData = await signupSchema.validate(formData, { abortEarly: false });
 
       setErrors({});
       setIsSubmitting(true);
@@ -139,13 +124,11 @@ const SignUpForm = () => {
           bankName?: string;
           bankCode?: string;
         } = {};
-
         err.inner.forEach((issue) => {
           if (issue.path && !fieldErrors[issue.path as keyof SignUpFormData]) {
             fieldErrors[issue.path as keyof SignUpFormData] = issue.message;
           }
         });
-
         setErrors(fieldErrors);
         return;
       }
@@ -169,7 +152,7 @@ const SignUpForm = () => {
       </div>
       <div className="flex h-screen w-full items-stretch justify-between gap-0 px-3">
         {/* Card: 40% width */}
-        <div className="flex h-full w-full md:w-[40%] items-center justify-center bg-transparent ">
+        <div className="flex h-full w-full md:w-[40%] items-center justify-center bg-transparent">
           <div className="w-full max-md:max-w-md rounded-none lg:rounded-r-2xl bg-white p-8 shadow-none animate-slide-in-left">
             {/* Form header */}
             <div className="space-y-2 mb-8 animate-fade-in [animation-delay:200ms]">
@@ -233,18 +216,16 @@ const SignUpForm = () => {
                   <label id="country-label" className="block text-sm font-medium text-slate-700">
                     {tAuth("country")}
                   </label>
-                  <Select
-                    value={formData.country}
-                    onValueChange={handleCountryChange}
-                  >
+                  <Select value={formData.country} onValueChange={handleCountryChange}>
                     <SelectTrigger
                       aria-labelledby="country-label"
                       aria-describedby={errors.country ? "country-error" : undefined}
                       aria-invalid={errors.country ? "true" : undefined}
                       className={cn(
                         "w-full h-[46px] rounded-[10px] border px-4 text-sm bg-white focus:ring-2 focus:ring-[#5649DF] focus:border-[#5649DF]",
-                        errors.country ? "border-red-500" : "border-[#D9D9D9]"
-                      )}>
+                        errors.country ? "border-red-500" : "border-[#D9D9D9]",
+                      )}
+                    >
                       <SelectValue placeholder="Select Country" />
                     </SelectTrigger>
                     <SelectContent>
@@ -368,20 +349,12 @@ const SignUpForm = () => {
                 className="flex w-full items-center justify-center gap-2 rounded-xl bg-linear-to-r from-[#5649DF] to-violet-500 px-6 py-3 text-sm md:text-[16px] font-semibold text-[#FFFFFF] shadow-md transition hover:shadow-lg hover:from-indigo-600 hover:to-violet-600 disabled:cursor-not-allowed disabled:opacity-70"
               >
                 {isSubmitting && (
-                  <svg
-                    className="h-5 w-5 animate-spin"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="3"
-                  >
+                  <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
                     <circle cx="12" cy="12" r="10" className="opacity-30" />
                     <path d="M22 12a10 10 0 0 1-10 10" />
                   </svg>
                 )}
-                <span>
-                  {isSubmitting ? "Creating account..." : "Create account"}
-                </span>
+                <span>{isSubmitting ? "Creating account..." : "Create account"}</span>
               </Button>
 
               {/* Have account */}

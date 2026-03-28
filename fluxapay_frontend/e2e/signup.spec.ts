@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 /**
  * E2E – Signup flow
- * Uses mocked backend responses via route intercept so no real server is needed.
+ * Intercepts POST /api/merchants/signup (matches backend route).
  */
 test.describe('Signup flow', () => {
   test('shows validation errors for empty form', async ({ page }) => {
@@ -12,12 +12,14 @@ test.describe('Signup flow', () => {
   });
 
   test('completes signup with valid data (mocked API)', async ({ page }) => {
-    // Intercept backend calls
     await page.route('**/api/merchants/signup', (route) =>
       route.fulfill({
         status: 201,
         contentType: 'application/json',
-        body: JSON.stringify({ message: 'Merchant registered. Verify OTP to activate.', merchantId: 'mock-id' }),
+        body: JSON.stringify({
+          message: 'Merchant registered. Verify OTP to activate.',
+          merchantId: 'mock-id',
+        }),
       }),
     );
 
