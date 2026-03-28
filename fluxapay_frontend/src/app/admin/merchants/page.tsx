@@ -23,6 +23,7 @@ import {
     FileText,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { toastApiError } from '@/lib/toastApiError';
 import EmptyState from '@/components/EmptyState';
 import { api } from '@/lib/api';
 import { useAdminMerchants, type AdminMerchant } from '@/hooks/useAdminMerchants';
@@ -137,8 +138,8 @@ const AdminMerchantsPage = () => {
             await api.adminKyc.updateStatus(id, { kyc_status: status });
             void mutate();
             toast.success(`KYC status updated to ${status}`);
-        } catch {
-            toast.error('Failed to update KYC status');
+        } catch (err) {
+            toastApiError(err);
         }
         setSelectedMerchant(null);
     };
@@ -152,8 +153,8 @@ const AdminMerchantsPage = () => {
             if (!res.ok) throw new Error();
             void mutate();
             toast.success(`Merchant ${newStatus === 'active' ? 'activated' : 'suspended'}`);
-        } catch {
-            toast.error('Failed to update account status');
+        } catch (err) {
+            toastApiError(err);
         }
         setSelectedMerchant(null);
     };
@@ -241,8 +242,8 @@ const AdminMerchantsPage = () => {
 
             await simulateExportProgress();
             toast.success(message);
-        } catch {
-            toast.error('Failed to export merchants. Please try again.');
+        } catch (err) {
+            toastApiError(err);
             setIsExporting(false);
             setExportProgress(0);
         }

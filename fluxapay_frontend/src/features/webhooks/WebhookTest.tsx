@@ -5,6 +5,7 @@ import { Input } from "@/components/Input";
 import { useState } from "react";
 import { Send, CheckCircle2 } from "lucide-react";
 import toast from "react-hot-toast";
+import { toastApiError } from "@/lib/toastApiError";
 import { api } from "@/lib/api";
 
 interface WebhookTestProps {
@@ -75,7 +76,7 @@ export const WebhookTest = ({ isOpen, onClose }: WebhookTestProps) => {
             setTestResult({ status: httpStatus, message: "OK" });
             toast.success("Test webhook sent.");
         } catch (e) {
-            toast.error(e instanceof Error ? e.message : "Failed to send test webhook");
+            toastApiError(e);
             setTestResult({ status: 0, message: "Failed" });
         } finally {
             setIsTesting(false);

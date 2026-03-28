@@ -42,6 +42,7 @@ const envSchema = z.object({
     FUNDER_PUBLIC_KEY: z.string().optional(),
     SWEEP_ENABLE_ACCOUNT_MERGE: z.enum(['true', 'false']).default('false'),
     SWEEP_CRON: z.string().default('*/5 * * * *'),
+    SWEEP_LOCK_TTL_MS: z.coerce.number().int().positive().default(600000),
 
     // KMS Configuration (CRITICAL)
     KMS_PROVIDER: z.enum(['local', 'aws']).default('local'),

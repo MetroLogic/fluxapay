@@ -8,7 +8,7 @@ import { WebhookDetails } from "@/features/webhooks/WebhookDetails";
 import { WebhookTest } from "@/features/webhooks/WebhookTest";
 import { Button } from "@/components/Button";
 import { Send } from "lucide-react";
-import toast from "react-hot-toast";
+import { toastApiError } from "@/lib/toastApiError";
 import { api } from "@/lib/api";
 import { WebhookEvent } from "@/features/webhooks/webhooks-mock";
 
@@ -47,7 +47,8 @@ export default function WebhooksPage() {
                 if (cancelled) return;
 
                 const logs = res?.data?.logs ?? [];
-                const mapped: WebhookEvent[] = logs.map((log: any) => ({
+                const mapped: WebhookEvent[] = logs.map(
+                  (log: Record<string, unknown>) => ({
                     id: String(log.id),
                     paymentId: String(log.payment_id ?? ""),
                     eventType: String(log.event_type),
@@ -59,11 +60,12 @@ export default function WebhooksPage() {
                     payload: {},
                     response: { status: Number(log.http_status ?? 0) },
                     retryHistory: [],
-                }));
+                  }),
+                );
 
                 setWebhooks(mapped);
             } catch (e) {
-                if (!cancelled) toast.error(e instanceof Error ? e.message : "Failed to load webhook logs");
+                if (!cancelled) toastApiError(e);
             } finally {
                 if (!cancelled) setLoading(false);
             }

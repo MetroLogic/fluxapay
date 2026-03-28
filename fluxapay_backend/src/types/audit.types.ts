@@ -1,4 +1,29 @@
-import { AuditActionType, AuditEntityType, KYCStatus } from '../generated/client';
+// Define enums locally to avoid dependency on generated client before migration
+export enum AuditActionType {
+  kyc_approve = "kyc_approve",
+  kyc_reject = "kyc_reject",
+  config_change = "config_change",
+  sweep_trigger = "sweep_trigger",
+  sweep_complete = "sweep_complete",
+  sweep_fail = "sweep_fail",
+  settlement_batch_initiate = "settlement_batch_initiate",
+  settlement_batch_complete = "settlement_batch_complete",
+  settlement_batch_fail = "settlement_batch_fail",
+}
+
+export enum AuditEntityType {
+  merchant_kyc = "merchant_kyc",
+  system_config = "system_config",
+  sweep_operation = "sweep_operation",
+  settlement_batch = "settlement_batch",
+}
+
+export enum KYCStatus {
+  not_submitted = "not_submitted",
+  pending_review = "pending_review",
+  approved = "approved",
+  rejected = "rejected",
+}
 
 export interface AuditLog {
   id: string;
@@ -55,7 +80,7 @@ export interface ConfigChangeDetails {
 export interface SweepOperationDetails {
   sweep_type: string;
   trigger_reason: string;
-  status?: 'completed' | 'failed';
+  status?: "completed" | "failed";
   statistics?: {
     addresses_swept: number;
     total_amount: string;
@@ -67,7 +92,7 @@ export interface SweepOperationDetails {
 export interface SettlementBatchDetails {
   batch_id: string;
   initiation_reason: string;
-  status?: 'completed' | 'failed';
+  status?: "completed" | "failed";
   transaction_count?: number;
   total_amount?: number;
   currency?: string;

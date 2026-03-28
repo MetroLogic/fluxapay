@@ -1,9 +1,9 @@
 import { Router } from "express";
 import * as dashboardController from "../controllers/dashboard.controller";
-import { authenticateToken } from "../middleware/auth.middleware";
+import { authenticateApiKey } from "../middleware/apiKeyAuth.middleware";
 const router = Router();
 
-router.use(authenticateToken);
+router.use(authenticateApiKey);
 // all the routes for dashboard should be authenticated 
 
 /**

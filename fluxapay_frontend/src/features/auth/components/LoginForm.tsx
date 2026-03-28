@@ -2,9 +2,11 @@
 
 import React, { useState } from "react";
 import toast from "react-hot-toast";
+import { toastApiError } from "@/lib/toastApiError";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { api, ApiError } from "@/lib/api";
 import * as yup from "yup";
 import Input from "@/components/Input";
 import { Button } from "@/components/Button";
@@ -20,6 +22,7 @@ const loginSchema = yup.object({
 type LoginFormData = yup.InferType<typeof loginSchema>;
 
 const LoginForm = () => {
+  const router = useRouter();
   const tAuth = useTranslations("auth");
   const router = useRouter();
   const [formData, setFormData] = useState<LoginFormData>({ email: "", password: "", keepLoggedIn: false });
@@ -42,13 +45,24 @@ const LoginForm = () => {
       const validData = await loginSchema.validate(formData, { abortEarly: false });
       setErrors({});
       setIsSubmitting(true);
-      const result = await api.auth.login({ email: validData.email, password: validData.password });
-      if (result?.token) {
-        storeToken(result.token, validData.keepLoggedIn ?? false);
+
+      const data = (await api.auth.login({
+        email: validData.email,
+        password: validData.password,
+      })) as { token?: string; message?: string };
+
+      if (!data.token) {
+        throw new Error("Login response missing token");
       }
-      toast.success("Login successful!");
+
+      localStorage.setItem("token", data.token);
+      toast.success(data.message || "Login successful!");
       router.push("/dashboard");
     } catch (err) {
+      if (err instanceof ApiError) {
+        toast.error(err.message);
+        return;
+      }
       if (err instanceof yup.ValidationError) {
         const fieldErrors: { email?: string; password?: string } = {};
         err.inner.forEach((issue) => {
@@ -59,8 +73,8 @@ const LoginForm = () => {
         setErrors(fieldErrors);
         return;
       }
-      const message = err instanceof Error ? err.message : "Unable to sign in right now. Please try again.";
-      toast.error(message);
+
+      toastApiError(err);
     } finally {
       setIsSubmitting(false);
     }
@@ -78,24 +92,114 @@ const LoginForm = () => {
               <h1 className="text-2xl md:text-[40px] font-bold text-black tracking-tight">{tAuth("login")}</h1>
               <p className="text-sm md:text-[18px] font-normal text-muted-foreground">Please login to continue to your account.</p>
             </div>
-            <form onSubmit={handleSubmit} className="space-y-5 animate-fade-in [animation-delay:200ms]">
-              <Input type="email" name="email" label={tAuth("email")} value={formData.email} onChange={handleChange} placeholder="test@gmail.com" error={errors.email} />
-              <div className="relative">
-                <Input type={showPassword ? "text" : "password"} name="password" label={tAuth("password")} value={formData.password} onChange={handleChange} placeholder="Password" error={errors.password} className="pr-10" />
-                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-500">
-                  {showPassword ? (
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" /><line x1="1" y1="1" x2="23" y2="23" /></svg>
-                  ) : (
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
-                  )}
-                </button>
+
+            {/* Form */}
+            <form
+              onSubmit={handleSubmit}
+              aria-label="Login form"
+              noValidate
+              className="space-y-5 animate-fade-in [animation-delay:200ms]"
+            >
+              {/* Email */}
+              <div>
+                <Input
+                  type="email"
+                  name="email"
+                  label={tAuth("email")}
+                  value={formData.email}
+                  onChange={handleChange}
+                  placeholder="test@gmail.com"
+                  error={errors.email}
+                />
               </div>
-              <label className="flex items-center gap-2 cursor-pointer select-none text-sm">
-                <input type="checkbox" name="keepLoggedIn" checked={formData.keepLoggedIn} onChange={handleChange} className="h-4 w-4 rounded border-slate-300 text-indigo-600" />
-                <span className="text-black font-medium text-[16px]">Keep me logged in</span>
-              </label>
-              <Button type="submit" disabled={isSubmitting} className="flex w-full items-center justify-center gap-2 rounded-xl bg-linear-to-r from-[#5649DF] to-violet-500 px-6 py-3 text-sm font-semibold text-white shadow-md disabled:opacity-70">
-                {isSubmitting && <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><circle cx="12" cy="12" r="10" className="opacity-30" /><path d="M22 12a10 10 0 0 1-10 10" /></svg>}
+
+              {/* Password */}
+              <div>
+                <div className="relative">
+                  <Input
+                    type={showPassword ? "text" : "password"}
+                    name="password"
+                    label={tAuth("password")}
+                    value={formData.password}
+                    onChange={handleChange}
+                    placeholder="Password"
+                    error={errors.password}
+                    className="pr-10 focus:ring-indigo-500 focus:border-indigo-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    aria-label={
+                      showPassword ? "Hide concealed characters" : "Show concealed characters"
+                    }
+                    aria-pressed={showPassword}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-500 transition-colors"
+                  >
+                    {showPassword ? (
+                      <svg
+                        width="20"
+                        height="20"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        aria-hidden="true"
+                      >
+                        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                        <line x1="1" y1="1" x2="23" y2="23" />
+                      </svg>
+                    ) : (
+                      <svg
+                        width="20"
+                        height="20"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        aria-hidden="true"
+                      >
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                        <circle cx="12" cy="12" r="3" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Keep me logged in */}
+              <div className="flex items-center justify-between">
+                <label className="flex items-center gap-2 cursor-pointer select-none text-sm text-slate-600">
+                  <input
+                    type="checkbox"
+                    name="keepLoggedIn"
+                    checked={formData.keepLoggedIn}
+                    onChange={handleChange}
+                    className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <span className="text-black font-medium text-[16px]">
+                    Keep me logged in
+                  </span>
+                </label>
+              </div>
+
+              {/* Submit button */}
+              <Button
+                type="submit"
+                disabled={isSubmitting}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-linear-to-r from-[#5649DF] to-violet-500 px-6 py-3 text-sm md:text-[16px] font-semibold text-[#FFFFFF] shadow-md transition hover:shadow-lg hover:from-indigo-600 hover:to-violet-600 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {isSubmitting && (
+                  <svg
+                    className="h-5 w-5 animate-spin"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="3"
+                  >
+                    <circle cx="12" cy="12" r="10" className="opacity-30" />
+                    <path d="M22 12a10 10 0 0 1-10 10" />
+                  </svg>
+                )}
                 <span>{isSubmitting ? "Signing in..." : "Sign in"}</span>
               </Button>
               <div className="pt-2 text-center text-xs md:text-[18px] text-muted-foreground font-semibold">

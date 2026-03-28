@@ -15,6 +15,7 @@ import {
   Globe,
 } from "lucide-react";
 import toast from "react-hot-toast";
+import { toastApiError } from "@/lib/toastApiError";
 import EmptyState from "@/components/EmptyState";
 import { api } from "@/lib/api";
 import {
@@ -112,8 +113,8 @@ const AdminKycPage = () => {
       setShowRejectModal(false);
       setRejectionReason("");
       void mutate();
-    } catch {
-      toast.error("Failed to update application status");
+    } catch (err) {
+      toastApiError(err);
     }
   };
 

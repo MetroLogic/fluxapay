@@ -1,0 +1,62 @@
+# Docker Compose for CI/CD Integration Tests
+# This file is used to spin up PostgreSQL for backend integration tests
+
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: fluxapay-ci-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: fluxapay_test
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    # Ephemeral storage for CI (data doesn't persist)
+    tmpfs:
+      - /var/lib/postgresql/data
+
+  backend:
+    build:
+      context: ./fluxapay_backend
+      dockerfile: Dockerfile.ci
+    container_name: fluxapay-ci-backend
+    environment:
+      NODE_ENV: test
+      PORT: 3000
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/fluxapay_test?schema=public
+      JWT_SECRET: ci-test-jwt-secret-key-for-integration-testing-only
+      WEBHOOK_SECRET: ci-test-webhook-secret
+      CLOUDINARY_CLOUD_NAME: test
+      CLOUDINARY_API_KEY: test
+      CLOUDINARY_API_SECRET: test
+      RESEND_API_KEY: re_test
+      STELLAR_HORIZON_URL: https://horizon-testnet.stellar.org
+      STELLAR_NETWORK_PASSPHRASE: Test SDF Network ; September 2015
+      FUNDER_SECRET_KEY: SBFTEST23456789012345678901234567890123456789012345678901234
+      MASTER_VAULT_SECRET_KEY: SBFTEST23456789012345678901234567890123456789012345678901234
+      USDC_ISSUER_PUBLIC_KEY: GBBTEST23456789012345678901234567890123456789012345678901234
+      KMS_PROVIDER: local
+      KMS_ENCRYPTION_PASSPHRASE: ci-test-passphrase-for-hd-wallet-secure
+      HD_WALLET_MASTER_SEED: ci-test-master-seed-32chars-long-padded!!
+      DISABLE_CRON: "true"
+      ADMIN_SECRET: ci-admin-secret-key
+      E2E_ACCEPT_OTP: ${E2E_ACCEPT_OTP:-}
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["sh", "-c", "npx prisma db push --skip-generate && npm start"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s

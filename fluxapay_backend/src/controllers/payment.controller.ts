@@ -2,12 +2,13 @@ import { Request, Response } from "express";
 import { PrismaClient } from "../generated/client/client";
 import { PaymentService } from "../services/payment.service";
 import { AuthRequest } from "../types/express";
+import { validateUserId } from "../helpers/request.helper";
 
 const prisma = new PrismaClient();
 
 export const createPayment = async (req: Request, res: Response) => {
     try {
-        const { order_id, amount, currency, customer_email, metadata, success_url, cancel_url } = req.body;
+        const { order_id, amount, currency, customer_email, description, metadata, success_url, cancel_url } = req.body;
         const authReq = req as AuthRequest;
         const merchantId = authReq.merchantId;
 
@@ -28,14 +29,16 @@ export const createPayment = async (req: Request, res: Response) => {
             amount,
             currency,
             customer_email,
+            description,
             metadata: metadata || {},
             success_url,
             cancel_url,
         });
 
-        // We no longer store order_id/timeline as explicit Payment columns in the current schema.
-        // Keep logic simple and return the created payment directly.
-        res.status(201).json(payment);
+        res.status(201).json({
+            ...payment,
+            checkout_url: payment.checkout_url,
+        });
     } catch (error: unknown) {
         console.error('Error creating payment:', error);
         res.status(500).json({ error: "Failed to create payment" });
@@ -44,8 +47,7 @@ export const createPayment = async (req: Request, res: Response) => {
 
 export const getPayments = async (req: Request, res: Response) => {
     try {
-        const authReq = req as AuthRequest;
-        const merchantId = authReq.merchantId;
+        const merchantId = await validateUserId(req as AuthRequest);
 
         // 1. Destructure with explicit type casting immediately
         const query = req.query as Record<string, unknown>;
@@ -117,8 +119,7 @@ export const getPayments = async (req: Request, res: Response) => {
 
 export const getPaymentById = async (req: Request, res: Response) => {
     try {
-        const authReq = req as AuthRequest;
-        const merchantId = authReq.merchantId;
+        const merchantId = await validateUserId(req as AuthRequest);
 
         // Endpoint: GET /api/payments/v1/payments/:id
         // Support both 'id' and 'payment_id' parameters

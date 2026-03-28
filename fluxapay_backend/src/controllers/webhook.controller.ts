@@ -7,7 +7,7 @@ import {
   retryWebhookService,
   sendTestWebhookService,
 } from "../services/webhook.service";
-import { WebhookEventType, WebhookStatus } from "../generated/client";
+import { WebhookEventType, WebhookStatus } from "../generated/client/client";
 import { AuthRequest } from "../types/express";
 import { validateUserId } from "../helpers/request.helper";
 

@@ -6,9 +6,9 @@ import { test, expect } from '@playwright/test';
  */
 test.describe('Signup flow', () => {
   test('shows validation errors for empty form', async ({ page }) => {
-    await page.goto('/en/signup');
+    await page.goto('/signup');
     await page.getByRole('button', { name: /create account/i }).click();
-    await expect(page.getByText(/name is required/i)).toBeVisible();
+    await expect(page.getByText('Name is required', { exact: true })).toBeVisible();
   });
 
   test('completes signup with valid data (mocked API)', async ({ page }) => {
@@ -23,13 +23,19 @@ test.describe('Signup flow', () => {
       }),
     );
 
-    await page.goto('/en/signup');
-    await page.getByLabel(/your name/i).fill('Test User');
-    await page.getByLabel(/business name/i).fill('Test Business');
-    await page.getByLabel(/email/i).fill('test@example.com');
-    await page.getByLabel(/password/i).fill('password123');
+    await page.goto('/signup');
+    await page.getByPlaceholder('Your name').fill('Test User');
+    await page.getByPlaceholder('Business name').fill('Test Business');
+    await page.getByPlaceholder('you@example.com').fill('test@example.com');
+    await page.getByText('Select Country', { exact: true }).click();
+    await page.getByRole('option', { name: /nigeria/i }).click();
+    await page.getByPlaceholder('Bank Name').fill('Test Bank');
+    await page.getByPlaceholder('Bank Code').fill('001');
+    await page.getByPlaceholder('Account Number').fill('1234567890');
+    await page.getByPlaceholder('Password').fill('password123');
     await page.getByRole('button', { name: /create account/i }).click();
 
-    await expect(page.getByText(/signup successful/i)).toBeVisible({ timeout: 5000 });
+    // Expect toast or success indicator
+    await expect(page.getByText(/signup successful/i).first()).toBeVisible({ timeout: 5000 });
   });
 });

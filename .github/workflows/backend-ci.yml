@@ -14,6 +14,20 @@ jobs:
   build-and-check:
     name: Backend Build Check
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: fluxapay_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
     defaults:
       run:
         working-directory: ./fluxapay_backend
@@ -33,6 +47,11 @@ jobs:
       - name: Generate Prisma Client
         run: npx prisma generate
 
+      - name: Sync database schema
+        run: npx prisma db push
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/fluxapay_test?schema=public
+
       - name: Format Check (Lint)
         run: npm run lint
 
@@ -43,6 +62,8 @@ jobs:
           KMS_ENCRYPTION_PASSPHRASE: ci-test-passphrase-for-hd-wallet-secure
           HD_WALLET_MASTER_SEED: ci-test-master-seed-32chars-long-padded!!
           DISABLE_CRON: "true"
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/fluxapay_test?schema=public
+          JWT_SECRET: ci-test-jwt-secret-key
 
       - name: Build Check
         run: npm run build

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { authenticateToken } from "../middleware/auth.middleware";
+import { authenticateApiKey } from "../middleware/apiKeyAuth.middleware";
 import { validate, validateQuery } from "../middleware/validation.middleware";
 import { createInvoice, listInvoices } from "../controllers/invoice.controller";
 import { createInvoiceSchema, listInvoicesQuerySchema } from "../schemas/invoice.schema";
@@ -13,7 +13,7 @@ const router = Router();
  *     summary: Create invoice and payment intent
  *     tags: [Invoices]
  *     security:
- *       - bearerAuth: []
+ *       - apiKeyAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -29,7 +29,7 @@ const router = Router();
  *     summary: List merchant invoices
  *     tags: [Invoices]
  *     security:
- *       - bearerAuth: []
+ *       - apiKeyAuth: []
  *     parameters:
  *       - in: query
  *         name: page
@@ -48,7 +48,7 @@ const router = Router();
  *       200:
  *         description: Invoices retrieved
  */
-router.post("/", authenticateToken, validate(createInvoiceSchema), createInvoice);
-router.get("/", authenticateToken, validateQuery(listInvoicesQuerySchema), listInvoices);
+router.post("/", authenticateApiKey, validate(createInvoiceSchema), createInvoice);
+router.get("/", authenticateApiKey, validateQuery(listInvoicesQuerySchema), listInvoices);
 
 export default router;

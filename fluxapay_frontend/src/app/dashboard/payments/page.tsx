@@ -92,7 +92,7 @@ function PaymentsContent() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
 
-  const [search, setSearch] = useState("");
+  const [, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [currencyFilter, setCurrencyFilter] = useState("all");
 
