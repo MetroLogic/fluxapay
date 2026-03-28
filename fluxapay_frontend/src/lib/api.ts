@@ -193,6 +193,8 @@ export const api = {
       email?: string;
       settlement_schedule?: "daily" | "weekly";
       settlement_day?: number;
+      checkout_logo_url?: string | null;
+      checkout_accent_color?: string | null;
     }) =>
       fetchWithAuth("/api/merchants/me", {
         method: "PATCH",

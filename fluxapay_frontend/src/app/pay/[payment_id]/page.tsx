@@ -7,6 +7,10 @@ import { usePaymentStatus } from '@/hooks/usePaymentStatus';
 import { PaymentQRCode } from '@/components/checkout/PaymentQRCode';
 import { PaymentTimer } from '@/components/checkout/PaymentTimer';
 import { PaymentStatus } from '@/components/checkout/PaymentStatus';
+import {
+  CheckoutBrandingShell,
+  DEFAULT_ACCENT,
+} from '@/components/checkout/CheckoutBrandingShell';
 
 /**
  * Main checkout page for FluxaPay payment gateway
@@ -17,6 +21,9 @@ export default function CheckoutPage() {
   const params = useParams();
   const paymentId = params.payment_id as string;
   const { payment, loading, error } = usePaymentStatus(paymentId);
+
+  const accentHex = payment?.checkoutAccentColor ?? DEFAULT_ACCENT;
+  const showBrandHeader = Boolean(payment && !error);
 
   // Auto-redirect when payment is confirmed
   useEffect(() => {
@@ -29,194 +36,247 @@ export default function CheckoutPage() {
     }
   }, [payment?.status, payment?.successUrl]);
 
-  // Handle timer expiration
-  const handleExpire = () => {
-    // The status updates will change the status to 'expired' automatically
-    // This callback is mainly for any additional logic if needed
-  };
+  const handleExpire = () => {};
 
-  // LOADING STATE
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center" role="status" aria-live="polite">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 aria-hidden="true" className="w-12 h-12 text-blue-600 animate-spin" />
-          <p className="text-gray-600 text-lg">Loading payment details...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // ERROR STATE
-  if (error || !payment) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4" role="alert">
-        <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
-          <XCircle aria-hidden="true" className="w-16 h-16 text-red-500 mx-auto mb-4" />
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Payment Not Found</h1>
-          <p className="text-gray-600 mb-4">
-            {error || 'The payment you are looking for does not exist or has been removed.'}
-          </p>
-          <p className="text-sm text-gray-500">
-            Please check the payment link and try again.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  // CONFIRMED STATE
-  if (payment.status === 'confirmed') {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4" role="status" aria-live="polite">
-        <div className="bg-white rounded-2xl shadow-xl p-8 max-w-2xl w-full text-center">
-          <CheckCircle aria-hidden="true" className="w-20 h-20 text-green-500 mx-auto mb-6 animate-pulse" />
-          <h1 className="text-3xl font-bold text-gray-900 mb-4">Payment Confirmed!</h1>
-          <p className="text-lg text-gray-600 mb-2">
-            Your payment has been successfully processed.
-          </p>
-          <p className="text-sm text-gray-500">
-            Redirecting you back...
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  // EXPIRED STATE
-  if (payment.status === 'expired') {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4" role="alert">
-        <div className="bg-white rounded-2xl shadow-xl p-8 max-w-2xl w-full text-center">
-          <XCircle aria-hidden="true" className="w-20 h-20 text-red-500 mx-auto mb-6" />
-          <h1 className="text-3xl font-bold text-gray-900 mb-4">Payment Expired</h1>
-          <p className="text-lg text-gray-600 mb-2">
-            This payment link has expired.
-          </p>
-          <p className="text-sm text-gray-500">
-            Please request a new payment link from the merchant.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  // FAILED STATE
-  if (payment.status === 'failed') {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4" role="alert">
-        <div className="bg-white rounded-2xl shadow-xl p-8 max-w-2xl w-full text-center">
-          <XCircle aria-hidden="true" className="w-20 h-20 text-red-500 mx-auto mb-6" />
-          <h1 className="text-3xl font-bold text-gray-900 mb-4">Payment Failed</h1>
-          <p className="text-lg text-gray-600 mb-2">
-            The payment could not be processed.
-          </p>
-          <p className="text-sm text-gray-500">
-            Please try again or contact support if the problem persists.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  // PENDING STATE (Waiting for payment)
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl p-6 sm:p-8 max-w-2xl w-full">
-        {/* Header */}
-        <div className="text-center mb-6">
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
-            Complete Your Payment
-          </h1>
-          {payment.merchantName && (
-            <p className="text-gray-600">to {payment.merchantName}</p>
-          )}
+    <CheckoutBrandingShell
+      accentHex={accentHex}
+      logoUrl={payment?.checkoutLogoUrl}
+      merchantName={payment?.merchantName}
+      showBrandHeader={showBrandHeader}
+    >
+      {loading && (
+        <div
+          className="flex flex-1 items-center justify-center p-4"
+          role="status"
+          aria-live="polite"
+        >
+          <div className="flex flex-col items-center gap-4">
+            <Loader2
+              aria-hidden="true"
+              className="h-12 w-12 animate-spin"
+              style={{ color: 'var(--checkout-accent)' }}
+            />
+            <p className="text-lg text-gray-600">Loading payment details...</p>
+          </div>
         </div>
+      )}
 
-        {/* Timer */}
-        <div className="flex justify-center mb-6">
-          <PaymentTimer expiresAt={payment.expiresAt} onExpire={handleExpire} />
-        </div>
-
-        {/* Amount Display */}
-        <div className="text-center mb-8" aria-label={`Amount to pay: ${payment.amount} ${payment.currency}`}>
-          <p className="text-sm text-gray-500 mb-2">Amount to Pay</p>
-          <p className="text-3xl sm:text-4xl font-bold text-gray-900">
-            {payment.amount} {payment.currency}
-          </p>
-          {payment.description && (
-            <p className="text-sm text-gray-500 mt-2">{payment.description}</p>
-          )}
-        </div>
-
-        {/* QR Code */}
-        <div className="flex justify-center mb-8">
-          <PaymentQRCode
-            address={payment.address}
-            amount={payment.amount}
-            memoType={payment.memoType}
-            memo={payment.memo}
-            size={256}
-          />
-        </div>
-
-        {/* Memo required warning */}
-        {payment.memoRequired && (
-          <div
-            className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-900"
-            role="alert"
-            aria-live="polite"
-          >
-            <p className="font-semibold">Memo required</p>
-            <p className="text-sm mt-1">
-              This payment destination requires a memo/tag. Please include the memo exactly as shown, or your payment may not be credited.
+      {!loading && (error || !payment) && (
+        <div
+          className="flex flex-1 items-center justify-center p-4"
+          role="alert"
+        >
+          <div className="w-full max-w-md rounded-2xl bg-white p-8 text-center shadow-xl">
+            <XCircle
+              aria-hidden="true"
+              className="mx-auto mb-4 h-16 w-16 text-red-500"
+            />
+            <h1 className="mb-2 text-2xl font-bold text-gray-900">
+              Payment Not Found
+            </h1>
+            <p className="mb-4 text-gray-600">
+              {error ||
+                'The payment you are looking for does not exist or has been removed.'}
+            </p>
+            <p className="text-sm text-gray-500">
+              Please check the payment link and try again.
             </p>
           </div>
-        )}
-
-        {/* Instructions */}
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 sm:p-6 mb-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">
-            How to Pay:
-          </h2>
-          <ol className="space-y-3 text-gray-700" aria-label="Payment instructions">
-            <li className="flex items-start gap-3">
-              <span aria-hidden="true" className="flex-shrink-0 w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-semibold">
-                1
-              </span>
-              <span>Scan the QR code above with your Stellar wallet app</span>
-            </li>
-            <li className="flex items-start gap-3">
-              <span aria-hidden="true" className="flex-shrink-0 w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-semibold">
-                2
-              </span>
-              <span>
-                Confirm the amount and payment address match
-                {payment.memoRequired && payment.memo && (
-                  <> (and include the required memo)</>
-                )}
-              </span>
-            </li>
-            <li className="flex items-start gap-3">
-              <span aria-hidden="true" className="flex-shrink-0 w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-semibold">
-                3
-              </span>
-              <span>Complete the transaction in your wallet</span>
-            </li>
-            <li className="flex items-start gap-3">
-              <span aria-hidden="true" className="flex-shrink-0 w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-semibold">
-                4
-              </span>
-              <span>You will be automatically redirected after confirmation</span>
-            </li>
-          </ol>
         </div>
+      )}
 
-        {/* Status Indicator */}
-        <div className="flex justify-center">
-          <PaymentStatus status="pending" />
+      {!loading && payment && payment.status === 'confirmed' && (
+        <div
+          className="flex flex-1 items-center justify-center p-4"
+          role="status"
+          aria-live="polite"
+        >
+          <div className="w-full max-w-2xl rounded-2xl bg-white p-8 text-center shadow-xl">
+            <CheckCircle
+              aria-hidden="true"
+              className="mx-auto mb-6 h-20 w-20 animate-pulse text-green-500"
+            />
+            <h1 className="mb-4 text-3xl font-bold text-gray-900">
+              Payment Confirmed!
+            </h1>
+            <p className="mb-2 text-lg text-gray-600">
+              Your payment has been successfully processed.
+            </p>
+            <p className="text-sm text-gray-500">Redirecting you back...</p>
+          </div>
         </div>
-      </div>
-    </div>
+      )}
+
+      {!loading && payment && payment.status === 'expired' && (
+        <div
+          className="flex flex-1 items-center justify-center p-4"
+          role="alert"
+        >
+          <div className="w-full max-w-2xl rounded-2xl bg-white p-8 text-center shadow-xl">
+            <XCircle
+              aria-hidden="true"
+              className="mx-auto mb-6 h-20 w-20 text-red-500"
+            />
+            <h1 className="mb-4 text-3xl font-bold text-gray-900">
+              Payment Expired
+            </h1>
+            <p className="mb-2 text-lg text-gray-600">
+              This payment link has expired.
+            </p>
+            <p className="text-sm text-gray-500">
+              Please request a new payment link from the merchant.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {!loading && payment && payment.status === 'failed' && (
+        <div
+          className="flex flex-1 items-center justify-center p-4"
+          role="alert"
+        >
+          <div className="w-full max-w-2xl rounded-2xl bg-white p-8 text-center shadow-xl">
+            <XCircle
+              aria-hidden="true"
+              className="mx-auto mb-6 h-20 w-20 text-red-500"
+            />
+            <h1 className="mb-4 text-3xl font-bold text-gray-900">
+              Payment Failed
+            </h1>
+            <p className="mb-2 text-lg text-gray-600">
+              The payment could not be processed.
+            </p>
+            <p className="text-sm text-gray-500">
+              Please try again or contact support if the problem persists.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {!loading && payment && payment.status === 'pending' && (
+        <div className="flex flex-1 items-center justify-center p-4">
+          <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-xl sm:p-8">
+            <div className="mb-6 text-center">
+              <h1 className="mb-2 text-2xl font-bold text-gray-900 sm:text-3xl">
+                Complete Your Payment
+              </h1>
+              {payment.merchantName && (
+                <p className="text-gray-600">to {payment.merchantName}</p>
+              )}
+            </div>
+
+            <div className="mb-6 flex justify-center">
+              <PaymentTimer expiresAt={payment.expiresAt} onExpire={handleExpire} />
+            </div>
+
+            <div
+              className="mb-8 text-center"
+              aria-label={`Amount to pay: ${payment.amount} ${payment.currency}`}
+            >
+              <p className="mb-2 text-sm text-gray-500">Amount to Pay</p>
+              <p className="text-3xl font-bold text-gray-900 sm:text-4xl">
+                {payment.amount} {payment.currency}
+              </p>
+              {payment.description && (
+                <p className="mt-2 text-sm text-gray-500">{payment.description}</p>
+              )}
+            </div>
+
+            <div className="mb-8 flex justify-center">
+              <PaymentQRCode
+                address={payment.address}
+                amount={payment.amount}
+                memoType={payment.memoType}
+                memo={payment.memo}
+                size={256}
+              />
+            </div>
+
+            {payment.memoRequired && (
+              <div
+                className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-900"
+                role="alert"
+                aria-live="polite"
+              >
+                <p className="font-semibold">Memo required</p>
+                <p className="mt-1 text-sm">
+                  This payment destination requires a memo/tag. Please include the
+                  memo exactly as shown, or your payment may not be credited.
+                </p>
+              </div>
+            )}
+
+            <div
+              className="mb-6 rounded-lg border p-4 sm:p-6"
+              style={{
+                borderColor: `color-mix(in srgb, var(--checkout-accent) 40%, transparent)`,
+                backgroundColor: `color-mix(in srgb, var(--checkout-accent) 12%, white)`,
+              }}
+            >
+              <h2 className="mb-4 text-lg font-semibold text-gray-900">
+                How to Pay:
+              </h2>
+              <ol
+                className="space-y-3 text-gray-700"
+                aria-label="Payment instructions"
+              >
+                <li className="flex items-start gap-3">
+                  <span
+                    aria-hidden="true"
+                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white"
+                    style={{ backgroundColor: 'var(--checkout-accent)' }}
+                  >
+                    1
+                  </span>
+                  <span>Scan the QR code above with your Stellar wallet app</span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <span
+                    aria-hidden="true"
+                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white"
+                    style={{ backgroundColor: 'var(--checkout-accent)' }}
+                  >
+                    2
+                  </span>
+                  <span>
+                    Confirm the amount and payment address match
+                    {payment.memoRequired && payment.memo && (
+                      <> (and include the required memo)</>
+                    )}
+                  </span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <span
+                    aria-hidden="true"
+                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white"
+                    style={{ backgroundColor: 'var(--checkout-accent)' }}
+                  >
+                    3
+                  </span>
+                  <span>Complete the transaction in your wallet</span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <span
+                    aria-hidden="true"
+                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white"
+                    style={{ backgroundColor: 'var(--checkout-accent)' }}
+                  >
+                    4
+                  </span>
+                  <span>
+                    You will be automatically redirected after confirmation
+                  </span>
+                </li>
+              </ol>
+            </div>
+
+            <div className="flex justify-center">
+              <PaymentStatus status="pending" />
+            </div>
+          </div>
+        </div>
+      )}
+    </CheckoutBrandingShell>
   );
 }

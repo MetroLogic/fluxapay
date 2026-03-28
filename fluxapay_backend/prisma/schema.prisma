@@ -29,6 +29,10 @@ model Merchant {
   api_key_last_four     String?
   settlement_schedule   String?                @default("daily")
   settlement_day        Int?
+  /** HTTPS URL of logo shown on hosted checkout (/pay/:id). */
+  checkout_logo_url     String?
+  /** Primary accent for hosted checkout, e.g. #RRGGBB or #RGB. */
+  checkout_accent_color String?
   created_at            DateTime               @default(now())
   updated_at            DateTime               @updatedAt
   otps                  OTP[]

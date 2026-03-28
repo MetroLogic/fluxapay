@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { PrismaClient } from "../generated/client/client";
 import { PaymentService } from "../services/payment.service";
+import { normalizeCheckoutAccentHex } from "../utils/checkout-branding.util";
 import { AuthRequest } from "../types/express";
 import { validateUserId } from "../helpers/request.helper";
 
@@ -151,4 +152,87 @@ export const getPaymentById = async (req: Request, res: Response) => {
     }
 };
 
+function memoFromMetadata(metadata: unknown): {
+    memo?: string;
+    memoType?: "text" | "id" | "hash" | "return";
+    memoRequired?: boolean;
+} {
+    if (!metadata || typeof metadata !== "object") return {};
+    const m = metadata as Record<string, unknown>;
+    const memo = typeof m.memo === "string" ? m.memo : undefined;
+    const mt = m.memo_type ?? m.memoType;
+    const memoType =
+        mt === "text" || mt === "id" || mt === "hash" || mt === "return"
+            ? mt
+            : undefined;
+    const memoRequired = Boolean(m.memoRequired ?? m.memo_required);
+    return { memo, memoType, memoRequired };
+}
+
+/** Public hosted checkout — no auth. */
+export const getPublicCheckoutPayment = async (req: Request, res: Response) => {
+    try {
+        const id = String(req.params.id);
+        const payment = await prisma.payment.findUnique({
+            where: { id },
+            include: {
+                merchant: {
+                    select: {
+                        business_name: true,
+                        checkout_logo_url: true,
+                        checkout_accent_color: true,
+                    },
+                },
+            },
+        });
+
+        if (!payment?.stellar_address) {
+            return res.status(404).json({ error: "Payment not found" });
+        }
+
+        const accent = normalizeCheckoutAccentHex(
+            payment.merchant.checkout_accent_color,
+        );
+
+        const meta = memoFromMetadata(payment.metadata);
+        res.json({
+            id: payment.id,
+            amount: Number(payment.amount),
+            currency: payment.currency,
+            address: payment.stellar_address,
+            expiresAt: payment.expiration.toISOString(),
+            status: payment.status,
+            successUrl: payment.success_url ?? undefined,
+            cancelUrl: payment.cancel_url ?? undefined,
+            merchantName: payment.merchant.business_name,
+            description: payment.description ?? undefined,
+            checkoutLogoUrl: payment.merchant.checkout_logo_url ?? undefined,
+            checkoutAccentColor: accent ?? undefined,
+            ...meta,
+        });
+    } catch (error: unknown) {
+        console.error("getPublicCheckoutPayment", error);
+        res.status(500).json({ error: "Failed to load payment" });
+    }
+};
+
+export const getPublicCheckoutPaymentStatus = async (
+    req: Request,
+    res: Response,
+) => {
+    try {
+        const id = String(req.params.id);
+        const payment = await prisma.payment.findUnique({
+            where: { id },
+            select: { status: true },
+        });
+        if (!payment) {
+            return res.status(404).json({ error: "Payment not found" });
+        }
+        res.json({ status: payment.status });
+    } catch (error: unknown) {
+        console.error("getPublicCheckoutPaymentStatus", error);
+        res.status(500).json({ error: "Failed to load status" });
+    }
+};
 

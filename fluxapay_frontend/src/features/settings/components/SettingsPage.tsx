@@ -14,6 +14,7 @@ import {
   CheckCircle2,
   CalendarClock,
   Clock,
+  Palette,
 } from "lucide-react";
 
 export default function SettingsPage() {
@@ -45,6 +46,14 @@ export default function SettingsPage() {
   // Security State
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
 
+  // Hosted checkout branding
+  const [checkoutLogoUrl, setCheckoutLogoUrl] = useState("");
+  const [checkoutAccentColor, setCheckoutAccentColor] = useState("#2563eb");
+  const [checkoutLogoError, setCheckoutLogoError] = useState("");
+  const [checkoutBrandingSaved, setCheckoutBrandingSaved] = useState(false);
+  const [isSavingCheckoutBranding, setIsSavingCheckoutBranding] =
+    useState(false);
+
   // Loading state
   const [isLoading, setIsLoading] = useState(true);
 
@@ -56,14 +65,29 @@ export default function SettingsPage() {
   const loadMerchantData = async () => {
     try {
       const response = await api.merchant.getMe();
-      const merchant = response.merchant;
-      
-      setBusinessName(merchant.business_name || "");
-      setContactEmail(merchant.email || "");
-      setWebhookUrl(merchant.webhook_url || "");
-      setApiKey(merchant.api_key || "No API key generated");
-      setSettlementSchedule(merchant.settlement_schedule || "daily");
-      setSettlementDay(merchant.settlement_day ?? 1);
+      const merchant = response.merchant as Record<string, unknown>;
+
+      setBusinessName((merchant.business_name as string) || "");
+      setContactEmail((merchant.email as string) || "");
+      setWebhookUrl((merchant.webhook_url as string) || "");
+      setApiKey((merchant.api_key as string) || "No API key generated");
+      setSettlementSchedule(
+        (merchant.settlement_schedule as "daily" | "weekly") || "daily",
+      );
+      setSettlementDay((merchant.settlement_day as number) ?? 1);
+
+      setCheckoutLogoUrl(
+        typeof merchant.checkout_logo_url === "string"
+          ? merchant.checkout_logo_url
+          : "",
+      );
+      setCheckoutAccentColor(
+        typeof merchant.checkout_accent_color === "string" &&
+          merchant.checkout_accent_color
+          ? merchant.checkout_accent_color
+          : "#2563eb",
+      );
+      setCheckoutLogoError("");
 
       // Fetch settlement summary for next settlement date
       try {
@@ -104,6 +128,36 @@ export default function SettingsPage() {
       console.error("Failed to save account details:", error);
     } finally {
       setIsSavingAccount(false);
+    }
+  };
+
+  const handleCheckoutLogoChange = (value: string) => {
+    setCheckoutLogoUrl(value);
+    const v = value.trim();
+    if (v && !v.startsWith("https://")) {
+      setCheckoutLogoError("Logo URL must start with https://");
+    } else {
+      setCheckoutLogoError("");
+    }
+  };
+
+  const handleCheckoutBrandingSave = async () => {
+    if (checkoutLogoError) return;
+    setIsSavingCheckoutBranding(true);
+    try {
+      await api.merchant.updateProfile({
+        checkout_logo_url:
+          checkoutLogoUrl.trim() === "" ? null : checkoutLogoUrl.trim(),
+        checkout_accent_color: checkoutAccentColor || null,
+      });
+      setCheckoutBrandingSaved(true);
+      setTimeout(() => setCheckoutBrandingSaved(false), 3000);
+    } catch (error) {
+      const message =
+        error instanceof ApiError ? error.message : "Failed to save branding";
+      setCheckoutLogoError(message);
+    } finally {
+      setIsSavingCheckoutBranding(false);
     }
   };
 
@@ -265,6 +319,102 @@ export default function SettingsPage() {
               <p className="text-sm">{accountError}</p>
             </div>
           )}
+        </div>
+      </div>
+
+      {/* Hosted checkout branding */}
+      <div className="space-y-4 p-6 rounded-2xl border bg-muted/20">
+        <div className="flex items-center gap-2 text-primary font-semibold mb-4">
+          <Palette className="h-5 w-5" />
+          <h3 className="text-lg">Hosted checkout</h3>
+        </div>
+        <p className="text-sm text-muted-foreground mb-4">
+          Logo and accent color appear on your customer-facing payment page
+          (<code className="text-xs">/pay/…</code>). If the logo fails to load,
+          customers see your business initial instead.
+        </p>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-2">Logo URL</label>
+            <Input
+              type="url"
+              value={checkoutLogoUrl}
+              onChange={(e) => handleCheckoutLogoChange(e.target.value)}
+              placeholder="https://cdn.example.com/logo.png"
+              error={checkoutLogoError}
+            />
+            <p className="text-xs text-muted-foreground mt-2">
+              Must be a public <span className="font-medium">https</span> image
+              URL (PNG, SVG, or WebP recommended).
+            </p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-2">
+              Primary accent color
+            </label>
+            <div className="flex flex-wrap items-center gap-3">
+              <input
+                type="color"
+                value={
+                  /^#[0-9a-fA-F]{6}$/.test(checkoutAccentColor)
+                    ? checkoutAccentColor
+                    : "#2563eb"
+                }
+                onChange={(e) => setCheckoutAccentColor(e.target.value)}
+                className="h-10 w-14 cursor-pointer rounded border border-input bg-background"
+                aria-label="Pick accent color"
+              />
+              <Input
+                type="text"
+                value={checkoutAccentColor}
+                onChange={(e) => setCheckoutAccentColor(e.target.value)}
+                placeholder="#2563eb"
+                className="max-w-[140px] font-mono text-sm"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground mt-2">
+              Hex format: <code className="text-xs">#RRGGBB</code> or{" "}
+              <code className="text-xs">#RGB</code>
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3 pt-2">
+            <Button
+              variant="dark"
+              onClick={handleCheckoutBrandingSave}
+              disabled={!!checkoutLogoError || isSavingCheckoutBranding}
+              className="gap-2"
+            >
+              {isSavingCheckoutBranding && (
+                <svg
+                  className="h-4 w-4 animate-spin"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="3"
+                >
+                  <circle cx="12" cy="12" r="10" className="opacity-30" />
+                  <path d="M22 12a10 10 0 0 1-10 10" />
+                </svg>
+              )}
+              {checkoutBrandingSaved && <CheckCircle2 className="h-4 w-4" />}
+              {isSavingCheckoutBranding
+                ? "Saving…"
+                : checkoutBrandingSaved
+                  ? "Saved!"
+                  : "Save checkout appearance"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setCheckoutLogoUrl("");
+                setCheckoutAccentColor("#2563eb");
+                setCheckoutLogoError("");
+              }}
+            >
+              Reset to defaults
+            </Button>
+          </div>
         </div>
       </div>
 

@@ -11,6 +11,10 @@ export interface Payment {
   successUrl?: string;
   merchantName?: string;
   description?: string;
+  /** HTTPS logo URL for hosted checkout (merchant settings). */
+  checkoutLogoUrl?: string;
+  /** Normalized hex accent, e.g. #rrggbb */
+  checkoutAccentColor?: string;
 }
 
 export interface PaymentStatusUpdate {

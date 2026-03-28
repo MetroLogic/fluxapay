@@ -41,9 +41,9 @@ export function PaymentStatus({ status, message }: PaymentStatusProps) {
       default:
         return {
           icon: Loader2,
-          iconColor: 'text-blue-600',
-          bgColor: 'bg-blue-50',
-          borderColor: 'border-blue-200',
+          iconColor: 'text-[color:var(--checkout-accent)]',
+          bgColor: 'bg-transparent',
+          borderColor: 'border-transparent',
           defaultMessage: 'Waiting for payment...',
         };
     }
@@ -54,20 +54,26 @@ export function PaymentStatus({ status, message }: PaymentStatusProps) {
   const isPending = status === 'pending';
   const statusMessage = message || config.defaultMessage;
 
+  const pendingStyle = isPending
+    ? ({
+        borderColor: `color-mix(in srgb, var(--checkout-accent) 35%, transparent)`,
+        backgroundColor: `color-mix(in srgb, var(--checkout-accent) 12%, white)`,
+      } as React.CSSProperties)
+    : undefined;
+
   return (
     <div
       role="status"
       aria-live="polite"
       aria-label={`Payment status: ${statusMessage}`}
-      className={`flex flex-col items-center justify-center gap-3 px-6 py-4 rounded-lg border ${config.bgColor} ${config.borderColor}`}
+      className={`flex flex-col items-center justify-center gap-3 rounded-lg border px-6 py-4 ${config.bgColor} ${config.borderColor}`}
+      style={pendingStyle}
     >
       <Icon
         aria-hidden="true"
-        className={`w-8 h-8 ${config.iconColor} ${isPending ? 'animate-spin' : ''}`}
+        className={`h-8 w-8 ${config.iconColor} ${isPending ? 'animate-spin' : ''}`}
       />
-      <p className={`font-semibold ${config.iconColor}`}>
-        {statusMessage}
-      </p>
+      <p className={`font-semibold ${config.iconColor}`}>{statusMessage}</p>
     </div>
   );
 }

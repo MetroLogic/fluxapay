@@ -11,7 +11,7 @@ export async function GET(
 
     const backendBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
     const upstream = await fetch(
-        `${backendBaseUrl}/api/payments/${encodeURIComponent(paymentId)}/stream`,
+        `${backendBaseUrl}/api/v1/payments/checkout/${encodeURIComponent(paymentId)}/stream`,
         {
             method: 'GET',
             headers: {

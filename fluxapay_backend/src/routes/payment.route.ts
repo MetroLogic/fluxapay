@@ -1,5 +1,11 @@
 import { Router } from 'express';
-import { createPayment, getPayments, getPaymentById } from '../controllers/payment.controller';
+import {
+  createPayment,
+  getPayments,
+  getPaymentById,
+  getPublicCheckoutPayment,
+  getPublicCheckoutPaymentStatus,
+} from '../controllers/payment.controller';
 import { validatePayment } from '../validators/payment.validator';
 import { authenticateApiKey } from '../middleware/apiKeyAuth.middleware';
 import { idempotencyMiddleware } from '../middleware/idempotency.middleware';
@@ -26,6 +32,15 @@ const router = Router();
  *       429:
  *         description: Rate limit exceeded
  */
+/**
+ * Hosted checkout (public, no API key) — must be registered before /:id
+ */
+router.get('/checkout/:id/stream', (_req, res) => {
+  res.status(404).json({ error: 'Checkout SSE is not available; use polling' });
+});
+router.get('/checkout/:id/status', getPublicCheckoutPaymentStatus);
+router.get('/checkout/:id', getPublicCheckoutPayment);
+
 router.post('/', authenticateApiKey, idempotencyMiddleware, validatePayment, createPayment);
 
 /**
