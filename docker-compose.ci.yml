@@ -53,6 +53,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    command: ["sh", "-c", "npx prisma db push --skip-generate && npm start"]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
       interval: 10s

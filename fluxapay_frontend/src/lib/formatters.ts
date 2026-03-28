@@ -17,7 +17,7 @@ export function formatCurrency(
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(amount);
-  } catch (error) {
+  } catch {
     // Fallback if currency code is invalid
     return `${amount.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency.toUpperCase()}`;
   }

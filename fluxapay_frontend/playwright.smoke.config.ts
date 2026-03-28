@@ -36,7 +36,8 @@ export default defineConfig({
   webServer: {
     command: 'npm start',
     url: 'http://localhost:3075',
-    reuseExistingServer: !process.env.CI,
+    // Integration workflows start `npm start` before Playwright; re-use that server in CI.
+    reuseExistingServer: !!process.env.CI,
     timeout: 60000,
   },
 });

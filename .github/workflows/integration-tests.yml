@@ -46,13 +46,15 @@ jobs:
         working-directory: ./fluxapay_backend
         run: npm ci
 
-      - name: Install wait-on
-        working-directory: ./fluxapay_backend
-        run: npm install --save-dev wait-on
-
       - name: Generate Prisma Client
         working-directory: ./fluxapay_backend
         run: npx prisma generate
+
+      - name: Sync database schema
+        working-directory: ./fluxapay_backend
+        run: npx prisma db push
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/fluxapay_test?schema=public
 
       - name: Run backend unit tests
         working-directory: ./fluxapay_backend
@@ -84,7 +86,7 @@ jobs:
         run: |
           npm start &
           echo "Waiting for backend to be ready..."
-          npx wait-on http://localhost:3000/health --timeout 120000 --interval 2000
+          npx --yes wait-on@9.0.4 http://localhost:3000/health --timeout 120000 --interval 2000
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/fluxapay_test?schema=public
           KMS_PROVIDER: local
@@ -140,10 +142,6 @@ jobs:
         working-directory: ./fluxapay_frontend
         run: npm ci --legacy-peer-deps
 
-      - name: Install wait-on
-        working-directory: ./fluxapay_frontend
-        run: npm install --save-dev wait-on
-
       - name: Install Playwright browsers
         working-directory: ./fluxapay_frontend
         run: npx playwright install --with-deps chromium
@@ -165,7 +163,7 @@ jobs:
         run: |
           npm start &
           echo "Waiting for frontend to be ready..."
-          npx wait-on http://localhost:3075 --timeout 120000 --interval 2000
+          npx --yes wait-on@9.0.4 http://localhost:3075 --timeout 120000 --interval 2000
           echo "Running E2E smoke tests..."
           npm run test:e2e:smoke
         env:

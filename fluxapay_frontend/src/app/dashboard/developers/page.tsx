@@ -447,8 +447,8 @@ export default function DevelopersPage() {
       // Update masked display with last four from new key
       const lastFour = res.apiKey.slice(-4);
       setApiKey(`sk_live_****${lastFour}`);
-    } catch (e: any) {
-      setRotateError(e.message || "Failed to rotate API key");
+    } catch (e: unknown) {
+      setRotateError(e instanceof Error ? e.message : "Failed to rotate API key");
     } finally {
       setRotatingApiKey(false);
       setConfirmRotateApiKey(false);
@@ -462,8 +462,10 @@ export default function DevelopersPage() {
       const res = await api.keys.rotateWebhookSecret();
       setNewWebhookSecret(res.webhookSecret);
       setShowNewWebhookSecret(false);
-    } catch (e: any) {
-      setRotateError(e.message || "Failed to rotate webhook secret");
+    } catch (e: unknown) {
+      setRotateError(
+        e instanceof Error ? e.message : "Failed to rotate webhook secret",
+      );
     } finally {
       setRotatingWebhook(false);
       setConfirmRotateWebhook(false);

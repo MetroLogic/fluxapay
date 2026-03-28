@@ -20,9 +20,9 @@ function InvoicesContent() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [, setIsLoading] = useState(true);
   const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
+  const [, setHasMore] = useState(true);
 
   const fetchInvoices = useCallback(async () => {
     try {
@@ -67,7 +67,7 @@ function InvoicesContent() {
     data: Omit<Invoice, "id" | "invoice_number" | "payment_link" | "created_at">
   ) => {
     try {
-      const response = await api.invoices.create({
+      await api.invoices.create({
         customer_name: data.customer_name,
         customer_email: data.customer_email,
         line_items: data.line_items,
