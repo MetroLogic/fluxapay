@@ -274,6 +274,22 @@ export default function CheckoutPage() {
             <div className="flex justify-center">
               <PaymentStatus status="pending" />
             </div>
+
+            {/* Footer links (merged from upstream/main) */}
+            <div className="mt-8 flex justify-center gap-6 border-t border-gray-100 pt-6 text-xs text-gray-500">
+              <a
+                href="/terms"
+                className="transition-colors hover:text-[color:var(--checkout-accent)]"
+              >
+                Terms of Service
+              </a>
+              <a
+                href="/privacy"
+                className="transition-colors hover:text-[color:var(--checkout-accent)]"
+              >
+                Privacy Policy
+              </a>
+            </div>
           </div>
         </div>
       )}

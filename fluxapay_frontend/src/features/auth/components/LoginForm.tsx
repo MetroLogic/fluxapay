@@ -1,16 +1,14 @@
-﻿"use client";
+"use client";
 
 import React, { useState } from "react";
 import toast from "react-hot-toast";
 import { toastApiError } from "@/lib/toastApiError";
 import Image from "next/image";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { api, ApiError } from "@/lib/api";
+import { Link, useRouter } from "@/i18n/routing";
 import * as yup from "yup";
 import Input from "@/components/Input";
 import { Button } from "@/components/Button";
-import { api, storeToken } from "@/lib/api";
+import { api, ApiError, storeToken } from "@/lib/api";
 import { useTranslations } from "next-intl";
 
 const loginSchema = yup.object({
@@ -24,7 +22,6 @@ type LoginFormData = yup.InferType<typeof loginSchema>;
 const LoginForm = () => {
   const router = useRouter();
   const tAuth = useTranslations("auth");
-  const router = useRouter();
   const [formData, setFormData] = useState<LoginFormData>({ email: "", password: "", keepLoggedIn: false });
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({ email: "", password: "" });
   const [showPassword, setShowPassword] = useState(false);
@@ -55,7 +52,7 @@ const LoginForm = () => {
         throw new Error("Login response missing token");
       }
 
-      localStorage.setItem("token", data.token);
+      storeToken(data.token);
       toast.success(data.message || "Login successful!");
       router.push("/dashboard");
     } catch (err) {
@@ -202,6 +199,26 @@ const LoginForm = () => {
                 )}
                 <span>{isSubmitting ? "Signing in..." : "Sign in"}</span>
               </Button>
+
+              <p className="mt-4 text-center text-xs text-slate-500">
+                By signing in, you agree to our{" "}
+                <Link
+                  href="/terms"
+                  className="font-medium text-slate-700 hover:text-indigo-600 underline underline-offset-4"
+                >
+                  Terms of Service
+                </Link>{" "}
+                and{" "}
+                <Link
+                  href="/privacy"
+                  className="font-medium text-slate-700 hover:text-indigo-600 underline underline-offset-4"
+                >
+                  Privacy Policy
+                </Link>
+                .
+              </p>
+
+              {/* Create account */}
               <div className="pt-2 text-center text-xs md:text-[18px] text-muted-foreground font-semibold">
                 Need an account?{" "}
                 <Link href="/signup" className="font-semibold text-indigo-500 hover:text-indigo-600 underline underline-offset-4">Create one</Link>
