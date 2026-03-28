@@ -1,5 +1,5 @@
 import { Keypair } from '@stellar/stellar-sdk';
-import crypto from 'crypto';
+import * as crypto from 'crypto';
 
 export class HDWalletService {
     private masterSeed: string;
