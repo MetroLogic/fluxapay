@@ -19,7 +19,7 @@ export function TopNav({ onMenuClick }: TopNavProps) {
     };
 
     return (
-        <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-background px-6">
+        <header aria-label="Dashboard top navigation" className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-background px-6">
             {/* Mobile Menu Trigger */}
             <Button
                 variant="ghost"

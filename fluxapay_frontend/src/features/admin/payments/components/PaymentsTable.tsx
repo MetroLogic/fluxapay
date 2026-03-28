@@ -1,5 +1,6 @@
 import { Payment } from "../types";
 import { Button } from "@/components/Button";
+import EmptyState from "@/components/EmptyState";
 import { ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -103,14 +104,11 @@ export function PaymentsTable({
               </tr>
             ))}
             {payments.length === 0 && (
-              <tr>
-                <td
-                  colSpan={6}
-                  className="px-6 py-12 text-center text-muted-foreground"
-                >
-                  No payments found matching your criteria.
-                </td>
-              </tr>
+              <EmptyState
+                colSpan={6}
+                className="px-6 py-12 text-muted-foreground"
+                message="No payments found matching your criteria."
+              />
             )}
           </tbody>
         </table>
