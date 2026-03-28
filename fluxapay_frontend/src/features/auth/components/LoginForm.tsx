@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import toast from "react-hot-toast";
 import { toastApiError } from "@/lib/toastApiError";
 import Image from "next/image";
-import Link from "next/link";
+import { Link } from "@/i18n/routing";
 import * as yup from "yup";
 import Input from "@/components/Input";
 import { Button } from "@/components/Button";
@@ -229,6 +229,23 @@ const LoginForm = () => {
                 )}
                 <span>{isSubmitting ? "Signing in..." : "Sign in"}</span>
               </Button>
+              <p className="mt-4 text-center text-xs text-slate-500">
+                By signing in, you agree to our{" "}
+                <Link
+                  href="/terms"
+                  className="font-medium text-slate-700 hover:text-indigo-600 underline underline-offset-4"
+                >
+                  Terms of Service
+                </Link>{" "}
+                and{" "}
+                <Link
+                  href="/privacy"
+                  className="font-medium text-slate-700 hover:text-indigo-600 underline underline-offset-4"
+                >
+                  Privacy Policy
+                </Link>
+                .
+              </p>
 
               {/* Create account */}
               <div className="pt-2 text-center text-xs md:text-[18px] text-muted-foreground font-semibold">

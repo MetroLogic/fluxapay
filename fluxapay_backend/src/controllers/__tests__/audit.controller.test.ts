@@ -1,5 +1,5 @@
 import { getAuditLogs, getAuditLogByIdHandler } from '../audit.controller';
-import { PrismaClient, AuditActionType, KYCStatus } from '../../generated/client';
+import { PrismaClient, AuditActionType, KYCStatus } from '../../generated/client/client';
 import { logKycDecision, logConfigChange } from '../../services/audit.service';
 
 const prisma = new PrismaClient();

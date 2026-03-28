@@ -1,29 +1,6 @@
-// Define enums locally to avoid dependency on generated client before migration
-export enum AuditActionType {
-  kyc_approve = "kyc_approve",
-  kyc_reject = "kyc_reject",
-  config_change = "config_change",
-  sweep_trigger = "sweep_trigger",
-  sweep_complete = "sweep_complete",
-  sweep_fail = "sweep_fail",
-  settlement_batch_initiate = "settlement_batch_initiate",
-  settlement_batch_complete = "settlement_batch_complete",
-  settlement_batch_fail = "settlement_batch_fail",
-}
+import { AuditActionType, AuditEntityType, KYCStatus } from '../generated/client/client';
 
-export enum AuditEntityType {
-  merchant_kyc = "merchant_kyc",
-  system_config = "system_config",
-  sweep_operation = "sweep_operation",
-  settlement_batch = "settlement_batch",
-}
-
-export enum KYCStatus {
-  not_submitted = "not_submitted",
-  pending_review = "pending_review",
-  approved = "approved",
-  rejected = "rejected",
-}
+export { AuditActionType, AuditEntityType, KYCStatus };
 
 export interface AuditLog {
   id: string;
