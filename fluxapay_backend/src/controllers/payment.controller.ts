@@ -9,12 +9,25 @@ const prisma = new PrismaClient();
 
 export const createPayment = async (req: Request, res: Response) => {
     try {
-        const { order_id, amount, currency, customer_email, description, metadata, success_url, cancel_url } = req.body;
+        const { order_id, amount, currency, customer_email, description, metadata, success_url, cancel_url, customer_id } = req.body;
         const authReq = req as AuthRequest;
         const merchantId = authReq.merchantId;
 
         if (!merchantId) {
             return res.status(401).json({ error: "Unauthorized: Merchant ID missing" });
+        }
+
+        let linkedCustomerId: string | undefined;
+        if (customer_id !== undefined && customer_id !== null && customer_id !== "") {
+            const cid = String(customer_id).trim();
+            const customer = await prisma.customer.findFirst({
+                where: { id: cid, merchantId },
+                select: { id: true },
+            });
+            if (!customer) {
+                return res.status(400).json({ error: "Invalid customer_id for this merchant" });
+            }
+            linkedCustomerId = customer.id;
         }
 
         const isWithinRateLimit = await PaymentService.checkRateLimit(merchantId);
@@ -34,6 +47,7 @@ export const createPayment = async (req: Request, res: Response) => {
             metadata: metadata || {},
             success_url,
             cancel_url,
+            customerId: linkedCustomerId,
         });
 
         res.status(201).json({

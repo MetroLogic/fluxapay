@@ -48,6 +48,21 @@ model Merchant {
   reconciliationRecords ReconciliationRecord[]
   discrepancyThresholds DiscrepancyThreshold[]
   discrepancyAlerts     DiscrepancyAlert[]
+  customers             Customer[]
+}
+
+model Customer {
+  id         String   @id @default(cuid())
+  merchant   Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  merchantId String
+  email      String
+  metadata   Json     @default("{}")
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  payments   Payment[]
+
+  @@index([merchantId])
+  @@index([merchantId, email])
 }
 
 model OTP {
@@ -191,8 +206,11 @@ model Payment {
   settlement         Settlement? @relation(fields: [settlementId], references: [id])
   refunds            Refund[]
   invoice            Invoice?
+  customerId         String?
+  customer           Customer?   @relation(fields: [customerId], references: [id], onDelete: SetNull)
 
   @@index([swept, status])
+  @@index([customerId])
 }
 
 model Refund {

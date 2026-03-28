@@ -49,6 +49,7 @@ export class PaymentService {
     metadata,
     success_url,
     cancel_url,
+    customerId,
   }: {
     amount: number;
     currency: string;
@@ -58,6 +59,7 @@ export class PaymentService {
     metadata?: Record<string, unknown>;
     success_url?: string;
     cancel_url?: string;
+    customerId?: string;
   }) {
     const paymentId = uuidv4();
     const expiration = new Date(Date.now() + 15 * 60 * 1000); // 15 min expiry
@@ -96,6 +98,7 @@ export class PaymentService {
         checkout_url,
         success_url: success_url ?? null,
         cancel_url: cancel_url ?? null,
+        ...(customerId ? { customerId } : {}),
         stellar_address: derived.publicKey,
         // HD wallet derivation fields — stored for sweep key recovery
         payment_index: derived.paymentIndex,
