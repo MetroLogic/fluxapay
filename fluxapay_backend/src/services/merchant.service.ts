@@ -6,6 +6,7 @@ import {
 import bcrypt from "bcrypt";
 import { createOtp, verifyOtp as verifyOtpService } from "./otp.service";
 import { sendOtpEmail } from "./email.service";
+import { sendMerchantOtpSms } from "./smsOtp.service";
 import { isDevEnv } from "../helpers/env.helper";
 import { generateToken } from "../helpers/jwt.helper";
 import { merchantRegistryService } from "./merchantRegistry.service";
@@ -136,7 +137,11 @@ export async function resendOtpMerchantService(data: {
 
 
   const otp = await createOtp(merchantId, channel);
-  if (channel === "email") await sendOtpEmail(merchant.email, otp);
+  if (channel === "email") {
+    await sendOtpEmail(merchant.email, otp);
+  } else {
+    await sendMerchantOtpSms(merchantId, merchant.phone_number, otp);
+  }
 
   return { message: "OTP resent" };
 }

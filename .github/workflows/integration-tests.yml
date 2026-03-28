@@ -71,6 +71,7 @@ jobs:
           CLOUDINARY_API_KEY: test
           CLOUDINARY_API_SECRET: test
           RESEND_API_KEY: re_test
+          SMS_PROVIDER: mock
           STELLAR_HORIZON_URL: https://horizon-testnet.stellar.org
           STELLAR_NETWORK_PASSPHRASE: Test SDF Network ; September 2015
           FUNDER_SECRET_KEY: SBFTEST23456789012345678901234567890123456789012345678901234
@@ -99,6 +100,7 @@ jobs:
           CLOUDINARY_API_KEY: test
           CLOUDINARY_API_SECRET: test
           RESEND_API_KEY: re_test
+          SMS_PROVIDER: mock
           STELLAR_HORIZON_URL: https://horizon-testnet.stellar.org
           STELLAR_NETWORK_PASSPHRASE: Test SDF Network ; September 2015
           FUNDER_SECRET_KEY: SBFTEST23456789012345678901234567890123456789012345678901234
