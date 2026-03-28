@@ -356,6 +356,23 @@ const SignUpForm = () => {
                 )}
                 <span>{isSubmitting ? "Creating account..." : "Create account"}</span>
               </Button>
+              <p className="mt-4 text-center text-xs text-slate-500">
+                By creating an account, you agree to our{" "}
+                <Link
+                  href="/terms"
+                  className="font-medium text-slate-700 hover:text-indigo-600 underline underline-offset-4"
+                >
+                  Terms of Service
+                </Link>{" "}
+                and{" "}
+                <Link
+                  href="/privacy"
+                  className="font-medium text-slate-700 hover:text-indigo-600 underline underline-offset-4"
+                >
+                  Privacy Policy
+                </Link>
+                .
+              </p>
 
               {/* Have account */}
               <div className="pt-2 text-center text-xs md:text-[18px] text-muted-foreground font-semibold">
