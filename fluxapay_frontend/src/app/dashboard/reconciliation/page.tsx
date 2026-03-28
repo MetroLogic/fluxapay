@@ -9,6 +9,7 @@ import { StatementDownload } from '../../../components/reconciliation/StatementD
 import { DiscrepancyAlert } from '../../../components/reconciliation/DiscrepancyAlert';
 import { useReconciliation } from '../../../hooks/useReconciliation';
 import { exportToPDF, exportToCSV } from '../../../utils/exportHelpers';
+import { ApiError } from '../../../lib/api';
 
 export default function ReconciliationPage() {
     const [dateRangeFilter, setDateRangeFilter] = useState<'today' | '7days' | '30days'>('30days');
@@ -29,7 +30,7 @@ export default function ReconciliationPage() {
         return { startDate: start, endDate: end };
     }, [dateRangeFilter]);
 
-    const { records, summary, discrepancies, loading, error, setDiscrepancies } = useReconciliation({
+    const { records, summary, discrepancies, loading, error, resolveDiscrepancy } = useReconciliation({
         start: startDate,
         end: endDate
     });
@@ -47,8 +48,13 @@ export default function ReconciliationPage() {
         exportToCSV(records);
     };
 
-    const handleResolveAlert = (id: string) => {
-        setDiscrepancies(prev => prev.map(a => a.id === id ? { ...a, resolved: true } : a));
+    const handleResolveAlert = async (id: string) => {
+        try {
+            await resolveDiscrepancy(id);
+        } catch (e) {
+            const message = e instanceof ApiError ? e.message : 'Could not resolve alert';
+            window.alert(message);
+        }
     };
 
     const handleDownloadRecord = async (record: ReconciliationRecord) => {
