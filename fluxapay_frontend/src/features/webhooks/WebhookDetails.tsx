@@ -53,7 +53,7 @@ export const WebhookDetails = ({
                         status: Number(d.http_status ?? 0),
                         body: d.response_body,
                     },
-                    retryHistory: retryAttempts.map((a: any) => ({
+                    retryHistory: retryAttempts.map((a: Record<string, unknown>) => ({
                         timestamp: String(a.timestamp),
                         status: d.status,
                         responseCode: Number(a.http_status ?? 0),
@@ -69,6 +69,8 @@ export const WebhookDetails = ({
         return () => {
             cancelled = true;
         };
+        // Intentionally omit `webhook` object: refetch when id or open state changes only.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [webhook?.id, isOpen]);
 
     const handleCopy = (text: string) => {

@@ -7,7 +7,7 @@ import Image from "next/image";
 import * as yup from "yup";
 import Input from "@/components/Input";
 import { Button } from "@/components/Button";
-import { Link } from "@/i18n/routing";
+import { Link, useRouter } from "@/i18n/routing";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 import {
@@ -46,6 +46,7 @@ const signupSchema = yup.object({
 type SignUpFormData = yup.InferType<typeof signupSchema>;
 
 const SignUpForm = () => {
+  const router = useRouter();
   const tAuth = useTranslations("auth");
   const [formData, setFormData] = useState<SignUpFormData>({
     name: "",
@@ -120,9 +121,10 @@ const SignUpForm = () => {
 
       toast.success("Signup successful! Please verify your account.");
       
-      // Redirect to OTP verification page
       if (response.merchantId) {
-        window.location.href = `/verify-otp?merchantId=${response.merchantId}&channel=email`;
+        router.push(
+          `/verify-otp?merchantId=${response.merchantId}&channel=email`,
+        );
       }
     } catch (err) {
       if (err instanceof yup.ValidationError) {
@@ -322,7 +324,9 @@ const SignUpForm = () => {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    aria-label={
+                      showPassword ? "Hide concealed characters" : "Show concealed characters"
+                    }
                     aria-pressed={showPassword}
                     className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-500 transition-colors"
                   >

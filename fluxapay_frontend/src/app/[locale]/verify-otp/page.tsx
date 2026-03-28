@@ -1,19 +1,16 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
 import { toastApiError } from "@/lib/toastApiError";
 import Image from "next/image";
-import Input from "@/components/Input";
 import { Button } from "@/components/Button";
-import { Link } from "@/i18n/routing";
+import { Link, useRouter as useI18nRouter } from "@/i18n/routing";
 import { api, ApiError } from "@/lib/api";
-import { useTranslations } from "next-intl";
 
 export default function VerifyOtpPage() {
-  const tAuth = useTranslations("auth");
-  const router = useRouter();
+  const router = useI18nRouter();
   const searchParams = useSearchParams();
 
   const merchantId = searchParams.get("merchantId") || "";
@@ -140,7 +137,8 @@ export default function VerifyOtpPage() {
               Verify Your Account
             </h1>
             <p className="text-sm md:text-[18px] font-normal text-muted-foreground">
-              We've sent a 6-digit code to your {channel}.
+              {"We've sent a 6-digit code to your "}
+              {channel}.
             </p>
           </div>
 
@@ -200,7 +198,7 @@ export default function VerifyOtpPage() {
             {/* Resend OTP */}
             <div className="text-center space-y-2">
               <p className="text-sm text-muted-foreground">
-                Didn't receive the code?
+                {"Didn't receive the code?"}
               </p>
               {cooldown > 0 ? (
                 <p className="text-sm text-slate-500">

@@ -1,7 +1,15 @@
-import { PrismaClient, KYCStatus, DocumentType, BusinessType, GovernmentIdType, Prisma } from "../generated/client/client";
+import {
+  PrismaClient,
+  KYCStatus as PrismaKYCStatus,
+  DocumentType,
+  BusinessType,
+  GovernmentIdType,
+  Prisma,
+} from "../generated/client/client";
 import { uploadToCloudinary, deleteFromCloudinary } from "./cloudinary.service";
 import { SubmitKycInput, UpdateKycStatusInput } from "../schemas/kyc.schema";
 import { logKycDecision } from "./audit.service";
+import { KYCStatus as AuditKYCStatus } from "../types/audit.types";
 
 const prisma = new PrismaClient();
 
@@ -43,7 +51,7 @@ export async function submitKycService(
         director_phone: data.director_phone,
         government_id_type: data.government_id_type as GovernmentIdType,
         government_id_number: data.government_id_number,
-        kyc_status: "pending_review",
+        kyc_status: PrismaKYCStatus.pending_review,
         rejection_reason: null,
       },
     });
@@ -68,7 +76,7 @@ export async function submitKycService(
       director_phone: data.director_phone,
       government_id_type: data.government_id_type as GovernmentIdType,
       government_id_number: data.government_id_number,
-      kyc_status: "pending_review",
+      kyc_status: PrismaKYCStatus.pending_review,
     },
   });
 
@@ -208,7 +216,7 @@ export async function getKycStatusService(merchantId: string) {
   if (!kyc) {
     return {
       message: "KYC not submitted",
-      kyc_status: "not_submitted" as KYCStatus,
+      kyc_status: PrismaKYCStatus.not_submitted,
       kyc: null,
     };
   }
@@ -273,7 +281,7 @@ export async function updateKycStatusService(
   }
 
   const previousStatus = kyc.kyc_status;
-  const newStatus = data.status as KYCStatus;
+  const newStatus = data.status as PrismaKYCStatus;
   const action = data.status === "approved" ? "approve" : "reject";
 
   // Use transaction to ensure atomicity
@@ -295,8 +303,8 @@ export async function updateKycStatusService(
         adminId: reviewerId,
         merchantId,
         action,
-        previousStatus,
-        newStatus,
+        previousStatus: previousStatus as AuditKYCStatus,
+        newStatus: newStatus as AuditKYCStatus,
         reason: data.rejection_reason,
       },
       tx
@@ -315,7 +323,7 @@ export async function updateKycStatusService(
  * Get all KYC submissions for admin review
  */
 export async function getAllKycSubmissionsService(
-  status?: KYCStatus,
+  status?: PrismaKYCStatus,
   page: number = 1,
   limit: number = 10
 ) {

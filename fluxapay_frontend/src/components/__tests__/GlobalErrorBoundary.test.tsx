@@ -40,7 +40,7 @@ describe("Example 1.4+1.5: reset via Try again button", () => {
       return <div>recovered content</div>;
     }
 
-    const { rerender } = render(
+    render(
       <GlobalErrorBoundary>
         <MaybeThrow />
       </GlobalErrorBoundary>,

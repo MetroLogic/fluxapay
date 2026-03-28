@@ -54,7 +54,7 @@ export async function updateRefundStatus(req: AuthRequest, res: Response) {
 
     const result = await updateRefundStatusService({
       merchantId,
-      refund_id,
+      refund_id: String(refund_id),
       status: req.body.status,
       failed_reason: req.body.failed_reason,
     });

@@ -2,7 +2,6 @@ import {
   PrismaClient,
   RefundStatus,
   WebhookEventType,
-  PaymentStatus,
   Prisma,
 } from "../generated/client/client";
 import { createAndDeliverWebhook } from "./webhook.service";
@@ -46,8 +45,8 @@ async function validatePaymentForRefund(
   }
 
   // Validate payment status is refundable
-  const refundableStatuses: PaymentStatus[] = ["confirmed", "overpaid"];
-  if (!refundableStatuses.includes(payment.status)) {
+  const refundableStatuses = ["confirmed", "overpaid"] as const;
+  if (!refundableStatuses.includes(payment.status as (typeof refundableStatuses)[number])) {
     throw {
       status: 400,
       message: `Payment cannot be refunded. Current status: ${payment.status}. Only confirmed or overpaid payments can be refunded.`,
@@ -153,7 +152,7 @@ export async function createRefundService(params: {
           where: {
             merchantId,
             paymentId: payment_id,
-            amount: BigInt(Math.round(amount * 100)), // Convert to cents for comparison
+            amount,
           },
         });
 
@@ -270,7 +269,6 @@ export async function updateRefundStatusService(params: {
       await createAndDeliverWebhook(
         merchantId,
         eventType,
-        endpointUrl,
         {
           event_type: eventType,
           refund_id: updated.id,
@@ -282,6 +280,7 @@ export async function updateRefundStatusService(params: {
           occurred_at: new Date().toISOString(),
         },
         updated.paymentId,
+        endpointUrl,
       );
     }
   }

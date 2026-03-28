@@ -58,5 +58,6 @@ export interface MetricsCollector {
   histogram(name: string, value: number, tags?: MetricsTags): void;
   timer(name: string, startTime: [number, number], tags?: MetricsTags): void;
   getMetrics(): MetricEvent[];
+  getSummary(): Record<string, unknown>;
   reset(): void;
 }

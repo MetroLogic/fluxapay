@@ -5,6 +5,8 @@ import toast from "react-hot-toast";
 import { toastApiError } from "@/lib/toastApiError";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { api, ApiError } from "@/lib/api";
 import * as yup from "yup";
 import Input from "@/components/Input";
 import { Button } from "@/components/Button";
@@ -26,6 +28,7 @@ const loginSchema = yup.object({
 type LoginFormData = yup.InferType<typeof loginSchema>;
 
 const LoginForm = () => {
+  const router = useRouter();
   const tAuth = useTranslations("auth");
   const [formData, setFormData] = useState<LoginFormData>({
     email: "",
@@ -74,12 +77,23 @@ const LoginForm = () => {
       setErrors({});
       setIsSubmitting(true);
 
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      const data = (await api.auth.login({
+        email: validData.email,
+        password: validData.password,
+      })) as { token?: string; message?: string };
 
-      console.log("Login data:", validData);
-      toast.success("Login successful!");
+      if (!data.token) {
+        throw new Error("Login response missing token");
+      }
+
+      localStorage.setItem("token", data.token);
+      toast.success(data.message || "Login successful!");
+      router.push("/dashboard");
     } catch (err) {
+      if (err instanceof ApiError) {
+        toast.error(err.message);
+        return;
+      }
       if (err instanceof yup.ValidationError) {
         const fieldErrors: { email?: string; password?: string } = {};
         err.inner.forEach((issue) => {
@@ -158,7 +172,9 @@ const LoginForm = () => {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    aria-label={
+                      showPassword ? "Hide concealed characters" : "Show concealed characters"
+                    }
                     aria-pressed={showPassword}
                     className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-500 transition-colors"
                   >
