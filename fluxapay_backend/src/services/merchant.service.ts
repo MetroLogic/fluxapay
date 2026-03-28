@@ -1,7 +1,12 @@
-import { PrismaClient } from "../generated/client/client";
+import { PrismaClient, Prisma } from "../generated/client/client";
+import {
+  normalizeCheckoutAccentHex,
+  normalizeCheckoutLogoUrl,
+} from "../utils/checkout-branding.util";
 import bcrypt from "bcrypt";
 import { createOtp, verifyOtp as verifyOtpService } from "./otp.service";
 import { sendOtpEmail } from "./email.service";
+import { sendMerchantOtpSms } from "./smsOtp.service";
 import { isDevEnv } from "../helpers/env.helper";
 import { generateToken } from "../helpers/jwt.helper";
 import { merchantRegistryService } from "./merchantRegistry.service";
@@ -132,7 +137,11 @@ export async function resendOtpMerchantService(data: {
 
 
   const otp = await createOtp(merchantId, channel);
-  if (channel === "email") await sendOtpEmail(merchant.email, otp);
+  if (channel === "email") {
+    await sendOtpEmail(merchant.email, otp);
+  } else {
+    await sendMerchantOtpSms(merchantId, merchant.phone_number, otp);
+  }
 
   return { message: "OTP resent" };
 }
@@ -204,17 +213,57 @@ export async function updateMerchantProfileService(data: {
   merchantId: string;
   business_name?: string;
   email?: string;
+  checkout_logo_url?: string | null;
+  checkout_accent_color?: string | null;
+  settlement_schedule?: "daily" | "weekly";
+  settlement_day?: number;
 }) {
-  const { merchantId, ...updates } = data;
-  if (updates.email) {
+  const { merchantId, ...rest } = data;
+
+  if (rest.email) {
     const taken = await prisma.merchant.findFirst({
-      where: { email: updates.email, id: { not: merchantId } },
+      where: { email: rest.email, id: { not: merchantId } },
     });
     if (taken) throw { status: 400, message: "Email already in use" };
   }
+
+  const patch: Prisma.MerchantUpdateInput = {};
+
+  if (rest.business_name !== undefined) {
+    patch.business_name = rest.business_name;
+  }
+  if (rest.email !== undefined) {
+    patch.email = rest.email;
+  }
+  if (rest.checkout_logo_url !== undefined) {
+    patch.checkout_logo_url = normalizeCheckoutLogoUrl(
+      rest.checkout_logo_url === null || rest.checkout_logo_url === ""
+        ? null
+        : rest.checkout_logo_url,
+    );
+  }
+  if (rest.checkout_accent_color !== undefined) {
+    patch.checkout_accent_color = normalizeCheckoutAccentHex(
+      rest.checkout_accent_color === null ||
+        rest.checkout_accent_color === ""
+        ? null
+        : rest.checkout_accent_color,
+    );
+  }
+  if (rest.settlement_schedule !== undefined) {
+    patch.settlement_schedule = rest.settlement_schedule;
+    if (rest.settlement_schedule === "daily") {
+      patch.settlement_day = null;
+    } else if (rest.settlement_day !== undefined) {
+      patch.settlement_day = rest.settlement_day;
+    }
+  } else if (rest.settlement_day !== undefined) {
+    patch.settlement_day = rest.settlement_day;
+  }
+
   const merchant = await prisma.merchant.update({
     where: { id: merchantId },
-    data: updates,
+    data: patch,
   });
   return { message: "Profile updated", merchant };
 }

@@ -12,7 +12,7 @@ export async function GET(
   const backendBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
   const upstream = await fetch(
-    `${backendBaseUrl}/api/payments/${encodeURIComponent(paymentId)}/status`,
+    `${backendBaseUrl}/api/v1/payments/checkout/${encodeURIComponent(paymentId)}/status`,
     {
       method: 'GET',
       headers: { Accept: 'application/json' },

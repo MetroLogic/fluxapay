@@ -49,12 +49,16 @@ export const getLoggedInMerchant = createController(
 );
 
 export const updateMerchantProfile = createController(
-  async (body: { business_name?: string; email?: string }, req: AuthRequest) => {
+  async (body: Record<string, unknown>, req: AuthRequest) => {
     const merchantId = await validateUserId(req);
+    const { params: _p, query: _q, ...profile } = body;
 
     return updateMerchantProfileService({
       merchantId,
-      ...body,
+      ...(profile as Omit<
+        Parameters<typeof updateMerchantProfileService>[0],
+        "merchantId"
+      >),
     });
   },
 );

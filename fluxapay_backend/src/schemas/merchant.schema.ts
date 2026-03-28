@@ -78,3 +78,66 @@ export const bankAccountSchema = z.object({
   currency: z.string().min(3, 'Currency is required'),
   country: z.string().min(2, 'Country is required'),
 });
+
+const checkoutLogoUrlField = z
+  .union([z.string().max(2048), z.literal(''), z.null()])
+  .optional()
+  .superRefine((val, ctx) => {
+    if (val == null || val === '') return;
+    try {
+      const u = new URL(val);
+      if (u.protocol !== 'https:') {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Logo URL must use https://',
+        });
+      }
+    } catch {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Invalid logo URL',
+      });
+    }
+  });
+
+const checkoutAccentField = z
+  .union([z.string().max(16), z.literal(''), z.null()])
+  .optional()
+  .superRefine((val, ctx) => {
+    if (val == null || val === '') return;
+    if (!/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(val.trim())) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Accent must be a hex color like #RRGGBB or #RGB',
+      });
+    }
+  });
+
+/**
+ * PATCH /merchants/me — validation middleware merges `params` and `query` into the payload.
+ */
+export const updateMerchantProfileSchema = z
+  .object({
+    business_name: z.string().min(1).optional(),
+    email: z.email().optional(),
+    checkout_logo_url: checkoutLogoUrlField,
+    checkout_accent_color: checkoutAccentField,
+    settlement_schedule: z.enum(['daily', 'weekly']).optional(),
+    settlement_day: z
+      .number()
+      .int()
+      .min(0, 'settlement_day must be 0–6 (Sun–Sat)')
+      .max(6, 'settlement_day must be 0–6 (Sun–Sat)')
+      .optional(),
+    params: z.any(),
+    query: z.any(),
+  })
+  .refine(
+    (data) =>
+      data.settlement_schedule !== 'weekly' ||
+      data.settlement_day !== undefined,
+    {
+      message: 'settlement_day is required when settlement_schedule is "weekly"',
+      path: ['settlement_day'],
+    },
+  );

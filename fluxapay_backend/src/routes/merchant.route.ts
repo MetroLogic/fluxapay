@@ -205,7 +205,12 @@ router.get("/me", authenticateApiKey, getLoggedInMerchant);
  *       401:
  *         description: Unauthorized
  */
-router.patch("/me", authenticateApiKey, updateMerchantProfile);
+router.patch(
+  "/me",
+  authenticateApiKey,
+  validate(merchantSchema.updateMerchantProfileSchema),
+  updateMerchantProfile,
+);
 
 /**
  * @swagger
