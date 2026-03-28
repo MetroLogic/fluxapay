@@ -4,6 +4,7 @@ import { HDWalletService } from "./HDWalletService";
 import { StellarService } from "./StellarService";
 import { sorobanService } from "./SorobanService";
 import { eventBus, AppEvents } from "./EventService";
+import { validateAndSanitizeMetadata } from "../utils/metadata.util";
 
 const prisma = new PrismaClient();
 
@@ -63,6 +64,7 @@ export class PaymentService {
   }) {
     const paymentId = uuidv4();
     const expiration = new Date(Date.now() + 15 * 60 * 1000); // 15 min expiry
+    const sanitizedMetadata = validateAndSanitizeMetadata(metadata);
 
     // Build absolute checkout URL using PAY_CHECKOUT_BASE env var
     const checkoutBase = PaymentService.getCheckoutBaseUrl();
@@ -92,7 +94,7 @@ export class PaymentService {
         customer_email,
         description: description ?? null,
         merchantId,
-        metadata: (metadata ?? {}) as any,
+        metadata: sanitizedMetadata as any,
         expiration,
         status: "pending",
         checkout_url,

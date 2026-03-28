@@ -1,10 +1,10 @@
 import { PaymentService } from "../payment.service";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient } from "../../generated/client/client";
 import { HDWalletService } from "../HDWalletService";
 import { StellarService } from "../StellarService";
 
 // Mock Prisma
-jest.mock("@prisma/client", () => {
+jest.mock("../../generated/client/client", () => {
   const mockPrismaClient = {
     payment: {
       count: jest.fn(),
@@ -162,6 +162,117 @@ describe("PaymentService", () => {
       });
     });
 
+
+    it('should sanitize metadata string fields before persistence', async () => {
+      const mockStellarAddress =
+        'GTEST123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ123456789ABC';
+      const mockDerivedAddress = {
+        publicKey: mockStellarAddress,
+        merchantIndex: 0,
+        paymentIndex: 0,
+        derivationPath: "m/44'/148'/0'/0'",
+      };
+
+      (
+        HDWalletService as jest.MockedClass<typeof HDWalletService>
+      ).mockImplementation(
+        () =>
+          ({
+            derivePaymentAddress: jest
+              .fn()
+              .mockResolvedValue(mockDerivedAddress),
+            encryptKeyData: jest.fn().mockResolvedValue('encrypted-blob'),
+            regenerateKeypair: jest.fn(),
+            regenerateKeypairFromPath: jest.fn(),
+            verifyAddress: jest.fn(),
+            decryptKeyData: jest.fn(),
+          }) as any,
+      );
+
+      (
+        StellarService as jest.MockedClass<typeof StellarService>
+      ).mockImplementation(
+        () =>
+          ({
+            prepareAccount: jest.fn().mockResolvedValue(undefined),
+          }) as any,
+      );
+
+      mockPrisma.payment.create.mockResolvedValue({
+        id: 'payment_123',
+        stellar_address: mockStellarAddress,
+      });
+
+      await PaymentService.createPayment({
+        amount: 100,
+        currency: 'USDC',
+        customer_email: 'test@example.com',
+        merchantId: 'merchant_1',
+        metadata: {
+          notes: '<script>alert(1)</script><b>safe text</b>',
+          nested: { description: '<img src=x onerror=alert(1)>hello' },
+        },
+      });
+
+      expect(mockPrisma.payment.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          metadata: {
+            notes: 'safe text',
+            nested: { description: 'hello' },
+          },
+        }),
+      });
+    });
+
+    it('should reject metadata over configured max size', async () => {
+      process.env.PAYMENT_METADATA_MAX_BYTES = '10';
+
+      const mockStellarAddress =
+        'GTEST123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ123456789ABC';
+      const mockDerivedAddress = {
+        publicKey: mockStellarAddress,
+        merchantIndex: 0,
+        paymentIndex: 0,
+        derivationPath: "m/44'/148'/0'/0'",
+      };
+
+      (
+        HDWalletService as jest.MockedClass<typeof HDWalletService>
+      ).mockImplementation(
+        () =>
+          ({
+            derivePaymentAddress: jest
+              .fn()
+              .mockResolvedValue(mockDerivedAddress),
+            encryptKeyData: jest.fn().mockResolvedValue('encrypted-blob'),
+            regenerateKeypair: jest.fn(),
+            regenerateKeypairFromPath: jest.fn(),
+            verifyAddress: jest.fn(),
+            decryptKeyData: jest.fn(),
+          }) as any,
+      );
+
+      (
+        StellarService as jest.MockedClass<typeof StellarService>
+      ).mockImplementation(
+        () =>
+          ({
+            prepareAccount: jest.fn().mockResolvedValue(undefined),
+          }) as any,
+      );
+
+      await expect(
+        PaymentService.createPayment({
+          amount: 100,
+          currency: 'USDC',
+          customer_email: 'test@example.com',
+          merchantId: 'merchant_1',
+          metadata: { big: 'this payload is too large' },
+        }),
+      ).rejects.toThrow('Metadata exceeds maximum size of 10 bytes');
+
+      delete process.env.PAYMENT_METADATA_MAX_BYTES;
+    });
     it("should work without HD_WALLET_MASTER_SEED when using KMS", async () => {
       delete process.env.HD_WALLET_MASTER_SEED;
 

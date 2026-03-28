@@ -44,4 +44,14 @@ export class FunderMonitorService {
   }
 }
 
-export const funderMonitorService = new FunderMonitorService();
+let _funderMonitorService: FunderMonitorService | undefined;
+try {
+  _funderMonitorService = new FunderMonitorService();
+} catch (err) {
+  console.warn(
+    "FunderMonitorService failed to initialize (invalid or missing FUNDER_SECRET_KEY):",
+    err instanceof Error ? err.message : err,
+  );
+}
+
+export const funderMonitorService = _funderMonitorService as FunderMonitorService;

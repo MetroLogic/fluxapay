@@ -4,6 +4,7 @@ import { PaymentService } from "../services/payment.service";
 import { normalizeCheckoutAccentHex } from "../utils/checkout-branding.util";
 import { AuthRequest } from "../types/express";
 import { validateUserId } from "../helpers/request.helper";
+import { MetadataValidationError } from "../utils/metadata.util";
 
 const prisma = new PrismaClient();
 
@@ -55,6 +56,23 @@ export const createPayment = async (req: Request, res: Response) => {
             checkout_url: payment.checkout_url,
         });
     } catch (error: unknown) {
+        if (error instanceof MetadataValidationError) {
+            return res.status(400).json({ error: error.message });
+        }
+
+        if (
+            error &&
+            typeof error === "object" &&
+            "status" in error &&
+            (error as { status?: unknown }).status === 400
+        ) {
+            const message =
+                "message" in error && typeof (error as { message?: unknown }).message === "string"
+                    ? (error as { message: string }).message
+                    : "Validation failed";
+            return res.status(400).json({ error: message });
+        }
+
         console.error('Error creating payment:', error);
         res.status(500).json({ error: "Failed to create payment" });
     }
@@ -162,6 +180,19 @@ export const getPaymentById = async (req: Request, res: Response) => {
 
         res.json(responseData);
     } catch (error: unknown) {
+        if (
+            error &&
+            typeof error === "object" &&
+            "status" in error &&
+            typeof (error as { status?: unknown }).status === "number"
+        ) {
+            const status = (error as { status: number }).status;
+            const message =
+                "message" in error && typeof (error as { message?: unknown }).message === "string"
+                    ? (error as { message: string }).message
+                    : "Unauthorized";
+            return res.status(status).json({ error: message });
+        }
         res.status(500).json({ error: "Error fetching details" });
     }
 };

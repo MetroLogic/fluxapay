@@ -107,7 +107,7 @@ describe('KMS Integration Tests', () => {
 
       // Set up Local KMS and get encrypted seed
       const kms = new LocalKMSProvider(passphrase);
-      const encrypted = kms['encrypt'](masterSeed); // Access private method for testing
+      const encrypted = await kms.encrypt(masterSeed);
 
       process.env.KMS_PROVIDER = 'local';
       process.env.KMS_ENCRYPTION_PASSPHRASE = passphrase;
@@ -118,20 +118,18 @@ describe('KMS Integration Tests', () => {
       // Create HDWalletService with KMS
       const hdWallet = new HDWalletService();
 
-      // Derive address
-      const address = await hdWallet.derivePaymentAddress('merchant_1', 'payment_1');
+      // Use direct index-based derivation path to avoid DB dependency in this unit test
+      const { publicKey: address } = await hdWallet.regenerateKeypair(0, 0);
 
       expect(address).toMatch(/^G[A-Z0-9]{55}$/);
     });
 
     it('should derive same addresses with KMS as with direct seed', async () => {
       const masterSeed = 'test-master-seed-12345678';
-      const merchantId = 'merchant_test';
-      const paymentId = 'payment_test';
 
       // Direct seed injection
       const hdWalletDirect = new HDWalletService(masterSeed);
-      const addressDirect = await hdWalletDirect.derivePaymentAddress(merchantId, paymentId);
+      const { publicKey: addressDirect } = await hdWalletDirect.regenerateKeypair(0, 0);
 
       // KMS-backed
       const passphrase = 'test-passphrase';
@@ -139,7 +137,7 @@ describe('KMS Integration Tests', () => {
       await kms.storeMasterSeed(masterSeed);
 
       const hdWalletKMS = new HDWalletService(kms);
-      const addressKMS = await hdWalletKMS.derivePaymentAddress(merchantId, paymentId);
+      const { publicKey: addressKMS } = await hdWalletKMS.regenerateKeypair(0, 0);
 
       expect(addressKMS).toBe(addressDirect);
     });
@@ -150,7 +148,7 @@ describe('KMS Integration Tests', () => {
       await kms.storeMasterSeed(masterSeed);
 
       const hdWallet = new HDWalletService(kms);
-      const { publicKey, secretKey } = await hdWallet.regenerateKeypair('merchant_1', 'payment_1');
+      const { publicKey, secretKey } = await hdWallet.regenerateKeypair(0, 0);
 
       expect(publicKey).toMatch(/^G[A-Z0-9]{55}$/);
       expect(secretKey).toMatch(/^S[A-Z0-9]{55}$/);
@@ -162,11 +160,12 @@ describe('KMS Integration Tests', () => {
       await kms.storeMasterSeed(masterSeed);
 
       const hdWallet = new HDWalletService(kms);
-      const merchantId = 'merchant_1';
-      const paymentId = 'payment_1';
-
-      const address = await hdWallet.derivePaymentAddress(merchantId, paymentId);
-      const isValid = await hdWallet.verifyAddress(merchantId, paymentId, address);
+      const derived = await hdWallet.regenerateKeypair(0, 0);
+      const isValid = await hdWallet.verifyAddress(
+        0,
+        0,
+        derived.publicKey,
+      );
 
       expect(isValid).toBe(true);
     });
@@ -193,7 +192,7 @@ describe('KMS Integration Tests', () => {
       process.env.HD_WALLET_MASTER_SEED = legacySeed;
 
       const kms = new LocalKMSProvider(passphrase);
-      const encrypted = kms['encrypt'](kmsSeed); // Access private method for testing
+      const encrypted = await kms.encrypt(kmsSeed);
 
       process.env.KMS_ENCRYPTED_MASTER_SEED = encrypted;
       process.env.KMS_ENCRYPTION_PASSPHRASE = passphrase;

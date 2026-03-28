@@ -1,4 +1,4 @@
-import { PrismaClient, AuditActionType, AuditEntityType, KYCStatus } from '../../generated/client';
+import { PrismaClient, AuditActionType, AuditEntityType, KYCStatus } from '../../generated/client/client';
 import {
   logKycDecision,
   logConfigChange,

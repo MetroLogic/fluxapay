@@ -13,13 +13,15 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "build": "tsc",
-    "test": "node --experimental-vm-modules node_modules/.bin/jest",
-    "test:unit": "node src/__tests__/sdk.test.ts",
-    "test:integration": "node src/__tests__/integration.test.ts",
+    "test": "npm run test:unit && npm run test:integration",
+    "test:unit": "tsx src/__tests__/sdk.test.ts",
+    "test:integration": "tsx src/__tests__/integration.test.ts",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
@@ -29,9 +31,18 @@
     "usdc",
     "crypto"
   ],
-  "license": "ISC",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MetroLogic/fluxapay.git",
+    "directory": "fluxapay_sdk"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "devDependencies": {
     "@types/node": "^20.19.33",
+    "tsx": "^4.20.6",
     "typescript": "^5.0.0"
   }
 }
