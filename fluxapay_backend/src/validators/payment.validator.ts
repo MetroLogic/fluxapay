@@ -29,6 +29,7 @@ export const validatePayment = [
   body('customer_email').isEmail().withMessage('Invalid customer email'),
   body('description').optional().isString().trim().withMessage('description must be a string'),
   body('metadata').optional().isObject().withMessage('Metadata must be an object'),
+  body('customer_id').optional().isString().trim().notEmpty().withMessage('customer_id must be a non-empty string'),
   body('success_url')
     .optional()
     .isString()

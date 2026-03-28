@@ -87,6 +87,12 @@ describe("PaymentService", () => {
   describe('createPayment', () => {
     it('should create payment with derived Stellar address', async () => {
       const mockStellarAddress = 'GTEST123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ123456789ABC';
+      const mockDerivedAddress = {
+        publicKey: mockStellarAddress,
+        merchantIndex: 0,
+        paymentIndex: 0,
+        derivationPath: "m/44'/148'/0'/0'",
+      };
       const mockPaymentData = {
         id: "payment_123",
         amount: 100,
