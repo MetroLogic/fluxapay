@@ -8,9 +8,23 @@ describeWithDatabase('Audit Logging - KYC Integration', () => {
   let testMerchantId: string;
 
   beforeEach(async () => {
-    // Clean up
+    // Clean up in FK-dependency order to avoid constraint violations
+    await prisma.discrepancyAlert.deleteMany({});
+    await prisma.discrepancyThreshold.deleteMany({});
+    await prisma.reconciliationRecord.deleteMany({});
+    await prisma.refund.deleteMany({});
+    await prisma.invoice.deleteMany({});
+    await prisma.payment.deleteMany({});
+    await prisma.settlement.deleteMany({});
+    await prisma.webhookRetryAttempt.deleteMany({});
+    await prisma.webhookLog.deleteMany({});
     await prisma.auditLog.deleteMany({});
+    await prisma.kYCDocument.deleteMany({});
     await prisma.merchantKYC.deleteMany({});
+    await prisma.merchantHDIndex.deleteMany({});
+    await prisma.bankAccount.deleteMany({});
+    await prisma.merchantSubscription.deleteMany({});
+    await prisma.oTP.deleteMany({});
     await prisma.merchant.deleteMany({});
 
     // Create test merchant

@@ -1,20 +1,37 @@
 import { createAndDeliverWebhook, deliverWebhook, generateWebhookSignature } from "../webhook.service";
+import { PrismaClient } from "../../generated/client/client";
 
-// mock prisma client
+// Define mock functions inside the factory to avoid jest-hoisting TDZ issues with const
+jest.mock("../../generated/client/client", () => {
+  const findUnique = jest.fn();
+  const webhookCreate = jest.fn();
+  const webhookUpdate = jest.fn();
+  const webhookFindFirst = jest.fn();
+  const webhookFindMany = jest.fn();
+  const webhookCount = jest.fn();
+  const retryAttemptCreate = jest.fn();
+  return {
+    PrismaClient: jest.fn(() => ({
+      merchant: { findUnique },
+      webhookLog: {
+        create: webhookCreate,
+        update: webhookUpdate,
+        findFirst: webhookFindFirst,
+        findMany: webhookFindMany,
+        count: webhookCount,
+      },
+      webhookRetryAttempt: { create: retryAttemptCreate },
+    })),
+  };
+});
+
+// Access mock fns from the PrismaClient instance created during webhook.service module load
+const MockedPrismaClient = PrismaClient as jest.MockedClass<typeof PrismaClient>;
+const mockPrismaInstance = MockedPrismaClient.mock.results[0]!.value;
 const mockMerchant = {
-  findUnique: jest.fn(),
-  webhookLog: {
-    create: jest.fn(),
-    update: jest.fn(),
-  },
+  findUnique: mockPrismaInstance.merchant.findUnique as jest.Mock,
+  webhookLog: mockPrismaInstance.webhookLog as { create: jest.Mock; update: jest.Mock },
 };
-
-jest.mock("../../generated/client/client", () => ({
-  PrismaClient: jest.fn(() => ({
-    merchant: mockMerchant,
-    webhookLog: mockMerchant.webhookLog,
-  })),
-}));
 
 // We will override global.fetch in tests
 const originalFetch = global.fetch;
