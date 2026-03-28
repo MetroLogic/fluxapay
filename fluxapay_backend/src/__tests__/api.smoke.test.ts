@@ -42,7 +42,7 @@ describeIfServer("Backend API Smoke Tests", () => {
 
   describe("Critical Routes", () => {
     const criticalRoutes = [
-      { method: "get", path: "/api/v1/merchants" },
+      { method: "get", path: "/api/v1/merchants/me" },
       { method: "get", path: "/api/v1/payments" },
       { method: "get", path: "/api/v1/refunds" },
       { method: "get", path: "/api/v1/dashboard" },
