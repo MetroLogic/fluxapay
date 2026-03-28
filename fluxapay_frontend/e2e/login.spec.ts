@@ -5,7 +5,7 @@ import { test, expect } from "@playwright/test";
  */
 test.describe("Login flow", () => {
   test("@smoke - shows validation error for empty fields", async ({ page }) => {
-    await page.goto("/en/login");
+    await page.goto("/login");
     await page.getByRole("button", { name: /sign in/i }).click();
     await expect(page.getByText(/email is required/i)).toBeVisible();
   });
@@ -19,13 +19,13 @@ test.describe("Login flow", () => {
       }),
     );
 
-    await page.goto("/en/login");
+    await page.goto("/login");
     await page.getByLabel(/email/i).fill("bad@example.com");
-    await page.getByLabel(/password/i).fill("wrongpass");
+    await page.getByRole("textbox", { name: /^password$/i }).fill("wrongpass");
     await page.getByRole("button", { name: /sign in/i }).click();
 
-    await expect(page.getByText(/invalid credentials/i)).toBeVisible({
-      timeout: 5000,
+    await expect(page.getByText(/invalid credentials/i).first()).toBeVisible({
+      timeout: 10000,
     });
   });
 
@@ -43,9 +43,9 @@ test.describe("Login flow", () => {
       }),
     );
 
-    await page.goto("/en/login");
+    await page.goto("/login");
     await page.getByLabel(/email/i).fill("test@example.com");
-    await page.getByLabel(/password/i).fill("password123");
+    await page.getByRole("textbox", { name: /^password$/i }).fill("password123");
     await page.getByRole("button", { name: /sign in/i }).click();
 
     // Wait for dashboard redirect

@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
+import { getBaseUrl } from './e2e/helpers/mode';
 
 /**
  * Playwright configuration for CI smoke tests
@@ -17,7 +18,7 @@ export default defineConfig({
   reporter: process.env.CI ? [['github'], ['html', { outputFolder: 'playwright-report' }]] : 'list',
 
   use: {
-    baseURL: process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3075',
+    baseURL: getBaseUrl(),
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',

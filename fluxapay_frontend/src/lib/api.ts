@@ -134,8 +134,16 @@ export const api = {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
-      }).then((res) => {
-        if (!res.ok) throw new ApiError(res.status, "Login failed");
+      }).then(async (res) => {
+        if (!res.ok) {
+          const error = await res
+            .json()
+            .catch(() => ({ message: "Login failed" }));
+          throw new ApiError(
+            res.status,
+            (error as { message?: string }).message || "Login failed",
+          );
+        }
         return res.json();
       }),
     verifyOtp: (data: { merchantId: string; channel: "email" | "phone"; otp: string }) =>

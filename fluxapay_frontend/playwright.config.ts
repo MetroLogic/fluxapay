@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
+import { getBaseUrl } from './e2e/helpers/mode';
 
 export default defineConfig({
   testDir: './e2e',
@@ -9,7 +10,7 @@ export default defineConfig({
   reporter: process.env.CI ? 'github' : 'list',
 
   use: {
-    baseURL: process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3075',
+    baseURL: getBaseUrl(),
     trace: 'on-first-retry',
   },
 

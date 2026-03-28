@@ -47,6 +47,7 @@ services:
       HD_WALLET_MASTER_SEED: ci-test-master-seed-32chars-long-padded!!
       DISABLE_CRON: "true"
       ADMIN_SECRET: ci-admin-secret-key
+      E2E_ACCEPT_OTP: ${E2E_ACCEPT_OTP:-}
     ports:
       - "3000:3000"
     depends_on:
