@@ -554,6 +554,27 @@ export const api = {
         return fetchWithAuth(`/api/admin/settlements?${sp.toString()}`);
       },
     },
+    auditLogs: {
+      list: (params?: {
+        page?: number;
+        limit?: number;
+        admin_id?: string;
+        action_type?: string;
+        date_from?: string;
+        date_to?: string;
+      }) => {
+        const sp = new URLSearchParams();
+        if (params?.page != null) sp.set("page", String(params.page));
+        if (params?.limit != null) sp.set("limit", String(params.limit));
+        if (params?.admin_id) sp.set("admin_id", params.admin_id);
+        if (params?.action_type && params.action_type !== "all")
+          sp.set("action_type", params.action_type);
+        if (params?.date_from) sp.set("date_from", params.date_from);
+        if (params?.date_to) sp.set("date_to", params.date_to);
+        return fetchWithAuth(`/api/v1/admin/audit-logs?${sp.toString()}`);
+      },
+      getById: (id: string) => fetchWithAuth(`/api/v1/admin/audit-logs/${id}`),
+    },
   },
 };
 

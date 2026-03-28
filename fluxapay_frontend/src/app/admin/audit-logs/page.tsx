@@ -9,94 +9,53 @@ import {
     CheckCircle,
     Activity,
     XCircle,
-    AlertCircle
+    AlertCircle,
+    ChevronLeft,
+    ChevronRight,
+    Loader2
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import EmptyState from '@/components/EmptyState';
+import { api } from '@/lib/api';
+import { useEffect, useCallback } from 'react';
 
-// -- Type Definitions --
+// -- Enums & Constants --
 
-interface AuditLogEntry {
-    id: string;
-    adminUser: string;
-    email: string;
-    action: 'USER_UPDATE' | 'SETTINGS_CHANGE' | 'PAYMENT_REFUND' | 'MERCHANT_APPROVAL' | 'SYSTEM_CONFIG';
-    targetResource: string;
-    timestamp: string;
-    status: 'success' | 'failure' | 'warning';
-    details: string;
-    ipAddress: string;
-}
+const ACTION_MAP: Record<string, string> = {
+    'kyc_approve': 'KYC Approval',
+    'kyc_reject': 'KYC Rejection',
+    'config_change': 'Config Change',
+    'sweep_trigger': 'Sweep Trigger',
+    'sweep_complete': 'Sweep Complete',
+    'sweep_fail': 'Sweep Failure',
+    'settlement_batch_initiate': 'Settlement Start',
+    'settlement_batch_complete': 'Settlement Complete',
+    'settlement_batch_fail': 'Settlement Failure'
+};
 
-// -- Mock Data --
-
-const MOCK_LOGS: AuditLogEntry[] = [
-    {
-        id: 'LOG-001',
-        adminUser: 'Sarah Connor',
-        email: 'sarah.connor@fluxapay.com',
-        action: 'MERCHANT_APPROVAL',
-        targetResource: 'Merchant: TechStore Inc (M001)',
-        timestamp: '2024-03-25T14:30:00Z',
-        status: 'success',
-        details: 'Approved KYC application for TechStore Inc.',
-        ipAddress: '192.168.1.10'
-    },
-    {
-        id: 'LOG-002',
-        adminUser: 'John Wick',
-        email: 'john.wick@fluxapay.com',
-        action: 'PAYMENT_REFUND',
-        targetResource: 'Tx: TXN-998877',
-        timestamp: '2024-03-25T13:15:00Z',
-        status: 'success',
-        details: 'Processed refund of $500.00 for disputed transaction.',
-        ipAddress: '10.0.0.5'
-    },
-    {
-        id: 'LOG-003',
-        adminUser: 'Sarah Connor',
-        email: 'sarah.connor@fluxapay.com',
-        action: 'USER_UPDATE',
-        targetResource: 'User: User-555',
-        timestamp: '2024-03-24T09:45:00Z',
-        status: 'success',
-        details: 'Updated profile information for user request.',
-        ipAddress: '192.168.1.10'
-    },
-    {
-        id: 'LOG-004',
-        adminUser: 'System Admin',
-        email: 'root@fluxapay.com',
-        action: 'SYSTEM_CONFIG',
-        targetResource: 'System Settings',
-        timestamp: '2024-03-24T02:00:00Z',
-        status: 'warning',
-        details: 'Automated system backup completed with warnings.',
-        ipAddress: '127.0.0.1'
-    },
-    {
-        id: 'LOG-005',
-        adminUser: 'Mike Ross',
-        email: 'mike.ross@fluxapay.com',
-        action: 'SETTINGS_CHANGE',
-        targetResource: 'Global Fee Config',
-        timestamp: '2024-03-23T16:20:00Z',
-        status: 'failure',
-        details: 'Failed attempt to update global transaction fee rate.',
-        ipAddress: '172.16.0.22'
-    }
-];
+const STATUS_MAP: Record<string, 'success' | 'failure' | 'warning'> = {
+    'kyc_approve': 'success',
+    'kyc_reject': 'failure',
+    'config_change': 'warning',
+    'sweep_trigger': 'warning',
+    'sweep_complete': 'success',
+    'sweep_fail': 'failure',
+    'settlement_batch_initiate': 'warning',
+    'settlement_batch_complete': 'success',
+    'settlement_batch_fail': 'failure'
+};
 
 // -- Helper Functions --
 
-const getStatusConfig = (status: AuditLogEntry['status']) => {
+const getStatusConfig = (actionType: string) => {
+    const status = STATUS_MAP[actionType] || 'success';
     switch (status) {
         case 'success':
             return {
                 color: 'text-emerald-700',
                 bg: 'bg-emerald-50',
                 border: 'border-emerald-200',
+                label: 'Success',
                 icon: <CheckCircle className="w-3 h-3" />
             };
         case 'failure':
@@ -104,6 +63,7 @@ const getStatusConfig = (status: AuditLogEntry['status']) => {
                 color: 'text-rose-700',
                 bg: 'bg-rose-50',
                 border: 'border-rose-200',
+                label: 'Failure',
                 icon: <XCircle className="w-3 h-3" />
             };
         case 'warning':
@@ -111,6 +71,7 @@ const getStatusConfig = (status: AuditLogEntry['status']) => {
                 color: 'text-amber-700',
                 bg: 'bg-amber-50',
                 border: 'border-amber-200',
+                label: 'Warning',
                 icon: <AlertCircle className="w-3 h-3" />
             };
     }
@@ -128,30 +89,48 @@ const formatDate = (dateString: string) => {
 // -- Main Component --
 
 export default function AdminAuditLogsPage() {
-    
-    const [searchTerm, setSearchTerm] = useState('');
+    const [logs, setLogs] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
     const [actionFilter, setActionFilter] = useState('all');
-    
-    // Filter Logic
-    const filteredLogs = MOCK_LOGS.filter(log => {
-        const matchesSearch = 
-            log.adminUser.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            log.targetResource.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            log.id.toLowerCase().includes(searchTerm.toLowerCase());
-            
-        const matchesAction = actionFilter === 'all' || log.action === actionFilter;
+    const [adminIdFilter, setAdminIdFilter] = useState('');
+    const [page, setPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
+    const limit = 20;
 
-        return matchesSearch && matchesAction;
-    });
+    const fetchLogs = useCallback(async () => {
+        try {
+            setLoading(true);
+            const response = await api.admin.auditLogs.list({
+                page,
+                limit,
+                action_type: actionFilter === 'all' ? undefined : actionFilter,
+                admin_id: adminIdFilter || undefined,
+            });
+
+            if (response.success) {
+                setLogs(response.data);
+                setTotalPages(response.pagination.totalPages);
+            }
+        } catch (error) {
+            console.error('Failed to fetch audit logs:', error);
+            toast.error('Failed to load audit logs');
+        } finally {
+            setLoading(false);
+        }
+    }, [page, actionFilter, adminIdFilter]);
+
+    useEffect(() => {
+        fetchLogs();
+    }, [fetchLogs]);
 
     const exportLogs = () => {
-        if (filteredLogs.length === 0) {
+        if (logs.length === 0) {
             toast.error('No logs to export');
             return;
         }
-        const headers = ['ID', 'Timestamp', 'Admin User', 'Email', 'Action', 'Target Resource', 'Status', 'Details', 'IP Address'];
-        const rows = filteredLogs.map(l => [
-            l.id, l.timestamp, l.adminUser, l.email, l.action, l.targetResource, l.status, l.details, l.ipAddress,
+        const headers = ['ID', 'Timestamp', 'Admin ID', 'Action', 'Entity Type', 'Entity ID', 'Details'];
+        const rows = logs.map(l => [
+            l.id, l.created_at, l.admin_id, l.action_type, l.entity_type, l.entity_id, JSON.stringify(l.details)
         ]);
         const csv = [headers, ...rows]
             .map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
@@ -163,7 +142,7 @@ export default function AdminAuditLogsPage() {
         a.download = `audit_logs_${new Date().toISOString().split('T')[0]}.csv`;
         a.click();
         URL.revokeObjectURL(url);
-        toast.success(`Exported ${filteredLogs.length} log entries`);
+        toast.success(`Exported current page (${logs.length} logs)`);
     };
 
     return (
@@ -199,10 +178,13 @@ export default function AdminAuditLogsPage() {
                                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-5 h-5" />
                                 <input
                                     type="text"
-                                    placeholder="Search by Admin, Resource ID, or Log ID..."
+                                    placeholder="Search by Admin ID..."
                                     className="w-full pl-10 pr-4 py-3 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-300 focus:border-transparent transition-shadow"
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    value={adminIdFilter}
+                                    onChange={(e) => {
+                                        setAdminIdFilter(e.target.value);
+                                        setPage(1);
+                                    }}
                                 />
                             </div>
                         </div>
@@ -213,14 +195,21 @@ export default function AdminAuditLogsPage() {
                                 <select
                                     className="px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-300 focus:border-transparent bg-white"
                                     value={actionFilter}
-                                    onChange={(e) => setActionFilter(e.target.value)}
+                                    onChange={(e) => {
+                                        setActionFilter(e.target.value);
+                                        setPage(1);
+                                    }}
                                 >
                                     <option value="all">All Actions</option>
-                                    <option value="USER_UPDATE">User Update</option>
-                                    <option value="SETTINGS_CHANGE">Settings Change</option>
-                                    <option value="PAYMENT_REFUND">Payment Refund</option>
-                                    <option value="MERCHANT_APPROVAL">Merchant Approval</option>
-                                    <option value="SYSTEM_CONFIG">System Config</option>
+                                    <option value="kyc_approve">KYC Approval</option>
+                                    <option value="kyc_reject">KYC Rejection</option>
+                                    <option value="config_change">Config Change</option>
+                                    <option value="sweep_trigger">Sweep Trigger</option>
+                                    <option value="sweep_complete">Sweep Complete</option>
+                                    <option value="sweep_fail">Sweep Failure</option>
+                                    <option value="settlement_batch_initiate">Settlement Start</option>
+                                    <option value="settlement_batch_complete">Settlement Complete</option>
+                                    <option value="settlement_batch_fail">Settlement Failure</option>
                                 </select>
                             </div>
                         </div>
@@ -254,18 +243,27 @@ export default function AdminAuditLogsPage() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-200">
-                                {filteredLogs.length === 0 ? (
+                                {loading ? (
+                                    <tr>
+                                        <td colSpan={6} className="py-20 text-center">
+                                            <div className="flex flex-col items-center justify-center gap-3">
+                                                <Loader2 className="w-8 h-8 text-slate-400 animate-spin" />
+                                                <p className="text-sm text-slate-500 font-medium">Fetching audit trail...</p>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ) : logs.length === 0 ? (
                                     <EmptyState colSpan={6} className="py-12" message="No audit logs found. Try adjusting your search or filter criteria." />
                                 ) : (
-                                    filteredLogs.map((log) => {
-                                        const statusConfig = getStatusConfig(log.status);
+                                    logs.map((log) => {
+                                        const statusConfig = getStatusConfig(log.action_type);
 
                                         return (
                                             <tr key={log.id} className="hover:bg-slate-50/50 transition-colors">
                                                 <td className="px-6 py-4 whitespace-nowrap">
                                                     <div className="flex items-center gap-2 text-sm text-slate-600">
                                                         <Calendar className="w-4 h-4 text-slate-400" />
-                                                        {formatDate(log.timestamp)}
+                                                        {formatDate(log.created_at)}
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
@@ -273,23 +271,23 @@ export default function AdminAuditLogsPage() {
                                                         <div
                                                             className="w-8 h-8 rounded-full flex items-center justify-center bg-slate-100 text-slate-600 font-medium text-xs"
                                                         >
-                                                            {log.adminUser.charAt(0)}
+                                                            {log.admin_id.charAt(0)}
                                                         </div>
                                                         <div>
-                                                            <p className="text-sm font-medium text-slate-900">{log.adminUser}</p>
-                                                            <p className="text-xs text-slate-500">{log.email}</p>
+                                                            <p className="text-sm font-medium text-slate-900">{log.admin_id}</p>
+                                                            <p className="text-xs text-slate-500 text-clip overflow-hidden w-32" title={log.admin_id}>{log.admin_id}</p>
                                                         </div>
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
                                                     <div className="flex items-center gap-2">
                                                         <Activity className="w-4 h-4 text-slate-400" />
-                                                        <span className="text-sm text-slate-700 font-medium">{log.action.replace('_', ' ')}</span>
+                                                        <span className="text-sm text-slate-700 font-medium">{ACTION_MAP[log.action_type] || log.action_type}</span>
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
                                                     <span className="font-mono text-xs text-slate-600 bg-slate-100 px-2 py-1 rounded">
-                                                        {log.targetResource}
+                                                        {log.entity_type}: {log.entity_id}
                                                     </span>
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
@@ -297,12 +295,12 @@ export default function AdminAuditLogsPage() {
                                                         className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium ${statusConfig.bg} ${statusConfig.color} ${statusConfig.border}`}
                                                     >
                                                         {statusConfig.icon}
-                                                        {log.status.charAt(0).toUpperCase() + log.status.slice(1)}
+                                                        {statusConfig.label}
                                                     </span>
                                                 </td>
                                                 <td className="px-6 py-4">
-                                                    <p className="text-sm text-slate-600 max-w-xs truncate" title={log.details}>
-                                                        {log.details}
+                                                    <p className="text-sm text-slate-600 max-w-xs truncate" title={JSON.stringify(log.details)}>
+                                                        {JSON.stringify(log.details)}
                                                     </p>
                                                 </td>
                                             </tr>
@@ -311,6 +309,29 @@ export default function AdminAuditLogsPage() {
                                 )}
                             </tbody>
                         </table>
+                    </div>
+                </div>
+
+                {/* Pagination */}
+                <div className="mt-6 flex items-center justify-between">
+                    <p className="text-sm text-slate-500">
+                        Page <span className="font-medium text-slate-900">{page}</span> of <span className="font-medium text-slate-900">{totalPages}</span>
+                    </p>
+                    <div className="flex items-center gap-2">
+                        <button
+                            disabled={page === 1 || loading}
+                            onClick={() => setPage(prev => prev - 1)}
+                            className="p-2 border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors"
+                        >
+                            <ChevronLeft className="w-5 h-5" />
+                        </button>
+                        <button
+                            disabled={page === totalPages || loading}
+                            onClick={() => setPage(prev => prev + 1)}
+                            className="p-2 border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors"
+                        >
+                            <ChevronRight className="w-5 h-5" />
+                        </button>
                     </div>
                 </div>
             </div>
