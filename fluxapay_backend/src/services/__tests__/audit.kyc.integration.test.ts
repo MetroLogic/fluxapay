@@ -132,13 +132,14 @@ describeWithDatabase('Audit Logging - KYC Integration', () => {
 
   it('should rollback audit entry if KYC update fails', async () => {
     // Simulate failure by trying to update non-existent merchant
+    // kyc.service throws plain objects (not Error instances), use toMatchObject
     await expect(
       updateKycStatusService(
         'non-existent-merchant',
         { status: 'approved' },
         'admin-123'
       )
-    ).rejects.toThrow();
+    ).rejects.toMatchObject({ message: expect.any(String) });
 
     // Verify no audit entry was created
     const auditLogs = await prisma.auditLog.findMany({
@@ -157,13 +158,14 @@ describeWithDatabase('Audit Logging - KYC Integration', () => {
     );
 
     // Try to update again
+    // kyc.service throws plain objects (not Error instances), use toMatchObject
     await expect(
       updateKycStatusService(
         testMerchantId,
         { status: 'rejected' },
         'admin-456'
       )
-    ).rejects.toThrow('KYC is not in pending review status');
+    ).rejects.toMatchObject({ message: 'KYC is not in pending review status' });
 
     // Verify only one audit entry exists (from first update)
     const auditLogs = await prisma.auditLog.findMany({

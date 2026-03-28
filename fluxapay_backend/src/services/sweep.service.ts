@@ -353,4 +353,13 @@ export class SweepService {
   }
 }
 
-export const sweepService = new SweepService();
+let _sweepService: SweepService | undefined;
+try {
+  _sweepService = new SweepService();
+} catch (err) {
+  console.warn(
+    "SweepService failed to initialize (missing Stellar env vars?):",
+    err instanceof Error ? err.message : err
+  );
+}
+export const sweepService = _sweepService as SweepService;
