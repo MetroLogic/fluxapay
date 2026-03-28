@@ -59,3 +59,14 @@ Status: In Progress
 ✅ 4/7 Metadata optional verified (already in validator/service)
 
 Next step: 5/7
+
+## #211 [Backend] Payments routes: Provide /api/payments/:id/status and /stream endpoints
+
+Status: Completed ✅
+
+### Implementation details
+- Added `GET /api/v1/payments/:id/status` (public view)
+- Added `GET /api/v1/payments/:id/stream` (SSE stream)
+- Updated `EventService` with `PAYMENT_UPDATED` event
+- Updated `paymentMonitor.service.ts` and `PaymentService.ts` to emit `PAYMENT_UPDATED`
+- Added Swagger documentation for the new endpoints

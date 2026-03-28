@@ -6,4 +6,5 @@ export const eventBus = new EventService();
 
 export enum AppEvents {
     PAYMENT_CONFIRMED = "payment.confirmed",
+    PAYMENT_UPDATED = "payment.updated",
 }

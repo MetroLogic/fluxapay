@@ -9,7 +9,7 @@ import Input from "@/components/Input";
 import { Button } from "@/components/Button";
 import { Link, useRouter } from "@/i18n/routing";
 import { cn } from "@/lib/utils";
-import { api, storeToken } from "@/lib/api";
+import { api } from "@/lib/api";
 import {
   Select,
   SelectContent,

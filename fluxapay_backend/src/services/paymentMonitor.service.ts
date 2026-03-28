@@ -106,7 +106,7 @@ export async function runPaymentMonitorTick(): Promise<void> {
 
       // Update database if status changed or new activity detected
       if (newStatus && (newStatus !== payment.status || latestTxHash)) {
-        await prisma.payment.update({
+        const updatedPayment = await prisma.payment.update({
           where: { id: payment.id },
           data: {
             status: newStatus as any,
@@ -114,6 +114,10 @@ export async function runPaymentMonitorTick(): Promise<void> {
             ...(latestTxHash && { transaction_hash: latestTxHash }),
           },
         });
+
+        // Emit generic status change event
+        const { eventBus, AppEvents } = await import('./EventService');
+        eventBus.emit(AppEvents.PAYMENT_UPDATED, updatedPayment);
 
         // Trigger on-chain verification via Soroban contract
         if ((newStatus === 'confirmed' || newStatus === 'overpaid') && latestTxHash) {

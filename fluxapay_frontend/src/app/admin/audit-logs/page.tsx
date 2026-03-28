@@ -86,10 +86,20 @@ const formatDate = (dateString: string) => {
     });
 };
 
+interface AuditLog {
+    id: string;
+    created_at: string;
+    admin_id: string;
+    action_type: string;
+    entity_type: string;
+    entity_id: string;
+    details: any;
+}
+
 // -- Main Component --
 
 export default function AdminAuditLogsPage() {
-    const [logs, setLogs] = useState<any[]>([]);
+    const [logs, setLogs] = useState<AuditLog[]>([]);
     const [loading, setLoading] = useState(true);
     const [actionFilter, setActionFilter] = useState('all');
     const [adminIdFilter, setAdminIdFilter] = useState('');

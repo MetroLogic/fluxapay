@@ -194,76 +194,15 @@ export async function rotateApiKeyService(data: {
   return regenerateApiKeyService(data); // Same logic as regenerate
 }
 
-export async function rotateWebhookSecretService(data: {
-  merchantId: string;
-}) {
-  const { merchantId } = data;
-
-  const webhookSecret = generateWebhookSecret();
-
-  await prisma.merchant.update({
-    where: { id: merchantId },
-    data: { webhook_secret: webhookSecret },
-  });
-
-  return { message: "Webhook secret rotated", webhookSecret };
-}
-
 export async function updateMerchantProfileService(data: {
   merchantId: string;
   business_name?: string;
   email?: string;
-  checkout_logo_url?: string | null;
-  checkout_accent_color?: string | null;
-  settlement_schedule?: "daily" | "weekly";
-  settlement_day?: number;
 }) {
-  const { merchantId, ...rest } = data;
-
-  if (rest.email) {
-    const taken = await prisma.merchant.findFirst({
-      where: { email: rest.email, id: { not: merchantId } },
-    });
-    if (taken) throw { status: 400, message: "Email already in use" };
-  }
-
-  const patch: Prisma.MerchantUpdateInput = {};
-
-  if (rest.business_name !== undefined) {
-    patch.business_name = rest.business_name;
-  }
-  if (rest.email !== undefined) {
-    patch.email = rest.email;
-  }
-  if (rest.checkout_logo_url !== undefined) {
-    patch.checkout_logo_url = normalizeCheckoutLogoUrl(
-      rest.checkout_logo_url === null || rest.checkout_logo_url === ""
-        ? null
-        : rest.checkout_logo_url,
-    );
-  }
-  if (rest.checkout_accent_color !== undefined) {
-    patch.checkout_accent_color = normalizeCheckoutAccentHex(
-      rest.checkout_accent_color === null ||
-        rest.checkout_accent_color === ""
-        ? null
-        : rest.checkout_accent_color,
-    );
-  }
-  if (rest.settlement_schedule !== undefined) {
-    patch.settlement_schedule = rest.settlement_schedule;
-    if (rest.settlement_schedule === "daily") {
-      patch.settlement_day = null;
-    } else if (rest.settlement_day !== undefined) {
-      patch.settlement_day = rest.settlement_day;
-    }
-  } else if (rest.settlement_day !== undefined) {
-    patch.settlement_day = rest.settlement_day;
-  }
-
+  const { merchantId, ...updateData } = data;
   const merchant = await prisma.merchant.update({
     where: { id: merchantId },
-    data: patch,
+    data: updateData,
   });
   return { message: "Profile updated", merchant };
 }
@@ -272,11 +211,24 @@ export async function updateMerchantWebhookService(data: {
   merchantId: string;
   webhook_url: string;
 }) {
+  const { merchantId, webhook_url } = data;
   await prisma.merchant.update({
-    where: { id: data.merchantId },
-    data: { webhook_url: data.webhook_url },
+    where: { id: merchantId },
+    data: { webhook_url },
   });
-  return { message: "Webhook URL updated" };
+  return { message: "Webhook URL updated", webhook_url };
+}
+
+export async function rotateWebhookSecretService(data: {
+  merchantId: string;
+}) {
+  const { merchantId } = data;
+  const newSecret = crypto.randomBytes(32).toString("hex");
+  await prisma.merchant.update({
+    where: { id: merchantId },
+    data: { webhook_secret: newSecret },
+  });
+  return { message: "Webhook secret rotated", webhook_secret: newSecret };
 }
 
 export async function updateSettlementScheduleService(data: {
@@ -284,14 +236,12 @@ export async function updateSettlementScheduleService(data: {
   settlement_schedule: "daily" | "weekly";
   settlement_day?: number;
 }) {
+  const { merchantId, settlement_schedule, settlement_day } = data;
   await prisma.merchant.update({
-    where: { id: data.merchantId },
-    data: {
-      settlement_schedule: data.settlement_schedule,
-      settlement_day: data.settlement_day ?? null,
-    },
+    where: { id: merchantId },
+    data: { settlement_schedule, settlement_day },
   });
-  return { message: "Settlement schedule updated" };
+  return { message: "Settlement schedule updated", settlement_schedule, settlement_day };
 }
 
 export async function addBankAccountService(data: {
@@ -303,11 +253,11 @@ export async function addBankAccountService(data: {
   currency: string;
   country: string;
 }) {
-  const { merchantId, ...bank } = data;
-  await prisma.bankAccount.upsert({
+  const { merchantId, ...bankData } = data;
+  const bankAccount = await prisma.bankAccount.upsert({
     where: { merchantId },
-    create: { merchantId, ...bank },
-    update: bank,
+    create: { merchantId, ...bankData },
+    update: bankData,
   });
-  return { message: "Bank account saved" };
+  return { message: "Bank account updated", bankAccount };
 }

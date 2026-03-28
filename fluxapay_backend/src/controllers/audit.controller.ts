@@ -1,7 +1,7 @@
-import { Response } from "express";
-import { AuthRequest } from "../types/express";
-import { queryAuditLogs, getAuditLogById } from "../services/audit.service";
-import { AuditActionType } from "../types/audit.types";
+import { Response } from 'express';
+import { AuthRequest } from '../types/express';
+import { queryAuditLogs, getAuditLogById } from '../services/audit.service';
+import { AuditActionType } from '../generated/client/client';
 
 /**
  * GET /api/admin/audit-logs

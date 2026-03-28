@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { useParams } from 'next/navigation';
+import Link from 'next/link';
 import { Loader2, XCircle, CheckCircle } from 'lucide-react';
 import { usePaymentStatus } from '@/hooks/usePaymentStatus';
 import { PaymentQRCode } from '@/components/checkout/PaymentQRCode';
@@ -277,18 +278,18 @@ export default function CheckoutPage() {
 
             {/* Footer links (merged from upstream/main) */}
             <div className="mt-8 flex justify-center gap-6 border-t border-gray-100 pt-6 text-xs text-gray-500">
-              <a
+              <Link
                 href="/terms"
                 className="transition-colors hover:text-[color:var(--checkout-accent)]"
               >
                 Terms of Service
-              </a>
-              <a
+              </Link>
+              <Link
                 href="/privacy"
                 className="transition-colors hover:text-[color:var(--checkout-accent)]"
               >
                 Privacy Policy
-              </a>
+              </Link>
             </div>
           </div>
         </div>

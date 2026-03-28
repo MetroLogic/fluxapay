@@ -248,41 +248,25 @@ export async function updateRefundStatusService(params: {
     },
   });
 
-  if (
-    existing.status !== status &&
-    (status === "completed" || status === "failed")
-  ) {
-    const endpointUrl =
-      typeof existing.payment.metadata === "object" &&
-      existing.payment.metadata !== null &&
-      "webhook_url" in existing.payment.metadata &&
-      typeof (existing.payment.metadata as Record<string, unknown>)
-        .webhook_url === "string"
-        ? ((existing.payment.metadata as Record<string, unknown>)
-            .webhook_url as string)
-        : undefined;
+  if (existing.status !== status && (status === "completed" || status === "failed")) {
+    const eventType: WebhookEventType =
+      status === "completed" ? "refund_completed" : "refund_failed";
 
-    if (endpointUrl) {
-      const eventType: WebhookEventType =
-        status === "completed" ? "refund_completed" : "refund_failed";
-
-      await createAndDeliverWebhook(
-        merchantId,
-        eventType,
-        {
-          event_type: eventType,
-          refund_id: updated.id,
-          payment_id: updated.paymentId,
-          amount: Number(updated.amount),
-          currency: updated.currency,
-          status: updated.status,
-          failed_reason: updated.failed_reason,
-          occurred_at: new Date().toISOString(),
-        },
-        updated.paymentId,
-        endpointUrl,
-      );
-    }
+    await createAndDeliverWebhook(
+      merchantId,
+      eventType,
+      {
+        event_type: eventType,
+        refund_id: updated.id,
+        payment_id: updated.paymentId,
+        amount: Number(updated.amount),
+        currency: updated.currency,
+        status: updated.status,
+        failed_reason: updated.failed_reason,
+        occurred_at: new Date().toISOString(),
+      },
+      updated.paymentId
+    );
   }
 
   return {

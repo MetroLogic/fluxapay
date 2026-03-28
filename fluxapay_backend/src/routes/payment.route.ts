@@ -3,14 +3,67 @@ import {
   createPayment,
   getPayments,
   getPaymentById,
+  getPaymentStatus,
+  streamPaymentStatus,
   getPublicCheckoutPayment,
   getPublicCheckoutPaymentStatus,
 } from '../controllers/payment.controller';
 import { validatePayment } from '../validators/payment.validator';
 import { authenticateApiKey } from '../middleware/apiKeyAuth.middleware';
 import { idempotencyMiddleware } from '../middleware/idempotency.middleware';
+import { simpleRateLimit } from "../middleware/simpleRateLimit.middleware";
 
 const router = Router();
+
+const publicPaymentStatusRateLimit = simpleRateLimit({
+  keyPrefix: "payments:status",
+  windowMs: 30_000,
+  max: 60,
+});
+
+const publicPaymentStreamRateLimit = simpleRateLimit({
+  keyPrefix: "payments:stream",
+  windowMs: 30_000,
+  max: 15,
+});
+
+/**
+ * @swagger
+ * /api/v1/payments/:id/status:
+ *   get:
+ *     summary: Publicly accessible view of a payment's status
+ *     tags: [Payments]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Payment status details
+ *       404:
+ *         description: Payment not found
+ */
+router.get('/:id/status', publicPaymentStatusRateLimit, getPaymentStatus);
+
+/**
+ * @swagger
+ * /api/v1/payments/:id/stream:
+ *   get:
+ *     summary: SSE stream for real-time payment updates
+ *     tags: [Payments]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: SSE stream
+ */
+router.get('/:id/stream', publicPaymentStreamRateLimit, streamPaymentStatus);
 
 /**
  * @swagger
