@@ -57,14 +57,14 @@ const router = Router();
  */
 router.post(
   "/",
-  authenticateToken,
+  authenticateApiKey,
   idempotencyMiddleware,
   validate(createRefundSchema),
   createRefund,
 );
 router.get(
   "/",
-  authenticateToken,
+  authenticateApiKey,
   validateQuery(listRefundsQuerySchema),
   listRefunds,
 );
@@ -97,7 +97,7 @@ router.get(
  */
 router.patch(
   "/:refund_id/status",
-  authenticateToken,
+  authenticateApiKey,
   validate(updateRefundStatusSchema),
   updateRefundStatus,
 );

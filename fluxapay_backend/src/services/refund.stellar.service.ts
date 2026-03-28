@@ -8,6 +8,7 @@ import {
   Horizon,
 } from "@stellar/stellar-sdk";
 import { HDWalletService } from "./HDWalletService";
+import { getLogger, getMetricsCollector } from "../utils/logger";
 
 interface RefundParams {
   refundId: string;
@@ -42,6 +43,11 @@ export class StellarRefundService {
   private baseFee: string;
   private txTimeout: number;
   private hdWalletService: HDWalletService;
+  private readonly maxFee: number;
+  private readonly feeBumpMultiplier: number;
+  private readonly maxRetries: number;
+  private readonly logger = getLogger("StellarRefundService");
+  private readonly metrics = getMetricsCollector();
 
   constructor() {
     this.horizonUrl =
@@ -52,6 +58,11 @@ export class StellarRefundService {
         : Networks.TESTNET;
     this.usdcIssuer = process.env.STELLAR_USDC_ISSUER || "";
     this.baseFee = process.env.STELLAR_BASE_FEE || "100";
+    this.maxFee = Number(process.env.STELLAR_MAX_FEE || "2000");
+    this.feeBumpMultiplier = Number(
+      process.env.STELLAR_FEE_BUMP_MULTIPLIER || "2",
+    );
+    this.maxRetries = Number(process.env.STELLAR_TX_MAX_RETRIES || "3");
     this.txTimeout = parseInt(process.env.STELLAR_TX_TIMEOUT || "30", 10);
 
     // Initialize HDWalletService with KMS support
@@ -125,43 +136,93 @@ export class StellarRefundService {
         : new Asset("USDC", this.usdcIssuer);
 
     // 6. Build transaction
-    const transaction = new TransactionBuilder(sourceAccount, {
-      fee: this.baseFee,
-      networkPassphrase: this.networkPassphrase,
-    })
-      .addOperation(
-        Operation.payment({
-          destination: customerAddress,
-          asset,
-          amount,
-        }),
-      )
-      .addMemo(Memo.text(`refund:${refundId.slice(0, 20)}`))
-      .setTimeout(this.txTimeout)
-      .build();
+    // 7 & 8. Build, sign, and submit to Stellar network with fee-bump retries
+    let lastError: unknown;
+    for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
+      try {
+        const transaction = new TransactionBuilder(sourceAccount, {
+          fee: this.calculateFeeForAttempt(attempt),
+          networkPassphrase: this.networkPassphrase,
+        })
+          .addOperation(
+            Operation.payment({
+              destination: customerAddress,
+              asset,
+              amount,
+            }),
+          )
+          .addMemo(Memo.text(`refund:${refundId.slice(0, 20)}`))
+          .setTimeout(this.txTimeout)
+          .build();
 
-    // 7. Sign with source keypair
-    transaction.sign(sourceKeypair);
+        transaction.sign(sourceKeypair);
+        const response = await server.submitTransaction(transaction);
+        return {
+          transactionHash: response.hash,
+          ledger: response.ledger,
+          sourceAddress: publicKey,
+        };
+      } catch (err: any) {
+        lastError = err;
+        const resultCodes = err?.response?.data?.extras?.result_codes;
+        const opCode = resultCodes?.operations?.[0] || resultCodes?.transaction;
+        const friendlyMessage =
+          STELLAR_ERROR_MESSAGES[opCode] || "Stellar transaction failed";
 
-    // 8. Submit to Stellar network
-    try {
-      const response = await server.submitTransaction(transaction);
-      return {
-        transactionHash: response.hash,
-        ledger: response.ledger,
-        sourceAddress: publicKey,
-      };
-    } catch (err: any) {
-      const resultCodes = err?.response?.data?.extras?.result_codes;
-      const opCode = resultCodes?.operations?.[0] || resultCodes?.transaction;
-      const friendlyMessage =
-        STELLAR_ERROR_MESSAGES[opCode] || "Stellar transaction failed";
+        this.logger.warn("Refund submission failed", {
+          refundId,
+          attempt,
+          maxRetries: this.maxRetries,
+          fee: this.calculateFeeForAttempt(attempt),
+          opCode: opCode || "stellar_error",
+          message: friendlyMessage,
+        });
+        this.metrics.increment("stellar.refund.submit.failure", {
+          attempt: attempt.toString(),
+          opCode: opCode || "stellar_error",
+        });
 
-      throw {
-        status: 502,
-        message: friendlyMessage,
-        code: opCode || "stellar_error",
-      };
+        if (attempt >= this.maxRetries) {
+          this.logger.error("ALERT: repeated Stellar refund submission failures", {
+            refundId,
+            attempts: attempt,
+            opCode: opCode || "stellar_error",
+            feeBudget: {
+              baseFee: Number(this.baseFee),
+              maxFee: this.maxFee,
+              multiplier: this.feeBumpMultiplier,
+            },
+          });
+          this.metrics.increment("stellar.refund.repeated_failures", {
+            opCode: opCode || "stellar_error",
+          });
+
+          throw {
+            status: 502,
+            message: friendlyMessage,
+            code: opCode || "stellar_error",
+          };
+        }
+      }
     }
+
+    const fallbackError = lastError as any;
+    const fallbackResultCodes = fallbackError?.response?.data?.extras?.result_codes;
+    const fallbackCode =
+      fallbackResultCodes?.operations?.[0] ||
+      fallbackResultCodes?.transaction ||
+      "stellar_error";
+    throw {
+      status: 502,
+      message: STELLAR_ERROR_MESSAGES[fallbackCode] || "Stellar transaction failed",
+      code: fallbackCode,
+    };
+  }
+
+  private calculateFeeForAttempt(attempt: number): string {
+    const baseFee = Number(this.baseFee);
+    const bump = Math.pow(this.feeBumpMultiplier, Math.max(0, attempt - 1));
+    const candidateFee = Math.floor(baseFee * bump);
+    return Math.min(candidateFee, this.maxFee).toString();
   }
 }

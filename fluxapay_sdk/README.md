@@ -259,6 +259,30 @@ npm test
 
 ### Integration Tests
 
+## Usage Examples
+
+Additional runnable examples are available in:
+
+- `examples/basic-usage.ts`
+- `examples/webhook-verification.ts`
+
+## Publishing and Versioning
+
+The SDK follows semantic versioning (`MAJOR.MINOR.PATCH`) and publishes from git tags.
+
+Release flow:
+
+1. Bump `version` in `package.json`.
+2. Commit and push to main.
+3. Create and push a matching tag in this format:
+
+```bash
+git tag sdk-v0.1.0
+git push origin sdk-v0.1.0
+```
+
+The GitHub workflow `.github/workflows/sdk-release.yml` validates tag/package version parity, runs tests/build, and publishes `@fluxapay/sdk` to npm.
+
 Integration tests require a running backend instance:
 
 ```bash
