@@ -86,6 +86,7 @@ export const validatePayment = [
 
       return true;
     }),
+  body('customer_id').optional().isString().trim().notEmpty().withMessage('customer_id must be a non-empty string'),
   body('success_url')
     .optional()
     .isString()

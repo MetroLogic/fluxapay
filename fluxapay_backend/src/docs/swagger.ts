@@ -54,12 +54,40 @@ const options: swaggerJsdoc.Options = {
                         amount: { type: 'number', example: 120.5 },
                         currency: { type: 'string', example: 'USDC' },
                         customer_email: { type: 'string', example: 'buyer@example.com' },
+                        customer_id: {
+                            type: 'string',
+                            description: 'Optional Customer id (must belong to the authenticated merchant)',
+                            example: 'clxyz123customer',
+                        },
                         metadata: {
                             type: 'object',
                             additionalProperties: true,
                             example: { order_id: 'ord_001', webhook_url: 'https://merchant.tld/webhooks' },
                         },
                     },
+                },
+                CreateCustomerRequest: {
+                    type: 'object',
+                    required: ['email'],
+                    properties: {
+                        email: { type: 'string', format: 'email', example: 'buyer@example.com' },
+                        metadata: {
+                            type: 'object',
+                            additionalProperties: true,
+                            example: { plan: 'pro' },
+                        },
+                    },
+                },
+                UpdateCustomerRequest: {
+                    type: 'object',
+                    properties: {
+                        email: { type: 'string', format: 'email' },
+                        metadata: {
+                            type: 'object',
+                            additionalProperties: true,
+                        },
+                    },
+                    description: 'At least one of email or metadata should be provided',
                 },
                 CreateInvoiceRequest: {
                     type: 'object',
@@ -129,6 +157,10 @@ const options: swaggerJsdoc.Options = {
             {
                 name: 'Invoices',
                 description: 'Invoice APIs with linked payment intents',
+            },
+            {
+                name: 'Customers',
+                description: 'Merchant-scoped customer records linked to payments',
             },
             {
                 name: 'Refunds',
