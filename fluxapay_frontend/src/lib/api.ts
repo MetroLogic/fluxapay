@@ -328,6 +328,48 @@ export const api = {
     },
   },
 
+  /** Reconciliation (JWT; backend mounts under /api/v1/admin/reconciliation) */
+  reconciliation: {
+    summary: (params: {
+      merchant_id?: string;
+      period_start: string;
+      period_end: string;
+    }) => {
+      const sp = new URLSearchParams();
+      sp.set("period_start", params.period_start);
+      sp.set("period_end", params.period_end);
+      if (params.merchant_id) sp.set("merchant_id", params.merchant_id);
+      return fetchWithAuth(
+        `/api/v1/admin/reconciliation/summary?${sp.toString()}`,
+      );
+    },
+    listAlerts: (params?: {
+      merchant_id?: string;
+      is_resolved?: boolean;
+      page?: number;
+      limit?: number;
+    }) => {
+      const sp = new URLSearchParams();
+      if (params?.merchant_id) sp.set("merchant_id", params.merchant_id);
+      if (params?.is_resolved !== undefined) {
+        sp.set("is_resolved", String(params.is_resolved));
+      }
+      if (params?.page != null) sp.set("page", String(params.page));
+      if (params?.limit != null) sp.set("limit", String(params.limit));
+      return fetchWithAuth(
+        `/api/v1/admin/reconciliation/alerts?${sp.toString()}`,
+      );
+    },
+    resolveAlert: (alertId: string, is_resolved: boolean) =>
+      fetchWithAuth(
+        `/api/v1/admin/reconciliation/alerts/${encodeURIComponent(alertId)}/resolve`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ is_resolved }),
+        },
+      ),
+  },
+
   // KYC admin
   kyc: {
     admin: {
