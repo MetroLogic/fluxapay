@@ -57,9 +57,18 @@ export function usePaymentStatus(paymentId: string): UsePaymentStatusReturn {
 
         if (!isMounted) return;
 
+        const raw = data as Record<string, unknown>;
         const paymentData: Payment = {
-          ...data,
-          expiresAt: new Date(data.expiresAt),
+          ...(data as Payment),
+          expiresAt: new Date(
+            (data as { expiresAt?: string }).expiresAt as string,
+          ),
+          checkoutLogoUrl:
+            (raw.checkoutLogoUrl as string | undefined) ??
+            (raw.checkout_logo_url as string | undefined),
+          checkoutAccentColor:
+            (raw.checkoutAccentColor as string | undefined) ??
+            (raw.checkout_accent_color as string | undefined),
         };
 
         setPayment(paymentData);

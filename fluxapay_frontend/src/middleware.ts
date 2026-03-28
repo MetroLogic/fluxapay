@@ -4,7 +4,14 @@ import { routing } from './i18n/routing';
 export default createMiddleware(routing);
 
 export const config = {
-  // Apply locale middleware only to locale entrypoints.
-  // Non-localized app routes like /dashboard should bypass this.
-  matcher: ['/', '/(en|fr|pt)/:path*'],
+  // Locale entrypoints + unprefixed auth URLs. With `localePrefix: 'as-needed'`, `/en/signup`
+  // redirects to `/signup`; those paths must still run next-intl middleware or they 404 (no `[locale]` segment).
+  // Dashboard and other non-localized routes stay outside this list.
+  matcher: [
+    '/',
+    '/(en|fr|pt)/:path*',
+    '/signup',
+    '/login',
+    '/verify-otp',
+  ],
 };

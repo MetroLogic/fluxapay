@@ -1,5 +1,8 @@
 import { PrismaClient, AuditActionType, AuditEntityType, KYCStatus, Prisma } from '../generated/client/client';
 import {
+  AuditActionType,
+  AuditEntityType,
+  KYCStatus,
   CreateAuditLogParams,
   QueryAuditLogsParams,
   PaginationInfo,
@@ -7,18 +10,21 @@ import {
   ConfigChangeDetails,
   SweepOperationDetails,
   SettlementBatchDetails,
-} from '../types/audit.types';
+} from "../types/audit.types";
 
 const prisma = new PrismaClient();
 
 // Utility function for delay
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Logger placeholder - replace with actual logger
 const logger = {
-  info: (message: string, data?: any) => console.log(JSON.stringify({ level: 'info', message, ...data })),
-  warn: (message: string, data?: any) => console.warn(JSON.stringify({ level: 'warn', message, ...data })),
-  error: (message: string, data?: any) => console.error(JSON.stringify({ level: 'error', message, ...data })),
+  info: (message: string, data?: any) =>
+    console.log(JSON.stringify({ level: "info", message, ...data })),
+  warn: (message: string, data?: any) =>
+    console.warn(JSON.stringify({ level: "warn", message, ...data })),
+  error: (message: string, data?: any) =>
+    console.error(JSON.stringify({ level: "error", message, ...data })),
 };
 
 // Metrics placeholder - replace with actual metrics service
@@ -34,7 +40,7 @@ const metrics = {
  */
 async function safeAuditLog<T>(
   operation: () => Promise<T>,
-  context: string
+  context: string,
 ): Promise<T | null> {
   let attempts = 0;
   const maxAttempts = 3;
@@ -44,7 +50,7 @@ async function safeAuditLog<T>(
       return await operation();
     } catch (error: any) {
       attempts++;
-      logger.error('Audit log failure', {
+      logger.error("Audit log failure", {
         context,
         attempt: attempts,
         error: error.message,
@@ -57,7 +63,7 @@ async function safeAuditLog<T>(
   }
 
   // Emit metric for monitoring
-  metrics.increment('audit_log_failure', { context });
+  metrics.increment("audit_log_failure", { context });
   return null;
 }
 
@@ -66,7 +72,7 @@ async function safeAuditLog<T>(
  */
 function emitStructuredLog(auditLog: any, success: boolean) {
   const logData = {
-    level: success ? 'info' : 'warn',
+    level: success ? "info" : "warn",
     message: `Audit: ${auditLog.action_type}`,
     timestamp: auditLog.created_at.toISOString(),
     audit_log_id: auditLog.id,
@@ -89,7 +95,7 @@ function emitStructuredLog(auditLog: any, success: boolean) {
  */
 function redactSensitiveValue(value: string, isSensitive: boolean): string {
   if (!isSensitive) return value;
-  return '***REDACTED***';
+  return "***REDACTED***";
 }
 
 /**
@@ -97,7 +103,7 @@ function redactSensitiveValue(value: string, isSensitive: boolean): string {
  */
 async function createAuditLog(
   params: CreateAuditLogParams,
-  tx?: Prisma.TransactionClient
+  tx?: Prisma.TransactionClient,
 ): Promise<any | null> {
   const client = tx || prisma;
 
@@ -120,14 +126,17 @@ async function createAuditLog(
 /**
  * Log KYC decision (approve or reject)
  */
-export async function logKycDecision(params: {
-  adminId: string;
-  merchantId: string;
-  action: 'approve' | 'reject';
-  previousStatus: KYCStatus;
-  newStatus: KYCStatus;
-  reason?: string;
-}, tx?: Prisma.TransactionClient): Promise<any | null> {
+export async function logKycDecision(
+  params: {
+    adminId: string;
+    merchantId: string;
+    action: "approve" | "reject";
+    previousStatus: KYCStatus;
+    newStatus: KYCStatus;
+    reason?: string;
+  },
+  tx?: Prisma.TransactionClient,
+): Promise<any | null> {
   const details: KycDecisionDetails = {
     merchant_id: params.merchantId,
     previous_status: params.previousStatus,
@@ -144,20 +153,23 @@ export async function logKycDecision(params: {
       entity_id: params.merchantId,
       details,
     },
-    tx
+    tx,
   );
 }
 
 /**
  * Log configuration change
  */
-export async function logConfigChange(params: {
-  adminId: string;
-  configKey: string;
-  previousValue: string;
-  newValue: string;
-  isSensitive?: boolean;
-}, tx?: Prisma.TransactionClient): Promise<any | null> {
+export async function logConfigChange(
+  params: {
+    adminId: string;
+    configKey: string;
+    previousValue: string;
+    newValue: string;
+    isSensitive?: boolean;
+  },
+  tx?: Prisma.TransactionClient,
+): Promise<any | null> {
   const isSensitive = params.isSensitive || false;
 
   const details: ConfigChangeDetails = {
@@ -175,7 +187,7 @@ export async function logConfigChange(params: {
       entity_id: params.configKey,
       details,
     },
-    tx
+    tx,
   );
 }
 
@@ -208,7 +220,7 @@ export async function logSweepTrigger(params: {
  */
 export async function updateSweepCompletion(params: {
   auditLogId: string;
-  status: 'completed' | 'failed';
+  status: "completed" | "failed";
   statistics?: {
     addresses_swept: number;
     total_amount: string;
@@ -240,7 +252,7 @@ export async function updateSweepCompletion(params: {
       },
     });
 
-    emitStructuredLog(updatedLog, params.status === 'completed');
+    emitStructuredLog(updatedLog, params.status === "completed");
     return updatedLog;
   }, `update_sweep_completion_${params.auditLogId}`);
 }
@@ -272,7 +284,7 @@ export async function logSettlementBatch(params: {
  */
 export async function updateSettlementBatchCompletion(params: {
   auditLogId: string;
-  status: 'completed' | 'failed';
+  status: "completed" | "failed";
   transactionCount?: number;
   totalAmount?: number;
   currency?: string;
@@ -305,7 +317,7 @@ export async function updateSettlementBatchCompletion(params: {
       },
     });
 
-    emitStructuredLog(updatedLog, params.status === 'completed');
+    emitStructuredLog(updatedLog, params.status === "completed");
     return updatedLog;
   }, `update_settlement_batch_completion_${params.auditLogId}`);
 }
@@ -352,7 +364,7 @@ export async function queryAuditLogs(params: QueryAuditLogsParams): Promise<{
   // Get paginated results
   const logs = await prisma.auditLog.findMany({
     where,
-    orderBy: { created_at: 'desc' },
+    orderBy: { created_at: "desc" },
     skip,
     take: limit,
   });

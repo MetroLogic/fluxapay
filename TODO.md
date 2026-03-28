@@ -29,7 +29,7 @@ Status: In Progress
 ### 2. Update payment routes with idempotency middleware
 - Edit `fluxapay_backend/src/routes/payment.route.ts`
 - Import idempotencyMiddleware
-- Add to POST '/' middleware chain: authenticateToken, idempotencyMiddleware, validatePayment, createPayment
+- Add to POST '/' middleware chain: authenticateApiKey, idempotencyMiddleware, validatePayment, createPayment
 
 ### 3. Generate and run Prisma migration
 - cd fluxapay_backend

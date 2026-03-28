@@ -62,7 +62,7 @@ export async function resolveDiscrepancyAlert(req: Request, res: Response) {
     }
 
     const result = await resolveDiscrepancyAlertService({
-      alert_id,
+      alert_id: String(req.params.alert_id),
       is_resolved: req.body.is_resolved,
     });
 

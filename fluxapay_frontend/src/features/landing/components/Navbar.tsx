@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Image from "next/image";
 import { Link } from "@/i18n/routing";
 import { useTranslations } from "next-intl";
@@ -19,11 +19,22 @@ export const Navbar = () => {
     { name: t("docs"), href: DOCS_URLS.FULL_DOCS },
   ];
 
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (e.key === "Escape" && isOpen) {
+      setIsOpen(false);
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [handleKeyDown]);
+
   return (
-    <nav className="relative top-6 left-0 right-0 z-99 flex justify-center px-4">
+    <nav aria-label="Main navigation" className="relative top-6 left-0 right-0 z-99 flex justify-center px-4">
       <div className="navbar w-full max-w-5xl rounded-xl px-4 py-3 flex items-center justify-between transition-all duration-300 border border-black/10">
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-2">
+        <Link href="/" aria-label="Fluxapay home" className="flex items-center gap-2">
           <Image
             src={logo}
             alt="Fluxapay Logo"
@@ -67,7 +78,9 @@ export const Navbar = () => {
         <button
           onClick={() => setIsOpen(!isOpen)}
           className="md:hidden p-2 text-zinc-600 hover:bg-zinc-100 rounded-full transition-colors"
-          aria-label="Toggle menu"
+          aria-label={isOpen ? "Close menu" : "Open menu"}
+          aria-expanded={isOpen}
+          aria-controls="mobile-nav-menu"
         >
           {isOpen ? (
             <svg
@@ -76,6 +89,7 @@ export const Navbar = () => {
               stroke="currentColor"
               viewBox="0 0 24 24"
               xmlns="http://www.w3.org/2000/svg"
+              aria-hidden="true"
             >
               <path
                 strokeLinecap="round"
@@ -91,6 +105,7 @@ export const Navbar = () => {
               stroke="currentColor"
               viewBox="0 0 24 24"
               xmlns="http://www.w3.org/2000/svg"
+              aria-hidden="true"
             >
               <path
                 strokeLinecap="round"
@@ -105,6 +120,8 @@ export const Navbar = () => {
 
       {/* Mobile Menu Dropdown */}
       <div
+        id="mobile-nav-menu"
+        aria-hidden={!isOpen}
         className={`navbar absolute inset-x-4 top-18 backdrop-blur-lg border border-black/10 rounded-xl p-6 shadow-2xl transition-all duration-300 md:hidden ${
           isOpen
             ? "opacity-100 translate-y-0 pointer-events-auto"
@@ -117,17 +134,19 @@ export const Navbar = () => {
               key={link.name}
               href={link.href}
               onClick={() => setIsOpen(false)}
+              tabIndex={isOpen ? 0 : -1}
               className="text-lg font-medium text-grey hover:text-black"
             >
               {link.name}
             </Link>
           ))}
-          <div className="h-px bg-zinc-100 my-2" />
+          <div className="h-px bg-zinc-100 my-2" aria-hidden="true" />
           <div className="flex flex-col gap-3">
             <LocaleSwitcher />
             <Link
               href="/login"
               onClick={() => setIsOpen(false)}
+              tabIndex={isOpen ? 0 : -1}
               className="w-full py-3 text-center text-lg font-semibold text-grey"
             >
               {t("login")}
@@ -135,6 +154,7 @@ export const Navbar = () => {
             <Link
               href="/signup"
               onClick={() => setIsOpen(false)}
+              tabIndex={isOpen ? 0 : -1}
               className="w-full py-3 text-center font-semibold text-white bg-zinc-900 rounded-lg"
             >
               {t("joinFluxapay")}

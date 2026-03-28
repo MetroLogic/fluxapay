@@ -4,82 +4,62 @@ import React, { useState } from "react";
 import toast from "react-hot-toast";
 import { toastApiError } from "@/lib/toastApiError";
 import Image from "next/image";
-import Link from "next/link";
+import { Link, useRouter } from "@/i18n/routing";
 import * as yup from "yup";
 import Input from "@/components/Input";
 import { Button } from "@/components/Button";
-
+import { api, ApiError, storeToken } from "@/lib/api";
 import { useTranslations } from "next-intl";
 
 const loginSchema = yup.object({
-  email: yup
-    .string()
-    .email("Please enter a valid email address")
-    .required("Email is required"),
-  password: yup
-    .string()
-    .min(6, "Password must be at least 6 characters")
-    .required("Password is required"),
+  email: yup.string().email("Please enter a valid email address").required("Email is required"),
+  password: yup.string().min(6, "Password must be at least 6 characters").required("Password is required"),
   keepLoggedIn: yup.boolean(),
 });
 
 type LoginFormData = yup.InferType<typeof loginSchema>;
 
 const LoginForm = () => {
+  const router = useRouter();
   const tAuth = useTranslations("auth");
-  const [formData, setFormData] = useState<LoginFormData>({
-    email: "",
-    password: "",
-    keepLoggedIn: false,
-  });
-
-  const [errors, setErrors] = useState<{ email?: string; password?: string }>({
-    email: "",
-    password: "",
-  });
-
+  const [formData, setFormData] = useState<LoginFormData>({ email: "", password: "", keepLoggedIn: false });
+  const [errors, setErrors] = useState<{ email?: string; password?: string }>({ email: "", password: "" });
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Handle input changes
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
     const newValue = type === "checkbox" ? checked : value;
-
-    setFormData((prev) => ({
-      ...prev,
-      [name]: newValue,
-    }));
-
-    // Clear error when user starts typing
+    setFormData((prev) => ({ ...prev, [name]: newValue }));
     if (errors[name as keyof typeof errors]) {
-      setErrors((prev) => ({
-        ...prev,
-        [name]: "",
-      }));
+      setErrors((prev) => ({ ...prev, [name]: "" }));
     }
   };
 
-  // Handle form submission using Yup
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-
     try {
-      // Validate against schema
-      const validData = await loginSchema.validate(formData, {
-        abortEarly: false,
-      });
-
-      // Clear previous errors
+      const validData = await loginSchema.validate(formData, { abortEarly: false });
       setErrors({});
       setIsSubmitting(true);
 
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      const data = (await api.auth.login({
+        email: validData.email,
+        password: validData.password,
+      })) as { token?: string; message?: string };
 
-      console.log("Login data:", validData);
-      toast.success("Login successful!");
+      if (!data.token) {
+        throw new Error("Login response missing token");
+      }
+
+      storeToken(data.token);
+      toast.success(data.message || "Login successful!");
+      router.push("/dashboard");
     } catch (err) {
+      if (err instanceof ApiError) {
+        toast.error(err.message);
+        return;
+      }
       if (err instanceof yup.ValidationError) {
         const fieldErrors: { email?: string; password?: string } = {};
         err.inner.forEach((issue) => {
@@ -100,31 +80,21 @@ const LoginForm = () => {
   return (
     <div className="min-h-screen w-full bg-white overflow-hidden flex flex-col font-sans">
       <div className="absolute top-6 left-2 md:left-10">
-        <Image
-          src="/assets/logo.svg"
-          alt="Login Header"
-          width={139}
-          height={30}
-          className="w-full h-auto"
-        />
+        <Image src="/assets/logo.svg" alt="Login Header" width={139} height={30} className="w-full h-auto" />
       </div>
       <div className="flex h-screen w-full items-stretch justify-between gap-0 px-3">
-        {/* Card: 40% width */}
-        <div className="flex h-full w-full md:w-[40%] items-center justify-center bg-transparent ">
+        <div className="flex h-full w-full md:w-[40%] items-center justify-center bg-transparent">
           <div className="w-full max-w-md rounded-none lg:rounded-r-2xl bg-white p-8 shadow-none animate-slide-in-left">
-            {/* Form header */}
             <div className="space-y-2 mb-8 animate-fade-in [animation-delay:200ms]">
-              <h1 className="text-2xl md:text-[40px] font-bold text-black tracking-tight">
-                {tAuth("login")}
-              </h1>
-              <p className="text-sm md:text-[18px] font-normal text-muted-foreground">
-                Please login to continue to your account.
-              </p>
+              <h1 className="text-2xl md:text-[40px] font-bold text-black tracking-tight">{tAuth("login")}</h1>
+              <p className="text-sm md:text-[18px] font-normal text-muted-foreground">Please login to continue to your account.</p>
             </div>
 
             {/* Form */}
             <form
               onSubmit={handleSubmit}
+              aria-label="Login form"
+              noValidate
               className="space-y-5 animate-fade-in [animation-delay:200ms]"
             >
               {/* Email */}
@@ -156,6 +126,10 @@ const LoginForm = () => {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
+                    aria-label={
+                      showPassword ? "Hide concealed characters" : "Show concealed characters"
+                    }
+                    aria-pressed={showPassword}
                     className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-500 transition-colors"
                   >
                     {showPassword ? (
@@ -166,6 +140,7 @@ const LoginForm = () => {
                         fill="none"
                         stroke="currentColor"
                         strokeWidth="2"
+                        aria-hidden="true"
                       >
                         <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
                         <line x1="1" y1="1" x2="23" y2="23" />
@@ -178,6 +153,7 @@ const LoginForm = () => {
                         fill="none"
                         stroke="currentColor"
                         strokeWidth="2"
+                        aria-hidden="true"
                       >
                         <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
                         <circle cx="12" cy="12" r="3" />
@@ -224,29 +200,35 @@ const LoginForm = () => {
                 <span>{isSubmitting ? "Signing in..." : "Sign in"}</span>
               </Button>
 
+              <p className="mt-4 text-center text-xs text-slate-500">
+                By signing in, you agree to our{" "}
+                <Link
+                  href="/terms"
+                  className="font-medium text-slate-700 hover:text-indigo-600 underline underline-offset-4"
+                >
+                  Terms of Service
+                </Link>{" "}
+                and{" "}
+                <Link
+                  href="/privacy"
+                  className="font-medium text-slate-700 hover:text-indigo-600 underline underline-offset-4"
+                >
+                  Privacy Policy
+                </Link>
+                .
+              </p>
+
               {/* Create account */}
               <div className="pt-2 text-center text-xs md:text-[18px] text-muted-foreground font-semibold">
                 Need an account?{" "}
-                <Link
-                  href="/signup"
-                  className="font-semibold text-indigo-500 hover:text-indigo-600 underline underline-offset-4 hover:underline"
-                >
-                  Create one
-                </Link>
+                <Link href="/signup" className="font-semibold text-indigo-500 hover:text-indigo-600 underline underline-offset-4">Create one</Link>
               </div>
             </form>
           </div>
         </div>
-
-        {/* Side image: 60% width, full height */}
         <div className="hidden md:flex h-[98%] w-[60%] my-auto items-center justify-center rounded-2xl overflow-hidden bg-slate-900">
           <div className="relative h-full w-full">
-            <Image
-              src="/assets/login_form_container.svg"
-              alt="Login Form Container"
-              fill
-              className="object-cover object-top"
-            />
+            <Image src="/assets/login_form_container.svg" alt="Login Form Container" fill className="object-cover object-top" />
           </div>
         </div>
       </div>

@@ -17,7 +17,7 @@ import {
 } from "../controllers/merchant.controller";
 import { validate } from "../middleware/validation.middleware";
 import * as merchantSchema from "../schemas/merchant.schema";
-import { authenticateToken } from "../middleware/auth.middleware";
+import { authenticateApiKey } from "../middleware/apiKeyAuth.middleware";
 import { idempotencyMiddleware } from "../middleware/idempotency.middleware";
 import { adminAuth } from "../middleware/adminAuth.middleware";
 import { updateSettlementScheduleSchema, bankAccountSchema } from "../schemas/merchant.schema";
@@ -178,7 +178,7 @@ router.post("/resend-otp", idempotencyMiddleware, validate(merchantSchema.resend
  *       404:
  *         description: Merchant not found
  */
-router.get("/me", authenticateToken, getLoggedInMerchant);
+router.get("/me", authenticateApiKey, getLoggedInMerchant);
 
 /**
  * @swagger
@@ -205,7 +205,12 @@ router.get("/me", authenticateToken, getLoggedInMerchant);
  *       401:
  *         description: Unauthorized
  */
-router.patch("/me", authenticateToken, updateMerchantProfile);
+router.patch(
+  "/me",
+  authenticateApiKey,
+  validate(merchantSchema.updateMerchantProfileSchema),
+  updateMerchantProfile,
+);
 
 /**
  * @swagger
@@ -232,7 +237,7 @@ router.patch("/me", authenticateToken, updateMerchantProfile);
  *       401:
  *         description: Unauthorized
  */
-router.patch("/me/webhook", authenticateToken, updateMerchantWebhook);
+router.patch("/me/webhook", authenticateApiKey, updateMerchantWebhook);
 
 
 /**
@@ -256,7 +261,7 @@ router.patch("/me/webhook", authenticateToken, updateMerchantWebhook);
  *                 apiKey:
  *                   type: string
  */
-router.post("/keys/rotate-api-key", authenticateToken, rotateApiKey);
+router.post("/keys/rotate-api-key", authenticateApiKey, rotateApiKey);
 
 /**
  * @swagger
@@ -281,7 +286,7 @@ router.post("/keys/rotate-api-key", authenticateToken, rotateApiKey);
  */
 router.post(
   "/keys/rotate-webhook-secret",
-  authenticateToken,
+  authenticateApiKey,
   rotateWebhookSecret,
 );
 
@@ -396,7 +401,7 @@ router.patch("/admin/:merchantId/status", adminAuth, adminUpdateMerchantStatus);
  */
 router.patch(
   "/me/settlement-schedule",
-  authenticateToken,
+  authenticateApiKey,
   validate(updateSettlementScheduleSchema),
   updateSettlementSchedule,
 );
@@ -445,7 +450,7 @@ router.patch(
  */
 router.post(
   "/me/bank-account",
-  authenticateToken,
+  authenticateApiKey,
   validate(bankAccountSchema),
   addBankAccount,
 );

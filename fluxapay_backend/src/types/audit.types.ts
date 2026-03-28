@@ -55,7 +55,7 @@ export interface ConfigChangeDetails {
 export interface SweepOperationDetails {
   sweep_type: string;
   trigger_reason: string;
-  status?: 'completed' | 'failed';
+  status?: "completed" | "failed";
   statistics?: {
     addresses_swept: number;
     total_amount: string;
@@ -67,7 +67,7 @@ export interface SweepOperationDetails {
 export interface SettlementBatchDetails {
   batch_id: string;
   initiation_reason: string;
-  status?: 'completed' | 'failed';
+  status?: "completed" | "failed";
   transaction_count?: number;
   total_amount?: number;
   currency?: string;

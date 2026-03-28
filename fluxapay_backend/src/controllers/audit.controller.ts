@@ -29,8 +29,8 @@ export async function getAuditLogs(req: AuthRequest, res: Response) {
         return res.status(400).json({
           success: false,
           error: {
-            code: 'VALIDATION_ERROR',
-            message: 'Invalid date_from format',
+            code: "VALIDATION_ERROR",
+            message: "Invalid date_from format",
           },
         });
       }
@@ -42,8 +42,8 @@ export async function getAuditLogs(req: AuthRequest, res: Response) {
         return res.status(400).json({
           success: false,
           error: {
-            code: 'VALIDATION_ERROR',
-            message: 'Invalid date_to format',
+            code: "VALIDATION_ERROR",
+            message: "Invalid date_to format",
           },
         });
       }
@@ -54,8 +54,8 @@ export async function getAuditLogs(req: AuthRequest, res: Response) {
       return res.status(400).json({
         success: false,
         error: {
-          code: 'VALIDATION_ERROR',
-          message: 'date_from must be before date_to',
+          code: "VALIDATION_ERROR",
+          message: "date_from must be before date_to",
         },
       });
     }
@@ -68,8 +68,8 @@ export async function getAuditLogs(req: AuthRequest, res: Response) {
       return res.status(400).json({
         success: false,
         error: {
-          code: 'VALIDATION_ERROR',
-          message: 'page must be a positive integer',
+          code: "VALIDATION_ERROR",
+          message: "page must be a positive integer",
         },
       });
     }
@@ -78,8 +78,8 @@ export async function getAuditLogs(req: AuthRequest, res: Response) {
       return res.status(400).json({
         success: false,
         error: {
-          code: 'VALIDATION_ERROR',
-          message: 'limit must be between 1 and 100',
+          code: "VALIDATION_ERROR",
+          message: "limit must be between 1 and 100",
         },
       });
     }
@@ -87,12 +87,14 @@ export async function getAuditLogs(req: AuthRequest, res: Response) {
     // Validate action_type if provided
     let actionType: AuditActionType | undefined;
     if (action_type) {
-      if (!Object.values(AuditActionType).includes(action_type as AuditActionType)) {
+      if (
+        !Object.values(AuditActionType).includes(action_type as AuditActionType)
+      ) {
         return res.status(400).json({
           success: false,
           error: {
-            code: 'VALIDATION_ERROR',
-            message: 'Invalid action_type',
+            code: "VALIDATION_ERROR",
+            message: "Invalid action_type",
           },
         });
       }
@@ -116,12 +118,12 @@ export async function getAuditLogs(req: AuthRequest, res: Response) {
       pagination: result.pagination,
     });
   } catch (error: any) {
-    console.error('Error querying audit logs:', error);
+    console.error("Error querying audit logs:", error);
     return res.status(500).json({
       success: false,
       error: {
-        code: 'INTERNAL_ERROR',
-        message: 'Failed to query audit logs',
+        code: "INTERNAL_ERROR",
+        message: "Failed to query audit logs",
       },
     });
   }
@@ -135,12 +137,12 @@ export async function getAuditLogByIdHandler(req: AuthRequest, res: Response) {
   try {
     const { id } = req.params;
 
-    if (!id || typeof id !== 'string') {
+    if (!id || typeof id !== "string") {
       return res.status(400).json({
         success: false,
         error: {
-          code: 'VALIDATION_ERROR',
-          message: 'Audit log ID is required',
+          code: "VALIDATION_ERROR",
+          message: "Audit log ID is required",
         },
       });
     }
@@ -151,8 +153,8 @@ export async function getAuditLogByIdHandler(req: AuthRequest, res: Response) {
       return res.status(404).json({
         success: false,
         error: {
-          code: 'NOT_FOUND',
-          message: 'Audit log not found',
+          code: "NOT_FOUND",
+          message: "Audit log not found",
         },
       });
     }
@@ -162,12 +164,12 @@ export async function getAuditLogByIdHandler(req: AuthRequest, res: Response) {
       data: auditLog,
     });
   } catch (error: any) {
-    console.error('Error fetching audit log:', error);
+    console.error("Error fetching audit log:", error);
     return res.status(500).json({
       success: false,
       error: {
-        code: 'INTERNAL_ERROR',
-        message: 'Failed to fetch audit log',
+        code: "INTERNAL_ERROR",
+        message: "Failed to fetch audit log",
       },
     });
   }

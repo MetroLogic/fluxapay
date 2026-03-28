@@ -47,7 +47,8 @@ export default function WebhooksPage() {
                 if (cancelled) return;
 
                 const logs = res?.data?.logs ?? [];
-                const mapped: WebhookEvent[] = logs.map((log: any) => ({
+                const mapped: WebhookEvent[] = logs.map(
+                  (log: Record<string, unknown>) => ({
                     id: String(log.id),
                     paymentId: String(log.payment_id ?? ""),
                     eventType: String(log.event_type),
@@ -59,7 +60,8 @@ export default function WebhooksPage() {
                     payload: {},
                     response: { status: Number(log.http_status ?? 0) },
                     retryHistory: [],
-                }));
+                  }),
+                );
 
                 setWebhooks(mapped);
             } catch (e) {
