@@ -434,7 +434,9 @@ export async function createAndDeliverWebhook(
   merchantId: string,
   eventType: WebhookEventType,
   payload: Record<string, any>,
-  paymentId?: string
+  paymentId?: string,
+  /** When set (e.g. payment metadata override), deliver to this URL instead of the merchant profile URL. */
+  endpointOverride?: string,
 ) {
   const merchant = await prisma.merchant.findUnique({ where: { id: merchantId } });
 
@@ -442,7 +444,7 @@ export async function createAndDeliverWebhook(
     throw new Error(`Merchant ${merchantId} has no webhook_secret configured`);
   }
 
-  const endpointUrl = merchant.webhook_url;
+  const endpointUrl = endpointOverride ?? merchant.webhook_url;
   if (!endpointUrl) {
     throw new Error(`Merchant ${merchantId} has no webhook_url configured`);
   }

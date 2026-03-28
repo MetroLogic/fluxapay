@@ -1,5 +1,5 @@
 import { createRefundService } from '../refund.service';
-import { PrismaClient, PaymentStatus } from '../../generated/client/client';
+import { PrismaClient } from '../../generated/client/client';
 
 const prisma = new PrismaClient();
 
@@ -42,7 +42,7 @@ describe('Refund Service - Validation', () => {
           customer_email: 'customer@example.com',
           metadata: {},
           expiration: new Date(Date.now() + 86400000), // 24 hours from now
-          status: PaymentStatus.confirmed,
+          status: 'confirmed',
           checkout_url: 'https://example.com/checkout',
         },
       });
@@ -88,7 +88,7 @@ describe('Refund Service - Validation', () => {
           customer_email: 'customer@example.com',
           metadata: {},
           expiration: new Date(Date.now() + 86400000),
-          status: PaymentStatus.confirmed,
+          status: 'confirmed',
           checkout_url: 'https://example.com/checkout',
         },
       });
@@ -145,7 +145,7 @@ describe('Refund Service - Validation', () => {
           customer_email: 'customer@example.com',
           metadata: {},
           expiration: new Date(Date.now() + 86400000),
-          status: PaymentStatus.confirmed,
+          status: 'confirmed',
           checkout_url: 'https://example.com/checkout',
         },
       });
@@ -169,7 +169,7 @@ describe('Refund Service - Validation', () => {
           customer_email: 'customer@example.com',
           metadata: {},
           expiration: new Date(Date.now() + 86400000),
-          status: PaymentStatus.overpaid,
+          status: 'overpaid',
           checkout_url: 'https://example.com/checkout',
         },
       });
@@ -193,7 +193,7 @@ describe('Refund Service - Validation', () => {
           customer_email: 'customer@example.com',
           metadata: {},
           expiration: new Date(Date.now() + 86400000),
-          status: PaymentStatus.pending,
+          status: 'pending',
           checkout_url: 'https://example.com/checkout',
         },
       });
@@ -220,7 +220,7 @@ describe('Refund Service - Validation', () => {
           customer_email: 'customer@example.com',
           metadata: {},
           expiration: new Date(Date.now() - 86400000), // 24 hours ago
-          status: PaymentStatus.confirmed,
+          status: 'confirmed',
           checkout_url: 'https://example.com/checkout',
         },
       });
@@ -247,7 +247,7 @@ describe('Refund Service - Validation', () => {
           customer_email: 'customer@example.com',
           metadata: {},
           expiration: new Date(Date.now() + 86400000),
-          status: PaymentStatus.failed,
+          status: 'failed',
           checkout_url: 'https://example.com/checkout',
         },
       });
@@ -291,7 +291,7 @@ describe('Refund Service - Validation', () => {
           customer_email: 'customer@example.com',
           metadata: {},
           expiration: new Date(Date.now() + 86400000),
-          status: PaymentStatus.confirmed,
+          status: 'confirmed',
           checkout_url: 'https://example.com/checkout',
         },
       });
@@ -318,7 +318,7 @@ describe('Refund Service - Validation', () => {
           customer_email: 'customer@example.com',
           metadata: {},
           expiration: new Date(Date.now() + 86400000),
-          status: PaymentStatus.confirmed,
+          status: 'confirmed',
           checkout_url: 'https://example.com/checkout',
         },
       });
@@ -345,7 +345,7 @@ describe('Refund Service - Validation', () => {
           customer_email: 'customer@example.com',
           metadata: {},
           expiration: new Date(Date.now() + 86400000),
-          status: PaymentStatus.confirmed,
+          status: 'confirmed',
           checkout_url: 'https://example.com/checkout',
         },
       });
@@ -372,7 +372,7 @@ describe('Refund Service - Validation', () => {
           customer_email: 'customer@example.com',
           metadata: {},
           expiration: new Date(Date.now() + 86400000),
-          status: PaymentStatus.confirmed,
+          status: 'confirmed',
           checkout_url: 'https://example.com/checkout',
         },
       });
@@ -411,7 +411,7 @@ describe('Refund Service - Validation', () => {
           customer_email: 'customer@example.com',
           metadata: {},
           expiration: new Date(Date.now() + 86400000),
-          status: PaymentStatus.confirmed,
+          status: 'confirmed',
           checkout_url: 'https://example.com/checkout',
         },
       });
@@ -462,7 +462,7 @@ describe('Refund Service - Validation', () => {
           customer_email: 'customer@example.com',
           metadata: {},
           expiration: new Date(Date.now() + 86400000),
-          status: PaymentStatus.confirmed,
+          status: 'confirmed',
           checkout_url: 'https://example.com/checkout',
         },
       });

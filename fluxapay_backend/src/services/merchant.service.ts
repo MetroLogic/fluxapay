@@ -199,3 +199,66 @@ export async function rotateWebhookSecretService(data: {
 
   return { message: "Webhook secret rotated", webhookSecret };
 }
+
+export async function updateMerchantProfileService(data: {
+  merchantId: string;
+  business_name?: string;
+  email?: string;
+}) {
+  const { merchantId, ...updates } = data;
+  if (updates.email) {
+    const taken = await prisma.merchant.findFirst({
+      where: { email: updates.email, id: { not: merchantId } },
+    });
+    if (taken) throw { status: 400, message: "Email already in use" };
+  }
+  const merchant = await prisma.merchant.update({
+    where: { id: merchantId },
+    data: updates,
+  });
+  return { message: "Profile updated", merchant };
+}
+
+export async function updateMerchantWebhookService(data: {
+  merchantId: string;
+  webhook_url: string;
+}) {
+  await prisma.merchant.update({
+    where: { id: data.merchantId },
+    data: { webhook_url: data.webhook_url },
+  });
+  return { message: "Webhook URL updated" };
+}
+
+export async function updateSettlementScheduleService(data: {
+  merchantId: string;
+  settlement_schedule: "daily" | "weekly";
+  settlement_day?: number;
+}) {
+  await prisma.merchant.update({
+    where: { id: data.merchantId },
+    data: {
+      settlement_schedule: data.settlement_schedule,
+      settlement_day: data.settlement_day ?? null,
+    },
+  });
+  return { message: "Settlement schedule updated" };
+}
+
+export async function addBankAccountService(data: {
+  merchantId: string;
+  account_name: string;
+  account_number: string;
+  bank_name: string;
+  bank_code?: string;
+  currency: string;
+  country: string;
+}) {
+  const { merchantId, ...bank } = data;
+  await prisma.bankAccount.upsert({
+    where: { merchantId },
+    create: { merchantId, ...bank },
+    update: bank,
+  });
+  return { message: "Bank account saved" };
+}

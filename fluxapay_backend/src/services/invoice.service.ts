@@ -1,4 +1,4 @@
-import { PrismaClient } from "../generated/client/client";
+import { PrismaClient, Prisma } from "../generated/client/client";
 import crypto from "crypto";
 
 const prisma = new PrismaClient();
@@ -31,7 +31,7 @@ export async function createInvoiceService(params: {
       amount,
       currency,
       customer_email,
-      metadata: metadata ?? {},
+      metadata: (metadata ?? {}) as Prisma.InputJsonValue,
       expiration: due_date ? new Date(due_date) : new Date(Date.now() + 15 * 60 * 1000),
       status: "pending",
       checkout_url: `/pay/${paymentId}`,
@@ -45,7 +45,7 @@ export async function createInvoiceService(params: {
       amount,
       currency,
       customer_email,
-      metadata: metadata ?? {},
+      metadata: (metadata ?? {}) as Prisma.InputJsonValue,
       payment_id: payment.id,
       payment_link: `/pay/${payment.id}`,
       due_date: due_date ? new Date(due_date) : null,
