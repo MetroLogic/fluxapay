@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { authenticateToken } from "../middleware/auth.middleware";
+import { authenticateApiKey } from "../middleware/apiKeyAuth.middleware";
 import { validate, validateQuery } from "../middleware/validation.middleware";
 import { idempotencyMiddleware } from "../middleware/idempotency.middleware";
 import {
@@ -22,7 +22,7 @@ const router = Router();
  *     summary: Create a refund
  *     tags: [Refunds]
  *     security:
- *       - bearerAuth: []
+ *       - apiKeyAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -36,7 +36,7 @@ const router = Router();
  *     summary: List merchant refunds
  *     tags: [Refunds]
  *     security:
- *       - bearerAuth: []
+ *       - apiKeyAuth: []
  *     parameters:
  *       - in: query
  *         name: page
@@ -76,7 +76,7 @@ router.get(
  *     summary: Update refund status and emit webhook
  *     tags: [Refunds]
  *     security:
- *       - bearerAuth: []
+ *       - apiKeyAuth: []
  *     parameters:
  *       - in: path
  *         name: refund_id

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { createPayment, getPayments, getPaymentById } from '../controllers/payment.controller';
 import { validatePayment } from '../validators/payment.validator';
-import { authenticateToken } from '../middleware/auth.middleware';
+import { authenticateApiKey } from '../middleware/apiKeyAuth.middleware';
 import { idempotencyMiddleware } from '../middleware/idempotency.middleware';
 
 const router = Router();
@@ -13,7 +13,6 @@ const router = Router();
  *     summary: Create payment intent
  *     tags: [Payments]
  *     security:
- *       - bearerAuth: []
  *       - apiKeyAuth: []
  *     requestBody:
  *       required: true
@@ -27,19 +26,16 @@ const router = Router();
  *       429:
  *         description: Rate limit exceeded
  */
-router.post('/', authenticateToken, idempotencyMiddleware, validatePayment, createPayment);
+router.post('/', authenticateApiKey, idempotencyMiddleware, validatePayment, createPayment);
 
 /**
  * @swagger
- * /api/payments/{id}:
- *   get:
- *     summary: Get payment by ID (merchant-scoped)
- * /api/payments:
+ * /api/v1/payments:
  *   get:
  *     summary: List payments for the authenticated merchant
  *     tags: [Payments]
  *     security:
- *       - bearerAuth: []
+ *       - apiKeyAuth: []
  *     parameters:
  *       - in: query
  *         name: page
@@ -66,30 +62,30 @@ router.post('/', authenticateToken, idempotencyMiddleware, validatePayment, crea
  *       200:
  *         description: Paginated list of payments
  */
-router.get('/', authenticateToken, getPayments);
+router.get('/', authenticateApiKey, getPayments);
 
 /**
  * @swagger
- * /api/payments/export:
+ * /api/v1/payments/export:
  *   get:
  *     summary: Export payments as CSV
  *     tags: [Payments]
  *     security:
- *       - bearerAuth: []
+ *       - apiKeyAuth: []
  *     responses:
  *       200:
  *         description: CSV file download
  */
-router.get('/export', authenticateToken, getPayments);
+router.get('/export', authenticateApiKey, getPayments);
 
 /**
  * @swagger
- * /api/payments/{id}:
+ * /api/v1/payments/{id}:
  *   get:
  *     summary: Get a single payment by ID
  *     tags: [Payments]
  *     security:
- *       - bearerAuth: []
+ *       - apiKeyAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -104,6 +100,6 @@ router.get('/export', authenticateToken, getPayments);
  *       404:
  *         description: Payment not found
  */
-router.get('/:id', authenticateToken, getPaymentById);
+router.get('/:id', authenticateApiKey, getPaymentById);
 
 export default router;
