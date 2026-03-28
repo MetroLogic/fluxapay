@@ -30,6 +30,22 @@ const envSchema = z.object({
     // Email (optional)
     RESEND_API_KEY: z.string().optional(),
 
+    // SMS OTP (optional) — SMS_PROVIDER: none | mock | twilio | messagebird
+    SMS_PROVIDER: z
+      .enum(['none', 'mock', 'twilio', 'messagebird'])
+      .default('none'),
+    TWILIO_ACCOUNT_SID: z.string().optional(),
+    TWILIO_AUTH_TOKEN: z.string().optional(),
+    TWILIO_FROM_NUMBER: z.string().optional(),
+    MESSAGEBIRD_API_KEY: z.string().optional(),
+    MESSAGEBIRD_ORIGINATOR: z.string().optional(),
+    OTP_SMS_MAX_PER_MERCHANT_HOUR: z.coerce.number().int().positive().default(10),
+    OTP_SMS_COST_ALERT_DAILY_THRESHOLD: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(1000),
+
     // Webhook
     WEBHOOK_SECRET: z.string().optional(),
 
@@ -144,6 +160,24 @@ export function validateEnv(): EnvConfig {
 
     if (config.EXCHANGE_PARTNER === 'anchor' && !config.ANCHOR_API_KEY) {
         conditionalErrors.push('  • ANCHOR_API_KEY is required when EXCHANGE_PARTNER=anchor');
+    }
+
+    if (config.SMS_PROVIDER === 'twilio') {
+        if (!config.TWILIO_ACCOUNT_SID) {
+            conditionalErrors.push('  • TWILIO_ACCOUNT_SID is required when SMS_PROVIDER=twilio');
+        }
+        if (!config.TWILIO_AUTH_TOKEN) {
+            conditionalErrors.push('  • TWILIO_AUTH_TOKEN is required when SMS_PROVIDER=twilio');
+        }
+        if (!config.TWILIO_FROM_NUMBER) {
+            conditionalErrors.push('  • TWILIO_FROM_NUMBER is required when SMS_PROVIDER=twilio');
+        }
+    }
+
+    if (config.SMS_PROVIDER === 'messagebird') {
+        if (!config.MESSAGEBIRD_API_KEY) {
+            conditionalErrors.push('  • MESSAGEBIRD_API_KEY is required when SMS_PROVIDER=messagebird');
+        }
     }
 
     // KMS seed validation
