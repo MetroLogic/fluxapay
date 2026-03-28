@@ -1,4 +1,4 @@
-import { PrismaClient } from "../generated/client/client";
+import { PrismaClient } from "../generated/client";
 import bcrypt from "bcrypt";
 import { createOtp, verifyOtp as verifyOtpService } from "./otp.service";
 import { sendOtpEmail } from "./email.service";
