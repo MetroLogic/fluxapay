@@ -17,6 +17,7 @@ export type StaticInfoPageProps = {
   description: string;
   sections: InfoSection[];
   ctas?: InfoCta[];
+  lastUpdated?: string;
 };
 
 export default function StaticInfoPage({
@@ -25,6 +26,7 @@ export default function StaticInfoPage({
   description,
   sections,
   ctas = [],
+  lastUpdated,
 }: StaticInfoPageProps) {
   return (
     <main className="min-h-screen bg-slate-50 py-16">
@@ -39,6 +41,11 @@ export default function StaticInfoPage({
             {title}
           </h1>
           <p className="mt-3 text-base text-slate-600">{description}</p>
+          {lastUpdated ? (
+            <p className="mt-2 text-xs text-slate-400">
+              Last updated: {lastUpdated}
+            </p>
+          ) : null}
           {ctas.length > 0 ? (
             <div className="mt-6 flex flex-wrap gap-3">
               {ctas.map((cta) => (
