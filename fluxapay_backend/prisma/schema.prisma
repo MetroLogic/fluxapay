@@ -23,7 +23,6 @@ model Merchant {
   settlement_currency   String
   webhook_url           String?
   webhook_secret        String
-  webhook_url           String? 
   password              String
   status                MerchantStatus         @default(pending_verification)
   api_key_hashed        String?
@@ -49,9 +48,6 @@ model Merchant {
   reconciliationRecords ReconciliationRecord[]
   discrepancyThresholds DiscrepancyThreshold[]
   discrepancyAlerts     DiscrepancyAlert[]
-  bankAccount           BankAccount?
-  hdIndex               MerchantHDIndex?
-  subscriptions         MerchantSubscription[]
 }
 
 model MerchantHDIndex {
@@ -151,7 +147,6 @@ model Settlement {
   usdc_amount      Decimal?
   amount           Decimal
   fees             Decimal
-  usdc_amount      Decimal?
   net_amount       Decimal?
   currency         String
   status           SettlementStatus @default(pending)
@@ -160,9 +155,6 @@ model Settlement {
   exchange_ref     String?
   bank_transfer_id String?
   breakdown        Json?
-  exchange_partner String?
-  exchange_rate    Decimal?
-  exchange_ref     String?
   payment_ids      Json?
   failure_reason   String?
   scheduled_date   DateTime
@@ -314,70 +306,6 @@ model Invoice {
   updated_at     DateTime      @updatedAt
 }
 
-model Plan {
-  id             String                 @id @default(cuid())
-  name           String
-  slug           String                 @unique
-  description    String?
-  amount         Decimal
-  currency       String
-  interval       String
-  created_at     DateTime               @default(now())
-  updated_at     DateTime               @updatedAt
-  subscriptions  MerchantSubscription[]
-}
-
-model MerchantSubscription {
-  id                   String   @id @default(cuid())
-  merchant             Merchant @relation(fields: [merchantId], references: [id])
-  merchantId           String
-  plan                 Plan     @relation(fields: [planId], references: [id])
-  planId               String
-  billing_cycle        String
-  current_period_start DateTime
-  current_period_end   DateTime
-  next_billing_date    DateTime
-  status               String   @default("active")
-  created_at           DateTime @default(now())
-  updated_at           DateTime @updatedAt
-
-  @@index([merchantId])
-  @@index([planId])
-}
-
-model BankAccount {
-  id              String   @id @default(cuid())
-  merchant        Merchant @relation(fields: [merchantId], references: [id])
-  merchantId      String   @unique
-  account_name    String
-  account_number  String
-  bank_name       String
-  bank_code       String?
-  currency        String
-  country         String
-  created_at      DateTime @default(now())
-  updated_at      DateTime @updatedAt
-}
-
-model MerchantHDIndex {
-  merchantId      String   @id
-  merchant        Merchant @relation(fields: [merchantId], references: [id])
-  merchant_index  Int
-  payment_counter Int      @default(0)
-}
-
-model HDIndexCounter {
-  id                   String @id
-  next_merchant_index  Int    @default(0)
-}
-
-model ManualIntervention {
-  id          String   @id @default(cuid())
-  merchantId  String
-  issue_type  String
-  description String
-  created_at  DateTime @default(now())
-}
 
 model ReconciliationRecord {
   id                  String               @id @default(cuid())
@@ -438,6 +366,8 @@ enum PaymentStatus {
   failed
   paid
   completed
+}
+
 model CronLock {
   job_name   String   @id
   locked_at  DateTime
@@ -445,20 +375,6 @@ model CronLock {
   locked_by  String   // hostname/pid for diagnostics
 }
 
-model AuditLog {
-  id          String           @id @default(cuid())
-  admin_id    String
-  action_type AuditActionType
-  entity_type AuditEntityType
-  entity_id   String
-  details     Json
-  created_at  DateTime         @default(now())
-
-  @@index([admin_id])
-  @@index([action_type])
-  @@index([entity_id])
-  @@index([created_at])
-}
 
 model IdempotencyRecord {
   idempotency_key  String   @id
@@ -524,8 +440,6 @@ enum WebhookEventType {
   subscription_created
   subscription_cancelled
   subscription_renewed
-  settlement_completed
-  settlement_failed
 }
 
 enum WebhookStatus {
@@ -563,34 +477,26 @@ enum AlertSeverity {
 }
 
 enum AuditActionType {
-  kyc_decision
-  config_change
-  sweep_operation
-  settlement_batch
-}
-
-enum AuditEntityType {
-  merchant
-  system_config
-  payment_gateway
-  settlement
-}
-
-enum AuditActionType {
   kyc_approve
   kyc_reject
+  kyc_decision // merged from other
   config_change
   sweep_trigger
   sweep_complete
   sweep_fail
+  sweep_operation // merged from other
+  settlement_batch
   settlement_batch_initiate
   settlement_batch_complete
   settlement_batch_fail
 }
 
 enum AuditEntityType {
+  merchant
   merchant_kyc
   system_config
+  payment_gateway
+  settlement
   sweep_operation
   settlement_batch
 }
