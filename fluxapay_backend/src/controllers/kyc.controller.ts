@@ -1,5 +1,5 @@
 import { Response } from "express";
-import { KYCStatus } from "../generated/client";
+import { KYCStatus } from "../generated/client/client";
 import { AuthRequest } from "../types/express";
 import { validateUserId } from "../helpers/request.helper";
 import {

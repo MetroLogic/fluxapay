@@ -16,11 +16,16 @@ export async function createRefund(req: AuthRequest, res: Response) {
       payment_id: req.body.payment_id,
       amount: req.body.amount,
       reason: req.body.reason,
+      idempotency_key:
+        req.body.idempotency_key ||
+        (req.headers["idempotency-key"] as string | undefined),
     });
 
     res.status(201).json(result);
   } catch (err: any) {
-    res.status(err.status || 500).json({ message: err.message || "Server error" });
+    res
+      .status(err.status || 500)
+      .json({ message: err.message || "Server error" });
   }
 }
 
@@ -36,7 +41,9 @@ export async function listRefunds(req: Request, res: Response) {
 
     res.status(200).json(result);
   } catch (err: any) {
-    res.status(err.status || 500).json({ message: err.message || "Server error" });
+    res
+      .status(err.status || 500)
+      .json({ message: err.message || "Server error" });
   }
 }
 
@@ -47,13 +54,15 @@ export async function updateRefundStatus(req: AuthRequest, res: Response) {
 
     const result = await updateRefundStatusService({
       merchantId,
-      refund_id,
+      refund_id: String(refund_id),
       status: req.body.status,
       failed_reason: req.body.failed_reason,
     });
 
     res.status(200).json(result);
   } catch (err: any) {
-    res.status(err.status || 500).json({ message: err.message || "Server error" });
+    res
+      .status(err.status || 500)
+      .json({ message: err.message || "Server error" });
   }
 }

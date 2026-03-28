@@ -21,11 +21,14 @@ model Merchant {
   phone_number          String                 @unique
   country               String
   settlement_currency   String
+  webhook_url           String?
   webhook_secret        String
   password              String
   status                MerchantStatus         @default(pending_verification)
   api_key_hashed        String?
   api_key_last_four     String?
+  settlement_schedule   String?                @default("daily")
+  settlement_day        Int?
   created_at            DateTime               @default(now())
   updated_at            DateTime               @updatedAt
   otps                  OTP[]
@@ -35,6 +38,9 @@ model Merchant {
   payments              Payment[]
   refunds               Refund[]
   invoices              Invoice[]
+  bankAccount           BankAccount?
+  merchantHDIndex       MerchantHDIndex?
+  subscriptions         MerchantSubscription[]
   reconciliationRecords ReconciliationRecord[]
   discrepancyThresholds DiscrepancyThreshold[]
   discrepancyAlerts     DiscrepancyAlert[]
@@ -57,15 +63,23 @@ model Settlement {
   merchant         Merchant         @relation(fields: [merchantId], references: [id])
   merchantId       String
   amount           Decimal
+  usdc_amount      Decimal?
+  net_amount       Decimal?
   currency         String
   status           SettlementStatus @default(pending)
   fees             Decimal
   breakdown        Json?
   bank_transfer_id String?
+  exchange_partner String?
+  exchange_rate    Decimal?
+  exchange_ref     String?
+  payment_ids      Json?
+  failure_reason   String?
   scheduled_date   DateTime
   processed_date   DateTime?
   created_at       DateTime         @default(now())
   updated_at       DateTime         @updatedAt
+  payments         Payment[]
 }
 
 model MerchantKYC {
@@ -136,19 +150,45 @@ model WebhookRetryAttempt {
 }
 
 model Payment {
-  id             String   @id @default(cuid())
-  merchant       Merchant @relation(fields: [merchantId], references: [id])
-  merchantId     String
-  amount         Decimal
-  currency       String
-  customer_email String
-  metadata       Json
-  expiration     DateTime
-  status         PaymentStatus @default(pending)
-  checkout_url   String
-  createdAt      DateTime @default(now())
-  refunds        Refund[]
-  invoice        Invoice?
+  id                 String   @id @default(cuid())
+  merchant           Merchant @relation(fields: [merchantId], references: [id])
+  merchantId         String
+  amount             Decimal
+  currency           String
+  customer_email     String
+  description        String?
+  metadata           Json
+  expiration         DateTime
+  status             String   @default("pending")
+  checkout_url       String
+  success_url        String?
+  cancel_url         String?
+  createdAt          DateTime @default(now())
+  stellar_address    String?
+  derivation_path    String?
+  encrypted_key_data String?
+  payment_index      Int?
+  transaction_hash   String?
+  contract_tx_hash   String?
+  payer_address      String?
+  onchain_verified   Boolean? @default(false)
+  verification_error String?
+  last_paging_token  String?
+  swept              Boolean  @default(false)
+  settled            Boolean  @default(false)
+  swept_at           DateTime?
+  sweep_tx_hash      String?
+  confirmed_at       DateTime?
+  settled_at         DateTime?
+  settlement_ref     String?
+  settlement_fiat_amount   Decimal?
+  settlement_fiat_currency String?
+  settlementId       String?
+  settlement         Settlement? @relation(fields: [settlementId], references: [id])
+  refunds            Refund[]
+  invoice            Invoice?
+
+  @@index([swept, status])
 }
 
 model Refund {
@@ -182,6 +222,71 @@ model Invoice {
   due_date       DateTime?
   created_at     DateTime      @default(now())
   updated_at     DateTime      @updatedAt
+}
+
+model Plan {
+  id             String                 @id @default(cuid())
+  name           String
+  slug           String                 @unique
+  description    String?
+  amount         Decimal
+  currency       String
+  interval       String
+  created_at     DateTime               @default(now())
+  updated_at     DateTime               @updatedAt
+  subscriptions  MerchantSubscription[]
+}
+
+model MerchantSubscription {
+  id                   String   @id @default(cuid())
+  merchant             Merchant @relation(fields: [merchantId], references: [id])
+  merchantId           String
+  plan                 Plan     @relation(fields: [planId], references: [id])
+  planId               String
+  billing_cycle        String
+  current_period_start DateTime
+  current_period_end   DateTime
+  next_billing_date    DateTime
+  status               String   @default("active")
+  created_at           DateTime @default(now())
+  updated_at           DateTime @updatedAt
+
+  @@index([merchantId])
+  @@index([planId])
+}
+
+model BankAccount {
+  id              String   @id @default(cuid())
+  merchant        Merchant @relation(fields: [merchantId], references: [id])
+  merchantId      String   @unique
+  account_name    String
+  account_number  String
+  bank_name       String
+  bank_code       String?
+  currency        String
+  country         String
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+}
+
+model MerchantHDIndex {
+  merchantId      String   @id
+  merchant        Merchant @relation(fields: [merchantId], references: [id])
+  merchant_index  Int
+  payment_counter Int      @default(0)
+}
+
+model HDIndexCounter {
+  id                   String @id
+  next_merchant_index  Int    @default(0)
+}
+
+model ManualIntervention {
+  id          String   @id @default(cuid())
+  merchantId  String
+  issue_type  String
+  description String
+  created_at  DateTime @default(now())
 }
 
 model ReconciliationRecord {
@@ -234,13 +339,26 @@ model DiscrepancyAlert {
   @@index([merchantId, is_resolved])
 }
 
-enum PaymentStatus {
-  pending
-  partially_paid
-  confirmed
-  overpaid
-  expired
-  failed
+model CronLock {
+  job_name   String   @id
+  locked_at  DateTime
+  expires_at DateTime
+  locked_by  String   // hostname/pid for diagnostics
+}
+
+model AuditLog {
+  id          String           @id @default(cuid())
+  admin_id    String
+  action_type AuditActionType
+  entity_type AuditEntityType
+  entity_id   String
+  details     Json
+  created_at  DateTime         @default(now())
+
+  @@index([admin_id])
+  @@index([action_type])
+  @@index([entity_id])
+  @@index([created_at])
 }
 
 model IdempotencyRecord {
@@ -305,6 +423,8 @@ enum WebhookEventType {
   subscription_created
   subscription_cancelled
   subscription_renewed
+  settlement_completed
+  settlement_failed
 }
 
 enum WebhookStatus {
@@ -337,4 +457,23 @@ enum AlertSeverity {
   low
   medium
   high
+}
+
+enum AuditActionType {
+  kyc_approve
+  kyc_reject
+  config_change
+  sweep_trigger
+  sweep_complete
+  sweep_fail
+  settlement_batch_initiate
+  settlement_batch_complete
+  settlement_batch_fail
+}
+
+enum AuditEntityType {
+  merchant_kyc
+  system_config
+  sweep_operation
+  settlement_batch
 }

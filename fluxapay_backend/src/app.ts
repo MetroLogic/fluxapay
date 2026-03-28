@@ -3,6 +3,12 @@ import cors from "cors";
 import swaggerUi from "swagger-ui-express";
 import { specs } from "./docs/swagger";
 import { PrismaClient } from "./generated/client/client";
+import { requestIdMiddleware } from "./middleware/requestId.middleware";
+import {
+  requestLoggingMiddleware,
+  errorLoggingMiddleware,
+} from "./middleware/requestLogging.middleware";
+import { metricsMiddleware } from "./middleware/metrics.middleware";
 import merchantRoutes from "./routes/merchant.route";
 import settlementRoutes from "./routes/settlement.route";
 import kycRoutes from "./routes/kyc.route";
@@ -19,6 +25,11 @@ import auditRoutes from "./routes/audit.route";
 
 const app = express();
 const prisma = new PrismaClient();
+
+// Observability Middleware (must be first)
+app.use(requestIdMiddleware);
+app.use(requestLoggingMiddleware);
+app.use(metricsMiddleware);
 
 app.use(cors());
 app.use(express.json());
@@ -44,6 +55,9 @@ app.use("/api/v1/admin", auditRoutes);
 app.get("/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date() });
 });
+
+// Error logging middleware (must be last)
+app.use(errorLoggingMiddleware);
 
 // Example route
 /**

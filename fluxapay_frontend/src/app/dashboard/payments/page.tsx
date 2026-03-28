@@ -16,7 +16,6 @@ import { Button } from "@/components/Button";
 import { Download, Plus } from "lucide-react";
 import { Suspense } from "react";
 import toast from "react-hot-toast";
-import { toastApiError, toastApiErrorWithRetry } from "@/lib/toastApiError";
 import { api } from "@/lib/api";
 import { QRCodeCanvas } from "qrcode.react";
 
@@ -93,7 +92,7 @@ function PaymentsContent() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
 
-  const [search, setSearch] = useState("");
+  const [, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [currencyFilter, setCurrencyFilter] = useState("all");
 

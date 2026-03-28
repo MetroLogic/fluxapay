@@ -5,6 +5,8 @@ import toast from "react-hot-toast";
 import { toastApiError } from "@/lib/toastApiError";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { api, ApiError } from "@/lib/api";
 import * as yup from "yup";
 import Input from "@/components/Input";
 import { Button } from "@/components/Button";
@@ -26,6 +28,7 @@ const loginSchema = yup.object({
 type LoginFormData = yup.InferType<typeof loginSchema>;
 
 const LoginForm = () => {
+  const router = useRouter();
   const tAuth = useTranslations("auth");
   const [formData, setFormData] = useState<LoginFormData>({
     email: "",
@@ -74,12 +77,23 @@ const LoginForm = () => {
       setErrors({});
       setIsSubmitting(true);
 
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      const data = (await api.auth.login({
+        email: validData.email,
+        password: validData.password,
+      })) as { token?: string; message?: string };
 
-      console.log("Login data:", validData);
-      toast.success("Login successful!");
+      if (!data.token) {
+        throw new Error("Login response missing token");
+      }
+
+      localStorage.setItem("token", data.token);
+      toast.success(data.message || "Login successful!");
+      router.push("/dashboard");
     } catch (err) {
+      if (err instanceof ApiError) {
+        toast.error(err.message);
+        return;
+      }
       if (err instanceof yup.ValidationError) {
         const fieldErrors: { email?: string; password?: string } = {};
         err.inner.forEach((issue) => {
@@ -125,6 +139,8 @@ const LoginForm = () => {
             {/* Form */}
             <form
               onSubmit={handleSubmit}
+              aria-label="Login form"
+              noValidate
               className="space-y-5 animate-fade-in [animation-delay:200ms]"
             >
               {/* Email */}
@@ -156,6 +172,10 @@ const LoginForm = () => {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
+                    aria-label={
+                      showPassword ? "Hide concealed characters" : "Show concealed characters"
+                    }
+                    aria-pressed={showPassword}
                     className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-500 transition-colors"
                   >
                     {showPassword ? (
@@ -166,6 +186,7 @@ const LoginForm = () => {
                         fill="none"
                         stroke="currentColor"
                         strokeWidth="2"
+                        aria-hidden="true"
                       >
                         <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
                         <line x1="1" y1="1" x2="23" y2="23" />
@@ -178,6 +199,7 @@ const LoginForm = () => {
                         fill="none"
                         stroke="currentColor"
                         strokeWidth="2"
+                        aria-hidden="true"
                       >
                         <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
                         <circle cx="12" cy="12" r="3" />

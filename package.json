@@ -1,4 +1,14 @@
 {
+  "scripts": {
+    "test:ci": "echo 'Running integration tests...' && .github/workflows/integration-tests.yml",
+    "test:backend": "cd fluxapay_backend && npm test",
+    "test:frontend": "cd fluxapay_frontend && npm test",
+    "test:e2e": "cd fluxapay_frontend && npm run test:e2e",
+    "test:smoke": "cd fluxapay_frontend && npm run test:e2e:smoke",
+    "detect-route-drift": "node scripts/detect-route-drift.js",
+    "ci:setup": "echo 'Setting up CI environment...' && docker-compose -f docker-compose.ci.yml up -d",
+    "ci:teardown": "docker-compose -f docker-compose.ci.yml down"
+  },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
     "react-hook-form": "^7.71.1",

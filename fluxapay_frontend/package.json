@@ -11,7 +11,8 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui"
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:smoke": "playwright test --config=playwright.smoke.config.ts"
   },
   "dependencies": {
     "@radix-ui/react-checkbox": "^1.3.3",
