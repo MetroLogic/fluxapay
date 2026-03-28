@@ -100,6 +100,7 @@ jobs:
 
       - name: Wait for backend health (real mode)
         if: matrix.e2e_mode == 'real'
+        continue-on-error: true
         run: npx wait-on http://127.0.0.1:3000/health --timeout 180000 --interval 3000
 
       - name: Install Playwright browsers

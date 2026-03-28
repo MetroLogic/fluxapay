@@ -1,9 +1,10 @@
-import { PrismaClient, KYCStatus, BusinessType, GovernmentIdType } from '../../generated/client';
+import { PrismaClient, KYCStatus, BusinessType, GovernmentIdType } from '../../generated/client/client';
 import { updateKycStatusService } from '../kyc.service';
 
 const prisma = new PrismaClient();
+const describeWithDatabase = process.env.DATABASE_URL ? describe : describe.skip;
 
-describe('Audit Logging - KYC Integration', () => {
+describeWithDatabase('Audit Logging - KYC Integration', () => {
   let testMerchantId: string;
 
   beforeEach(async () => {
@@ -20,6 +21,7 @@ describe('Audit Logging - KYC Integration', () => {
         phone_number: `+1234567${Date.now()}`,
         country: 'US',
         settlement_currency: 'USD',
+        webhook_secret: 'test-webhook-secret',
         password: 'hashed_password',
       },
     });

@@ -58,9 +58,9 @@ describe('Refund Service - Validation', () => {
       expect(result.data).toMatchObject({
         merchantId: 'test-merchant',
         paymentId: 'test-payment-1',
-        amount: 50,
         status: 'pending',
       });
+      expect(Number(result.data.amount)).toBe(50);
     });
 
     it('should reject refund when payment does not belong to merchant', async () => {

@@ -1,10 +1,10 @@
 import { PaymentService } from "../payment.service";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient } from "../../generated/client/client";
 import { HDWalletService } from "../HDWalletService";
 import { StellarService } from "../StellarService";
 
 // Mock Prisma
-jest.mock("@prisma/client", () => {
+jest.mock("../../generated/client/client", () => {
   const mockPrismaClient = {
     payment: {
       count: jest.fn(),

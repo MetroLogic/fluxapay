@@ -230,7 +230,7 @@ test.describe("Critical path (signup → OTP → login → payment → checkout 
       await expect(
         page.getByText(new RegExp(`${amount}\\s*${currency}`, "i")),
       ).toBeVisible();
-      await expect(page.getByText(/e2e business/i)).toBeVisible();
+      await expect(page.getByText('E2E Business', { exact: true })).toBeVisible();
       if (!isRealMode() && capturedCreateBody) {
         expect(capturedCreateBody.amount).toBe(amount);
         expect(capturedCreateBody.currency).toBe(currency);

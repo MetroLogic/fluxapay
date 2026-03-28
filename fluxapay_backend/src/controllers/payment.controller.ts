@@ -166,6 +166,19 @@ export const getPaymentById = async (req: Request, res: Response) => {
 
         res.json(responseData);
     } catch (error: unknown) {
+        if (
+            error &&
+            typeof error === "object" &&
+            "status" in error &&
+            typeof (error as { status?: unknown }).status === "number"
+        ) {
+            const status = (error as { status: number }).status;
+            const message =
+                "message" in error && typeof (error as { message?: unknown }).message === "string"
+                    ? (error as { message: string }).message
+                    : "Unauthorized";
+            return res.status(status).json({ error: message });
+        }
         res.status(500).json({ error: "Error fetching details" });
     }
 };
