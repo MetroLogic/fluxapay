@@ -1,5 +1,4 @@
-import { PrismaClient, Payment, Merchant } from '../generated/client';
-import crypto from 'crypto';
+
 
 export class WebhookDispatcher {
   private prisma: PrismaClient;
@@ -60,7 +59,8 @@ export class WebhookDispatcher {
     }
   }
 }
-import { PrismaClient, WebhookEventType, WebhookStatus } from "../generated/client/client";
+import { PrismaClient, WebhookEventType, WebhookStatus, Payment, Merchant } from "../generated/client";
+import crypto from "crypto";
 import { webhookEventTypes } from "../schemas/webhook.schema";
 
 const prisma = new PrismaClient();
@@ -304,6 +304,10 @@ export async function sendTestWebhookService(params: SendTestWebhookParams) {
     throw { status: 404, message: "Merchant not found" };
   }
 
+  if (!merchant.webhook_secret) {
+    throw { status: 400, message: "Merchant webhook secret not configured" };
+  }
+
   // Generate test payload
   const testPayload = generateTestPayload(event_type, payload_override);
 
@@ -319,7 +323,7 @@ export async function sendTestWebhookService(params: SendTestWebhookParams) {
   });
 
   // Attempt to deliver the webhook
-  const result = await deliverWebhook(endpoint_url, testPayload, merchant.webhook_secret);
+  const result = await deliverWebhook(endpoint_url, testPayload, merchant.webhook_secret as string);
 
   const status: WebhookStatus = result.success ? "delivered" : "failed";
 
@@ -351,7 +355,6 @@ export async function sendTestWebhookService(params: SendTestWebhookParams) {
 }
 
 // Helper function to deliver webhook
-import crypto from "crypto";
 
 export async function deliverWebhook(
   endpointUrl: string,
