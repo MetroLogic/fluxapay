@@ -504,3 +504,26 @@ enum AuditEntityType {
   sweep_operation
   settlement_batch
 }
+
+/// Internal operator accounts with role-based access control.
+/// No production rollout until reviewed — spike only.
+model AdminUser {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  /// bcrypt-hashed password
+  password     String
+  role         AdminRole
+  is_active    Boolean   @default(true)
+  created_at   DateTime  @default(now())
+  updated_at   DateTime  @updatedAt
+}
+
+/// Roles for internal FluxaPay operators.
+/// - support: read-only access to KYC submissions, payments, audit logs
+/// - finance: read + write access to settlements, reconciliation, payouts
+/// - super_admin: full access (future use)
+enum AdminRole {
+  support
+  finance
+  super_admin
+}
