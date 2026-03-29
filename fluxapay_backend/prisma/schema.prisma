@@ -33,6 +33,10 @@ model Merchant {
   checkout_logo_url     String?
   /** Primary accent for hosted checkout, e.g. #RRGGBB or #RGB. */
   checkout_accent_color String?
+  /** Email notification preferences */
+  email_notifications_enabled Boolean            @default(true)
+  notify_on_payment     Boolean                @default(false)
+  notify_on_settlement  Boolean                @default(true)
   created_at            DateTime               @default(now())
   updated_at            DateTime               @updatedAt
   otps                  OTP[]
@@ -94,6 +98,7 @@ model Settlement {
   exchange_ref     String?
   payment_ids      Json?
   failure_reason   String?
+  payout_partner_payload Json?
   scheduled_date   DateTime
   processed_date   DateTime?
   created_at       DateTime         @default(now())
