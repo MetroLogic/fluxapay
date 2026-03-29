@@ -114,7 +114,7 @@ describe('StellarService', () => {
             await stellarService.prepareAccount('merchant_1', 'payment_1');
 
             expect(createAndFundSpy).not.toHaveBeenCalled();
-            expect(addTrustlineSpy).toHaveBeenCalledWith('S_MOCK_SEC', 'USDC', expect.any(String));
+            expect(addTrustlineSpy).toHaveBeenCalledWith('S_MOCK_SEC', 'USDC', expect.any(String), expect.any(String));
         });
 
         it('should do nothing if account exists and has trustline', async () => {
@@ -143,8 +143,8 @@ describe('StellarService', () => {
 
             await stellarService.prepareAccount('merchant_1', 'payment_1');
 
-            expect(createAndFundSpy).toHaveBeenCalledWith('G_MOCK_PUB', '2.0');
-            expect(addTrustlineSpy).toHaveBeenCalledWith('S_MOCK_SEC', 'USDC', expect.any(String));
+            expect(createAndFundSpy).toHaveBeenCalledWith('G_MOCK_PUB', '2.0', expect.any(String));
+            expect(addTrustlineSpy).toHaveBeenCalledWith('S_MOCK_SEC', 'USDC', expect.any(String), expect.any(String));
         });
     });
 });

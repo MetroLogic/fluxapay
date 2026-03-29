@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { Loader2, XCircle, CheckCircle } from 'lucide-react';
+import { useParams } from 'next/navigation';
+import { Loader2, XCircle, CheckCircle, AlertCircle } from 'lucide-react';
 import { usePaymentStatus } from '@/hooks/usePaymentStatus';
 import { PaymentQRCode } from '@/components/checkout/PaymentQRCode';
 import { PaymentTimer } from '@/components/checkout/PaymentTimer';
@@ -151,6 +151,70 @@ export default function CheckoutPage() {
             <p className="text-sm text-gray-500">
               Please try again or contact support if the problem persists.
             </p>
+          </div>
+        </div>
+      )}
+
+      {!loading && payment && payment.status === 'partially_paid' && (
+        <div
+          className="flex flex-1 items-center justify-center p-4"
+          role="alert"
+        >
+          <div className="w-full max-w-2xl rounded-2xl bg-white p-8 text-center shadow-xl">
+            <AlertCircle
+              aria-hidden="true"
+              className="mx-auto mb-6 h-20 w-20 text-amber-500"
+            />
+            <h1 className="mb-4 text-3xl font-bold text-gray-900">
+              Partial Payment Received
+            </h1>
+            <p className="mb-2 text-lg text-gray-600">
+              Your payment of {payment.paidAmount ?? 0} {payment.currency} was less than the expected {payment.amount} {payment.currency}.
+            </p>
+            <p className="mb-6 text-sm text-gray-500">
+              Please contact the merchant to resolve the remaining balance.
+            </p>
+            {payment.successUrl && (
+              <a
+                href={payment.successUrl}
+                className="inline-block rounded-lg px-6 py-3 font-semibold text-white transition-opacity hover:opacity-90"
+                style={{ backgroundColor: 'var(--checkout-accent)' }}
+              >
+                Return to Merchant
+              </a>
+            )}
+          </div>
+        </div>
+      )}
+
+      {!loading && payment && payment.status === 'overpaid' && (
+        <div
+          className="flex flex-1 items-center justify-center p-4"
+          role="alert"
+        >
+          <div className="w-full max-w-2xl rounded-2xl bg-white p-8 text-center shadow-xl">
+            <AlertCircle
+              aria-hidden="true"
+              className="mx-auto mb-6 h-20 w-20 text-blue-500"
+            />
+            <h1 className="mb-4 text-3xl font-bold text-gray-900">
+              Overpayment Received
+            </h1>
+            <p className="mb-2 text-lg text-gray-600">
+              Your payment of {payment.paidAmount ?? 0} {payment.currency} exceeded the expected {payment.amount} {payment.currency}.
+            </p>
+            <p className="mb-6 text-sm text-gray-500">
+              Please contact the merchant regarding the excess amount.
+            </p>
+            {payment.successUrl && (
+              <a
+                href={payment.successUrl}
+                className="inline-block rounded-lg px-6 py-3 font-semibold text-white transition-opacity hover:opacity-90"
+                style={{ backgroundColor: 'var(--checkout-accent)' }}
+              >
+                Return to Merchant
+              </a>
+            )}
           </div>
         </div>
       )}

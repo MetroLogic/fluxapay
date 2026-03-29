@@ -15,14 +15,20 @@ COPY prisma ./prisma/
 # Install dependencies
 RUN npm ci
 
-# Generate Prisma client
-RUN npx prisma generate
-
 # Copy source code
 COPY . .
 
+# Generate Prisma client (runs inside Alpine so binary target is linux-musl)
+RUN npx prisma generate
+
 # Build the application
 RUN npm run build
+
+# Copy native Prisma engine binary into dist so node can resolve it at runtime
+# (tsc only copies .js files; the .node query-engine binary must be placed next to
+# the compiled client.js, which uses __dirname to locate it)
+RUN mkdir -p dist/generated/client && \
+    cp src/generated/client/*.node dist/generated/client/ 2>/dev/null || true
 
 # Expose port
 EXPOSE 3000

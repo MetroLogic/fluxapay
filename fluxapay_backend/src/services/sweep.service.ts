@@ -10,6 +10,7 @@ import { PrismaClient } from "../generated/client/client";
 import { Decimal } from "@prisma/client/runtime/library";
 import { HDWalletService } from "./HDWalletService";
 import { logSweepTrigger, updateSweepCompletion } from "./audit.service";
+import { getLogger, getMetricsCollector } from "../utils/logger";
 
 const prisma = new PrismaClient();
 
@@ -57,6 +58,12 @@ export class SweepService {
   private usdcAsset: Asset;
   private vaultKeypair: Keypair;
   private hdWalletService: HDWalletService;
+  private readonly logger = getLogger("SweepService");
+  private readonly metrics = getMetricsCollector();
+  private readonly baseFee: number;
+  private readonly maxFee: number;
+  private readonly feeBumpMultiplier: number;
+  private readonly maxRetries: number;
 
   constructor() {
     const horizonUrl =
@@ -64,6 +71,12 @@ export class SweepService {
     this.server = new Horizon.Server(horizonUrl);
     this.networkPassphrase =
       process.env.STELLAR_NETWORK_PASSPHRASE || Networks.TESTNET;
+    this.baseFee = Number(process.env.STELLAR_BASE_FEE || "100");
+    this.maxFee = Number(process.env.STELLAR_MAX_FEE || "2000");
+    this.feeBumpMultiplier = Number(
+      process.env.STELLAR_FEE_BUMP_MULTIPLIER || "2",
+    );
+    this.maxRetries = Number(process.env.STELLAR_TX_MAX_RETRIES || "3");
 
     const issuer =
       process.env.USDC_ISSUER_PUBLIC_KEY ||
@@ -98,36 +111,80 @@ export class SweepService {
     /** Optional destination to merge remaining XLM into after payment succeeds. */
     mergeDestination?: string;
   }): Promise<string> {
-    const sourceKeypair = Keypair.fromSecret(params.sourceSecret);
-    const sourceAccount = await this.server.loadAccount(
-      sourceKeypair.publicKey(),
-    );
+    let lastError: unknown;
 
-    const builder = new TransactionBuilder(sourceAccount, {
-      fee: "100",
-      networkPassphrase: this.networkPassphrase,
-    }).addOperation(
-      Operation.payment({
-        destination: params.destination,
-        asset: this.usdcAsset,
-        amount: params.amount,
-      }),
-    );
+    for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
+      try {
+        const sourceKeypair = Keypair.fromSecret(params.sourceSecret);
+        const sourceAccount = await this.server.loadAccount(
+          sourceKeypair.publicKey(),
+        );
 
-    if (params.mergeDestination) {
-      builder.addOperation(
-        Operation.accountMerge({
-          destination: params.mergeDestination,
-        }),
-      );
+        const builder = new TransactionBuilder(sourceAccount, {
+          fee: this.calculateFeeForAttempt(attempt),
+          networkPassphrase: this.networkPassphrase,
+        }).addOperation(
+          Operation.payment({
+            destination: params.destination,
+            asset: this.usdcAsset,
+            amount: params.amount,
+          }),
+        );
+
+        if (params.mergeDestination) {
+          builder.addOperation(
+            Operation.accountMerge({
+              destination: params.mergeDestination,
+            }),
+          );
+        }
+
+        const tx = builder.setTimeout(30).build();
+
+        tx.sign(sourceKeypair);
+
+        const res = await this.server.submitTransaction(tx);
+        return res.hash;
+      } catch (error) {
+        lastError = error;
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+
+        this.logger.warn("Sweep transaction submission failed", {
+          attempt,
+          maxRetries: this.maxRetries,
+          fee: this.calculateFeeForAttempt(attempt),
+          errorMessage,
+        });
+
+        this.metrics.increment("stellar.sweep.submit.failure", {
+          attempt: attempt.toString(),
+          fee: this.calculateFeeForAttempt(attempt),
+        });
+
+        if (attempt >= this.maxRetries) {
+          this.logger.error("ALERT: repeated Stellar sweep transaction failures", {
+            attempts: attempt,
+            feeBudget: {
+              baseFee: this.baseFee,
+              maxFee: this.maxFee,
+              multiplier: this.feeBumpMultiplier,
+            },
+          });
+          this.metrics.increment("stellar.sweep.repeated_failures");
+        }
+      }
     }
 
-    const tx = builder.setTimeout(30).build();
+    throw lastError instanceof Error
+      ? lastError
+      : new Error("Failed to submit sweep transaction");
+  }
 
-    tx.sign(sourceKeypair);
-
-    const res = await this.server.submitTransaction(tx);
-    return res.hash;
+  private calculateFeeForAttempt(attempt: number): string {
+    const bump = Math.pow(this.feeBumpMultiplier, Math.max(0, attempt - 1));
+    const candidateFee = Math.floor(this.baseFee * bump);
+    return Math.min(candidateFee, this.maxFee).toString();
   }
 
   /**
@@ -296,4 +353,13 @@ export class SweepService {
   }
 }
 
-export const sweepService = new SweepService();
+let _sweepService: SweepService | undefined;
+try {
+  _sweepService = new SweepService();
+} catch (err) {
+  console.warn(
+    "SweepService failed to initialize (missing Stellar env vars?):",
+    err instanceof Error ? err.message : err
+  );
+}
+export const sweepService = _sweepService as SweepService;

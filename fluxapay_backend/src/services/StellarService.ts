@@ -17,8 +17,11 @@ export class StellarService {
   private usdcIssuer: string;
   private readonly logger = getLogger("StellarService");
   private readonly metrics = getMetricsCollector();
-  private readonly MAX_RETRIES = 3;
+  private readonly MAX_RETRIES: number;
   private readonly BASE_DELAY_MS = 1000;
+  private readonly baseFee: number;
+  private readonly maxFee: number;
+  private readonly feeBumpMultiplier: number;
 
   constructor() {
     const horizonUrl =
@@ -26,6 +29,12 @@ export class StellarService {
     this.networkPassphrase =
       process.env.STELLAR_NETWORK_PASSPHRASE || Networks.TESTNET;
     this.server = new Horizon.Server(horizonUrl);
+    this.baseFee = Number(process.env.STELLAR_BASE_FEE || "100");
+    this.maxFee = Number(process.env.STELLAR_MAX_FEE || "2000");
+    this.feeBumpMultiplier = Number(
+      process.env.STELLAR_FEE_BUMP_MULTIPLIER || "2",
+    );
+    this.MAX_RETRIES = Number(process.env.STELLAR_TX_MAX_RETRIES || "3");
 
     const funderSecret = process.env.FUNDER_SECRET_KEY;
     if (!funderSecret) {
@@ -134,6 +143,7 @@ export class StellarService {
   private async createAndFundAccount(
     destination: string,
     startingBalance: string,
+    feeOverride?: string,
   ): Promise<void> {
     // Load the funder account
     const funderAccountResponse = await this.server.loadAccount(
@@ -142,7 +152,7 @@ export class StellarService {
 
     // Build the transaction
     const transaction = new TransactionBuilder(funderAccountResponse, {
-      fee: "100", // Basic fee
+      fee: feeOverride || this.baseFee.toString(),
       networkPassphrase: this.networkPassphrase,
     })
       .addOperation(
@@ -214,13 +224,14 @@ export class StellarService {
     secretKey: string,
     assetCode: string,
     assetIssuer: string,
+    feeOverride?: string,
   ): Promise<void> {
     const keypair = Keypair.fromSecret(secretKey);
     const accountResponse = await this.server.loadAccount(keypair.publicKey());
     const asset = new Asset(assetCode, assetIssuer);
 
     const transaction = new TransactionBuilder(accountResponse, {
-      fee: "100",
+      fee: feeOverride || this.baseFee.toString(),
       networkPassphrase: this.networkPassphrase,
     })
       .addOperation(
@@ -254,7 +265,12 @@ export class StellarService {
     startingBalance: string,
   ): Promise<void> {
     return this.retryWithBackoff(
-      () => this.createAndFundAccount(destination, startingBalance),
+      (attempt) =>
+        this.createAndFundAccount(
+          destination,
+          startingBalance,
+          this.calculateFeeForAttempt(attempt),
+        ),
       "createAndFundAccount",
       { destination, startingBalance },
     );
@@ -269,7 +285,13 @@ export class StellarService {
     assetIssuer: string,
   ): Promise<void> {
     return this.retryWithBackoff(
-      () => this.addTrustline(secretKey, assetCode, assetIssuer),
+      (attempt) =>
+        this.addTrustline(
+          secretKey,
+          assetCode,
+          assetIssuer,
+          this.calculateFeeForAttempt(attempt),
+        ),
       "addTrustline",
       { assetCode, assetIssuer },
     );
@@ -280,7 +302,7 @@ export class StellarService {
    * Classifies errors and determines if retry is appropriate.
    */
   private async retryWithBackoff<T>(
-    operation: () => Promise<T>,
+    operation: (attempt: number) => Promise<T>,
     operationName: string,
     context: Record<string, any>,
   ): Promise<T> {
@@ -288,12 +310,14 @@ export class StellarService {
 
     for (let attempt = 1; attempt <= this.MAX_RETRIES; attempt++) {
       try {
-        const result = await operation();
+        const feeForAttempt = this.calculateFeeForAttempt(attempt);
+        const result = await operation(attempt);
 
         // Track successful operation
         this.metrics.increment("stellar.operation.success", {
           operation: operationName,
           attempt: attempt.toString(),
+          fee: feeForAttempt,
         });
 
         if (attempt > 1) {
@@ -313,6 +337,7 @@ export class StellarService {
           operation: operationName,
           attempt,
           maxRetries: this.MAX_RETRIES,
+          fee: this.calculateFeeForAttempt(attempt),
           errorType,
           errorMessage: error.message,
           errorResponse: error.response?.data,
@@ -322,6 +347,7 @@ export class StellarService {
         this.metrics.increment("stellar.operation.failure", {
           operation: operationName,
           attempt: attempt.toString(),
+          fee: this.calculateFeeForAttempt(attempt),
           errorType,
         });
 
@@ -353,7 +379,22 @@ export class StellarService {
             operation: operationName,
             attempts: attempt,
             errorType,
+            feeBudget: {
+              baseFee: this.baseFee,
+              maxFee: this.maxFee,
+              multiplier: this.feeBumpMultiplier,
+            },
             ...context,
+          });
+          this.logger.error("ALERT: repeated Stellar transaction failures", {
+            operation: operationName,
+            attempts: attempt,
+            errorType,
+            ...context,
+          });
+          this.metrics.increment("stellar.operation.repeated_failures", {
+            operation: operationName,
+            errorType,
           });
           throw new Error(
             `${operationName} failed after ${this.MAX_RETRIES} attempts: ${error.message}`,
@@ -377,6 +418,15 @@ export class StellarService {
     }
 
     throw lastError;
+  }
+
+  /**
+   * Returns fee per operation for a retry attempt, bounded by max fee budget.
+   */
+  private calculateFeeForAttempt(attempt: number): string {
+    const bump = Math.pow(this.feeBumpMultiplier, Math.max(0, attempt - 1));
+    const candidateFee = Math.floor(this.baseFee * bump);
+    return Math.min(candidateFee, this.maxFee).toString();
   }
 
   /**

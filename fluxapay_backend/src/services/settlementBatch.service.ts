@@ -267,6 +267,7 @@ async function settleMerchant(
                     exchange_ref: payout.exchange_ref,
                     bank_transfer_id: payout.transfer_ref,
                     payment_ids: paymentIds,
+                    payout_partner_payload: payout.raw_partner_payload || null,
                     status: "completed",
                     scheduled_date: now,
                     processed_date: now,

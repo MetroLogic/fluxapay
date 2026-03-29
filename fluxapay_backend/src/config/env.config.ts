@@ -15,6 +15,8 @@ const envSchema = z.object({
     BASE_URL: z.string().url().default('http://localhost:3000'),
     PAY_CHECKOUT_BASE: z.string().url().optional(),
     PAYMENT_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(5),
+    PAYMENT_METADATA_MAX_BYTES: z.coerce.number().int().positive().default(16384),
+    PAYMENT_METADATA_MAX_DEPTH: z.coerce.number().int().positive().default(5),
 
     // Database (CRITICAL)
     DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
@@ -52,6 +54,10 @@ const envSchema = z.object({
     // Stellar (CRITICAL)
     STELLAR_HORIZON_URL: z.string().url().default('https://horizon-testnet.stellar.org'),
     STELLAR_NETWORK_PASSPHRASE: z.string().default('Test SDF Network ; September 2015'),
+    STELLAR_BASE_FEE: z.coerce.number().int().positive().default(100),
+    STELLAR_MAX_FEE: z.coerce.number().int().positive().default(2000),
+    STELLAR_FEE_BUMP_MULTIPLIER: z.coerce.number().positive().default(2),
+    STELLAR_TX_MAX_RETRIES: z.coerce.number().int().positive().default(3),
     FUNDER_SECRET_KEY: z.string().min(1, 'FUNDER_SECRET_KEY is required'),
     USDC_ISSUER_PUBLIC_KEY: z.string().min(1, 'USDC_ISSUER_PUBLIC_KEY is required'),
     MASTER_VAULT_SECRET_KEY: z.string().min(1, 'MASTER_VAULT_SECRET_KEY is required'),
@@ -86,6 +92,10 @@ const envSchema = z.object({
     SETTLEMENT_FEE_PERCENT: z.coerce.number().nonnegative().default(2),
     SETTLEMENT_CRON: z.string().default('0 0 * * *'),
     SETTLEMENT_BATCH_LIMIT: z.coerce.number().int().positive().default(500),
+
+    // Exchange Partner Feature Flags
+    ENABLE_YELLOWCARD_VALIDATION: z.enum(['true', 'false']).default('false'),
+    ENABLE_ANCHOR_VALIDATION: z.enum(['true', 'false']).default('false'),
 
     // Cron Jobs
     PAYMENT_MONITOR_CRON: z.string().default('*/2 * * * *'),

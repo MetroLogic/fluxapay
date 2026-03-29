@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import helmet from "helmet";
 import swaggerUi from "swagger-ui-express";
 import { specs } from "./docs/swagger";
 import { PrismaClient } from "./generated/client/client";
@@ -15,6 +16,7 @@ import kycRoutes from "./routes/kyc.route";
 import webhookRoutes from "./routes/webhook.route";
 import paymentRoutes from "./routes/payment.route";
 import invoiceRoutes from "./routes/invoice.route";
+import customerRoutes from "./routes/customer.route";
 import refundRoutes from "./routes/refund.route";
 import reconciliationRoutes from "./routes/reconciliation.route";
 import sweepRoutes from "./routes/sweep.route";
@@ -34,8 +36,41 @@ app.use(metricsMiddleware);
 app.use(cors());
 app.use(express.json());
 
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+    crossOriginEmbedderPolicy: false,
+    hsts: process.env.NODE_ENV === "production",
+  }),
+);
+
+app.use((req, res, next) => {
+  if (req.path.startsWith("/api/v1") || req.path === "/health") {
+    res.setHeader(
+      "Content-Security-Policy",
+      "default-src 'none'; frame-ancestors 'none'; base-uri 'none'",
+    );
+  }
+  next();
+});
+
 // Swagger UI
-app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(specs));
+app.use(
+  "/api-docs",
+  helmet.contentSecurityPolicy({
+    useDefaults: true,
+    directives: {
+      defaultSrc: ["'self'"],
+      imgSrc: ["'self'", "data:"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      connectSrc: ["'self'"],
+      frameAncestors: ["'none'"],
+    },
+  }),
+  swaggerUi.serve,
+  swaggerUi.setup(specs),
+);
 
 app.use("/api/v1/merchants", merchantRoutes);
 app.use("/api/v1/settlements", settlementRoutes);
@@ -43,6 +78,7 @@ app.use("/api/v1/merchants/kyc", kycRoutes);
 app.use("/api/v1/webhooks", webhookRoutes);
 app.use("/api/v1/payments", paymentRoutes);
 app.use("/api/v1/invoices", invoiceRoutes);
+app.use("/api/v1/customers", customerRoutes);
 app.use("/api/v1/refunds", refundRoutes);
 app.use("/api/v1/keys", keysRoutes);
 app.use("/api/v1/dashboard", dashboardRoutes);

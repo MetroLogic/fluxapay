@@ -33,6 +33,10 @@ model Merchant {
   checkout_logo_url     String?
   /** Primary accent for hosted checkout, e.g. #RRGGBB or #RGB. */
   checkout_accent_color String?
+  /** Email notification preferences */
+  email_notifications_enabled Boolean            @default(true)
+  notify_on_payment     Boolean                @default(false)
+  notify_on_settlement  Boolean                @default(true)
   created_at            DateTime               @default(now())
   updated_at            DateTime               @updatedAt
   otps                  OTP[]
@@ -48,6 +52,21 @@ model Merchant {
   reconciliationRecords ReconciliationRecord[]
   discrepancyThresholds DiscrepancyThreshold[]
   discrepancyAlerts     DiscrepancyAlert[]
+  customers             Customer[]
+}
+
+model Customer {
+  id         String   @id @default(cuid())
+  merchant   Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  merchantId String
+  email      String
+  metadata   Json     @default("{}")
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  payments   Payment[]
+
+  @@index([merchantId])
+  @@index([merchantId, email])
 }
 
 model MerchantHDIndex {
@@ -157,6 +176,7 @@ model Settlement {
   breakdown        Json?
   payment_ids      Json?
   failure_reason   String?
+  payout_partner_payload Json?
   scheduled_date   DateTime
   processed_date   DateTime?
   created_at       DateTime         @default(now())
@@ -267,10 +287,18 @@ model Payment {
   settlement_fiat_currency String?
   settlementId       String?
   settlement         Settlement? @relation(fields: [settlementId], references: [id])
+  
+  // webhook fields
+  webhook_status     WebhookDeliveryStatus @default(PENDING)
+  webhook_retries    Int                   @default(0)
+
   refunds            Refund[]
   invoice            Invoice?
+  customerId         String?
+  customer           Customer?   @relation(fields: [customerId], references: [id], onDelete: SetNull)
 
   @@index([swept, status])
+  @@index([customerId])
 }
 
 model Refund {
@@ -499,4 +527,15 @@ enum AuditEntityType {
   settlement
   sweep_operation
   settlement_batch
+}
+
+enum WebhookDeliveryStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+model WorkerState {
+  key   String @id
+  value String
 }

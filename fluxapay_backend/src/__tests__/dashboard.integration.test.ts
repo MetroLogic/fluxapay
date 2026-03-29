@@ -33,11 +33,11 @@ describe('Dashboard API Integration Tests', () => {
       expect(response.status).toBe(401);
     });
 
-    it('should return 403 if token is invalid', async () => {
+    it('should return 401 if token is invalid', async () => {
       const response = await request(app)
         .get('/api/v1/dashboard/overview/metrics')
         .set('Authorization', 'Bearer invalid-token');
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(401);
     });
   });
 

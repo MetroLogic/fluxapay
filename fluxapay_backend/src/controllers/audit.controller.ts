@@ -1,7 +1,10 @@
-import { Response } from 'express';
-import { AuthRequest } from '../types/express';
-import { queryAuditLogs, getAuditLogById } from '../services/audit.service';
-import { AuditActionType } from '../generated/client/client';
+import { Response } from "express";
+import { AuthRequest } from "../types/express";
+import { queryAuditLogs, getAuditLogById } from "../services/audit.service";
+import { AuditActionType } from "../types/audit.types";
+import { PrismaClient } from "../generated/client/client";
+
+const prisma = new PrismaClient();
 
 /**
  * GET /api/admin/audit-logs
@@ -170,6 +173,79 @@ export async function getAuditLogByIdHandler(req: AuthRequest, res: Response) {
       error: {
         code: "INTERNAL_ERROR",
         message: "Failed to fetch audit log",
+      },
+    });
+  }
+}
+
+/**
+ * GET /api/admin/settlements/:settlement_id/payout-payload
+ * Get raw payout partner payload for a settlement (Admin only)
+ */
+export async function getSettlementPayoutPayload(req: AuthRequest, res: Response) {
+  try {
+    const { settlement_id } = req.params;
+
+    if (!settlement_id || typeof settlement_id !== "string") {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "Settlement ID is required",
+        },
+      });
+    }
+
+    const settlement = await prisma.settlement.findUnique({
+      where: { id: settlement_id },
+      select: {
+        id: true,
+        merchantId: true,
+        exchange_partner: true,
+        payout_partner_payload: true,
+        created_at: true,
+        processed_date: true,
+      },
+    });
+
+    if (!settlement) {
+      return res.status(404).json({
+        success: false,
+        error: {
+          code: "NOT_FOUND",
+          message: "Settlement not found",
+        },
+      });
+    }
+
+    if (!settlement.payout_partner_payload) {
+      return res.status(404).json({
+        success: false,
+        error: {
+          code: "NOT_FOUND",
+          message: "No payout payload available for this settlement",
+        },
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        settlement_id: settlement.id,
+        merchant_id: settlement.merchantId,
+        exchange_partner: settlement.exchange_partner,
+        payout_partner_payload: settlement.payout_partner_payload,
+        created_at: settlement.created_at,
+        processed_date: settlement.processed_date,
+      },
+    });
+  } catch (error: any) {
+    console.error("Error fetching settlement payout payload:", error);
+    return res.status(500).json({
+      success: false,
+      error: {
+        code: "INTERNAL_ERROR",
+        message: "Failed to fetch payout payload",
       },
     });
   }

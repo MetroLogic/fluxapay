@@ -207,7 +207,7 @@ export const PaymentDetails = ({
               <div>
                 <p className="text-xs text-muted-foreground">Transaction Hash</p>
                 <a
-                  href={`https://stellar.expert/explorer/public/tx/${payment.txHash}`}
+                  href={payment.stellarExpertUrl || `https://stellar.expert/explorer/public/tx/${payment.txHash}`}
                   target="_blank"
                   rel="noreferrer"
                   className="mt-1 flex items-center gap-1 text-xs font-mono text-primary hover:underline"
@@ -215,6 +215,26 @@ export const PaymentDetails = ({
                   {payment.txHash.substring(0, 16)}...{" "}
                   <ExternalLink className="h-3 w-3" />
                 </a>
+              </div>
+            )}
+            {payment.sweepStatus && (
+              <div>
+                <p className="text-xs text-muted-foreground">Sweep Status</p>
+                <div className="mt-1 inline-block">
+                  <Badge variant={['completed', 'swept', 'success'].includes(payment.sweepStatus.toLowerCase()) ? 'success' : ['failed', 'error'].includes(payment.sweepStatus.toLowerCase()) ? 'error' : 'secondary'}>
+                    {payment.sweepStatus}
+                  </Badge>
+                </div>
+              </div>
+            )}
+            {payment.settlementLinkage && (
+              <div>
+                <p className="text-xs text-muted-foreground">Settlement Linkage</p>
+                <code className="mt-1 block rounded bg-muted p-1.5 text-[11px] leading-relaxed break-all max-h-24 overflow-auto scrollbar-thin">
+                  {typeof payment.settlementLinkage === 'string'
+                    ? (payment.settlementLinkage as string)
+                    : JSON.stringify(payment.settlementLinkage)}
+                </code>
               </div>
             )}
           </div>
@@ -424,7 +444,14 @@ export const PaymentDetails = ({
       </div>
 
       <div className="flex flex-col gap-3 pt-2 sm:flex-row">
-        <Button className="flex-1 gap-2">
+        <Button 
+          className="flex-1 gap-2"
+          onClick={() => {
+            const url = payment.stellarExpertUrl || (payment.txHash ? `https://stellar.expert/explorer/public/tx/${payment.txHash}` : null);
+            if (url) window.open(url, "_blank");
+          }}
+          disabled={!payment.txHash && !payment.stellarExpertUrl}
+        >
           <ExternalLink className="h-4 w-4" />
           Open in Explorer
         </Button>

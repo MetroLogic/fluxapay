@@ -45,6 +45,16 @@ const STATUS_MAP: Record<string, 'success' | 'failure' | 'warning'> = {
     'settlement_batch_fail': 'failure'
 };
 
+interface AuditLogEntry {
+    id: string;
+    created_at: string;
+    admin_id: string;
+    action_type: string;
+    entity_type: string | null;
+    entity_id: string | null;
+    details: unknown;
+}
+
 // -- Helper Functions --
 
 const getStatusConfig = (actionType: string) => {
@@ -99,7 +109,7 @@ interface AuditLog {
 // -- Main Component --
 
 export default function AdminAuditLogsPage() {
-    const [logs, setLogs] = useState<AuditLog[]>([]);
+    const [logs, setLogs] = useState<AuditLogEntry[]>([]);
     const [loading, setLoading] = useState(true);
     const [actionFilter, setActionFilter] = useState('all');
     const [adminIdFilter, setAdminIdFilter] = useState('');
