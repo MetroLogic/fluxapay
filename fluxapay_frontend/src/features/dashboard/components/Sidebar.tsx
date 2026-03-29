@@ -11,6 +11,9 @@ import {
   Settings,
   Code,
   X,
+  Webhook,
+  FileText,
+  RefreshCcw,
 } from "lucide-react";
 import Image from "next/image";
 import FluxapayLogo from "@/assets/fluxapaylogo.png";
@@ -24,7 +27,10 @@ interface SidebarProps {
 const navItems = [
   { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
   { name: "Payments", href: "/dashboard/payments", icon: CreditCard },
+  { name: "Invoices", href: "/dashboard/invoices", icon: FileText },
+  { name: "Refunds", href: "/dashboard/refunds", icon: RefreshCcw },
   { name: "Settlements", href: "/dashboard/settlements", icon: Landmark },
+  { name: "Webhooks", href: "/dashboard/webhooks", icon: Webhook },
   { name: "Analytics", href: "/dashboard/analytics", icon: BarChart3 },
   { name: "Settings", href: "/dashboard/settings", icon: Settings },
   { name: "Developers", href: "/dashboard/developers", icon: Code },
@@ -32,9 +38,14 @@ const navItems = [
 
 export function Sidebar({ className, isOpen, onClose }: SidebarProps) {
   const pathname = usePathname();
+  // On mobile (isOpen is defined), hide from AT when closed.
+  // On desktop (md+), the sidebar is always visible via CSS, so never aria-hidden.
+  const ariaHidden = isOpen === false ? true : undefined;
 
   return (
     <aside
+      aria-label="Main sidebar"
+      aria-hidden={ariaHidden}
       className={cn(
         "flex h-full w-64 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-transform duration-300 ease-in-out md:translate-x-0",
         isOpen ? "translate-x-0" : "-translate-x-full",
@@ -61,13 +72,14 @@ export function Sidebar({ className, isOpen, onClose }: SidebarProps) {
         {/* Close button for mobile */}
         <button
           onClick={onClose}
-          className="md:hidden text-sidebar-foreground hover:text-primary transition-colors"
+          aria-label="Close menu"
+          className="md:hidden text-sidebar-foreground hover:text-primary transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
         >
-          <X className="h-6 w-6" />
+          <X className="h-6 w-6" aria-hidden="true" />
         </button>
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-4 py-6 space-y-1">
+      <nav className="flex-1 overflow-y-auto px-4 py-6 space-y-1" aria-label="Main navigation">
         {navItems.map((item) => {
           const isActive = item.href === "/dashboard"
             ? pathname === "/dashboard"
@@ -78,14 +90,16 @@ export function Sidebar({ className, isOpen, onClose }: SidebarProps) {
               key={item.href}
               href={item.href}
               onClick={onClose}
+              aria-current={isActive ? "page" : undefined}
               className={cn(
-                "group flex items-center gap-3 rounded-md px-3 py-2 text-[16px] font-semibold transition-all border-l-4",
+                "group flex items-center gap-3 rounded-md px-3 py-2 text-[16px] font-semibold transition-all border-l-4 min-h-[44px]",
                 isActive
                   ? "bg-[#F1EFFF] text-[#5F44EC] border-[#5F44EC]"
                   : "text-grey hover:text-black hover:bg-[#F1EFFF]/50 border-transparent"
               )}
             >
               <item.icon
+                aria-hidden="true"
                 className={cn(
                   "h-5 w-5 transition-colors"
                 )}

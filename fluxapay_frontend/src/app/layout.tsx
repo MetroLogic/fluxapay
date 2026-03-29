@@ -1,22 +1,11 @@
 import type { Metadata } from "next";
-import { Inter, Caveat } from "next/font/google";
 import "@/styles/globals.css";
 import { Providers } from "./providers";
 import { Toaster } from "react-hot-toast";
-
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-inter",
-});
-
-const caveat = Caveat({
-  subsets: ["latin"],
-  variable: "--font-caveat",
-});
+import { baseMetadata, generateJsonLd } from "@/lib/seo";
 
 export const metadata: Metadata = {
-  title: "FluxaPay | Global Payment Infrastructure",
-  description: "The next generation of global payments. Accept crypto and fiat seamlessly.",
+  ...baseMetadata,
 };
 
 export default function RootLayout({
@@ -24,11 +13,33 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const organizationSchema = generateJsonLd({
+    type: "Organization",
+    title: "FluxaPay",
+    description:
+      "The next generation of global payments. Accept crypto and fiat seamlessly.",
+    contactPoint: {
+      telephone: "+1-support",
+      contactType: "Customer Service",
+    },
+  });
+
   return (
-    <html lang="en">
-      <body className={`${inter.variable} ${caveat.variable} font-sans antialiased`}>
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(organizationSchema),
+          }}
+        />
+      </head>
+      <body className="font-sans antialiased">
+        <a href="#main-content" className="skip-to-content">
+          Skip to main content
+        </a>
         <Providers>{children}</Providers>
-        <Toaster />
+        <Toaster position="top-right" />
       </body>
     </html>
   );

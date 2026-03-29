@@ -1,0 +1,48 @@
+{
+  "name": "@fluxapay/sdk",
+  "version": "0.1.0",
+  "description": "FluxaPay JavaScript/TypeScript SDK for merchant integration",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "npm run test:unit && npm run test:integration",
+    "test:unit": "tsx src/__tests__/sdk.test.ts",
+    "test:integration": "tsx src/__tests__/integration.test.ts",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "fluxapay",
+    "payments",
+    "stellar",
+    "usdc",
+    "crypto"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MetroLogic/fluxapay.git",
+    "directory": "fluxapay_sdk"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.33",
+    "tsx": "^4.20.6",
+    "typescript": "^5.0.0"
+  }
+}

@@ -451,15 +451,19 @@ WHERE payment_id = 'pay_xyz789'
 }
 ```
 
-5. Sign payload with merchant's webhook secret
+5. **Sign payload with merchant's webhook secret.**
+   Compute an HMAC-SHA256 over the ISO timestamp and the JSON body joined
+   by a dot (`${timestamp}.${payload}`) and use the merchant's
+   `webhook_secret` as the HMAC key.  Include the timestamp in a header so
+   receivers can enforce a freshness window and detect replay attacks.
 
 6. **Send webhook:**
 
 ```http
 POST https://coolshop.com/webhooks/fluxapay
 X-FluxaPay-Signature: [HMAC_SIGNATURE]
+X-FluxaPay-Timestamp: 2026-02-26T12:00:00.000Z
 ```
-
 7. **Retry logic:**
    - If fails, retry with exponential backoff
    - Attempt 1: immediate
