@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { authenticateToken } from '../middleware/auth.middleware';
 import { adminAuth } from '../middleware/adminAuth.middleware';
-import { getAuditLogs, getAuditLogByIdHandler } from '../controllers/audit.controller';
+import { getAuditLogs, getAuditLogByIdHandler, getSettlementPayoutPayload } from '../controllers/audit.controller';
 
 const router = Router();
 
@@ -59,5 +59,30 @@ router.get('/audit-logs', getAuditLogs);
  *         description: Audit log not found
  */
 router.get('/audit-logs/:id', getAuditLogByIdHandler);
+
+/**
+ * @swagger
+ * /api/v1/admin/settlements/{settlement_id}/payout-payload:
+ *   get:
+ *     summary: Get raw payout partner payload for a settlement (Admin only)
+ *     tags: [Admin - Settlements]
+ *     security:
+ *       - bearerAuth: []
+ *       - adminSecret: []
+ *     parameters:
+ *       - in: path
+ *         name: settlement_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Raw payout partner payload
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Settlement not found or no payload available
+ */
+router.get('/settlements/:settlement_id/payout-payload', getSettlementPayoutPayload);
 
 export default router;
