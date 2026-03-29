@@ -204,6 +204,11 @@ model Payment {
   settlement_fiat_currency String?
   settlementId       String?
   settlement         Settlement? @relation(fields: [settlementId], references: [id])
+  
+  // webhook fields
+  webhook_status     WebhookDeliveryStatus @default(PENDING)
+  webhook_retries    Int                   @default(0)
+
   refunds            Refund[]
   invoice            Invoice?
   customerId         String?
@@ -498,4 +503,15 @@ enum AuditEntityType {
   system_config
   sweep_operation
   settlement_batch
+}
+
+enum WebhookDeliveryStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+model WorkerState {
+  key   String @id
+  value String
 }
