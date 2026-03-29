@@ -69,6 +69,9 @@ export function usePaymentStatus(paymentId: string): UsePaymentStatusReturn {
           checkoutAccentColor:
             (raw.checkoutAccentColor as string | undefined) ??
             (raw.checkout_accent_color as string | undefined),
+          paidAmount:
+            (raw.paidAmount as number | undefined) ??
+            (raw.paid_amount as number | undefined),
         };
 
         setPayment(paymentData);
@@ -91,7 +94,7 @@ export function usePaymentStatus(paymentId: string): UsePaymentStatusReturn {
   // Polling callback — uses ref to avoid stale closures
   const pollStatus = useCallback(async () => {
     const current = paymentRef.current;
-    if (current && ['confirmed', 'expired', 'failed'].includes(current.status)) {
+    if (current && ['confirmed', 'expired', 'failed', 'partially_paid', 'overpaid'].includes(current.status)) {
       return;
     }
 
@@ -118,7 +121,7 @@ export function usePaymentStatus(paymentId: string): UsePaymentStatusReturn {
     if (loading || !payment) return;
 
     // Don't connect if payment is in terminal state
-    if (['confirmed', 'expired', 'failed'].includes(payment.status)) {
+    if (['confirmed', 'expired', 'failed', 'partially_paid', 'overpaid'].includes(payment.status)) {
       return;
     }
 
@@ -153,7 +156,7 @@ export function usePaymentStatus(paymentId: string): UsePaymentStatusReturn {
             });
 
             // Close SSE on terminal states
-            if (['confirmed', 'expired', 'failed'].includes(data.status)) {
+            if (['confirmed', 'expired', 'failed', 'partially_paid', 'overpaid'].includes(data.status)) {
               es.close();
               eventSourceRef.current = null;
             }
