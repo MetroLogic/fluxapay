@@ -17,7 +17,6 @@ export class WebhookDispatcher {
       event: 'payment.confirmed',
       data: {
         payment_id: payment.id,
-        order_id: payment.order_id,
         amount: payment.amount.toString(),
         currency: payment.currency,
         status: 'CONFIRMED',
