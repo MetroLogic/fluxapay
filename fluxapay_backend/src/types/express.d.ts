@@ -5,6 +5,11 @@ export interface AuthRequest extends Request {
     id?: string;
     email?: string;
   };
+  adminUser?: {
+    id: string;
+    email: string;
+    role: string;
+  };
   merchantId?: string;
   requestId?: string;
 }

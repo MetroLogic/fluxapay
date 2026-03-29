@@ -16,9 +16,10 @@ export interface IKMSProvider {
   storeMasterSeed(seed: string): Promise<void>;
 
   /**
-   * Rotates the master seed encryption key (if supported)
+   * Rotates the master seed encryption key (if supported).
+   * Returns the new encrypted seed value.
    */
-  rotateEncryptionKey?(): Promise<void>;
+  rotateEncryptionKey?(newKeyId?: string): Promise<string>;
 
   /**
    * Health check for KMS availability
