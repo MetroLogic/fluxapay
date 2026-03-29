@@ -58,7 +58,7 @@ export class WebhookDispatcher {
     }
   }
 }
-import { PrismaClient, WebhookEventType, WebhookStatus, Payment, Merchant } from "../generated/client";
+import { PrismaClient, WebhookEventType, WebhookStatus, Payment, Merchant } from "../generated/client/client";
 import crypto from "crypto";
 import { webhookEventTypes } from "../schemas/webhook.schema";
 
