@@ -93,6 +93,10 @@ const envSchema = z.object({
     SETTLEMENT_CRON: z.string().default('0 0 * * *'),
     SETTLEMENT_BATCH_LIMIT: z.coerce.number().int().positive().default(500),
 
+    // Exchange Partner Feature Flags
+    ENABLE_YELLOWCARD_VALIDATION: z.enum(['true', 'false']).default('false'),
+    ENABLE_ANCHOR_VALIDATION: z.enum(['true', 'false']).default('false'),
+
     // Cron Jobs
     PAYMENT_MONITOR_CRON: z.string().default('*/2 * * * *'),
     BILLING_CRON: z.string().default('0 1 * * *'),
