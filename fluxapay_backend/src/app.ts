@@ -24,6 +24,7 @@ import keysRoutes from "./routes/keys.route";
 import settlementBatchRoutes from "./routes/settlementBatch.route";
 import dashboardRoutes from "./routes/dashboard.route";
 import auditRoutes from "./routes/audit.route";
+import merchantDeletionRoutes from "./routes/merchantDeletion.route";
 
 const app = express();
 const prisma = new PrismaClient();
@@ -86,6 +87,7 @@ app.use("/api/v1/admin/reconciliation", reconciliationRoutes);
 app.use("/api/v1/admin/settlement", settlementBatchRoutes);
 app.use("/api/v1/admin/sweep", sweepRoutes);
 app.use("/api/v1/admin", auditRoutes);
+app.use("/api/v1/merchants", merchantDeletionRoutes);
 
 // Basic health check
 app.get("/health", (req, res) => {

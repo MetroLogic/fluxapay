@@ -1,5 +1,5 @@
 import { PrismaClient } from "../generated/client/client";
-import { v4 as uuidv4 } from "uuid";
+import crypto from "crypto";
 import { HDWalletService } from "./HDWalletService";
 import { StellarService } from "./StellarService";
 import { sorobanService } from "./SorobanService";
@@ -62,7 +62,7 @@ export class PaymentService {
     cancel_url?: string;
     customerId?: string;
   }) {
-    const paymentId = uuidv4();
+    const paymentId = crypto.randomUUID();
     const expiration = new Date(Date.now() + 15 * 60 * 1000); // 15 min expiry
     const sanitizedMetadata = validateAndSanitizeMetadata(metadata);
 

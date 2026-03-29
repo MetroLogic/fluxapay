@@ -37,6 +37,10 @@ model Merchant {
   email_notifications_enabled Boolean            @default(true)
   notify_on_payment     Boolean                @default(false)
   notify_on_settlement  Boolean                @default(true)
+  /** Compliance: set when merchant requests account deletion */
+  deletion_requested_at DateTime?
+  /** Compliance: set after PII anonymization is complete */
+  anonymized_at         DateTime?
   created_at            DateTime               @default(now())
   updated_at            DateTime               @updatedAt
   otps                  OTP[]
@@ -496,6 +500,8 @@ enum AuditActionType {
   settlement_batch_initiate
   settlement_batch_complete
   settlement_batch_fail
+  merchant_deletion_requested
+  merchant_anonymized
 }
 
 enum AuditEntityType {
@@ -503,4 +509,20 @@ enum AuditEntityType {
   system_config
   sweep_operation
   settlement_batch
+  merchant_account
+}
+
+/// Tracks a merchant's right-to-erasure request.
+/// Financial records are retained under legal hold; only PII is anonymized.
+model MerchantDeletionRequest {
+  id           String    @id @default(cuid())
+  merchantId   String    @unique
+  reason       String?
+  requested_by String    // "merchant" | "admin:<id>"
+  /// Set when PII anonymization is executed
+  executed_at  DateTime?
+  created_at   DateTime  @default(now())
+  updated_at   DateTime  @updatedAt
+
+  @@index([merchantId])
 }
