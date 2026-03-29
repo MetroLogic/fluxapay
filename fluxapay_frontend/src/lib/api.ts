@@ -417,7 +417,7 @@ export const api = {
       fetchWithAuth(`/api/refunds/${refundId}`, { headers: refundAdminKeyHeader() }),
   },
 
-  // Payments (merchant-scoped)
+  // Payments (merchant-scoped) — backend mounts at /api/v1/payments
   payments: {
     create: (data: {
       amount: number;
@@ -426,7 +426,7 @@ export const api = {
       success_url?: string;
       cancel_url?: string;
     }) =>
-      fetchWithAuth("/api/payments", { method: "POST", body: JSON.stringify(data) }),
+      fetchWithAuth("/api/v1/payments", { method: "POST", body: JSON.stringify(data) }),
 
     list: (params?: {
       page?: number;
@@ -445,8 +445,11 @@ export const api = {
       if (params?.search) sp.set("search", params.search);
       if (params?.date_from) sp.set("date_from", params.date_from);
       if (params?.date_to) sp.set("date_to", params.date_to);
-      return fetchWithAuth(`/api/payments?${sp.toString()}`);
+      return fetchWithAuth(`/api/v1/payments?${sp.toString()}`);
     },
+
+    getById: (paymentId: string) =>
+      fetchWithAuth(`/api/v1/payments/${encodeURIComponent(paymentId)}`),
 
     export: async (params?: {
       status?: string;
@@ -462,7 +465,7 @@ export const api = {
       if (params?.date_from) sp.set("date_from", params.date_from);
       if (params?.date_to) sp.set("date_to", params.date_to);
       const response = await fetch(
-        `${API_BASE_URL}/api/payments/export?${sp.toString()}`,
+        `${API_BASE_URL}/api/v1/payments/export?${sp.toString()}`,
         { headers: { Authorization: `Bearer ${getToken()}` } },
       );
       if (!response.ok) throw new ApiError(response.status, "Export failed");

@@ -32,6 +32,9 @@ interface BackendPayment {
   createdAt: string;
   depositAddress?: string;
   transaction_hash?: string;
+  sweep_status?: string;
+  settlement_linkage?: unknown;
+  stellar_expert_url?: string;
 }
 
 interface BackendRefund {
@@ -62,6 +65,9 @@ function mapBackendPayment(p: BackendPayment): Payment {
     createdAt: p.createdAt,
     depositAddress: p.depositAddress ?? "",
     txHash: p.transaction_hash,
+    sweepStatus: p.sweep_status,
+    settlementLinkage: p.settlement_linkage,
+    stellarExpertUrl: p.stellar_expert_url,
   };
 }
 
@@ -97,6 +103,7 @@ function PaymentsContent() {
   const [currencyFilter, setCurrencyFilter] = useState("all");
 
   const [selectedPaymentId, setSelectedPaymentId] = useState<string | null>(paymentIdFromQuery || null);
+  const [detailedPayment, setDetailedPayment] = useState<Payment | null>(null);
   const [refunds, setRefunds] = useState<RefundRecord[]>(MOCK_REFUNDS);
 
   const [showCreateLinkModal, setShowCreateLinkModal] = useState(shouldOpenCreateLink);
@@ -153,6 +160,25 @@ function PaymentsContent() {
     if (!id) return null;
     return payments.find((p) => p.id === id) ?? null;
   }, [selectedPaymentId, paymentIdFromQuery, payments]);
+
+  const selectedIdToFetch = selectedPayment?.id;
+
+  useEffect(() => {
+    if (!selectedIdToFetch) {
+      setDetailedPayment(null);
+      return;
+    }
+    const fetchDetailedPayment = async () => {
+      try {
+        const response = (await api.payments.getById(selectedIdToFetch)) as Record<string, unknown>;
+        const backendPayment = (response.data || response.payment || response) as BackendPayment;
+        setDetailedPayment(mapBackendPayment(backendPayment));
+      } catch (error) {
+        console.error("Failed to fetch detailed payment", error);
+      }
+    };
+    fetchDetailedPayment();
+  }, [selectedIdToFetch]);
 
   const handleExportCSV = async () => {
     try {
@@ -366,7 +392,7 @@ function PaymentsContent() {
       >
         {selectedPayment && (
           <PaymentDetails
-            payment={selectedPayment}
+            payment={detailedPayment || selectedPayment}
             refunds={refunds}
             onCreateRefund={handleInitiateRefund}
             onOpenRefundsSection={() =>

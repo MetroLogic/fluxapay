@@ -17,6 +17,9 @@ export interface Payment {
   createdAt: string;
   depositAddress: string;
   txHash?: string;
+  sweepStatus?: string;
+  settlementLinkage?: unknown;
+  stellarExpertUrl?: string;
 }
 
 export const MOCK_PAYMENTS: Payment[] = [
@@ -33,6 +36,9 @@ export const MOCK_PAYMENTS: Payment[] = [
     createdAt: "2026-01-24T10:30:00Z",
     depositAddress: "GBX...W4Q",
     txHash: "0x123...abc",
+    sweepStatus: "completed",
+    settlementLinkage: "stl_123456789",
+    stellarExpertUrl: "https://stellar.expert/explorer/public/tx/0x123...abc",
   },
   {
     id: "pay_9a8b7c6d5e",
@@ -73,6 +79,9 @@ export const MOCK_PAYMENTS: Payment[] = [
     createdAt: "2026-01-23T14:20:00Z",
     depositAddress: "GAV...N6X",
     txHash: "0x456...def",
+    sweepStatus: "failed",
+    settlementLinkage: null,
+    stellarExpertUrl: "https://stellar.expert/explorer/public/tx/0x456...def",
   },
   {
     id: "pay_m1n2o3p4q5",
@@ -114,5 +123,8 @@ export const MOCK_PAYMENTS: Payment[] = [
     createdAt: "2026-01-20T10:15:00Z",
     depositAddress: "GCD...A7F",
     txHash: "0xabc...123",
+    sweepStatus: "pending",
+    settlementLinkage: "stl_987654321",
+    stellarExpertUrl: "https://stellar.expert/explorer/public/tx/0xabc...123",
   },
 ];
