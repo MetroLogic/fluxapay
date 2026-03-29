@@ -107,3 +107,74 @@ export async function listInvoicesService(params: {
     },
   };
 }
+
+export async function exportInvoiceService(
+  merchantId: string,
+  invoiceId: string,
+  format: "csv" | "json"
+) {
+  const invoice = await prisma.invoice.findUnique({
+    where: { id: invoiceId, merchantId },
+    include: { payment: true },
+  });
+
+  if (!invoice) {
+    throw new Error("Invoice not found");
+  }
+
+  // Enrich with payment data
+  const payment = invoice.payment;
+
+  if (format === "csv") {
+    const csvContent = [
+      `INVOICE - ${invoice.invoice_number}`,
+      `Merchant Invoice ID,${invoice.id}`,
+      `Amount,${invoice.amount},${invoice.currency}`,
+      `Customer Email,${invoice.customer_email}`,
+      `Status,${invoice.status}`,
+      `Due Date,"${invoice.due_date ? invoice.due_date.toISOString().split("T")[0] : "N/A"}"`,
+      `Created Date,${invoice.created_at.toISOString().split("T")[0]}`,
+      ``,
+      `PAYMENT DETAILS`,
+      `Payment ID,${payment?.id || "N/A"}`,
+      `Amount Paid,${payment?.amount || 0},${payment?.currency || invoice.currency}`,
+      `Status,${payment?.status || "N/A"}`,
+      `Checkout URL,${invoice.payment_link}`,
+    ].join("\n");
+
+    return {
+      filename: `invoice-${invoice.invoice_number}.csv`,
+      content: csvContent,
+      contentType: "text/csv",
+    };
+  }
+
+  // JSON format - return structured data for client-side PDF generation
+  return {
+    filename: `invoice-${invoice.invoice_number}.json`,
+    content: {
+      invoice: {
+        id: invoice.id,
+        invoice_number: invoice.invoice_number,
+        amount: Number(invoice.amount),
+        currency: invoice.currency,
+        customer_email: invoice.customer_email,
+        status: invoice.status,
+        due_date: invoice.due_date,
+        created_at: invoice.created_at,
+        metadata: invoice.metadata,
+      },
+      payment: payment
+        ? {
+            id: payment.id,
+            amount: Number(payment.amount),
+            currency: payment.currency,
+            status: payment.status,
+            customer_email: payment.customer_email,
+            created_at: payment.createdAt,
+          }
+        : null,
+    },
+    contentType: "application/json",
+  };
+}

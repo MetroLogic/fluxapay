@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { validateUserId } from "../helpers/request.helper";
 import { AuthRequest } from "../types/express";
-import { createInvoiceService, listInvoicesService } from "../services/invoice.service";
+import { createInvoiceService, listInvoicesService, exportInvoiceService } from "../services/invoice.service";
 
 export async function createInvoice(req: AuthRequest, res: Response) {
   try {
@@ -32,5 +32,32 @@ export async function listInvoices(req: Request, res: Response) {
     res.status(200).json(result);
   } catch (err: any) {
     res.status(err.status || 500).json({ message: err.message || "Server error" });
+  }
+}
+
+export async function exportInvoice(req: AuthRequest, res: Response) {
+  try {
+    const merchantId = await validateUserId(req);
+    const invoice_id = Array.isArray(req.params.invoice_id) 
+      ? req.params.invoice_id[0] 
+      : req.params.invoice_id;
+    const { format } = req.query as { format?: "csv" | "json" };
+
+    const result = await exportInvoiceService(merchantId, invoice_id, format || "json");
+
+    res.setHeader("Content-Disposition", `attachment; filename="${result.filename}"`);
+    res.setHeader("Content-Type", result.contentType);
+
+    if (typeof result.content === "string") {
+      res.send(result.content);
+    } else {
+      res.json(result.content);
+    }
+  } catch (err: any) {
+    if (err.message === "Invoice not found") {
+      res.status(404).json({ message: "Invoice not found" });
+    } else {
+      res.status(err.status || 500).json({ message: err.message || "Server error" });
+    }
   }
 }
