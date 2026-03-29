@@ -3,6 +3,7 @@ import { PrismaClient } from "../generated/client/client";
 import { PaymentService } from "../services/payment.service";
 import { normalizeCheckoutAccentHex } from "../utils/checkout-branding.util";
 import { AuthRequest } from "../types/express";
+import { eventBus, AppEvents } from "../services/EventService";
 import { validateUserId } from "../helpers/request.helper";
 import { MetadataValidationError } from "../utils/metadata.util";
 
@@ -195,6 +196,85 @@ export const getPaymentById = async (req: Request, res: Response) => {
         }
         res.status(500).json({ error: "Error fetching details" });
     }
+};
+
+/**
+ * GET /api/payments/:id/status
+ * Publicly accessible view of a payment's status.
+ * Returns only safe information for checkout display.
+ */
+export const getPaymentStatus = async (req: Request, res: Response) => {
+    try {
+        const payment_id = String(req.params.id);
+
+        const payment = await prisma.payment.findUnique({
+            where: { id: payment_id },
+            select: {
+                id: true,
+                status: true,
+                amount: true,
+                currency: true,
+                expiration: true,
+                createdAt: true,
+                merchant: {
+                    select: {
+                        business_name: true
+                    }
+                }
+            }
+        });
+
+        if (!payment) {
+            return res.status(404).json({ error: "Payment not found" });
+        }
+
+        res.json(payment);
+    } catch (error: unknown) {
+        console.error('Error fetching payment status:', error);
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+};
+
+/**
+ * GET /api/payments/:id/stream
+ * SSE stream for real-time payment updates.
+ */
+export const streamPaymentStatus = async (req: Request, res: Response) => {
+    const payment_id = String(req.params.id);
+
+    // Set headers for SSE
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
+
+    // Send initial status
+    const payment = await prisma.payment.findUnique({
+        where: { id: payment_id },
+        select: { status: true }
+    });
+
+    if (payment) {
+        res.write(`data: ${JSON.stringify({ status: payment.status })}\n\n`);
+    }
+
+    // Listener for payment updates
+    const onPaymentUpdate = (updatedPayment: any) => {
+        if (updatedPayment.id === payment_id) {
+            res.write(`data: ${JSON.stringify({ status: updatedPayment.status })}\n\n`);
+            
+            // If terminal status reached, we could potentially close the stream
+            // but usually let the client handle it.
+        }
+    };
+
+    eventBus.on(AppEvents.PAYMENT_UPDATED, onPaymentUpdate);
+
+    // Clean up on client disconnect
+    req.on('close', () => {
+        eventBus.off(AppEvents.PAYMENT_UPDATED, onPaymentUpdate);
+        res.end();
+    });
 };
 
 function memoFromMetadata(metadata: unknown): {
