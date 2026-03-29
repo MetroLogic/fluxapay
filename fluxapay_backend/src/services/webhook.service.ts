@@ -1,5 +1,6 @@
 import { PrismaClient, WebhookEventType, WebhookStatus } from "../generated/client/client";
 import { webhookEventTypes } from "../schemas/webhook.schema";
+import crypto from "crypto";
 
 const prisma = new PrismaClient();
 
@@ -86,6 +87,7 @@ export async function getWebhookLogsService(params: GetWebhookLogsParams) {
         endpoint_url: true,
         http_status: true,
         status: true,
+        event_id: true,
         payment_id: true,
         retry_count: true,
         created_at: true,
@@ -138,6 +140,7 @@ export async function getWebhookLogDetailsService(params: WebhookLogDetailsParam
       response_body: log.response_body,
       http_status: log.http_status,
       status: log.status,
+      event_id: log.event_id,
       payment_id: log.payment_id,
       retry_count: log.retry_count,
       max_retries: log.max_retries,
@@ -185,7 +188,7 @@ export async function retryWebhookService(params: RetryWebhookParams) {
   );
 
   const newRetryCount = log.retry_count + 1;
-  const newStatus: WebhookStatus = result.success ? "delivered" : 
+  const newStatus: WebhookStatus = result.success ? "delivered" :
     newRetryCount >= log.max_retries ? "failed" : "retrying";
 
   // Create retry attempt record
@@ -200,8 +203,8 @@ export async function retryWebhookService(params: RetryWebhookParams) {
   });
 
   // Calculate next retry time with exponential backoff
-  const nextRetryAt = newStatus === "retrying" 
-    ? new Date(Date.now() + Math.pow(2, newRetryCount) * 60 * 1000) // exponential backoff in minutes
+  const nextRetryAt = newStatus === "retrying"
+    ? new Date(Date.now() + Math.pow(2, newRetryCount) * 60 * 1000)
     : null;
 
   // Update the webhook log
@@ -217,8 +220,8 @@ export async function retryWebhookService(params: RetryWebhookParams) {
   });
 
   return {
-    message: result.success 
-      ? "Webhook retry successful" 
+    message: result.success
+      ? "Webhook retry successful"
       : `Webhook retry failed${newStatus === "retrying" ? ", will retry again" : ""}`,
     data: {
       id: updatedLog.id,
@@ -242,8 +245,9 @@ export async function sendTestWebhookService(params: SendTestWebhookParams) {
     throw { status: 404, message: "Merchant not found" };
   }
 
-  // Generate test payload
-  const testPayload = generateTestPayload(event_type, payload_override);
+  // Generate test payload (event_id embedded so merchant can deduplicate test events too)
+  const eventId = crypto.randomUUID();
+  const testPayload = generateTestPayload(event_type, payload_override, eventId);
 
   // Create webhook log for the test
   const webhookLog = await prisma.webhookLog.create({
@@ -251,6 +255,7 @@ export async function sendTestWebhookService(params: SendTestWebhookParams) {
       merchantId,
       event_type,
       endpoint_url,
+      event_id: eventId,
       request_payload: testPayload,
       status: "pending",
     },
@@ -272,8 +277,8 @@ export async function sendTestWebhookService(params: SendTestWebhookParams) {
   });
 
   return {
-    message: result.success 
-      ? "Test webhook delivered successfully" 
+    message: result.success
+      ? "Test webhook delivered successfully"
       : "Test webhook delivery failed",
     data: {
       id: updatedLog.id,
@@ -282,6 +287,7 @@ export async function sendTestWebhookService(params: SendTestWebhookParams) {
       request_payload: updatedLog.request_payload,
       response_body: updatedLog.response_body,
       http_status: updatedLog.http_status,
+      event_id: updatedLog.event_id,
       status: updatedLog.status,
       created_at: updatedLog.created_at,
     },
@@ -289,8 +295,6 @@ export async function sendTestWebhookService(params: SendTestWebhookParams) {
 }
 
 // Helper function to deliver webhook
-import crypto from "crypto";
-
 export async function deliverWebhook(
   endpointUrl: string,
   payload: Record<string, any>,
@@ -349,9 +353,11 @@ export function generateWebhookSignature(
 // Helper function to generate test payload based on event type
 function generateTestPayload(
   eventType: WebhookEventType,
-  override?: Record<string, any>
+  override?: Record<string, any>,
+  eventId?: string,
 ): Record<string, any> {
   const basePayload = {
+    event_id: eventId ?? crypto.randomUUID(),
     webhook_id: `test_${Date.now()}`,
     event_type: eventType,
     timestamp: new Date().toISOString(),
@@ -437,6 +443,8 @@ export async function createAndDeliverWebhook(
   paymentId?: string,
   /** When set (e.g. payment metadata override), deliver to this URL instead of the merchant profile URL. */
   endpointOverride?: string,
+  /** Stable event_id for deduplication. If omitted a new UUID is generated. */
+  eventId?: string,
 ) {
   const merchant = await prisma.merchant.findUnique({ where: { id: merchantId } });
 
@@ -449,18 +457,32 @@ export async function createAndDeliverWebhook(
     throw new Error(`Merchant ${merchantId} has no webhook_url configured`);
   }
 
+  const resolvedEventId = eventId ?? crypto.randomUUID();
+
+  // Deduplication: if a log with this event_id was already delivered, skip re-delivery.
+  const existing = await prisma.webhookLog.findUnique({
+    where: { event_id: resolvedEventId },
+  });
+  if (existing?.status === "delivered") {
+    return existing;
+  }
+
+  // Embed event_id in the outgoing payload so merchants can deduplicate on their side.
+  const enrichedPayload = { event_id: resolvedEventId, ...payload };
+
   const webhookLog = await prisma.webhookLog.create({
     data: {
       merchantId,
       event_type: eventType,
       endpoint_url: endpointUrl,
-      request_payload: payload,
+      event_id: resolvedEventId,
+      request_payload: enrichedPayload,
       payment_id: paymentId,
       status: "pending",
     },
   });
 
-  const result = await deliverWebhook(endpointUrl, payload, merchant.webhook_secret);
+  const result = await deliverWebhook(endpointUrl, enrichedPayload, merchant.webhook_secret);
   const status: WebhookStatus = result.success ? "delivered" : "retrying";
 
   const nextRetryAt = status === "retrying"
