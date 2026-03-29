@@ -2,6 +2,7 @@ import dotenv from "dotenv";
 import { validateEnv, EnvValidationError } from "./config/env.config";
 import { startCronJobs } from "./services/cron.service";
 import { startPaymentMonitor } from "./services/paymentMonitor.service";
+import { initializeEmailNotifications } from "./services/emailNotification.service";
 import { getLogger } from "./utils/logger";
 
 dotenv.config();
@@ -43,6 +44,9 @@ try {
 
     // Start payment monitor loop
     startPaymentMonitor();
+
+    // Initialize email notification listeners
+    initializeEmailNotifications();
   });
 
   // Graceful shutdown handling

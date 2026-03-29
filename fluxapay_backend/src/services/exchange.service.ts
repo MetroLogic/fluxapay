@@ -40,6 +40,8 @@ export interface PayoutResult {
   exchange_ref?: string;
   /** ISO timestamp when payout was initiated */
   initiated_at: string;
+  /** Raw partner payload for audit (sanitized) */
+  raw_partner_payload?: any;
 }
 
 export interface ExchangePartner {
@@ -78,7 +80,7 @@ const MOCK_RATES: Record<string, number> = {
   USD: 1,
 };
 
-class MockExchangePartner implements ExchangePartner {
+export class MockExchangePartner implements ExchangePartner {
   async getQuote(usdcAmount: number, targetCurrency: string): Promise<ExchangeQuoteResult> {
     const rate = MOCK_RATES[targetCurrency] ?? 1;
     return {
@@ -114,7 +116,7 @@ class MockExchangePartner implements ExchangePartner {
 // Yellow Card partner (https://docs.yellowcard.io)
 // ──────────────────────────────────────────────────────────────────────────────
 
-class YellowCardPartner implements ExchangePartner {
+export class YellowCardPartner implements ExchangePartner {
   private apiKey: string;
   private baseUrl: string;
 
@@ -191,6 +193,11 @@ class YellowCardPartner implements ExchangePartner {
       transfer_ref: data.transferId,
       exchange_ref: quote.quote_ref,
       initiated_at: new Date().toISOString(),
+      raw_partner_payload: {
+        partner: 'yellowcard',
+        response: data,
+        timestamp: new Date().toISOString(),
+      },
     };
   }
 }
@@ -199,7 +206,7 @@ class YellowCardPartner implements ExchangePartner {
 // Anchor partner (https://docs.anchorusd.com)
 // ──────────────────────────────────────────────────────────────────────────────
 
-class AnchorPartner implements ExchangePartner {
+export class AnchorPartner implements ExchangePartner {
   private apiKey: string;
   private baseUrl: string;
 
@@ -269,6 +276,11 @@ class AnchorPartner implements ExchangePartner {
       transfer_ref: data.reference,
       exchange_ref: data.exchange_id,
       initiated_at: new Date().toISOString(),
+      raw_partner_payload: {
+        partner: 'anchor',
+        response: data,
+        timestamp: new Date().toISOString(),
+      },
     };
   }
 }

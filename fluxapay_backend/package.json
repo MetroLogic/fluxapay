@@ -14,7 +14,10 @@
     "prisma:push": "prisma db push",
     "prisma:studio": "prisma studio",
     "lint": "eslint src/**/*.ts",
-    "encrypt-seed": "ts-node src/scripts/encrypt-seed.ts"
+    "encrypt-seed": "ts-node src/scripts/encrypt-seed.ts",
+    "rotation:dry-run": "ts-node scripts/rotate-master-seed.ts",
+    "rotation:migrate": "ts-node scripts/rotate-master-seed.ts",
+    "rotation:verify": "ts-node scripts/rotate-master-seed.ts verify"
   },
   "repository": {
     "type": "git",

@@ -79,3 +79,80 @@ export async function sendOtpEmail(to: string, otp: string) {
     throw err;
   }
 }
+
+export interface PaymentConfirmationDetails {
+  amount: string;
+  currency: string;
+  payment_id: string;
+  merchant_reference?: string;
+  explorer_link: string;
+  timestamp: string;
+}
+
+export async function sendPaymentConfirmationEmail(
+  to: string,
+  businessName: string,
+  details: PaymentConfirmationDetails,
+) {
+  try {
+    const response = await getResend().emails.send({
+      from: process.env.MAIL_FROM || "noreply@fluxapay.com",
+      to,
+      subject: `Payment Confirmed - ${details.amount} ${details.currency}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2>Payment Confirmed</h2>
+          <p>Hello ${businessName},</p>
+          <p>Your payment has been successfully confirmed on the Stellar network.</p>
+
+          <div style="background: #f4f4f4; padding: 16px; border-radius: 4px; margin: 16px 0;">
+            <h3 style="margin-top: 0;">Payment Details</h3>
+            <table style="width: 100%; border-collapse: collapse;">
+              <tr>
+                <td style="padding: 8px 0;"><strong>Amount:</strong></td>
+                <td style="padding: 8px 0;">${details.amount} ${details.currency}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0;"><strong>Payment ID:</strong></td>
+                <td style="padding: 8px 0; font-family: monospace; font-size: 12px;">${details.payment_id}</td>
+              </tr>
+              ${details.merchant_reference ? `
+              <tr>
+                <td style="padding: 8px 0;"><strong>Reference:</strong></td>
+                <td style="padding: 8px 0;">${details.merchant_reference}</td>
+              </tr>
+              ` : ''}
+              <tr>
+                <td style="padding: 8px 0;"><strong>Time:</strong></td>
+                <td style="padding: 8px 0;">${new Date(details.timestamp).toLocaleString()}</td>
+              </tr>
+            </table>
+          </div>
+
+          <p>
+            <a href="${details.explorer_link}"
+               style="display: inline-block; padding: 10px 20px; background: #0066cc; color: white; text-decoration: none; border-radius: 4px;">
+              View on Stellar Explorer
+            </a>
+          </p>
+
+          <p style="color: #666; font-size: 14px; margin-top: 24px;">
+            This is an automated confirmation email. If you have any questions, please contact support.
+          </p>
+          <p>— The FluxaPay Team</p>
+        </div>
+      `,
+    });
+    if (response.error) {
+      if (isDevEnv()) {
+        console.error("Error sending payment confirmation email:", response.error);
+      }
+      throw new Error("Failed to send payment confirmation email");
+    }
+  } catch (err) {
+    if (isDevEnv()) {
+      console.error("Error sending payment confirmation email:", err);
+    }
+    throw err;
+  }
+}
