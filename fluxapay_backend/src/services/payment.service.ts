@@ -2,7 +2,7 @@ import { PrismaClient } from "../generated/client/client";
 import crypto from "crypto";
 import { HDWalletService } from "./HDWalletService";
 import { StellarService } from "./StellarService";
-import { sorobanService } from "./SorobanService";
+import { sorobanQueue } from "./sorobanQueue.service";
 import { eventBus, AppEvents } from "./EventService";
 import { validateAndSanitizeMetadata } from "../utils/metadata.util";
 
@@ -123,7 +123,11 @@ export class PaymentService {
   }
 
   /**
-   * Verifies a payment on-chain, updates the database, and emits an internal event.
+   * Verifies a payment on-chain via the Soroban queue, updates the database,
+   * and emits an internal event.
+   *
+   * The on-chain submission is enqueued asynchronously; the DB is updated
+   * optimistically so the rest of the payment flow is not blocked.
    */
   static async verifyPayment(
     paymentId: string,
@@ -131,19 +135,7 @@ export class PaymentService {
     payerAddress: string,
     amountReceived: number,
   ): Promise<any> {
-    // 1. Verify on Soroban
-    const onChainVerified = await sorobanService.verifyPaymentOnChain(
-      paymentId,
-      transactionHash,
-      payerAddress,
-      amountReceived,
-    );
-
-    if (!onChainVerified) {
-      throw new Error("Payment verification failed on-chain");
-    }
-
-    // 2. Update local PostgreSQL database
+    // 1. Update local PostgreSQL database optimistically
     const payment = await prisma.payment.update({
       where: { id: paymentId },
       data: {
@@ -151,9 +143,11 @@ export class PaymentService {
         transaction_hash: transactionHash,
         payer_address: payerAddress,
         confirmed_at: new Date(),
-        onchain_verified: true,
       },
     });
+
+    // 2. Enqueue the Soroban contract submission (non-blocking)
+    sorobanQueue.enqueue(paymentId, transactionHash, String(amountReceived));
 
     // 3. Emit internal event for Webhook Service to pick up
     eventBus.emit(AppEvents.PAYMENT_CONFIRMED, payment);
