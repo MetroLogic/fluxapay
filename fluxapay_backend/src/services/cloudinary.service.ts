@@ -29,7 +29,7 @@ export async function uploadToCloudinary(
         resource_type: 'auto',
         public_id: `${Date.now()}-${fileName.replace(/\.[^/.]+$/, '')}`,
       },
-      (error, result) => {
+      (error: any, result: any) => {
         if (error) {
           reject(error);
         } else if (result) {

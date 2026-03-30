@@ -157,6 +157,7 @@ export class PaymentService {
 
     // 3. Emit internal event for Webhook Service to pick up
     eventBus.emit(AppEvents.PAYMENT_CONFIRMED, payment);
+    eventBus.emit(AppEvents.PAYMENT_UPDATED, payment);
 
     return payment;
   }
