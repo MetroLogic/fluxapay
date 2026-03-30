@@ -1,8 +1,8 @@
 import { Router } from "express";
 import { authenticateApiKey } from "../middleware/apiKeyAuth.middleware";
 import { validate, validateQuery } from "../middleware/validation.middleware";
-import { createInvoice, listInvoices } from "../controllers/invoice.controller";
-import { createInvoiceSchema, listInvoicesQuerySchema } from "../schemas/invoice.schema";
+import { createInvoice, listInvoices, exportInvoice } from "../controllers/invoice.controller";
+import { createInvoiceSchema, listInvoicesQuerySchema, exportInvoiceSchema } from "../schemas/invoice.schema";
 
 const router = Router();
 
@@ -50,5 +50,33 @@ const router = Router();
  */
 router.post("/", authenticateApiKey, validate(createInvoiceSchema), createInvoice);
 router.get("/", authenticateApiKey, validateQuery(listInvoicesQuerySchema), listInvoices);
+
+/**
+ * @swagger
+ * /api/v1/invoices/{invoice_id}/export:
+ *   get:
+ *     summary: Export invoice in CSV or JSON format
+ *     tags: [Invoices]
+ *     security:
+ *       - apiKeyAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: invoice_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: format
+ *         schema:
+ *           type: string
+ *           enum: [csv, json]
+ *           default: json
+ *     responses:
+ *       200:
+ *         description: Invoice exported
+ *       404:
+ *         description: Invoice not found
+ */
+router.get("/:invoice_id/export", authenticateApiKey, validate(exportInvoiceSchema), exportInvoice);
 
 export default router;

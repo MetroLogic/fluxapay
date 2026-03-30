@@ -13,3 +13,12 @@ export const listInvoicesQuerySchema = z.object({
   limit: z.coerce.number().int().positive().max(100).default(10),
   status: z.enum(["pending", "paid", "cancelled", "overdue"]).optional(),
 });
+
+export const exportInvoiceSchema = z.object({
+  params: z.object({
+    invoice_id: z.string(),
+  }),
+  query: z.object({
+    format: z.enum(["csv", "json"]).default("json"),
+  }),
+});
