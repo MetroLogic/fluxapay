@@ -55,6 +55,12 @@ export async function upsertDiscrepancyThreshold(req: Request, res: Response) {
 
 export async function resolveDiscrepancyAlert(req: Request, res: Response) {
   try {
+    const alertIdRaw = (req.params as any).alert_id as string | string[] | undefined;
+    const alert_id = Array.isArray(alertIdRaw) ? alertIdRaw[0] : alertIdRaw;
+    if (!alert_id) {
+      return res.status(400).json({ message: "alert_id is required" });
+    }
+
     const result = await resolveDiscrepancyAlertService({
       alert_id: String(req.params.alert_id),
       is_resolved: req.body.is_resolved,
