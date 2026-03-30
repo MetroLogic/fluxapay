@@ -31,6 +31,12 @@
   },
   "homepage": "https://github.com/MetroLogic/fluxapay-backend#readme",
   "dependencies": {
+    "@opentelemetry/auto-instrumentations-node": "^0.72.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.214.0",
+    "@opentelemetry/resources": "^2.6.1",
+    "@opentelemetry/sdk-node": "^0.214.0",
+    "@opentelemetry/sdk-trace-base": "^2.6.1",
+    "@opentelemetry/semantic-conventions": "^1.40.0",
     "@prisma/client": "6.19.2",
     "@stellar/stellar-sdk": "^14.4.3",
     "@types/bcrypt": "^6.0.0",
