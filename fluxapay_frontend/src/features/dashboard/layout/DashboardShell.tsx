@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Sidebar } from "../components/Sidebar";
 import { TopNav } from "../components/TopNav";
+import { CommandPalette } from "@/components/CommandPalette";
 
 interface DashboardShellProps {
     children: React.ReactNode;
@@ -38,6 +39,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
                     aria-hidden="true"
                 />
             )}
+            <CommandPalette />
             <Sidebar
                 isOpen={isMobileMenuOpen}
                 onClose={() => setIsMobileMenuOpen(false)}
