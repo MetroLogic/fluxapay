@@ -1,1 +1,165 @@
-/**\n * paymentMonitor.streaming.minimal.ts\n * \n * Ultra-minimal working reference for SSE-based payment monitoring.\n * Add types and integrations as needed for your environment.\n */\n\ninterface PaymentStreamConfig {\n  paymentId: string;\n  address: string;\n  horizonServer: any;\n}\n\ninterface StreamStatus {\n  paymentId: string;\n  isActive: boolean;\n  isHealthy: boolean;\n  lastHeartbeat: Date;\n}\n\n/**\n * Simple stream handler for one payment\n */\nfunction createPaymentStream(config: PaymentStreamConfig) {\n  let closeStream: (() => void) | null = null;\n  let lastHeartbeat = new Date();\n  let reconnectBackoff = 1000; // ms\n  let reconnectAttempts = 0;\n  const maxReconnectAttempts = 5;\n  const maxBackoff = 300000; // 5 min\n  const heartbeatTimeout = 30000; // 30 sec\n  let isActive = true;\n  let heartbeatTimer: any = null;\n  const processedTxes = new Set<string>();\n\n  const connect = () => {\n    console.log(`[Stream] Connecting ${config.paymentId}...`);\n    try {\n      // stellar-sdk v14+ streaming support\n      closeStream = config.horizonServer\n        .payments()\n        .forAccount(config.address)\n        .stream({\n          onmessage: (msg: any) => {\n            lastHeartbeat = new Date();\n            // TODO: Handle payment event\n            // - Check if USDC payment\n            // - Deduplicate\n            // - Update DB\n            // - Emit event\n          },\n          onerror: (err: any) => {\n            console.error(`[Stream] Error: ${err}`);\n            scheduleReconnect();\n          },\n        });\n      \n      reconnectAttempts = 0;\n      reconnectBackoff = 1000;\n      console.log(`[Stream] Connected ${config.paymentId}`);\n      startHeartbeat();\n    } catch (error) {\n      console.error(`[Stream] Connection failed: ${error}`);\n      scheduleReconnect();\n    }\n  };\n\n  const startHeartbeat = () => {\n    if (heartbeatTimer) clearInterval(heartbeatTimer);\n    heartbeatTimer = setInterval(() => {\n      const elapsed = Date.now() - lastHeartbeat.getTime();\n      if (elapsed > heartbeatTimeout) {\n        console.warn(`[Stream] Heartbeat timeout for ${config.paymentId}`);\n        if (closeStream) closeStream();\n        scheduleReconnect();\n      }\n    }, heartbeatTimeout / 2);\n  };\n\n  const scheduleReconnect = () => {\n    reconnectAttempts++;\n    if (reconnectAttempts > maxReconnectAttempts) {\n      console.error(\n        `[Stream] Max reconnects exceeded for ${config.paymentId}`\n      );\n      isActive = false;\n      return;\n    }\n\n    const backoff = Math.min(\n      reconnectBackoff * Math.pow(2, reconnectAttempts - 1),\n      maxBackoff\n    );\n\n    console.log(\n      `[Stream] Reconnecting in ${backoff}ms (attempt ${reconnectAttempts})`\n    );\n\n    setTimeout(() => {\n      if (isActive) connect();\n    }, backoff);\n  };\n\n  const close = () => {\n    if (closeStream) closeStream();\n    if (heartbeatTimer) clearInterval(heartbeatTimer);\n    isActive = false;\n    console.log(`[Stream] Closed ${config.paymentId}`);\n  };\n\n  const getStatus = (): StreamStatus => ({\n    paymentId: config.paymentId,\n    isActive,\n    isHealthy: Date.now() - lastHeartbeat.getTime() < heartbeatTimeout,\n    lastHeartbeat,\n  });\n\n  return { connect, close, getStatus };\n}\n\n/**\n * Stream manager for all active payments\n */\nconst streamManager = (() => {\n  const streams = new Map<string, any>();\n  let fallbackPollTimer: any = null;\n\n  const start = (payments: Array<{ id: string; stellar_address: string }>, horizonServer: any) => {\n    console.log(`[StreamManager] Starting ${payments.length} streams...`);\n\n    for (const payment of payments) {\n      const stream = createPaymentStream({\n        paymentId: payment.id,\n        address: payment.stellar_address,\n        horizonServer,\n      });\n      streams.set(payment.id, stream);\n      stream.connect();\n    }\n\n    // Fallback polling every 5 min\n    fallbackPollTimer = setInterval(() => {\n      console.log(`[StreamManager] Health check: ${streams.size} streams`);\n      // TODO: Check for dead streams, expired payments\n    }, 300000);\n  };\n\n  const stop = () => {\n    console.log(`[StreamManager] Stopping ${streams.size} streams...`);\n    for (const stream of streams.values()) {\n      stream.close();\n    }\n    streams.clear();\n    if (fallbackPollTimer) clearInterval(fallbackPollTimer);\n  };\n\n  const getStatus = () => ({\n    total: streams.size,\n    healthy: Array.from(streams.values()).filter((s) => s.getStatus().isHealthy).length,\n  });\n\n  return { start, stop, getStatus };\n})();\n\nexport { streamManager };\n
+/**
+ * paymentMonitor.streaming.minimal.ts
+ * 
+ * Ultra-minimal working reference for SSE-based payment monitoring.
+ * Add types and integrations as needed for your environment.
+ */
+
+interface PaymentStreamConfig {
+  paymentId: string;
+  address: string;
+  horizonServer: any;
+}
+
+interface StreamStatus {
+  paymentId: string;
+  isActive: boolean;
+  isHealthy: boolean;
+  lastHeartbeat: Date;
+}
+
+/**
+ * Simple stream handler for one payment
+ */
+function createPaymentStream(config: PaymentStreamConfig) {
+  let closeStream: (() => void) | null = null;
+  let lastHeartbeat = new Date();
+  let reconnectBackoff = 1000; // ms
+  let reconnectAttempts = 0;
+  const maxReconnectAttempts = 5;
+  const maxBackoff = 300000; // 5 min
+  const heartbeatTimeout = 30000; // 30 sec
+  let isActive = true;
+  let heartbeatTimer: any = null;
+  const processedTxes = new Set<string>();
+
+  const connect = () => {
+    console.log(`[Stream] Connecting ${config.paymentId}...`);
+    try {
+      // stellar-sdk v14+ streaming support
+      closeStream = config.horizonServer
+        .payments()
+        .forAccount(config.address)
+        .stream({
+          onmessage: (msg: any) => {
+            lastHeartbeat = new Date();
+            // TODO: Handle payment event
+            // - Check if USDC payment
+            // - Deduplicate
+            // - Update DB
+            // - Emit event
+          },
+          onerror: (err: any) => {
+            console.error(`[Stream] Error: ${err}`);
+            scheduleReconnect();
+          },
+        });
+      
+      reconnectAttempts = 0;
+      reconnectBackoff = 1000;
+      console.log(`[Stream] Connected ${config.paymentId}`);
+      startHeartbeat();
+    } catch (error) {
+      console.error(`[Stream] Connection failed: ${error}`);
+      scheduleReconnect();
+    }
+  };
+
+  const startHeartbeat = () => {
+    if (heartbeatTimer) clearInterval(heartbeatTimer);
+    heartbeatTimer = setInterval(() => {
+      const elapsed = Date.now() - lastHeartbeat.getTime();
+      if (elapsed > heartbeatTimeout) {
+        console.warn(`[Stream] Heartbeat timeout for ${config.paymentId}`);
+        if (closeStream) closeStream();
+        scheduleReconnect();
+      }
+    }, heartbeatTimeout / 2);
+  };
+
+  const scheduleReconnect = () => {
+    reconnectAttempts++;
+    if (reconnectAttempts > maxReconnectAttempts) {
+      console.error(
+        `[Stream] Max reconnects exceeded for ${config.paymentId}`
+      );
+      isActive = false;
+      return;
+    }
+
+    const backoff = Math.min(
+      reconnectBackoff * Math.pow(2, reconnectAttempts - 1),
+      maxBackoff
+    );
+
+    console.log(
+      `[Stream] Reconnecting in ${backoff}ms (attempt ${reconnectAttempts})`
+    );
+
+    setTimeout(() => {
+      if (isActive) connect();
+    }, backoff);
+  };
+
+  const close = () => {
+    if (closeStream) closeStream();
+    if (heartbeatTimer) clearInterval(heartbeatTimer);
+    isActive = false;
+    console.log(`[Stream] Closed ${config.paymentId}`);
+  };
+
+  const getStatus = (): StreamStatus => ({
+    paymentId: config.paymentId,
+    isActive,
+    isHealthy: Date.now() - lastHeartbeat.getTime() < heartbeatTimeout,
+    lastHeartbeat,
+  });
+
+  return { connect, close, getStatus };
+}
+
+/**
+ * Stream manager for all active payments
+ */
+const streamManager = (() => {
+  const streams = new Map<string, any>();
+  let fallbackPollTimer: any = null;
+
+  const start = (payments: Array<{ id: string; stellar_address: string }>, horizonServer: any) => {
+    console.log(`[StreamManager] Starting ${payments.length} streams...`);
+
+    for (const payment of payments) {
+      const stream = createPaymentStream({
+        paymentId: payment.id,
+        address: payment.stellar_address,
+        horizonServer,
+      });
+      streams.set(payment.id, stream);
+      stream.connect();
+    }
+
+    // Fallback polling every 5 min
+    fallbackPollTimer = setInterval(() => {
+      console.log(`[StreamManager] Health check: ${streams.size} streams`);
+      // TODO: Check for dead streams, expired payments
+    }, 300000);
+  };
+
+  const stop = () => {
+    console.log(`[StreamManager] Stopping ${streams.size} streams...`);
+    for (const stream of streams.values()) {
+      stream.close();
+    }
+    streams.clear();
+    if (fallbackPollTimer) clearInterval(fallbackPollTimer);
+  };
+
+  const getStatus = () => ({
+    total: streams.size,
+    healthy: Array.from(streams.values()).filter((s) => s.getStatus().isHealthy).length,
+  });
+
+  return { start, stop, getStatus };
+})();
+
+export { streamManager };

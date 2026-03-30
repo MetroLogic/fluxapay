@@ -1,3 +1,5 @@
+import crypto from 'crypto';
+
 // ── Types ────────────────────────────────────────────────────────────────────
 
 export interface FluxaPayConfig {
@@ -56,6 +58,88 @@ export interface WebhookEvent {
   merchant_id: string;
   timestamp: string;
   data: Record<string, unknown>;
+}
+
+// ── Webhook Verification Helper ──────────────────────────────────────────────
+
+export interface VerifyWebhookSignatureOptions {
+  /** Max age of the webhook in seconds before it is rejected. Default: 300 (5 min). */
+  toleranceSeconds?: number;
+}
+
+export interface WebhookVerificationResult {
+  valid: boolean;
+  error?: string;
+}
+
+/**
+ * Verify a FluxaPay webhook signature without instantiating the SDK client.
+ *
+ * The backend signs webhooks using HMAC-SHA256 over `"${timestamp}.${rawBody}"`.
+ * Both `X-FluxaPay-Signature` and `X-FluxaPay-Timestamp` headers must be forwarded.
+ *
+ * @param rawBody   - Raw JSON string received in the request body (do NOT parse first).
+ * @param signature - Value of the `X-FluxaPay-Signature` header.
+ * @param timestamp - Value of the `X-FluxaPay-Timestamp` header (ISO 8601).
+ * @param secret    - Your webhook secret (`whsec_...`).
+ * @param options   - Optional replay-protection window.
+ *
+ * @example
+ * ```ts
+ * import { verifyWebhookSignature } from '@fluxapay/sdk';
+ *
+ * const result = verifyWebhookSignature(rawBody, sig, ts, process.env.WEBHOOK_SECRET!);
+ * if (!result.valid) throw new Error(result.error);
+ * ```
+ */
+export function verifyWebhookSignature(
+  rawBody: string,
+  signature: string,
+  timestamp: string,
+  secret: string,
+  options: VerifyWebhookSignatureOptions = {},
+): WebhookVerificationResult {
+  const { toleranceSeconds = 300 } = options;
+
+  if (!rawBody || !signature || !timestamp || !secret) {
+    return { valid: false, error: 'Missing required parameter' };
+  }
+
+  // Replay-protection: reject webhooks outside the tolerance window
+  const webhookMs = new Date(timestamp).getTime();
+  if (isNaN(webhookMs)) {
+    return { valid: false, error: 'Invalid timestamp format' };
+  }
+  const diffSeconds = (Date.now() - webhookMs) / 1000;
+  if (diffSeconds < 0) {
+    return { valid: false, error: 'Webhook timestamp is in the future' };
+  }
+  if (diffSeconds > toleranceSeconds) {
+    return {
+      valid: false,
+      error: `Webhook timestamp is older than ${toleranceSeconds} seconds`,
+    };
+  }
+
+  // Compute expected HMAC-SHA256 over "${timestamp}.${rawBody}"
+  const signingString = `${timestamp}.${rawBody}`;
+  const expected = crypto
+    .createHmac('sha256', secret)
+    .update(signingString)
+    .digest('hex');
+
+  // Constant-time comparison to prevent timing attacks
+  try {
+    const sigBuf = Buffer.from(signature);
+    const expBuf = Buffer.from(expected);
+    if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
+      return { valid: false, error: 'Signature mismatch' };
+    }
+  } catch {
+    return { valid: false, error: 'Signature verification failed' };
+  }
+
+  return { valid: true };
 }
 
 // ── Errors ───────────────────────────────────────────────────────────────────
@@ -307,30 +391,13 @@ export class FluxaPay {
      * ```
      */
     verify: (rawBody: string, signature: string, webhookSecret: string, timestamp?: string): boolean => {
-      // Node.js crypto – works in Node 18+. Browser usage is not recommended
-      // (never expose your webhook secret client-side).
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const crypto = require('crypto') as typeof import('crypto');
-        // include timestamp if provided
-        let data = rawBody;
-        if (timestamp) {
-          data = `${timestamp}.${rawBody}`;
-        }
-        const expected = crypto
-          .createHmac('sha256', webhookSecret)
-          .update(data)
-          .digest('hex');
-        // Timing-safe comparison
-        const sigBuffer = Buffer.from(signature);
-        const expBuffer = Buffer.from(expected);
-        return (
-          sigBuffer.length === expBuffer.length &&
-          crypto.timingSafeEqual(sigBuffer, expBuffer)
-        );
-      } catch {
-        return false;
-      }
+      // Delegates to the standalone verifyWebhookSignature helper.
+      // Node.js 18+ only – never expose your webhook secret client-side.
+      const ts = timestamp ?? new Date().toISOString();
+      return verifyWebhookSignature(rawBody, signature, ts, webhookSecret, {
+        // When no timestamp is provided we skip replay-protection by using a large window.
+        toleranceSeconds: timestamp ? 300 : Number.MAX_SAFE_INTEGER,
+      }).valid;
     },
 
     /**
