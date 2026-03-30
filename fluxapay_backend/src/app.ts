@@ -1,5 +1,4 @@
 import express from "express";
-import cors from "cors";
 import helmet from "helmet";
 import swaggerUi from "swagger-ui-express";
 import { specs } from "./docs/swagger";
@@ -10,6 +9,7 @@ import {
   errorLoggingMiddleware,
 } from "./middleware/requestLogging.middleware";
 import { metricsMiddleware } from "./middleware/metrics.middleware";
+import { corsMiddleware } from "./middleware/cors.middleware";
 import merchantRoutes from "./routes/merchant.route";
 import settlementRoutes from "./routes/settlement.route";
 import kycRoutes from "./routes/kyc.route";
@@ -35,7 +35,8 @@ app.use(requestIdMiddleware);
 app.use(requestLoggingMiddleware);
 app.use(metricsMiddleware);
 
-app.use(cors());
+// CORS Middleware (before routes, after observability)
+app.use(corsMiddleware);
 app.use(express.json());
 
 app.use(

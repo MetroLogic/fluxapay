@@ -17,6 +17,7 @@ const envSchema = z.object({
     PAYMENT_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(5),
     PAYMENT_METADATA_MAX_BYTES: z.coerce.number().int().positive().default(16384),
     PAYMENT_METADATA_MAX_DEPTH: z.coerce.number().int().positive().default(5),
+    CORS_ORIGINS: z.string().optional(),
 
     // Database (CRITICAL)
     DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
