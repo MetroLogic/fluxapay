@@ -201,7 +201,10 @@ export const getPaymentById = async (req: Request, res: Response) => {
 /**
  * GET /api/payments/:id/status
  * Publicly accessible view of a payment's status.
- * Returns only safe information for checkout display.
+ *
+ * Safe payer DTO — only the fields a payer needs to complete or verify a
+ * checkout.  Intentionally excludes: merchantId, internal DB ids beyond the
+ * payment id, merchant API keys, customer PII, and any internal metadata.
  */
 export const getPaymentStatus = async (req: Request, res: Response) => {
     try {
@@ -214,13 +217,8 @@ export const getPaymentStatus = async (req: Request, res: Response) => {
                 status: true,
                 amount: true,
                 currency: true,
+                stellar_address: true,
                 expiration: true,
-                createdAt: true,
-                merchant: {
-                    select: {
-                        business_name: true
-                    }
-                }
             }
         });
 
@@ -228,7 +226,15 @@ export const getPaymentStatus = async (req: Request, res: Response) => {
             return res.status(404).json({ error: "Payment not found" });
         }
 
-        res.json(payment);
+        // Return a minimal, PII-free DTO safe for unauthenticated callers.
+        res.json({
+            id: payment.id,
+            status: payment.status,
+            amount: Number(payment.amount),
+            currency: payment.currency,
+            address: payment.stellar_address,
+            expiresAt: payment.expiration.toISOString(),
+        });
     } catch (error: unknown) {
         console.error('Error fetching payment status:', error);
         res.status(500).json({ error: "Internal Server Error" });

@@ -15,10 +15,17 @@ import { simpleRateLimit } from "../middleware/simpleRateLimit.middleware";
 
 const router = Router();
 
+// Rate-limit unauthenticated status checks by IP *and* payment id so a single
+// client cannot enumerate or hammer an arbitrary number of payment ids.
 const publicPaymentStatusRateLimit = simpleRateLimit({
   keyPrefix: "payments:status",
   windowMs: 30_000,
-  max: 60,
+  max: 30,
+  getKey: (req) => {
+    const ip = req.ip || req.socket.remoteAddress || "unknown";
+    const paymentId = req.params.id || "unknown";
+    return `${ip}:${paymentId}`;
+  },
 });
 
 const publicPaymentStreamRateLimit = simpleRateLimit({
