@@ -229,6 +229,7 @@ model WebhookLog {
   endpoint_url    String
   http_status     Int?
   status          WebhookStatus
+  event_id        String?               @unique
   payment_id      String?
   retry_count     Int                   @default(0)
   max_retries     Int                   @default(5)
