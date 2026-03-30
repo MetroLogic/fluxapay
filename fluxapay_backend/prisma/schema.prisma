@@ -53,6 +53,7 @@ model Merchant {
   discrepancyThresholds DiscrepancyThreshold[]
   discrepancyAlerts     DiscrepancyAlert[]
   customers             Customer[]
+  dataExportJobs        DataExportJob[]
 }
 
 model Customer {
@@ -530,6 +531,28 @@ enum AuditEntityType {
   settlement_batch
 }
 
+/// Async GDPR-style data export job for a merchant.
+model DataExportJob {
+  id           String           @id @default(cuid())
+  merchant     Merchant         @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  merchantId   String
+  status       DataExportStatus @default(pending)
+  /// Base64-encoded JSON payload — populated when status = completed.
+  payload      String?
+  error        String?
+  requested_by String
+  expires_at   DateTime
+  created_at   DateTime         @default(now())
+  updated_at   DateTime         @updatedAt
+
+  @@index([merchantId])
+}
+
+enum DataExportStatus {
+  pending
+  processing
+  completed
+  failed
 /// Internal operator accounts with role-based access control.
 /// No production rollout until reviewed — spike only.
 model AdminUser {

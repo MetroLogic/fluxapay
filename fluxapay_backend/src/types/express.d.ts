@@ -9,7 +9,7 @@ export interface AuthRequest extends Request {
   adminUser?: {
     id: string;
     email: string;
-    role: AdminRole;
+    role: string;
   };
   merchantId?: string;
   requestId?: string;
