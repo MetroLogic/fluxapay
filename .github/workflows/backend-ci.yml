@@ -55,8 +55,24 @@ jobs:
       - name: Format Check (Lint)
         run: npm run lint
 
-      - name: Run Tests
+      - name: Validate OpenAPI Specification
+        run: npm run validate:openapi
+
+      - name: Check Route Documentation Coverage
+        run: npm run check:route-coverage -- --ci
+
+      - name: Run Unit Tests
         run: npm test
+        env:
+          KMS_PROVIDER: local
+          KMS_ENCRYPTION_PASSPHRASE: ci-test-passphrase-for-hd-wallet-secure
+          HD_WALLET_MASTER_SEED: ci-test-master-seed-32chars-long-padded!!
+          DISABLE_CRON: "true"
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/fluxapay_test?schema=public
+          JWT_SECRET: ci-test-jwt-secret-key
+
+      - name: Run Contract Tests
+        run: npm run test:contract
         env:
           KMS_PROVIDER: local
           KMS_ENCRYPTION_PASSPHRASE: ci-test-passphrase-for-hd-wallet-secure

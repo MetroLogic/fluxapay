@@ -110,6 +110,24 @@ Make stablecoin payments simple, practical, and accessible so merchants can sell
 Contributions are welcome!  
 Open an issue or submit a PR to help build Fluxapay.
 
+### API Documentation & Testing
+
+FluxaPay uses OpenAPI 3.0.0 for API documentation. We enforce contract testing to ensure docs stay in sync with implementation.
+
+**Quick Start:**
+```bash
+# Validate OpenAPI spec
+npm run validate:openapi
+
+# Check route documentation coverage
+npm run check:route-coverage
+
+# Run contract tests
+npm run test:contract
+```
+
+**Learn more:** See [docs/OPENAPI_CONTRACT_TESTING.md](docs/OPENAPI_CONTRACT_TESTING.md) for complete guide on documenting endpoints and understanding contract tests.
+
 ## Telegram link
 
 https://t.me/+m23gN14007w0ZmQ0
