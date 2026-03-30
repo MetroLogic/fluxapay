@@ -50,7 +50,11 @@ export async function listRefunds(req: Request, res: Response) {
 export async function updateRefundStatus(req: AuthRequest, res: Response) {
   try {
     const merchantId = await validateUserId(req);
-    const { refund_id } = req.params;
+    const refundIdRaw = (req.params as any).refund_id as string | string[] | undefined;
+    const refund_id = Array.isArray(refundIdRaw) ? refundIdRaw[0] : refundIdRaw;
+    if (!refund_id) {
+      return res.status(400).json({ message: "refund_id is required" });
+    }
 
     const result = await updateRefundStatusService({
       merchantId,

@@ -96,6 +96,16 @@ const formatDate = (dateString: string) => {
     });
 };
 
+interface AuditLog {
+    id: string;
+    created_at: string;
+    admin_id: string;
+    action_type: string;
+    entity_type: string;
+    entity_id: string;
+    details: any;
+}
+
 // -- Main Component --
 
 export default function AdminAuditLogsPage() {

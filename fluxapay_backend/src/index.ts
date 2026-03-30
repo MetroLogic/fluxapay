@@ -1,7 +1,11 @@
+// OTEL must be imported first so auto-instrumentation patches load before any
+// application modules are required.
+import "./tracing";
+
 import dotenv from "dotenv";
 import { validateEnv, EnvValidationError } from "./config/env.config";
-import { startCronJobs } from "./services/cron.service";
-import { startPaymentMonitor } from "./services/paymentMonitor.service";
+import { startCronJobs, stopCronJobs } from "./services/cron.service";
+import { startPaymentMonitor, stopPaymentMonitor } from "./services/paymentMonitor.service";
 import { initializeEmailNotifications } from "./services/emailNotification.service";
 import { getLogger } from "./utils/logger";
 
@@ -27,6 +31,8 @@ try {
 import { app, prisma } from "./app";
 
 let server: any;
+// Track whether a shutdown is already in progress to avoid duplicate calls.
+let isShuttingDown = false;
 
 try {
   server = app.listen(config.PORT, () => {
@@ -49,24 +55,72 @@ try {
     initializeEmailNotifications();
   });
 
-  // Graceful shutdown handling
+  /**
+   * Graceful shutdown handler.
+   *
+   * Sequence:
+   *  1. Stop cron workers and payment monitor (no new background work).
+   *  2. Stop the HTTP server so no new connections are accepted.
+   *  3. Wait for in-flight requests to finish (server.close callback).
+   *  4. Disconnect Prisma.
+   *  5. Exit 0.
+   *
+   * A hard-kill timer fires after SHUTDOWN_TIMEOUT_MS (default 30 s) to
+   * ensure the process always terminates even when a request hangs.
+   *
+   * Kubernetes preStop hook recommendation
+   * ───────────────────────────────────────
+   * Add the following to your container spec so the kubelet sends SIGTERM
+   * *after* the pod is removed from the load-balancer endpoints, giving
+   * existing connections time to drain:
+   *
+   *   lifecycle:
+   *     preStop:
+   *       exec:
+   *         command: ["sleep", "5"]
+   *
+   * Set `terminationGracePeriodSeconds` to at least SHUTDOWN_TIMEOUT_MS / 1000
+   * plus the preStop sleep (e.g. 35 s for a 30 s drain + 5 s preStop).
+   */
+  const SHUTDOWN_TIMEOUT_MS = parseInt(
+    process.env.SHUTDOWN_TIMEOUT_MS || "30000",
+    10,
+  );
+
   const gracefulShutdown = async (signal: string) => {
+    if (isShuttingDown) return;
+    isShuttingDown = true;
+
     logger.info(`Graceful shutdown initiated (${signal})`);
 
-    try {
-      // Stop accepting new requests
-      server.close();
+    // Arm the hard-kill timer FIRST so we always exit even if cleanup hangs.
+    const forceExitTimer = setTimeout(() => {
+      logger.error("Graceful shutdown timed out — forcing exit");
+      process.exit(1);
+    }, SHUTDOWN_TIMEOUT_MS);
+    // Allow Node to exit normally once cleanup finishes (don't keep the loop alive).
+    forceExitTimer.unref();
 
-      // Close Prisma connections
+    try {
+      // 1. Stop background workers — no new cron ticks or monitor polls.
+      stopCronJobs();
+      stopPaymentMonitor();
+      logger.info("Background workers stopped");
+
+      // 2. Stop accepting new HTTP connections; wait for in-flight requests.
+      await new Promise<void>((resolve, reject) => {
+        server.close((err?: Error) => {
+          if (err) return reject(err);
+          resolve();
+        });
+      });
+      logger.info("HTTP server closed — all in-flight requests finished");
+
+      // 3. Disconnect from the database.
       await prisma.$disconnect();
       logger.info("Database connections closed");
 
-      // Give existing requests time to complete
-      setTimeout(() => {
-        logger.info("Forcing shutdown after timeout");
-        process.exit(1);
-      }, 30000); // 30 second timeout
-
+      clearTimeout(forceExitTimer);
       logger.info("Graceful shutdown completed");
       process.exit(0);
     } catch (error) {
