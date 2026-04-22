@@ -98,7 +98,7 @@ function PaymentsContent() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
 
-  const [, setSearch] = useState("");
+  const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [currencyFilter, setCurrencyFilter] = useState("all");
 
@@ -338,6 +338,9 @@ function PaymentsContent() {
         )}
 
         <PaymentsFilters
+          searchValue={search}
+          statusValue={statusFilter}
+          currencyValue={currencyFilter}
           onSearchChange={handleSearchChange}
           onStatusChange={(v) => setStatusFilter(v)}
           onCurrencyChange={(v) => setCurrencyFilter(v)}

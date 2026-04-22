@@ -78,15 +78,21 @@ export function mapReconciliationRecordApiToUi(
   const expected = num(r.expected_total);
   const actual = num(r.actual_total);
   const disc = num(r.discrepancy_amount);
+  const discPercent = num(r.discrepancy_percent);
   return {
     id: r.id,
     settlementId: r.id,
+    period_start: r.period_start,
+    period_end: r.period_end,
     date: new Date(r.period_end),
     usdcReceived: expected,
     fiatPayout: actual,
     fees: 0,
     discrepancy: disc,
+    discrepancy_percent: discPercent,
+    status: r.status,
     notes: r.status,
+    alerts: [],
   };
 }
 
@@ -108,12 +114,14 @@ export function mapDiscrepancyAlertApiToUi(
   const amount = rec ? num(rec.discrepancy_amount) : 0;
   return {
     id: a.id,
+    reconciliationRecordId: a.reconciliationRecordId,
     settlementId: rec?.id ?? a.reconciliationRecordId,
     type: inferAlertType(rec),
     amount,
     description: a.message,
     date: new Date(a.created_at),
     resolved: a.is_resolved,
+    severity: a.severity || 'medium',
   };
 }
 
@@ -148,18 +156,25 @@ export interface Settlement {
 export interface ReconciliationRecord {
   id: string;
   settlementId: string;
+  period_start?: string;
+  period_end?: string;
   date: Date;
   usdcReceived: number;
   fiatPayout: number;
   fees: number;
   discrepancy: number;
+  discrepancy_percent?: number;
+  status?: string;
   notes?: string;
+  alerts?: DiscrepancyAlert[];
 }
 
 export interface DiscrepancyAlert {
   id: string;
+  reconciliationRecordId?: string;
   settlementId: string;
   type: 'overpayment' | 'underpayment' | 'missing_transaction';
+  severity?: string;
   amount: number;
   description: string;
   date: Date;

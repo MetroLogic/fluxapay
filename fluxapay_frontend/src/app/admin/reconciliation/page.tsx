@@ -32,40 +32,8 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 
-// ─── Types ────────────────────────────────────────────────────────────────
-
-interface ReconciliationRecord {
-  id: string;
-  period_start: string;
-  period_end: string;
-  total_usdc_swept: number;
-  total_fiat_payouts: number;
-  total_fees: number;
-  expected_balance: number;
-  actual_balance: number;
-  discrepancy: number;
-  discrepancy_percent: number;
-  status: "pending" | "matched" | "discrepancy" | "reviewed" | "resolved";
-  settlements_count: number;
-  payments_count: number;
-  notes?: string;
-  reviewed_by?: string;
-  reviewed_at?: string;
-  alerts: ReconciliationAlert[];
-  created_at: string;
-}
-
-interface ReconciliationAlert {
-  id: string;
-  alert_type: string;
-  severity: "low" | "medium" | "high" | "critical";
-  message: string;
-  details?: Record<string, unknown>;
-  acknowledged: boolean;
-  acknowledged_by?: string;
-  acknowledged_at?: string;
-  created_at: string;
-}
+import { useAdminReconciliation } from "../../../hooks/useAdminReconciliation";
+import { ReconciliationRecord, DiscrepancyAlert } from "../../../types/reconciliation";
 
 interface StatusConfig {
   color: string;
@@ -76,131 +44,58 @@ interface StatusConfig {
   glow: string;
 }
 
-// ─── Mock Data ─────────────────────────────────────────────────────────
-
-const mockReconciliations: ReconciliationRecord[] = [
-  {
-    id: "REC-2026-001",
-    period_start: "2026-02-01",
-    period_end: "2026-02-07",
-    total_usdc_swept: 45200.0,
-    total_fiat_payouts: 43950.0,
-    total_fees: 904.0,
-    expected_balance: 45200.0,
-    actual_balance: 44854.0,
-    discrepancy: 346.0,
-    discrepancy_percent: 0.77,
-    status: "matched",
-    settlements_count: 12,
-    payments_count: 189,
-    alerts: [],
-    created_at: "2026-02-08T00:15:00Z",
-  },
-  {
-    id: "REC-2026-002",
-    period_start: "2026-02-08",
-    period_end: "2026-02-14",
-    total_usdc_swept: 67850.0,
-    total_fiat_payouts: 65100.0,
-    total_fees: 1357.0,
-    expected_balance: 67850.0,
-    actual_balance: 65200.0,
-    discrepancy: 2650.0,
-    discrepancy_percent: 3.91,
-    status: "discrepancy",
-    settlements_count: 18,
-    payments_count: 312,
-    alerts: [
-      {
-        id: "ALT-001",
-        alert_type: "threshold_exceeded",
-        severity: "medium",
-        message: "Discrepancy of 3.91% detected (2,650 USDC). Threshold is 1%.",
-        acknowledged: false,
-        created_at: "2026-02-15T00:20:00Z",
-      },
-      {
-        id: "ALT-002",
-        alert_type: "missing_settlement",
-        severity: "high",
-        message: "2 failed settlement(s) detected in period.",
-        details: {
-          failedSettlementIds: ["SET-9923-Z"],
-          totalFailedAmount: 75000,
-        },
-        acknowledged: false,
-        created_at: "2026-02-15T00:20:00Z",
-      },
-    ],
-    created_at: "2026-02-15T00:15:00Z",
-  },
-  {
-    id: "REC-2026-003",
-    period_start: "2026-02-15",
-    period_end: "2026-02-19",
-    total_usdc_swept: 23400.0,
-    total_fiat_payouts: 22750.0,
-    total_fees: 468.0,
-    expected_balance: 23400.0,
-    actual_balance: 23218.0,
-    discrepancy: 182.0,
-    discrepancy_percent: 0.78,
-    status: "pending",
-    settlements_count: 8,
-    payments_count: 94,
-    alerts: [],
-    created_at: "2026-02-20T00:15:00Z",
-  },
-  {
-    id: "REC-2026-004",
-    period_start: "2026-01-25",
-    period_end: "2026-01-31",
-    total_usdc_swept: 89500.0,
-    total_fiat_payouts: 87100.0,
-    total_fees: 1790.0,
-    expected_balance: 89500.0,
-    actual_balance: 88890.0,
-    discrepancy: 610.0,
-    discrepancy_percent: 0.68,
-    status: "reviewed",
-    settlements_count: 24,
-    payments_count: 445,
-    notes: "Minor rounding differences across FX conversions. Acceptable.",
-    reviewed_by: "admin@fluxapay.com",
-    reviewed_at: "2026-02-02T10:30:00Z",
-    alerts: [
-      {
-        id: "ALT-003",
-        alert_type: "fee_discrepancy",
-        severity: "low",
-        message: "Fee rate deviation detected: 2.01% vs expected 2.00%.",
-        acknowledged: true,
-        acknowledged_by: "admin@fluxapay.com",
-        acknowledged_at: "2026-02-02T10:30:00Z",
-        created_at: "2026-02-01T00:20:00Z",
-      },
-    ],
-    created_at: "2026-02-01T00:15:00Z",
-  },
-];
-
 // ─── Component ─────────────────────────────────────────────────────────
 
 const AdminReconciliationPage = () => {
-  const [records] = useState<ReconciliationRecord[]>(mockReconciliations);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [selectedRecord, setSelectedRecord] =
     useState<ReconciliationRecord | null>(null);
   const [showRunModal, setShowRunModal] = useState(false);
-  const [periodStart, setPeriodStart] = useState("");
-  const [periodEnd, setPeriodEnd] = useState("");
+  
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  
+  const [globalStart, setGlobalStart] = useState<Date>(thirtyDaysAgo);
+  const [globalEnd, setGlobalEnd] = useState<Date>(new Date());
+  
+  const [periodStart, setPeriodStart] = useState(thirtyDaysAgo.toISOString().split("T")[0]);
+  const [periodEnd, setPeriodEnd] = useState(new Date().toISOString().split("T")[0]);
+  
   const [activeTab, setActiveTab] = useState<"overview" | "alerts">("overview");
+
+  const { records: rawRecords, summary, discrepancies, loading, resolveDiscrepancy } = 
+    useAdminReconciliation({ start: globalStart, end: globalEnd });
+    
+  const records = rawRecords.map(r => ({
+    ...r,
+    alerts: discrepancies.filter(d => d.settlementId === r.id || d.reconciliationRecordId === r.id)
+  }));
+
+  const handleExport = () => {
+    if (records.length === 0) {
+      toast.error("No records to export.");
+      return;
+    }
+    const csvContent = "data:text/csv;charset=utf-8," 
+      + "Record ID,Period Start,Period End,USDC Swept,Fiat Payouts,Fees,Discrepancy Amount,Discrepancy %,Status\\n"
+      + records.map(r => {
+          return `${r.id},${r.period_start},${r.period_end},${r.usdcReceived},${r.fiatPayout},${r.fees},${r.discrepancy},${(r.discrepancy_percent || 0)},${r.status}`;
+      }).join("\\n");
+      
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `admin_reconciliations_${new Date().toISOString()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  };
 
   // ─── Helpers ────────────────────────────────────────────────────
 
   const getStatusConfig = (
-    status: ReconciliationRecord["status"],
+    status: string | undefined,
   ): StatusConfig => {
     switch (status) {
       case "matched":
@@ -254,13 +149,13 @@ const AdminReconciliationPage = () => {
           bg: "bg-slate-50",
           border: "border-slate-200",
           icon: <Clock className="w-3.5 h-3.5" />,
-          label: status,
+          label: status || "Unknown",
           glow: "",
         };
     }
   };
 
-  const getSeverityConfig = (severity: ReconciliationAlert["severity"]) => {
+  const getSeverityConfig = (severity: string | undefined) => {
     switch (severity) {
       case "critical":
         return {
@@ -309,7 +204,7 @@ const AdminReconciliationPage = () => {
   const allAlerts = records.flatMap((r) =>
     r.alerts.map((a) => ({ ...a, reconciliationId: r.id })),
   );
-  const unresolvedAlerts = allAlerts.filter((a) => !a.acknowledged);
+  const unresolvedAlerts = allAlerts.filter((a) => !a.resolved);
 
   const stats = {
     totalRecords: records.length,
@@ -318,10 +213,10 @@ const AdminReconciliationPage = () => {
     unresolvedAlerts: unresolvedAlerts.length,
     avgDiscrepancy:
       records.length > 0
-        ? records.reduce((sum, r) => sum + r.discrepancy_percent, 0) /
+        ? records.reduce((sum, r) => sum + (r.discrepancy_percent || 0), 0) /
           records.length
         : 0,
-    totalSwept: records.reduce((sum, r) => sum + r.total_usdc_swept, 0),
+    totalSwept: records.reduce((sum, r) => sum + r.usdcReceived, 0),
   };
 
   const handleRunReconciliation = () => {
@@ -329,16 +224,21 @@ const AdminReconciliationPage = () => {
       toast.error("Please select both start and end dates");
       return;
     }
+    setGlobalStart(new Date(periodStart));
+    setGlobalEnd(new Date(periodEnd));
     toast.success(
-      "Reconciliation started for period " + periodStart + " to " + periodEnd,
+      "Fetching reconciliation for period " + periodStart + " to " + periodEnd,
     );
     setShowRunModal(false);
-    setPeriodStart("");
-    setPeriodEnd("");
   };
 
-  const handleAcknowledgeAlert = (alertId: string) => {
-    toast.success(`Alert ${alertId} acknowledged`);
+  const handleAcknowledgeAlert = async (alertId: string) => {
+    try {
+      await resolveDiscrepancy(alertId);
+      toast.success(`Alert ${alertId} resolved`);
+    } catch (err) {
+      toast.error(`Failed to resolve alert: ${err}`);
+    }
   };
 
   // ─── Render ─────────────────────────────────────────────────────
@@ -371,7 +271,7 @@ const AdminReconciliationPage = () => {
                 <Play className="w-4 h-4" />
                 Run Reconciliation
               </button>
-              <button className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-all shadow-sm">
+              <button onClick={handleExport} className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-all shadow-sm">
                 <Download className="w-4 h-4" />
                 Export
               </button>
@@ -413,7 +313,7 @@ const AdminReconciliationPage = () => {
               {[
                 {
                   label: "Total USDC Swept",
-                  value: `$${stats.totalSwept.toLocaleString(undefined, { minimumFractionDigits: 0 })}`,
+                  value: `$${(summary?.totalUSDCReceived || 0).toLocaleString(undefined, { minimumFractionDigits: 0 })}`,
                   icon: DollarSign,
                   color: "text-emerald-600",
                   bg: "bg-emerald-50",
@@ -512,14 +412,14 @@ const AdminReconciliationPage = () => {
                     </p>
                     <h3 className="text-3xl font-black">
                       $
-                      {stats.totalSwept.toLocaleString(undefined, {
+                      {(summary?.totalUSDCReceived || 0).toLocaleString(undefined, {
                         minimumFractionDigits: 2,
                       })}
                     </h3>
                     <p className="text-xs text-slate-400 mt-1 flex items-center gap-1">
                       <ArrowUpRight className="w-3 h-3 text-emerald-400" />
                       {records.reduce(
-                        (sum, r) => sum + r.payments_count,
+                        (sum, r) => sum + 0,
                         0,
                       )}{" "}
                       payments processed
@@ -544,7 +444,7 @@ const AdminReconciliationPage = () => {
                       $
                       {records
                         .reduce(
-                          (sum, r) => sum + r.total_fiat_payouts + r.total_fees,
+                          (sum, r) => sum + r.fiatPayout + r.fees,
                           0,
                         )
                         .toLocaleString(undefined, {
@@ -554,7 +454,7 @@ const AdminReconciliationPage = () => {
                     <p className="text-xs text-slate-400 mt-1 flex items-center gap-1">
                       <ArrowDownRight className="w-3 h-3 text-rose-400" />
                       {records.reduce(
-                        (sum, r) => sum + r.settlements_count,
+                        (sum, r) => sum + 0,
                         0,
                       )}{" "}
                       settlements processed
@@ -655,7 +555,7 @@ const AdminReconciliationPage = () => {
                     {filteredRecords.map((r) => {
                       const config = getStatusConfig(r.status);
                       const hasAlerts =
-                        r.alerts.filter((a) => !a.acknowledged).length > 0;
+                        r.alerts.filter((a) => !a.resolved).length > 0;
                       return (
                         <tr
                           key={r.id}
@@ -670,42 +570,42 @@ const AdminReconciliationPage = () => {
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex flex-col">
                               <span className="text-sm font-semibold text-slate-900">
-                                {new Date(r.period_start).toLocaleDateString(
+                                {r.period_start ? new Date(r.period_start).toLocaleDateString(
                                   "en-US",
                                   { month: "short", day: "numeric" },
-                                )}{" "}
+                                ) : ""}{" "}
                                 –{" "}
-                                {new Date(r.period_end).toLocaleDateString(
+                                {r.period_end ? new Date(r.period_end).toLocaleDateString(
                                   "en-US",
                                   { month: "short", day: "numeric" },
-                                )}
+                                ) : ""}
                               </span>
                               <span className="text-[10px] text-slate-400 font-medium">
-                                {r.payments_count} payments ·{" "}
-                                {r.settlements_count} settlements
+                                0 payments ·{" "}
+                                0 settlements
                               </span>
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <span className="text-sm font-extrabold text-slate-900">
-                              ${r.total_usdc_swept.toLocaleString()}
+                              ${r.usdcReceived.toLocaleString()}
                             </span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <span className="text-sm font-extrabold text-slate-900">
                               $
                               {(
-                                r.total_fiat_payouts + r.total_fees
+                                r.fiatPayout + r.fees
                               ).toLocaleString()}
                             </span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex flex-col">
                               <span
-                                className={`text-sm font-bold ${r.discrepancy_percent > 1 ? "text-rose-600" : "text-emerald-600"}`}
+                                className={`text-sm font-bold ${(r.discrepancy_percent || 0) > 1 ? "text-rose-600" : "text-emerald-600"}`}
                               >
-                                {r.discrepancy_percent > 1 ? "↑" : "✓"}{" "}
-                                {r.discrepancy_percent.toFixed(2)}%
+                                {(r.discrepancy_percent || 0) > 1 ? "↑" : "✓"}{" "}
+                                {(r.discrepancy_percent || 0).toFixed(2)}%
                               </span>
                               <span className="text-[10px] text-slate-400 font-medium">
                                 ${r.discrepancy.toLocaleString()} USDC
@@ -724,7 +624,7 @@ const AdminReconciliationPage = () => {
                             {hasAlerts ? (
                               <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
                                 <Bell className="w-3 h-3" />
-                                {r.alerts.filter((a) => !a.acknowledged).length}
+                                {r.alerts.filter((a) => !a.resolved).length}
                               </span>
                             ) : (
                               <span className="text-slate-300 text-xs">—</span>
@@ -794,7 +694,7 @@ const AdminReconciliationPage = () => {
                 },
                 {
                   label: "Total Acknowledged",
-                  value: allAlerts.filter((a) => a.acknowledged).length,
+                  value: allAlerts.filter((a) => a.resolved).length,
                   icon: BellOff,
                   color: "text-slate-600",
                   bg: "bg-slate-50",
@@ -835,12 +735,12 @@ const AdminReconciliationPage = () => {
                 </div>
               ) : (
                 allAlerts.map((alert) => {
-                  const sevConfig = getSeverityConfig(alert.severity);
+                  const sevConfig = getSeverityConfig(alert.severity || 'low');
                   return (
                     <div
                       key={alert.id}
                       className={`bg-white rounded-2xl border shadow-sm p-5 flex items-start gap-4 transition-all hover:shadow-md ${
-                        alert.acknowledged
+                        alert.resolved
                           ? "border-slate-100 opacity-60"
                           : "border-slate-200"
                       }`}
@@ -860,10 +760,10 @@ const AdminReconciliationPage = () => {
                             <span
                               className={`w-1.5 h-1.5 rounded-full ${sevConfig.dot}`}
                             />
-                            {alert.severity.toUpperCase()}
+                            {(alert.severity || 'low').toUpperCase()}
                           </span>
                           <span className="text-[10px] text-slate-400 font-mono">
-                            {alert.alert_type.replace(/_/g, " ")}
+                            {alert.type.replace(/_/g, " ")}
                           </span>
                           <span className="text-[10px] text-slate-300">•</span>
                           <span className="text-[10px] text-slate-400">
@@ -873,13 +773,13 @@ const AdminReconciliationPage = () => {
                           </span>
                         </div>
                         <p className="text-sm font-semibold text-slate-900 mb-1">
-                          {alert.message}
+                          {alert.description}
                         </p>
                         <p className="text-xs text-slate-400 font-medium">
-                          {new Date(alert.created_at).toLocaleString()}
+                          {new Date(alert.date).toLocaleString()}
                         </p>
                       </div>
-                      {!alert.acknowledged ? (
+                      {!alert.resolved ? (
                         <button
                           onClick={() => handleAcknowledgeAlert(alert.id)}
                           className="px-3 py-1.5 text-xs font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 transition-all flex-shrink-0"
@@ -958,23 +858,23 @@ const AdminReconciliationPage = () => {
                   {[
                     {
                       label: "Period",
-                      value: `${new Date(selectedRecord.period_start).toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${new Date(selectedRecord.period_end).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`,
+                      value: `${selectedRecord.period_start ? new Date(selectedRecord.period_start).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : ""} – ${selectedRecord.period_end ? new Date(selectedRecord.period_end).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : ""}`,
                       icon: Calendar,
                     },
                     {
                       label: "Payments",
-                      value: selectedRecord.payments_count.toString(),
+                      value: "0",
                       icon: Hash,
                     },
                     {
                       label: "Settlements",
-                      value: selectedRecord.settlements_count.toString(),
+                      value: "0",
                       icon: FileText,
                     },
                     {
                       label: "Created",
                       value: new Date(
-                        selectedRecord.created_at,
+                        selectedRecord.date || new Date(),
                       ).toLocaleDateString(),
                       icon: Clock,
                     },
@@ -1012,7 +912,7 @@ const AdminReconciliationPage = () => {
                       </div>
                       <span className="text-sm font-extrabold text-slate-900">
                         $
-                        {selectedRecord.total_usdc_swept.toLocaleString(
+                        {selectedRecord.usdcReceived.toLocaleString(
                           undefined,
                           { minimumFractionDigits: 2 },
                         )}
@@ -1027,7 +927,7 @@ const AdminReconciliationPage = () => {
                       </div>
                       <span className="text-sm font-extrabold text-slate-900">
                         $
-                        {selectedRecord.total_fiat_payouts.toLocaleString(
+                        {selectedRecord.fiatPayout.toLocaleString(
                           undefined,
                           { minimumFractionDigits: 2 },
                         )}
@@ -1042,7 +942,7 @@ const AdminReconciliationPage = () => {
                       </div>
                       <span className="text-sm font-extrabold text-slate-900">
                         $
-                        {selectedRecord.total_fees.toLocaleString(undefined, {
+                        {selectedRecord.fees.toLocaleString(undefined, {
                           minimumFractionDigits: 2,
                         })}
                       </span>
@@ -1055,7 +955,7 @@ const AdminReconciliationPage = () => {
                         </span>
                         <span className="text-sm font-extrabold text-slate-900">
                           $
-                          {selectedRecord.expected_balance.toLocaleString(
+                          {selectedRecord.usdcReceived.toLocaleString(
                             undefined,
                             { minimumFractionDigits: 2 },
                           )}
@@ -1067,7 +967,7 @@ const AdminReconciliationPage = () => {
                         </span>
                         <span className="text-sm font-extrabold text-slate-900">
                           $
-                          {selectedRecord.actual_balance.toLocaleString(
+                          {selectedRecord.fiatPayout.toLocaleString(
                             undefined,
                             { minimumFractionDigits: 2 },
                           )}
@@ -1075,26 +975,26 @@ const AdminReconciliationPage = () => {
                       </div>
                       <div
                         className={`flex justify-between items-center p-3 rounded-xl ${
-                          selectedRecord.discrepancy_percent > 1
+                          (selectedRecord.discrepancy_percent || 0) > 1
                             ? "bg-rose-50 border border-rose-200"
                             : "bg-emerald-50 border border-emerald-200"
                         }`}
                       >
                         <span
-                          className={`text-sm font-black ${selectedRecord.discrepancy_percent > 1 ? "text-rose-700" : "text-emerald-700"}`}
+                          className={`text-sm font-black ${(selectedRecord.discrepancy_percent || 0) > 1 ? "text-rose-700" : "text-emerald-700"}`}
                         >
                           Discrepancy
                         </span>
                         <div className="text-right">
                           <span
-                            className={`text-sm font-black ${selectedRecord.discrepancy_percent > 1 ? "text-rose-700" : "text-emerald-700"}`}
+                            className={`text-sm font-black ${(selectedRecord.discrepancy_percent || 0) > 1 ? "text-rose-700" : "text-emerald-700"}`}
                           >
                             $
                             {selectedRecord.discrepancy.toLocaleString(
                               undefined,
                               { minimumFractionDigits: 2 },
                             )}{" "}
-                            ({selectedRecord.discrepancy_percent.toFixed(2)}%)
+                            ({(selectedRecord.discrepancy_percent || 0).toFixed(2)}%)
                           </span>
                         </div>
                       </div>
@@ -1103,20 +1003,20 @@ const AdminReconciliationPage = () => {
                 </div>
 
                 {/* Alerts Section */}
-                {selectedRecord.alerts.length > 0 && (
+                {(selectedRecord.alerts || []).length > 0 && (
                   <div className="space-y-4">
                     <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest flex items-center gap-3">
                       <Bell className="w-4 h-4 text-rose-500" />
-                      Alerts ({selectedRecord.alerts.length})
+                      Alerts ({(selectedRecord.alerts || []).length})
                       <div className="h-px flex-1 bg-slate-100" />
                     </h3>
                     <div className="space-y-2">
-                      {selectedRecord.alerts.map((alert) => {
-                        const sevConfig = getSeverityConfig(alert.severity);
+                      {(selectedRecord.alerts || []).map((alert) => {
+                        const sevConfig = getSeverityConfig(alert.severity || 'low');
                         return (
                           <div
                             key={alert.id}
-                            className={`p-4 rounded-2xl border ${alert.acknowledged ? "bg-slate-50 border-slate-100" : `${sevConfig.bg} ${sevConfig.border}`}`}
+                            className={`p-4 rounded-2xl border ${alert.resolved ? "bg-slate-50 border-slate-100" : `${sevConfig.bg} ${sevConfig.border}`}`}
                           >
                             <div className="flex items-start justify-between gap-3">
                               <div className="flex-1">
@@ -1124,17 +1024,17 @@ const AdminReconciliationPage = () => {
                                   <span
                                     className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold ${sevConfig.bg} ${sevConfig.color}`}
                                   >
-                                    {alert.severity.toUpperCase()}
+                                    {(alert.severity || 'low').toUpperCase()}
                                   </span>
                                   <span className="text-[10px] text-slate-400 font-mono">
-                                    {alert.alert_type.replace(/_/g, " ")}
+                                    {alert.type.replace(/_/g, " ")}
                                   </span>
                                 </div>
                                 <p className="text-sm font-semibold text-slate-900">
-                                  {alert.message}
+                                  {alert.description}
                                 </p>
                               </div>
-                              {alert.acknowledged ? (
+                              {alert.resolved ? (
                                 <span className="text-emerald-500">
                                   <CheckCircle className="w-5 h-5" />
                                 </span>
@@ -1168,16 +1068,7 @@ const AdminReconciliationPage = () => {
                       <p className="text-sm text-blue-900 font-medium">
                         {selectedRecord.notes}
                       </p>
-                      {selectedRecord.reviewed_by && (
-                        <p className="text-xs text-blue-600 mt-2 font-medium">
-                          — Reviewed by {selectedRecord.reviewed_by} on{" "}
-                          {selectedRecord.reviewed_at
-                            ? new Date(
-                                selectedRecord.reviewed_at,
-                              ).toLocaleString()
-                            : ""}
-                        </p>
-                      )}
+                      
                     </div>
                   </div>
                 )}
