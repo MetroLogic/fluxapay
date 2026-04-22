@@ -19,8 +19,9 @@
   ],
   "scripts": {
     "build": "tsc",
-    "test": "npm run test:unit && npm run test:integration",
+    "test": "npm run test:unit && npm run test:webhook && npm run test:integration",
     "test:unit": "tsx src/__tests__/sdk.test.ts",
+    "test:webhook": "tsx src/__tests__/webhook.test.ts",
     "test:integration": "tsx src/__tests__/integration.test.ts",
     "prepublishOnly": "npm run build"
   },
