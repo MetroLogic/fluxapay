@@ -182,6 +182,38 @@ export const api = {
         if (!res.ok) throw new ApiError(res.status, "Failed to resend OTP");
         return res.json();
       }),
+    forgotPassword: (data: { email: string }) =>
+      fetch(`${API_BASE_URL}/api/merchants/forgot-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      }).then(async (res) => {
+        if (!res.ok) {
+           const err = await res.json().catch(() => ({ message: "Request failed" }));
+           throw new ApiError(res.status, err.message || "Failed to request password reset");
+        }
+        return res.json();
+      }),
+    validateResetToken: (token: string) =>
+      fetch(`${API_BASE_URL}/api/merchants/validate-reset-token?token=${encodeURIComponent(token)}`).then(async (res) => {
+        if (!res.ok) {
+           const err = await res.json().catch(() => ({ message: "Invalid or expired token" }));
+           throw new ApiError(res.status, err.message || "Invalid or expired token");
+        }
+        return res.json();
+      }),
+    resetPassword: (data: { token: string; new_password: string }) =>
+      fetch(`${API_BASE_URL}/api/merchants/reset-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      }).then(async (res) => {
+        if (!res.ok) {
+           const err = await res.json().catch(() => ({ message: "Reset failed" }));
+           throw new ApiError(res.status, err.message || "Failed to reset password");
+        }
+        return res.json();
+      }),
   },
 
   // Merchant endpoints
