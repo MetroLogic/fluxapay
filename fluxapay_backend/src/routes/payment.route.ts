@@ -36,7 +36,7 @@ const publicPaymentStreamRateLimit = simpleRateLimit({
 
 /**
  * @swagger
- * /api/v1/payments/:id/status:
+ * /api/v1/payments/{id}/status:
  *   get:
  *     summary: Publicly accessible view of a payment's status
  *     tags: [Payments]
@@ -56,7 +56,7 @@ router.get('/:id/status', publicPaymentStatusRateLimit, getPaymentStatus);
 
 /**
  * @swagger
- * /api/v1/payments/:id/stream:
+ * /api/v1/payments/{id}/stream:
  *   get:
  *     summary: SSE stream for real-time payment updates
  *     tags: [Payments]

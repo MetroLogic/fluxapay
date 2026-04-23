@@ -135,6 +135,22 @@ const options: swaggerJsdoc.Options = {
                         is_active: { type: 'boolean', example: true },
                     },
                 },
+                Merchant: {
+                    type: 'object',
+                    description: 'Merchant account (subset for documentation / contract tests)',
+                    properties: {
+                        id: { type: 'string' },
+                        business_name: { type: 'string' },
+                        email: { type: 'string', format: 'email' },
+                        phone_number: { type: 'string' },
+                        country: { type: 'string' },
+                        settlement_currency: { type: 'string' },
+                        status: { type: 'string' },
+                        webhook_url: { type: 'string', nullable: true },
+                        created_at: { type: 'string', format: 'date-time' },
+                        updated_at: { type: 'string', format: 'date-time' },
+                    },
+                },
             },
         },
         tags: [

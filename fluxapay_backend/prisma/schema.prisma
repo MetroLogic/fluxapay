@@ -575,6 +575,8 @@ enum DataExportStatus {
   processing
   completed
   failed
+}
+
 /// Internal operator accounts with role-based access control.
 /// No production rollout until reviewed — spike only.
 model AdminUser {
@@ -596,6 +598,8 @@ enum AdminRole {
   support
   finance
   super_admin
+}
+
 enum WebhookDeliveryStatus {
   PENDING
   SUCCESS

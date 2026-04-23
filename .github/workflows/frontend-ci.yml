@@ -10,9 +10,13 @@ on:
     paths:
       - "fluxapay_frontend/**"
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  build-and-check:
-    name: Frontend Build & Format Check
+  lint:
+    name: Frontend Lint
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -30,13 +34,32 @@ jobs:
           cache-dependency-path: fluxapay_frontend/package-lock.json
 
       - name: Install dependencies
-        run: npm install --legacy-peer-deps
+        run: npm ci --legacy-peer-deps
 
       - name: Format Check (Lint)
         run: npx eslint . --max-warnings=0
         continue-on-error: true
-        # Runs ESLint to verify code quality and formatting rules defined in eslint config.
-        # This satisfies the "Format Check" requirement.
+
+  build:
+    name: Frontend Build Check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./fluxapay_frontend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: fluxapay_frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
 
       - name: Build Check
         run: npm run build
@@ -60,7 +83,7 @@ jobs:
           cache-dependency-path: fluxapay_frontend/package-lock.json
 
       - name: Install dependencies
-        run: npm install --legacy-peer-deps
+        run: npm ci --legacy-peer-deps
 
       - name: Run unit / component tests
         run: npm test
@@ -68,7 +91,7 @@ jobs:
   e2e-tests:
     name: E2E (${{ matrix.e2e_mode }})
     runs-on: ubuntu-latest
-    needs: build-and-check
+    needs: [build]
     strategy:
       fail-fast: false
       matrix:
@@ -89,7 +112,7 @@ jobs:
           cache-dependency-path: fluxapay_frontend/package-lock.json
 
       - name: Install dependencies
-        run: npm install --legacy-peer-deps
+        run: npm ci --legacy-peer-deps
 
       - name: Start backend stack (real mode)
         if: matrix.e2e_mode == 'real'

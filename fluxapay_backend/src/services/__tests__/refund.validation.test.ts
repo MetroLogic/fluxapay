@@ -7,9 +7,15 @@ describe('Refund Service - Validation', () => {
   // Test data cleanup
   beforeEach(async () => {
     // Clean up test data before each test
-    await prisma.refund.deleteMany({ where: { merchantId: 'test-merchant' } });
-    await prisma.payment.deleteMany({ where: { merchantId: 'test-merchant' } });
-    await prisma.merchant.deleteMany({ where: { id: 'test-merchant' } });
+    await prisma.refund.deleteMany({
+      where: { merchantId: { in: ['test-merchant', 'other-merchant'] } },
+    });
+    await prisma.payment.deleteMany({
+      where: { merchantId: { in: ['test-merchant', 'other-merchant'] } },
+    });
+    await prisma.merchant.deleteMany({
+      where: { id: { in: ['test-merchant', 'other-merchant'] } },
+    });
   });
 
   afterAll(async () => {
