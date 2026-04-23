@@ -93,6 +93,57 @@ router.get('/:id/stream', publicPaymentStreamRateLimit, streamPaymentStatus);
  *         description: Rate limit exceeded
  */
 /**
+ * @swagger
+ * /api/v1/payments/checkout/{id}/stream:
+ *   get:
+ *     summary: Checkout SSE placeholder (returns not implemented)
+ *     tags: [Payments]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Placeholder (may return 404 in practice)
+ *       404:
+ *         description: SSE not available; use status polling
+ */
+/**
+ * @swagger
+ * /api/v1/payments/checkout/{id}/status:
+ *   get:
+ *     summary: Public checkout payment status
+ *     tags: [Payments]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Status payload
+ *       404:
+ *         description: Not found
+ */
+/**
+ * @swagger
+ * /api/v1/payments/checkout/{id}:
+ *   get:
+ *     summary: Public hosted checkout payment details
+ *     tags: [Payments]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Checkout payment
+ *       404:
+ *         description: Not found
+ */
+/**
  * Hosted checkout (public, no API key) — must be registered before /:id
  */
 router.get('/checkout/:id/stream', (_req, res) => {

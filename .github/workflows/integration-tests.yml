@@ -60,6 +60,7 @@ jobs:
         working-directory: ./fluxapay_backend
         run: npm test
         env:
+          NODE_ENV: test
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/fluxapay_test?schema=public
           KMS_PROVIDER: local
           KMS_ENCRYPTION_PASSPHRASE: ci-test-passphrase-for-hd-wallet-secure
