@@ -314,23 +314,10 @@ describe('OpenAPI Contract Tests', () => {
 
     describe('GET /api/v1/payments/:id/status', () => {
       it('should get public payment status', async () => {
-        // Create a payment first
-        const createResponse = await request(getServerUrl())
-          .post(`${API_BASE_PATH}/payments`)
-          .set(getAuthHeaders())
-          .send({
-            amount: 25,
-            currency: 'USDC',
-            customer_email: 'public@example.com',
-            metadata: { order_id: 'contract_public_status' },
-          });
-
-        expect(createResponse.status).toBe(201);
-        const paymentId = createResponse.body.id as string;
-        expect(paymentId).toBeTruthy();
+        expect(createdPaymentId).toBeDefined();
 
         const response = await request(getServerUrl())
-          .get(`${API_BASE_PATH}/payments/${paymentId}/status`);
+          .get(`${API_BASE_PATH}/payments/${createdPaymentId}/status`);
 
         expect(response.status).toBe(200);
 

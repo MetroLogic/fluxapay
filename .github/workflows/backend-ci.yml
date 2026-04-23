@@ -75,8 +75,6 @@ jobs:
       FUNDER_SECRET_KEY: SBXEHJKWF7C7BIFSUGXZE7XKFJ5SP6Y7JGPD4J4TKMX2MQXWQQRF3BSG
       MASTER_VAULT_SECRET_KEY: SDGHCAPDRWTOTBAQT6HJ5KBUZOECD2JEOH6E76NDL4OXNBXIWODLZA4B
       USDC_ISSUER_PUBLIC_KEY: GBVXGET7UCLTTLDZGVWDDMZ7FVLCNZL75GU7BLVPTWUP6UIVYHAY5OAX
-      # Unit suite creates many payments; contract tests run after and share the same merchant.
-      PAYMENT_RATE_LIMIT_PER_MINUTE: "10000"
     services:
       postgres:
         image: postgres:15-alpine
@@ -120,3 +118,6 @@ jobs:
 
       - name: Run Contract Tests
         run: npm run test:contract
+        env:
+          # Contract suite runs after the full unit suite; avoid merchant create rate limit.
+          PAYMENT_RATE_LIMIT_PER_MINUTE: "10000"
