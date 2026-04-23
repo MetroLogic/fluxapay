@@ -56,10 +56,12 @@ export function CommandPalette() {
   }, []);
 
   useEffect(() => {
-    if (open) {
+    if (!open) return;
+    const id = requestAnimationFrame(() => {
       setActive(0);
-      setTimeout(() => inputRef.current?.focus(), 0);
-    }
+      queueMicrotask(() => inputRef.current?.focus());
+    });
+    return () => cancelAnimationFrame(id);
   }, [open]);
 
   useEffect(() => {

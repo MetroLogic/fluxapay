@@ -322,9 +322,12 @@ describe('OpenAPI Contract Tests', () => {
             amount: 25,
             currency: 'USDC',
             customer_email: 'public@example.com',
+            metadata: { order_id: 'contract_public_status' },
           });
 
-        const paymentId = createResponse.body.id;
+        expect(createResponse.status).toBe(201);
+        const paymentId = createResponse.body.id as string;
+        expect(paymentId).toBeTruthy();
 
         const response = await request(getServerUrl())
           .get(`${API_BASE_PATH}/payments/${paymentId}/status`);
