@@ -80,7 +80,59 @@ export async function sendOtpEmail(to: string, otp: string) {
   }
 }
 
-export interface PaymentConfirmationDetails {
+export interface CheckoutExpiryReminderDetails {
+  payment_id: string;
+  amount: string;
+  currency: string;
+  customer_email: string;
+  checkout_url: string;
+  expires_at: string;
+  minutes_remaining: number;
+}
+
+export async function sendCheckoutExpiryReminderEmail(
+  to: string,
+  businessName: string,
+  details: CheckoutExpiryReminderDetails,
+) {
+  try {
+    const response = await getResend().emails.send({
+      from: process.env.MAIL_FROM || "noreply@fluxapay.com",
+      to,
+      subject: `Checkout Expiring Soon — ${details.amount} ${details.currency} (${details.minutes_remaining} min left)`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2>Checkout Expiring Soon</h2>
+          <p>Hello ${businessName},</p>
+          <p>A customer checkout is about to expire in <strong>${details.minutes_remaining} minutes</strong> without completing payment.</p>
+          <div style="background: #fff8e1; border-left: 4px solid #f59e0b; padding: 16px; border-radius: 4px; margin: 16px 0;">
+            <table style="width: 100%; border-collapse: collapse;">
+              <tr><td style="padding: 6px 0;"><strong>Payment ID:</strong></td><td style="font-family: monospace; font-size: 12px;">${details.payment_id}</td></tr>
+              <tr><td style="padding: 6px 0;"><strong>Amount:</strong></td><td>${details.amount} ${details.currency}</td></tr>
+              <tr><td style="padding: 6px 0;"><strong>Customer:</strong></td><td>${details.customer_email}</td></tr>
+              <tr><td style="padding: 6px 0;"><strong>Expires at:</strong></td><td>${new Date(details.expires_at).toLocaleString()}</td></tr>
+            </table>
+          </div>
+          <p>
+            <a href="${details.checkout_url}"
+               style="display: inline-block; padding: 10px 20px; background: #0066cc; color: white; text-decoration: none; border-radius: 4px;">
+              View Checkout
+            </a>
+          </p>
+          <p style="color: #666; font-size: 13px;">This is an automated alert. No action is required — this is for your awareness only.</p>
+          <p>— The FluxaPay Team</p>
+        </div>
+      `,
+    });
+    if (response.error) {
+      if (isDevEnv()) console.error("Error sending expiry reminder email:", response.error);
+      throw new Error("Failed to send expiry reminder email");
+    }
+  } catch (err) {
+    if (isDevEnv()) console.error("Error sending expiry reminder email:", err);
+    throw err;
+  }
+}
   amount: string;
   currency: string;
   payment_id: string;

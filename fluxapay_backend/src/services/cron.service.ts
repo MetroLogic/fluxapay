@@ -20,6 +20,7 @@ import { runSettlementBatch } from "./settlementBatch.service";
 import { processBillingCycle } from "./plan.service";
 import { runSweepWithLock } from "./sweepCron.service";
 import { funderMonitorService } from "./funderMonitor.service";
+import { runPaymentExpiryReminderJob } from "./paymentExpiryReminder.service";
 
 const SETTLEMENT_CRON_EXPR = process.env.SETTLEMENT_CRON ?? "0 0 * * *";
 const BILLING_CRON_EXPR = process.env.BILLING_CRON ?? "0 1 * * *";
@@ -27,11 +28,13 @@ const BILLING_CRON_EXPR = process.env.BILLING_CRON ?? "0 1 * * *";
 // Override with SWEEP_CRON in env for less frequent schedules.
 const SWEEP_CRON_EXPR = process.env.SWEEP_CRON ?? "*/5 * * * *"; // every 5 minutes
 const FUNDER_MONITOR_CRON_EXPR = process.env.FUNDER_MONITOR_CRON ?? "*/10 * * * *"; // every 10 minutes
+const CHECKOUT_REMINDER_CRON_EXPR = process.env.CHECKOUT_REMINDER_CRON ?? "*/2 * * * *"; // every 2 minutes
 
 let settlementTask: ScheduledTask | null = null;
 let billingTask: ScheduledTask | null = null;
 let sweepTask: ScheduledTask | null = null;
 let funderMonitorTask: ScheduledTask | null = null;
+let checkoutReminderTask: ScheduledTask | null = null;
 
 /**
  * Starts all scheduled cron jobs.
@@ -161,6 +164,31 @@ export function startCronJobs(): void {
   } else {
     console.log("[Cron] DISABLE_FUNDER_MONITOR_CRON=true – funder monitor job disabled.");
   }
+
+  // ── Checkout Expiry Reminder ────────────────────────────────────────
+  if (validate(CHECKOUT_REMINDER_CRON_EXPR)) {
+    checkoutReminderTask = schedule(
+      CHECKOUT_REMINDER_CRON_EXPR,
+      async () => {
+        try {
+          const result = await runPaymentExpiryReminderJob();
+          if (result.processed > 0) {
+            console.log(
+              `[Cron] ✅ Checkout reminder — ${result.notified}/${result.processed} notified, ` +
+              `${result.errors.length} error(s).`,
+            );
+          }
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.error(`[Cron] ❌ Checkout reminder job failed: ${msg}`);
+        }
+      },
+      { timezone: "UTC" },
+    );
+    console.log(`[Cron] ✅ Checkout reminder job scheduled (${CHECKOUT_REMINDER_CRON_EXPR}) in UTC. Feature flag: CHECKOUT_REMINDER_ENABLED=${process.env.CHECKOUT_REMINDER_ENABLED ?? "false"}.`);
+  } else {
+    console.warn(`[Cron] Invalid CHECKOUT_REMINDER_CRON – checkout reminder disabled.`);
+  }
 }
 
 /**
@@ -173,6 +201,7 @@ export function stopCronJobs(): void {
     [billingTask, "Billing cycle"],
     [sweepTask, "Sweep"],
     [funderMonitorTask, "Funder monitor"],
+    [checkoutReminderTask, "Checkout reminder"],
   ];
   for (const [task, name] of tasks) {
     if (task) {
@@ -184,4 +213,5 @@ export function stopCronJobs(): void {
   billingTask = null;
   sweepTask = null;
   funderMonitorTask = null;
+  checkoutReminderTask = null;
 }
