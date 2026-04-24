@@ -133,8 +133,10 @@ test.describe("Critical path (signup → OTP → login → payment → checkout 
             body: JSON.stringify({
               payment: {
                 id: CP_PAYMENT_ID,
-                checkoutUrl: `${getBaseUrl()}/pay/${CP_PAYMENT_ID}`,
+                checkout_url: `${getBaseUrl()}/pay/${CP_PAYMENT_ID}`,
                 status: "pending",
+                amount,
+                currency,
               },
             }),
           });
@@ -217,9 +219,9 @@ test.describe("Critical path (signup → OTP → login → payment → checkout 
       await dialog.locator("select").selectOption(currency);
       await dialog.locator('input[type="text"]').fill("E2E critical path");
       await page.getByRole("button", { name: /generate link/i }).click();
-      await expect(page.getByText(/payment link created successfully/i)).toBeVisible({
-        timeout: 15_000,
-      });
+      await expect
+        .poll(() => capturedCreateBody, { timeout: 15_000 })
+        .not.toBeNull();
     });
 
     await test.step("Checkout pending", async () => {

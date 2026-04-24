@@ -13,6 +13,26 @@ import fs from 'fs';
 import path from 'path';
 import { specs } from '../src/docs/swagger';
 
+/** Must stay in sync with `src/app.ts` mount paths (path after `/api/v1`). */
+const ROUTE_FILE_MOUNT_PREFIX: Record<string, string> = {
+    'audit.route.ts': '/admin',
+    'customer.route.ts': '/customers',
+    'dashboard.route.ts': '/dashboard',
+    'dataExport.route.ts': '/merchants/export',
+    'invoice.route.ts': '/invoices',
+    'keys.route.ts': '/keys',
+    'kyc.route.ts': '/merchants/kyc',
+    'merchant.route.ts': '/merchants',
+    'merchantDeletion.route.ts': '/merchants',
+    'payment.route.ts': '/payments',
+    'reconciliation.route.ts': '/admin/reconciliation',
+    'refund.route.ts': '/refunds',
+    'settlement.route.ts': '/settlements',
+    'settlementBatch.route.ts': '/admin/settlement',
+    'sweep.route.ts': '/admin/sweep',
+    'webhook.route.ts': '/webhooks',
+};
+
 interface RouteInfo {
   method: string;
   path: string;
@@ -23,13 +43,10 @@ interface RouteInfo {
 
 class RouteCoverageChecker {
   private routesDir: string;
-  private swaggerPaths: Set<string>;
   private documentedRoutes: Map<string, Set<string>>;
   
   constructor(routesDir: string) {
     this.routesDir = routesDir;
-    const spec = specs as any;
-    this.swaggerPaths = new Set(Object.keys(spec.paths || {}));
     this.documentedRoutes = this.extractDocumentedRoutes();
   }
 
@@ -47,8 +64,8 @@ class RouteCoverageChecker {
       
       methods.forEach((method) => {
         if ((pathItem as any)[method]) {
-          // Normalize path parameters
-          const normalizedPath = swaggerPath.replace(/\{[^}]+\}/g, '{param}');
+          // Normalize path parameters (:id and {id} → same key for matching)
+          const normalizedPath = this.normalizePathForMatch(swaggerPath);
           
           if (!map.has(normalizedPath)) {
             map.set(normalizedPath, new Set());
@@ -59,6 +76,20 @@ class RouteCoverageChecker {
     });
     
     return map;
+  }
+
+  /** Map Express `:param` and OpenAPI `{param}` to a single comparable token. */
+  private normalizePathForMatch(p: string): string {
+    return p
+      .replace(/:[a-zA-Z_][a-zA-Z0-9_]*/g, '{param}')
+      .replace(/\{[^}]+\}/g, '{param}');
+  }
+
+  /** Full documented path as in OpenAPI (includes `/api/v1` prefix). */
+  private expressRouteToOpenApiPath(file: string, routePath: string): string {
+    const mount = ROUTE_FILE_MOUNT_PREFIX[file] ?? '';
+    const suffix = routePath === '/' ? '' : routePath;
+    return `/api/v1${mount}${suffix}`;
   }
 
   /**
@@ -93,7 +124,7 @@ class RouteCoverageChecker {
               path: routePath,
               file: file,
               line: index + 1,
-              hasSwagger: this.isRouteDocumented(routePath, method.toUpperCase()),
+              hasSwagger: this.isRouteDocumented(file, routePath, method.toUpperCase()),
             });
           }
         });
@@ -108,19 +139,16 @@ class RouteCoverageChecker {
   /**
    * Check if a route is documented in Swagger
    */
-  private isRouteDocumented(routePath: string, method: string): boolean {
-    // Normalize path parameters for comparison
-    const normalizedRoute = routePath.replace(/:[a-zA-Z_]+/g, '{param}');
-    
-    // Direct match
-    if (this.swaggerPaths.has(routePath)) {
-      const methods = this.documentedRoutes.get(routePath.replace(/\{[^}]+\}/g, '{param}'));
-      return methods?.has(method) ?? false;
-    }
-    
-    // Match with parameter normalization
-    const docMethods = this.documentedRoutes.get(normalizedRoute);
-    return docMethods?.has(method) ?? false;
+  private isRouteDocumented(file: string, routePath: string, method: string): boolean {
+    const fullPath = this.expressRouteToOpenApiPath(file, routePath);
+    const normalizedFull = this.normalizePathForMatch(fullPath);
+    const withoutApiPrefix = fullPath.replace(/^\/api\/v1(?=\/|$)/, '') || '/';
+    const normalizedShort = this.normalizePathForMatch(withoutApiPrefix);
+
+    return (
+      (this.documentedRoutes.get(normalizedFull)?.has(method) ?? false) ||
+      (this.documentedRoutes.get(normalizedShort)?.has(method) ?? false)
+    );
   }
 
   /**

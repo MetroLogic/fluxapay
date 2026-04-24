@@ -10,10 +10,71 @@ on:
     paths:
       - "fluxapay_backend/**"
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  build-and-check:
-    name: Backend Build Check
+  quality-and-build:
+    name: Backend Quality & Build
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/fluxapay_ci_placeholder?schema=public
+    defaults:
+      run:
+        working-directory: ./fluxapay_backend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: fluxapay_backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Format Check (Lint)
+        run: npm run lint
+
+      - name: Validate OpenAPI Specification
+        run: npm run validate:openapi
+
+      - name: Check Route Documentation Coverage
+        run: npm run check:route-coverage -- --ci
+
+      - name: Build Check
+        run: npm run build
+
+  unit-and-contract-tests:
+    name: Backend Unit & Contract Tests
+    runs-on: ubuntu-latest
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/fluxapay_test?schema=public
+      JWT_SECRET: ci-test-jwt-secret-key
+      KMS_PROVIDER: local
+      KMS_ENCRYPTION_PASSPHRASE: ci-test-passphrase-for-hd-wallet-secure
+      HD_WALLET_MASTER_SEED: ci-test-master-seed-32chars-long-padded!!
+      DISABLE_CRON: "true"
+      WEBHOOK_SECRET: ci-test-webhook-secret
+      CLOUDINARY_CLOUD_NAME: test
+      CLOUDINARY_API_KEY: test
+      CLOUDINARY_API_SECRET: test
+      RESEND_API_KEY: re_test
+      SMS_PROVIDER: mock
+      STELLAR_HORIZON_URL: https://horizon-testnet.stellar.org
+      STELLAR_NETWORK_PASSPHRASE: Test SDF Network ; September 2015
+      FUNDER_SECRET_KEY: SBXEHJKWF7C7BIFSUGXZE7XKFJ5SP6Y7JGPD4J4TKMX2MQXWQQRF3BSG
+      MASTER_VAULT_SECRET_KEY: SDGHCAPDRWTOTBAQT6HJ5KBUZOECD2JEOH6E76NDL4OXNBXIWODLZA4B
+      USDC_ISSUER_PUBLIC_KEY: GBVXGET7UCLTTLDZGVWDDMZ7FVLCNZL75GU7BLVPTWUP6UIVYHAY5OAX
     services:
       postgres:
         image: postgres:15-alpine
@@ -40,47 +101,23 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
+          cache: "npm"
+          cache-dependency-path: fluxapay_backend/package-lock.json
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Generate Prisma Client
         run: npx prisma generate
 
       - name: Sync database schema
         run: npx prisma db push
-        env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/fluxapay_test?schema=public
-
-      - name: Format Check (Lint)
-        run: npm run lint
-
-      - name: Validate OpenAPI Specification
-        run: npm run validate:openapi
-
-      - name: Check Route Documentation Coverage
-        run: npm run check:route-coverage -- --ci
 
       - name: Run Unit Tests
         run: npm test
-        env:
-          KMS_PROVIDER: local
-          KMS_ENCRYPTION_PASSPHRASE: ci-test-passphrase-for-hd-wallet-secure
-          HD_WALLET_MASTER_SEED: ci-test-master-seed-32chars-long-padded!!
-          DISABLE_CRON: "true"
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/fluxapay_test?schema=public
-          JWT_SECRET: ci-test-jwt-secret-key
 
       - name: Run Contract Tests
         run: npm run test:contract
         env:
-          KMS_PROVIDER: local
-          KMS_ENCRYPTION_PASSPHRASE: ci-test-passphrase-for-hd-wallet-secure
-          HD_WALLET_MASTER_SEED: ci-test-master-seed-32chars-long-padded!!
-          DISABLE_CRON: "true"
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/fluxapay_test?schema=public
-          JWT_SECRET: ci-test-jwt-secret-key
-
-      - name: Build Check
-        run: npm run build
-        # Verification that the backend TypeScript application builds successfully.
+          # Contract suite runs after the full unit suite; avoid merchant create rate limit.
+          PAYMENT_RATE_LIMIT_PER_MINUTE: "10000"

@@ -36,7 +36,7 @@ const publicPaymentStreamRateLimit = simpleRateLimit({
 
 /**
  * @swagger
- * /api/v1/payments/:id/status:
+ * /api/v1/payments/{id}/status:
  *   get:
  *     summary: Publicly accessible view of a payment's status
  *     tags: [Payments]
@@ -56,7 +56,7 @@ router.get('/:id/status', publicPaymentStatusRateLimit, getPaymentStatus);
 
 /**
  * @swagger
- * /api/v1/payments/:id/stream:
+ * /api/v1/payments/{id}/stream:
  *   get:
  *     summary: SSE stream for real-time payment updates
  *     tags: [Payments]
@@ -91,6 +91,57 @@ router.get('/:id/stream', publicPaymentStreamRateLimit, streamPaymentStatus);
  *         description: Payment created
  *       429:
  *         description: Rate limit exceeded
+ */
+/**
+ * @swagger
+ * /api/v1/payments/checkout/{id}/stream:
+ *   get:
+ *     summary: Checkout SSE placeholder (returns not implemented)
+ *     tags: [Payments]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Placeholder (may return 404 in practice)
+ *       404:
+ *         description: SSE not available; use status polling
+ */
+/**
+ * @swagger
+ * /api/v1/payments/checkout/{id}/status:
+ *   get:
+ *     summary: Public checkout payment status
+ *     tags: [Payments]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Status payload
+ *       404:
+ *         description: Not found
+ */
+/**
+ * @swagger
+ * /api/v1/payments/checkout/{id}:
+ *   get:
+ *     summary: Public hosted checkout payment details
+ *     tags: [Payments]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Checkout payment
+ *       404:
+ *         description: Not found
  */
 /**
  * Hosted checkout (public, no API key) — must be registered before /:id
