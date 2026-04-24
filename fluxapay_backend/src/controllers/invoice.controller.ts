@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { validateUserId } from "../helpers/request.helper";
 import { AuthRequest } from "../types/express";
-import { createInvoiceService, listInvoicesService, exportInvoiceService } from "../services/invoice.service";
+import { createInvoiceService, listInvoicesService, exportInvoiceService, updateInvoiceStatusService } from "../services/invoice.service";
 
 export async function createInvoice(req: AuthRequest, res: Response) {
   try {
@@ -26,7 +26,9 @@ export async function createInvoice(req: AuthRequest, res: Response) {
 export async function updateInvoiceStatus(req: AuthRequest, res: Response) {
   try {
     const merchantId = await validateUserId(req);
-    const { invoice_id } = req.params;
+    const invoice_id = Array.isArray(req.params.invoice_id) 
+      ? req.params.invoice_id[0] 
+      : req.params.invoice_id;
     const { status } = req.body;
 
     const result = await updateInvoiceStatusService(merchantId, invoice_id, status);
