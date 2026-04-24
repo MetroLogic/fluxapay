@@ -131,11 +131,11 @@ test.describe("Critical path (signup → OTP → login → payment → checkout 
             status: 201,
             contentType: "application/json",
             body: JSON.stringify({
-              payment: {
-                id: CP_PAYMENT_ID,
-                checkoutUrl: `${getBaseUrl()}/pay/${CP_PAYMENT_ID}`,
-                status: "pending",
-              },
+              id: CP_PAYMENT_ID,
+              checkout_url: `${getBaseUrl()}/pay/${CP_PAYMENT_ID}`,
+              status: "pending",
+              amount,
+              currency,
             }),
           });
           return;
