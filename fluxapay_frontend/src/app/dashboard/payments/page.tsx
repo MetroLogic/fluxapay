@@ -364,29 +364,11 @@ function PaymentsContent() {
           isLoading={loading}
           error={loadError}
           payments={payments}
-          onRowClick={(payment) => setSelectedPaymentId(payment.id)}
+          onRowClick={(payment) => router.push(`/dashboard/payments/${payment.id}`)}
         />
       </DataTableCard>
 
       <Modal
-        isOpen={!!selectedPayment}
-        onClose={() => {
-          setSelectedPaymentId(null);
-          if (paymentIdFromQuery) router.replace("/dashboard/payments");
-        }}
-        title="Payment Details"
-      >
-        {selectedPayment && (
-          <PaymentDetails
-            payment={detailedPayment || selectedPayment}
-            refunds={refunds}
-            onCreateRefund={handleInitiateRefund}
-            onOpenRefundsSection={() =>
-              router.push(`/dashboard/refunds?paymentId=${selectedPayment.id}`)
-            }
-          />
-        )}
-      </Modal>
 
       <Modal
         isOpen={showCreateLinkModal}
