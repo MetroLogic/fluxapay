@@ -23,6 +23,8 @@ const router = Router();
  *     responses:
  *       200:
  *         description: Deletion request recorded
+ *       400:
+ *         description: Invalid state
  */
 router.post("/me/deletion-request", authenticateApiKey, selfRequestDeletion);
 /**
@@ -58,6 +60,8 @@ router.get("/me/deletion-request", authenticateApiKey, selfGetDeletionRequest);
  *     responses:
  *       200:
  *         description: Recorded
+ *       403:
+ *         description: Forbidden
  */
 router.post("/admin/:merchantId/deletion-request", authenticateToken, adminAuth, adminRequestDeletion);
 /**
@@ -76,6 +80,8 @@ router.post("/admin/:merchantId/deletion-request", authenticateToken, adminAuth,
  *     responses:
  *       200:
  *         description: Anonymization completed or accepted
+ *       403:
+ *         description: Forbidden
  */
 router.post("/admin/:merchantId/anonymize", authenticateToken, adminAuth, adminExecuteDeletion);
 

@@ -23,6 +23,8 @@ const router = Router();
  *     responses:
  *       202:
  *         description: Export job accepted
+ *       401:
+ *         description: Unauthorized
  */
 router.post("/", authenticateApiKey, requestExport);
 /**
@@ -41,6 +43,8 @@ router.post("/", authenticateApiKey, requestExport);
  *     responses:
  *       200:
  *         description: Export job status
+ *       404:
+ *         description: Job not found
  */
 router.get("/:jobId", authenticateApiKey, getExportStatus);
 /**
@@ -59,6 +63,8 @@ router.get("/:jobId", authenticateApiKey, getExportStatus);
  *     responses:
  *       200:
  *         description: Export payload
+ *       404:
+ *         description: Job not found or not ready
  */
 router.get("/:jobId/download", authenticateApiKey, downloadExportHandler);
 
@@ -79,6 +85,8 @@ router.get("/:jobId/download", authenticateApiKey, downloadExportHandler);
  *     responses:
  *       202:
  *         description: Export job accepted
+ *       403:
+ *         description: Forbidden
  */
 router.post("/admin/:merchantId", authenticateToken, adminAuth, adminRequestExport);
 /**
@@ -101,6 +109,8 @@ router.post("/admin/:merchantId", authenticateToken, adminAuth, adminRequestExpo
  *     responses:
  *       200:
  *         description: Export payload
+ *       404:
+ *         description: Not found
  */
 router.get("/admin/:merchantId/:jobId/download", authenticateToken, adminAuth, adminDownloadExport);
 
