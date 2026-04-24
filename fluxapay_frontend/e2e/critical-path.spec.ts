@@ -83,9 +83,9 @@ test.describe("Critical path (signup → OTP → login → payment → checkout 
         expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
       };
 
-      // Register payment sub-routes before the broad `/api/payments` matcher (which would otherwise
+      // Register payment sub-routes before the broad `/payments` matcher (which would otherwise
       // swallow `/api/payments/:id/status` and break checkout polling).
-      await p.route(`**/api/payments/${CP_PAYMENT_ID}/status`, async (route) => {
+      await p.route(`**/payments/${CP_PAYMENT_ID}/status`, async (route) => {
         if (route.request().method() !== "GET") return route.continue();
         statusPollCount += 1;
         const status = statusPollCount >= 2 ? "confirmed" : "pending";
@@ -96,7 +96,7 @@ test.describe("Critical path (signup → OTP → login → payment → checkout 
         });
       });
 
-      await p.route(`**/api/payments/${CP_PAYMENT_ID}/stream`, async (route) => {
+      await p.route(`**/payments/${CP_PAYMENT_ID}/stream`, async (route) => {
         await route.fulfill({
           status: 404,
           contentType: "application/json",
@@ -104,7 +104,7 @@ test.describe("Critical path (signup → OTP → login → payment → checkout 
         });
       });
 
-      await p.route(`**/api/payments/${CP_PAYMENT_ID}`, async (route) => {
+      await p.route(`**/payments/${CP_PAYMENT_ID}`, async (route) => {
         if (route.request().method() !== "GET") return route.continue();
         await route.fulfill({
           status: 200,
@@ -113,9 +113,11 @@ test.describe("Critical path (signup → OTP → login → payment → checkout 
         });
       });
 
-      await p.route("**/api/payments", async (route) => {
+      await p.route("**/payments", async (route) => {
         const url = new URL(route.request().url());
-        if (url.pathname !== "/api/payments") return route.continue();
+        if (url.pathname !== "/api/payments" && url.pathname !== "/api/v1/payments") {
+          return route.continue();
+        }
 
         const method = route.request().method();
         if (method === "POST") {
