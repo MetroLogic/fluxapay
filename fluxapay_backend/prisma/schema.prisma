@@ -247,12 +247,15 @@ model WebhookLog {
   next_retry_at   DateTime?
   request_payload Json?
   response_body   String?
+  failed_at       DateTime?
+  failure_reason  String?
   created_at      DateTime              @default(now())
   updated_at      DateTime              @updatedAt
   retryAttempts   WebhookRetryAttempt[]
 
   @@index([merchantId, created_at(sort: Desc)])
   @@index([merchantId, status])
+  @@index([status, failed_at])
 }
 
 model WebhookRetryAttempt {

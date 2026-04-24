@@ -4,10 +4,13 @@ import {
   getWebhookLogDetails,
   retryWebhook,
   sendTestWebhook,
+  getDeadLetterQueue,
+  requeueWebhook,
 } from "../controllers/webhook.controller";
 import { validate, validateQuery } from "../middleware/validation.middleware";
 import * as webhookSchema from "../schemas/webhook.schema";
 import { authenticateToken } from "../middleware/auth.middleware";
+import { adminAuth } from "../middleware/adminAuth.middleware";
 
 const router = Router();
 
@@ -267,6 +270,91 @@ router.post(
   authenticateToken,
   validate(webhookSchema.sendTestWebhookSchema),
   sendTestWebhook
+);
+
+/* ── Admin DLQ endpoints (protected by X-Admin-Secret) ─────────────────── */
+
+/**
+ * @swagger
+ * /api/v1/webhooks/admin/dead-letter-queue:
+ *   get:
+ *     summary: List permanently failed webhooks (DLQ)
+ *     tags: [Webhooks — Admin]
+ *     security:
+ *       - adminAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: merchant_id
+ *         schema:
+ *           type: string
+ *         description: Filter by merchant ID
+ *       - in: query
+ *         name: date_from
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *         description: Filter from this date
+ *       - in: query
+ *         name: date_to
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *         description: Filter until this date
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Page number
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *           maximum: 100
+ *         description: Items per page
+ *     responses:
+ *       200:
+ *         description: DLQ items retrieved successfully
+ *       401:
+ *         description: Unauthorized — missing or invalid X-Admin-Secret
+ */
+router.get(
+  "/admin/dead-letter-queue",
+  adminAuth,
+  validateQuery(webhookSchema.getDeadLetterQueueSchema),
+  getDeadLetterQueue
+);
+
+/**
+ * @swagger
+ * /api/v1/webhooks/admin/dead-letter-queue/{log_id}/requeue:
+ *   post:
+ *     summary: Requeue a permanently failed webhook for redelivery
+ *     tags: [Webhooks — Admin]
+ *     security:
+ *       - adminAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: log_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The webhook log ID to requeue
+ *     responses:
+ *       200:
+ *         description: Webhook requeued successfully
+ *       400:
+ *         description: Webhook is not in failed status
+ *       404:
+ *         description: Webhook log not found
+ *       401:
+ *         description: Unauthorized — missing or invalid X-Admin-Secret
+ */
+router.post(
+  "/admin/dead-letter-queue/:log_id/requeue",
+  adminAuth,
+  requeueWebhook
 );
 
 export default router;
