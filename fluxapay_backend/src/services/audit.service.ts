@@ -1,4 +1,4 @@
-import { PrismaClient, AuditActionType, AuditEntityType, KYCStatus, Prisma } from '../generated/client/client';
+import { PrismaClient, Prisma } from '../generated/client/client';
 import {
   CreateAuditLogParams,
   QueryAuditLogsParams,
@@ -400,5 +400,101 @@ export async function queryAuditLogs(params: QueryAuditLogsParams): Promise<{
 export async function getAuditLogById(id: string): Promise<any | null> {
   return await prisma.auditLog.findUnique({
     where: { id },
+  });
+}
+
+/**
+ * Log merchant profile update
+ */
+export async function logMerchantProfileUpdate(params: {
+  merchantId: string;
+  changedFields: string[];
+  oldValues: Record<string, any>;
+  newValues: Record<string, any>;
+}): Promise<any | null> {
+  const details = {
+    merchant_id: params.merchantId,
+    changed_fields: params.changedFields,
+    old_values: params.oldValues,
+    new_values: params.newValues,
+    changed_at: new Date().toISOString(),
+  };
+
+  return await createAuditLog({
+    admin_id: params.merchantId,
+    action_type: AuditActionType.merchant_profile_updated,
+    entity_type: AuditEntityType.merchant_account,
+    entity_id: params.merchantId,
+    details,
+  });
+}
+
+/**
+ * Log bank account change (create or update)
+ */
+export async function logBankAccountChange(params: {
+  merchantId: string;
+  action: "created" | "updated";
+  changedFields: string[];
+  oldValues: Record<string, any>;
+  newValues: Record<string, any>;
+}): Promise<any | null> {
+  const details = {
+    merchant_id: params.merchantId,
+    action: params.action,
+    changed_fields: params.changedFields,
+    old_values: params.oldValues,
+    new_values: params.newValues,
+    changed_at: new Date().toISOString(),
+  };
+
+  return await createAuditLog({
+    admin_id: params.merchantId,
+    action_type: AuditActionType.bank_account_updated,
+    entity_type: AuditEntityType.bank_account,
+    entity_id: params.merchantId,
+    details,
+  });
+}
+
+/**
+ * Log API key rotation
+ */
+export async function logApiKeyRotation(params: {
+  merchantId: string;
+  lastFour: string;
+}): Promise<any | null> {
+  const details = {
+    merchant_id: params.merchantId,
+    rotated_at: new Date().toISOString(),
+    last_four: params.lastFour,
+  };
+
+  return await createAuditLog({
+    admin_id: params.merchantId,
+    action_type: AuditActionType.api_key_rotated,
+    entity_type: AuditEntityType.api_key,
+    entity_id: params.merchantId,
+    details,
+  });
+}
+
+/**
+ * Log webhook secret rotation
+ */
+export async function logWebhookSecretRotation(params: {
+  merchantId: string;
+}): Promise<any | null> {
+  const details = {
+    merchant_id: params.merchantId,
+    rotated_at: new Date().toISOString(),
+  };
+
+  return await createAuditLog({
+    admin_id: params.merchantId,
+    action_type: AuditActionType.webhook_secret_rotated,
+    entity_type: AuditEntityType.webhook_secret,
+    entity_id: params.merchantId,
+    details,
   });
 }

@@ -150,6 +150,9 @@ model AuditLog {
   entity_id   String
   details     Json
   created_at  DateTime        @default(now())
+
+  @@index([admin_id, created_at(sort: Desc)])
+  @@index([entity_id, action_type])
 }
 
 model OTP {
@@ -187,6 +190,9 @@ model Settlement {
   created_at       DateTime         @default(now())
   updated_at       DateTime         @updatedAt
   payments         Payment[]
+
+  @@index([merchantId, status])
+  @@index([merchantId, scheduled_date(sort: Desc)])
 }
 
 model MerchantKYC {
@@ -244,6 +250,9 @@ model WebhookLog {
   created_at      DateTime              @default(now())
   updated_at      DateTime              @updatedAt
   retryAttempts   WebhookRetryAttempt[]
+
+  @@index([merchantId, created_at(sort: Desc)])
+  @@index([merchantId, status])
 }
 
 model WebhookRetryAttempt {
@@ -305,6 +314,8 @@ model Payment {
 
   @@index([swept, status])
   @@index([customerId])
+  @@index([merchantId, createdAt(sort: Desc)])
+  @@index([merchantId, status, createdAt(sort: Desc)])
 }
 
 model Refund {
@@ -320,6 +331,8 @@ model Refund {
   failed_reason String?
   created_at    DateTime     @default(now())
   updated_at    DateTime     @updatedAt
+
+  @@index([merchantId, status, created_at(sort: Desc)])
 }
 
 model Invoice {
@@ -338,6 +351,9 @@ model Invoice {
   due_date       DateTime?
   created_at     DateTime      @default(now())
   updated_at     DateTime      @updatedAt
+
+  @@index([merchantId, created_at(sort: Desc)])
+  @@index([merchantId, status, created_at(sort: Desc)])
 }
 
 
@@ -525,6 +541,10 @@ enum AuditActionType {
   settlement_batch_fail
   merchant_deletion_requested
   merchant_anonymized
+  merchant_profile_updated
+  bank_account_updated
+  api_key_rotated
+  webhook_secret_rotated
 }
 
 enum AuditEntityType {
@@ -536,6 +556,9 @@ enum AuditEntityType {
   sweep_operation
   settlement_batch
   merchant_account
+  bank_account
+  api_key
+  webhook_secret
 }
 
 /// Tracks a merchant's right-to-erasure request.
