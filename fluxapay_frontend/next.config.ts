@@ -27,13 +27,25 @@ const nextConfig: NextConfig = {
     return config;
   },
   async redirects() {
-    return [
+    const redirects = [
       {
-        source: '/admin',
-        destination: '/admin/overview',
+        source: "/admin",
+        destination: "/admin/overview",
         permanent: true,
       },
     ];
+
+    // If an external docs URL is configured, redirect /docs/* to it.
+    const externalDocsUrl = process.env.NEXT_PUBLIC_EXTERNAL_DOCS_URL;
+    if (externalDocsUrl) {
+      redirects.push({
+        source: "/docs/:path*",
+        destination: `${externalDocsUrl.endsWith("/") ? externalDocsUrl.slice(0, -1) : externalDocsUrl}/:path*`,
+        permanent: false,
+      });
+    }
+
+    return redirects;
   },
 };
 
