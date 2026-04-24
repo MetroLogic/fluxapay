@@ -276,7 +276,7 @@ model Payment {
   description        String?
   metadata           Json
   expiration         DateTime
-  status             String   @default("pending")
+  status             PaymentStatus   @default(pending)
   checkout_url       String
   success_url        String?
   cancel_url         String?
