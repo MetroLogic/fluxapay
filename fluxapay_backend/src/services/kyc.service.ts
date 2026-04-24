@@ -258,6 +258,26 @@ export async function getKycStatusService(merchantId: string) {
 }
 
 /**
+ * Allowed KYC status transitions.
+ *
+ * The lifecycle is linear:
+ *   not_submitted  →  pending_review  →  approved
+ *                                     →  rejected
+ *
+ * Rejected / approved merchants may resubmit (handled by submitKycService),
+ * which moves them back to pending_review.  Admin reviewers may only act on
+ * submissions that are in pending_review.
+ */
+const ALLOWED_ADMIN_TRANSITIONS: Partial<
+  Record<PrismaKYCStatus, PrismaKYCStatus[]>
+> = {
+  pending_review: [
+    PrismaKYCStatus.approved,
+    PrismaKYCStatus.rejected,
+  ],
+};
+
+/**
  * Update KYC status (admin only)
  */
 export async function updateKycStatusService(
@@ -273,15 +293,32 @@ export async function updateKycStatusService(
     throw { status: 404, message: "KYC not found for this merchant" };
   }
 
-  if (kyc.kyc_status !== "pending_review") {
+  const currentStatus = kyc.kyc_status as PrismaKYCStatus;
+  const newStatus = data.status as PrismaKYCStatus;
+
+  // Validate transition using the explicit allowlist.
+  const allowedNext = ALLOWED_ADMIN_TRANSITIONS[currentStatus] ?? [];
+  if (!allowedNext.includes(newStatus)) {
     throw {
       status: 400,
-      message: "KYC is not in pending review status",
+      message: `Invalid status transition: '${currentStatus}' → '${newStatus}'. Allowed transitions from '${currentStatus}': ${
+        allowedNext.length > 0
+          ? allowedNext.join(", ")
+          : "none (only pending_review submissions can be reviewed)"
+      }.`,
     };
   }
 
-  const previousStatus = kyc.kyc_status;
-  const newStatus = data.status as PrismaKYCStatus;
+  // Reject without a reason is a client error — enforce here in addition to
+  // the schema-level check so the service is self-consistent.
+  if (newStatus === PrismaKYCStatus.rejected && !data.rejection_reason?.trim()) {
+    throw {
+      status: 400,
+      message: "rejection_reason is required when rejecting a KYC submission.",
+    };
+  }
+
+  const previousStatus = currentStatus;
   const action = data.status === "approved" ? "approve" : "reject";
 
   // Use transaction to ensure atomicity

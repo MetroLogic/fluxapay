@@ -177,15 +177,15 @@ describeWithDatabase('Audit Logging - KYC Integration', () => {
       'admin-123'
     );
 
-    // Try to update again
+    // Try to update again — approved → rejected is not an allowed transition
     // kyc.service throws plain objects (not Error instances), use toMatchObject
     await expect(
       updateKycStatusService(
         testMerchantId,
-        { status: 'rejected' },
+        { status: 'rejected', rejection_reason: 'Documents missing' },
         'admin-456'
       )
-    ).rejects.toMatchObject({ message: 'KYC is not in pending review status' });
+    ).rejects.toMatchObject({ message: expect.stringContaining('Invalid status transition') });
 
     // Verify only one audit entry exists (from first update)
     const auditLogs = await prisma.auditLog.findMany({

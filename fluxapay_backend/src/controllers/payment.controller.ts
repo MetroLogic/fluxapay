@@ -300,6 +300,79 @@ function memoFromMetadata(metadata: unknown): {
     return { memo, memoType, memoRequired };
 }
 
+/**
+ * Public Checkout DTO
+ *
+ * Strict whitelist of fields safe to expose to unauthenticated payers.
+ * Fields intentionally absent: merchantId, customerId, customer_email,
+ * merchant API keys, internal DB indices, encrypted_key_data, metadata (raw),
+ * payment_index, derivation_path, order_id.
+ */
+export interface PublicCheckoutDto {
+    id: string;
+    amount: number;
+    currency: string;
+    address: string;
+    expiresAt: string;
+    status: string;
+    successUrl?: string;
+    cancelUrl?: string;
+    merchantName: string;
+    description?: string;
+    checkoutLogoUrl?: string;
+    checkoutAccentColor?: string;
+    memo?: string;
+    memoType?: "text" | "id" | "hash" | "return";
+    memoRequired?: boolean;
+}
+
+/**
+ * Build the public checkout DTO from a hydrated payment + merchant record.
+ * Centralising DTO construction here ensures the whitelist is enforced in a
+ * single place and is easily testable.
+ */
+export function buildPublicCheckoutDto(payment: {
+    id: string;
+    amount: { toString(): string } | number;
+    currency: string;
+    stellar_address: string;
+    expiration: Date;
+    status: string;
+    success_url: string | null;
+    cancel_url: string | null;
+    description: string | null;
+    metadata: unknown;
+    merchant: {
+        business_name: string;
+        checkout_logo_url: string | null;
+        checkout_accent_color: string | null;
+    };
+}): PublicCheckoutDto {
+    const accent = normalizeCheckoutAccentHex(payment.merchant.checkout_accent_color);
+    const meta = memoFromMetadata(payment.metadata);
+
+    const dto: PublicCheckoutDto = {
+        id: payment.id,
+        amount: Number(payment.amount),
+        currency: payment.currency,
+        address: payment.stellar_address,
+        expiresAt: payment.expiration.toISOString(),
+        status: payment.status,
+        merchantName: payment.merchant.business_name,
+    };
+
+    if (payment.success_url != null) dto.successUrl = payment.success_url;
+    if (payment.cancel_url != null) dto.cancelUrl = payment.cancel_url;
+    if (payment.description != null) dto.description = payment.description;
+    if (payment.merchant.checkout_logo_url != null) dto.checkoutLogoUrl = payment.merchant.checkout_logo_url;
+    if (accent != null) dto.checkoutAccentColor = accent;
+    if (meta.memo !== undefined) dto.memo = meta.memo;
+    if (meta.memoType !== undefined) dto.memoType = meta.memoType;
+    if (meta.memoRequired !== undefined) dto.memoRequired = meta.memoRequired;
+
+    return dto;
+}
+
 /** Public hosted checkout — no auth. */
 export const getPublicCheckoutPayment = async (req: Request, res: Response) => {
     try {
@@ -321,26 +394,7 @@ export const getPublicCheckoutPayment = async (req: Request, res: Response) => {
             return res.status(404).json({ error: "Payment not found" });
         }
 
-        const accent = normalizeCheckoutAccentHex(
-            payment.merchant.checkout_accent_color,
-        );
-
-        const meta = memoFromMetadata(payment.metadata);
-        res.json({
-            id: payment.id,
-            amount: Number(payment.amount),
-            currency: payment.currency,
-            address: payment.stellar_address,
-            expiresAt: payment.expiration.toISOString(),
-            status: payment.status,
-            successUrl: payment.success_url ?? undefined,
-            cancelUrl: payment.cancel_url ?? undefined,
-            merchantName: payment.merchant.business_name,
-            description: payment.description ?? undefined,
-            checkoutLogoUrl: payment.merchant.checkout_logo_url ?? undefined,
-            checkoutAccentColor: accent ?? undefined,
-            ...meta,
-        });
+        res.json(buildPublicCheckoutDto(payment));
     } catch (error: unknown) {
         console.error("getPublicCheckoutPayment", error);
         res.status(500).json({ error: "Failed to load payment" });

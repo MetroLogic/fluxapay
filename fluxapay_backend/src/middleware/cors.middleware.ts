@@ -3,12 +3,15 @@ import { getEnvConfig } from '../config/env.config';
 
 /**
  * CORS Middleware Configuration
- * 
+ *
  * Provides secure CORS configuration based on environment variables:
- * - Development: Automatically allows localhost origins
- * - Production: Requires explicit CORS_ORIGINS environment variable
- * - Test: Allows all origins for easier testing
+ * - Development: Allows localhost origins only (any port). Override with CORS_ORIGINS.
+ * - Production: Requires explicit CORS_ORIGINS environment variable (comma-separated allowlist).
+ * - Test: Allows all origins for easier testing.
  */
+
+/** Localhost origin pattern: http(s)://localhost:<port> or http(s)://127.0.0.1:<port> */
+const LOCALHOST_ORIGIN_RE = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
 
 /**
  * Parse comma-separated CORS origins from environment variable
@@ -62,17 +65,36 @@ export function getCorsOptions(): CorsOptions {
   const config = getEnvConfig();
   const nodeEnv = config.NODE_ENV;
   
-  // Development: Allow localhost with credentials
+  // Development: Allow localhost origins only (or CORS_ORIGINS override if provided)
   if (nodeEnv === 'development') {
+    const overrideOrigins = parseCorsOrigins();
     return {
       origin: (origin, callback) => {
-        // Allow all origins in development for flexibility
-        // In practice, you should still set CORS_ORIGINS if you have a frontend
-        callback(null, true);
+        // Requests with no Origin header (e.g. curl, server-to-server) are allowed in dev.
+        if (!origin) {
+          callback(null, true);
+          return;
+        }
+        // If CORS_ORIGINS is explicitly set in dev, honour it.
+        if (overrideOrigins.length > 0) {
+          if (isOriginAllowed(origin, overrideOrigins)) {
+            callback(null, true);
+          } else {
+            callback(new Error(`Origin ${origin} not in CORS_ORIGINS allowlist`), false);
+          }
+          return;
+        }
+        // Default dev policy: localhost / 127.0.0.1 only.
+        if (LOCALHOST_ORIGIN_RE.test(origin)) {
+          callback(null, true);
+        } else {
+          callback(new Error(`Origin ${origin} is not a localhost origin. Set CORS_ORIGINS to allow additional origins in development.`), false);
+        }
       },
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
       allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Admin-Secret'],
+      exposedHeaders: ['X-Request-ID'],
       maxAge: 86400, // 24 hours
     };
   }
