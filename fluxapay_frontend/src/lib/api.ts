@@ -2,15 +2,17 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
 export interface AuthSignupRequest {
-  name: string;
-  businessName: string;
+  business_name: string;
   email: string;
   password: string;
+  phone_number: string;
   country: string;
-  settlementCurrency: string;
-  accountNumber: string;
-  bankName: string;
-  bankCode: string;
+  settlement_currency: string;
+  // Optional bank details during signup
+  account_name?: string;
+  account_number?: string;
+  bank_name?: string;
+  bank_code?: string;
 }
 
 export interface AuthLoginRequest {
@@ -245,6 +247,19 @@ export const api = {
       fetchWithAuth("/api/merchants/me/webhook", {
         method: "PATCH",
         body: JSON.stringify({ webhook_url }),
+      }),
+
+    addBankAccount: (data: {
+      account_name: string;
+      account_number: string;
+      bank_name: string;
+      bank_code?: string;
+      currency: string;
+      country: string;
+    }) =>
+      fetchWithAuth("/api/merchants/me/bank-account", {
+        method: "POST",
+        body: JSON.stringify(data),
       }),
   },
 
