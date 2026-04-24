@@ -214,6 +214,10 @@ export const api = {
         }
         return res.json();
       }),
+    logoutAllSessions: () =>
+      fetchWithAuth("/api/merchants/logout-all", {
+        method: "POST",
+      }),
   },
 
   // Merchant endpoints
