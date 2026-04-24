@@ -1,9 +1,10 @@
 'use client';
 
 import { CheckCircle, XCircle, Loader2, AlertCircle } from 'lucide-react';
+import type { PaymentStatus } from '../../types/payment';
 
 interface PaymentStatusProps {
-  status: 'pending' | 'confirmed' | 'expired' | 'failed' | 'partially_paid' | 'overpaid';
+  status: PaymentStatus;
   message?: string;
 }
 
@@ -52,6 +53,22 @@ export function PaymentStatus({ status, message }: PaymentStatusProps) {
           bgColor: 'bg-blue-50',
           borderColor: 'border-blue-200',
           defaultMessage: 'Overpayment Received',
+        };
+      case 'paid':
+        return {
+          icon: CheckCircle,
+          iconColor: 'text-green-600',
+          bgColor: 'bg-green-50',
+          borderColor: 'border-green-200',
+          defaultMessage: 'Payment Completed',
+        };
+      case 'completed':
+        return {
+          icon: CheckCircle,
+          iconColor: 'text-green-600',
+          bgColor: 'bg-green-50',
+          borderColor: 'border-green-200',
+          defaultMessage: 'Payment Completed',
         };
       case 'pending':
       default:

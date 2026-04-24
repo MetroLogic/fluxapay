@@ -27,6 +27,26 @@ describe('PaymentStatus', () => {
     expect(screen.getByText(/payment failed/i)).toBeInTheDocument();
   });
 
+  it('renders partially_paid state', () => {
+    render(<PaymentStatus status="partially_paid" />);
+    expect(screen.getByText(/partial payment received/i)).toBeInTheDocument();
+  });
+
+  it('renders overpaid state', () => {
+    render(<PaymentStatus status="overpaid" />);
+    expect(screen.getByText(/overpayment received/i)).toBeInTheDocument();
+  });
+
+  it('renders paid state', () => {
+    render(<PaymentStatus status="paid" />);
+    expect(screen.getByText(/payment completed/i)).toBeInTheDocument();
+  });
+
+  it('renders completed state', () => {
+    render(<PaymentStatus status="completed" />);
+    expect(screen.getByText(/payment completed/i)).toBeInTheDocument();
+  });
+
   it('displays custom message when provided', () => {
     render(<PaymentStatus status="pending" message="Custom message here" />);
     expect(screen.getByText('Custom message here')).toBeInTheDocument();

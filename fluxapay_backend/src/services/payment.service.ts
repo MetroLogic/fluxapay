@@ -5,6 +5,7 @@ import { StellarService } from "./StellarService";
 import { sorobanQueue } from "./sorobanQueue.service";
 import { eventBus, AppEvents } from "./EventService";
 import { validateAndSanitizeMetadata } from "../utils/metadata.util";
+import { PaymentStatus } from "../types/payment";
 
 const prisma = new PrismaClient();
 
@@ -96,7 +97,7 @@ export class PaymentService {
         merchantId,
         metadata: sanitizedMetadata as any,
         expiration,
-        status: "pending",
+        status: PaymentStatus.PENDING,
         checkout_url,
         success_url: success_url ?? null,
         cancel_url: cancel_url ?? null,
@@ -142,7 +143,7 @@ export class PaymentService {
     const payment = await prisma.payment.update({
       where: { id: paymentId },
       data: {
-        status: "confirmed",
+        status: PaymentStatus.CONFIRMED,
         transaction_hash: transactionHash,
         payer_address: payerAddress,
         confirmed_at: new Date(),
