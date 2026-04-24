@@ -108,6 +108,8 @@ export interface PageMetadataOptions {
 /**
  * Generate page-specific metadata with OpenGraph, Twitter Cards, and canonical URLs
  */
+const SUPPORTED_LOCALES = ["en", "fr", "pt"] as const;
+
 export function generatePageMetadata({
   title,
   description,
@@ -122,6 +124,11 @@ export function generatePageMetadata({
   const pageUrl = `${SITE_BASE_URL}/${locale}${slug}`;
   const finalKeywords =
     pageKeywords && pageKeywords.length > 0 ? pageKeywords : undefined;
+
+  // Build hreflang alternates for all supported locales
+  const languages = Object.fromEntries(
+    SUPPORTED_LOCALES.map((l) => [l, `${SITE_BASE_URL}/${l}${slug}`])
+  );
 
   return {
     title,
@@ -155,6 +162,7 @@ export function generatePageMetadata({
     },
     alternates: {
       canonical: pageUrl,
+      languages,
     },
   };
 }

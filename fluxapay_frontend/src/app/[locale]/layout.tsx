@@ -5,12 +5,21 @@ import { Toaster } from "react-hot-toast";
 import { NextIntlClientProvider } from "next-intl";
 import { notFound } from "next/navigation";
 import { routing } from "@/i18n/routing";
+import { baseMetadata, SITE_BASE_URL } from "@/lib/seo";
 
-export const metadata: Metadata = {
-  title: "FluxaPay | Global Payment Infrastructure",
-  description:
-    "The next generation of global payments. Accept crypto and fiat seamlessly.",
-};
+export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
+  const { locale } = await params;
+
+  return {
+    ...baseMetadata,
+    alternates: {
+      canonical: `${SITE_BASE_URL}/${locale}`,
+      languages: Object.fromEntries(
+        routing.locales.map((l) => [l, `${SITE_BASE_URL}/${l}`])
+      ),
+    },
+  };
+}
 
 export function generateStaticParams() {
   return routing.locales.map((locale) => ({ locale }));
