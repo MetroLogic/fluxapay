@@ -25,22 +25,22 @@ const COUNTRIES = [
   { code: "KE", name: "Kenya", currency: "KES", Icon: KE },
 ];
 
-const signupSchema = yup.object({
-  name: yup.string().required("Name is required"),
-  businessName: yup.string().required("Business name is required"),
+const signupSchema = (t: any) => yup.object({
+  name: yup.string().required(t("validation.nameRequired")),
+  businessName: yup.string().required(t("validation.businessNameRequired")),
   email: yup
     .string()
-    .email("Please enter a valid email address")
-    .required("Email is required"),
+    .email(t("validation.emailInvalid"))
+    .required(t("validation.emailRequired")),
   password: yup
     .string()
-    .min(6, "Password must be at least 6 characters")
-    .required("Password is required"),
-  country: yup.string().required("Country is required"),
-  settlementCurrency: yup.string().required("Settlement currency is required"),
-  accountNumber: yup.string().required("Account number is required"),
-  bankName: yup.string().required("Bank name is required"),
-  bankCode: yup.string().required("Bank code is required"),
+    .min(6, t("validation.passwordMin"))
+    .required(t("validation.passwordRequired")),
+  country: yup.string().required(t("validation.countryRequired")),
+  settlementCurrency: yup.string().required(t("validation.currencyRequired")),
+  accountNumber: yup.string().required(t("validation.accountNumberRequired")),
+  bankName: yup.string().required(t("validation.bankNameRequired")),
+  bankCode: yup.string().required(t("validation.bankCodeRequired")),
 });
 
 type SignUpFormData = yup.InferType<typeof signupSchema>;
@@ -97,14 +97,14 @@ const SignUpForm = () => {
     e.preventDefault();
 
     try {
-      const validData = await signupSchema.validate(formData, { abortEarly: false });
+      const validData = await signupSchema(tAuth).validate(formData, { abortEarly: false });
 
       setErrors({});
       setIsSubmitting(true);
 
       const response = await api.auth.signup(validData);
 
-      toast.success("Signup successful! Please verify your account.");
+      toast.success(tAuth("signupSuccess"));
       
       if (response.merchantId) {
         router.push(
@@ -160,7 +160,7 @@ const SignUpForm = () => {
                 {tAuth("signup")}
               </h1>
               <p className="text-sm md:text-[18px] font-normal text-muted-foreground">
-                Please signup to get started.
+                {tAuth("signupPrompt")}
               </p>
             </div>
 
@@ -179,7 +179,7 @@ const SignUpForm = () => {
                   label={tAuth("fullName")}
                   value={formData.name}
                   onChange={handleChange}
-                  placeholder="Your name"
+                  placeholder={tAuth("fullNamePlaceholder")}
                   error={errors.name}
                 />
               </div>
@@ -192,7 +192,7 @@ const SignUpForm = () => {
                   label={tAuth("businessName")}
                   value={formData.businessName}
                   onChange={handleChange}
-                  placeholder="Business name"
+                  placeholder={tAuth("businessNamePlaceholder")}
                   error={errors.businessName}
                 />
               </div>
@@ -205,7 +205,7 @@ const SignUpForm = () => {
                   label={tAuth("email")}
                   value={formData.email}
                   onChange={handleChange}
-                  placeholder="you@example.com"
+                  placeholder={tAuth("emailSignupPlaceholder")}
                   error={errors.email}
                 />
               </div>
@@ -226,7 +226,7 @@ const SignUpForm = () => {
                         errors.country ? "border-red-500" : "border-[#D9D9D9]",
                       )}
                     >
-                      <SelectValue placeholder="Select Country" />
+                      <SelectValue placeholder={tAuth("selectCountry")} />
                     </SelectTrigger>
                     <SelectContent>
                       {COUNTRIES.map((country) => (
@@ -248,10 +248,10 @@ const SignUpForm = () => {
                   <Input
                     type="text"
                     name="settlementCurrency"
-                    label="Currency"
+                    label={tAuth("currencyLabel")}
                     value={formData.settlementCurrency}
                     readOnly
-                    placeholder="Currency"
+                    placeholder={tAuth("currencyLabel")}
                     error={errors.settlementCurrency}
                     className="bg-slate-50 cursor-not-allowed"
                   />
@@ -263,28 +263,28 @@ const SignUpForm = () => {
                 <Input
                   type="text"
                   name="bankName"
-                  label="Bank"
+                  label={tAuth("bankLabel")}
                   value={formData.bankName}
                   onChange={handleChange}
-                  placeholder="Bank Name"
+                  placeholder={tAuth("bankNamePlaceholder")}
                   error={errors.bankName}
                 />
                 <Input
                   type="text"
                   name="bankCode"
-                  label="Code"
+                  label={tAuth("codeLabel")}
                   value={formData.bankCode}
                   onChange={handleChange}
-                  placeholder="Bank Code"
+                  placeholder={tAuth("bankCodePlaceholder")}
                   error={errors.bankCode}
                 />
                 <Input
                   type="text"
                   name="accountNumber"
-                  label="Account"
+                  label={tAuth("accountLabel")}
                   value={formData.accountNumber}
                   onChange={handleChange}
-                  placeholder="Account Number"
+                  placeholder={tAuth("accountNumberPlaceholder")}
                   error={errors.accountNumber}
                 />
               </div>
@@ -298,7 +298,7 @@ const SignUpForm = () => {
                     label={tAuth("password")}
                     value={formData.password}
                     onChange={handleChange}
-                    placeholder="Password"
+                    placeholder={tAuth("passwordPlaceholder")}
                     error={errors.password}
                     className="pr-10 focus:ring-indigo-500 focus:border-indigo-500"
                   />
@@ -356,34 +356,34 @@ const SignUpForm = () => {
                     <path d="M22 12a10 10 0 0 1-10 10" />
                   </svg>
                 )}
-                <span>{isSubmitting ? "Creating account..." : "Create account"}</span>
+                <span>{isSubmitting ? tAuth("creatingAccount") : tAuth("signup")}</span>
               </Button>
               <p className="mt-4 text-center text-xs text-slate-500">
-                By creating an account, you agree to our{" "}
+                {tAuth("agreeToTermsSignup")}{" "}
                 <Link
                   href="/terms"
                   className="font-medium text-slate-700 hover:text-indigo-600 underline underline-offset-4"
                 >
-                  Terms of Service
+                  {tAuth("terms")}
                 </Link>{" "}
-                and{" "}
+                {tAuth("and")}{" "}
                 <Link
                   href="/privacy"
                   className="font-medium text-slate-700 hover:text-indigo-600 underline underline-offset-4"
                 >
-                  Privacy Policy
+                  {tAuth("privacy")}
                 </Link>
                 .
               </p>
 
               {/* Have account */}
               <div className="pt-2 text-center text-xs md:text-[18px] text-muted-foreground font-semibold">
-                Already have an account?{" "}
+                {tAuth("hasAccount")}{" "}
                 <Link
                   href="/login"
                   className="font-semibold text-indigo-500 hover:text-indigo-600 underline underline-offset-4 hover:underline"
                 >
-                  Sign in
+                  {tAuth("login")}
                 </Link>
               </div>
             </form>
