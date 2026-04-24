@@ -23,7 +23,10 @@ export async function createInvoiceService(params: {
   const { merchantId, amount, currency, customer_email, metadata, due_date } = params;
   const metadataJson = (metadata ?? {}) as Prisma.InputJsonValue;
 
+  // Create payment first
   const paymentId = crypto.randomUUID();
+  const checkoutBase = process.env.PAY_CHECKOUT_BASE || process.env.BASE_URL || "http://localhost:3000";
+  const checkout_url = `${checkoutBase.replace(/\/$/, "")}/pay/${paymentId}`;
 
   const payment = await prisma.payment.create({
     data: {
@@ -35,7 +38,7 @@ export async function createInvoiceService(params: {
       metadata: metadataJson,
       expiration: due_date ? new Date(due_date) : new Date(Date.now() + 15 * 60 * 1000),
       status: "pending",
-      checkout_url: `/pay/${paymentId}`,
+      checkout_url,
     },
   });
 
@@ -167,13 +170,13 @@ export async function exportInvoiceService(
       },
       payment: payment
         ? {
-            id: payment.id,
-            amount: Number(payment.amount),
-            currency: payment.currency,
-            status: payment.status,
-            customer_email: payment.customer_email,
-            created_at: payment.createdAt,
-          }
+          id: payment.id,
+          amount: Number(payment.amount),
+          currency: payment.currency,
+          status: payment.status,
+          customer_email: payment.customer_email,
+          created_at: payment.createdAt,
+        }
         : null,
     },
     contentType: "application/json",
