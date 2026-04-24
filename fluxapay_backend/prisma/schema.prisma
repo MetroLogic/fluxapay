@@ -277,6 +277,8 @@ model Payment {
   metadata           Json
   expiration         DateTime
   status             PaymentStatus   @default(pending)
+  paid_amount        Decimal?        @default(0)
+  last_seen_at       DateTime?
   checkout_url       String
   success_url        String?
   cancel_url         String?
@@ -487,6 +489,8 @@ enum WebhookEventType {
   payment_failed
   payment_pending
   payment_expired
+  payment_partially_paid
+  payment_overpaid
   refund_completed
   refund_failed
   settlement_completed

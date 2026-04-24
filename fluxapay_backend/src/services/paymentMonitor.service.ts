@@ -17,6 +17,12 @@ const HORIZON_URL = () => process.env.STELLAR_HORIZON_URL || 'https://horizon-te
 const USDC_ISSUER = () => process.env.USDC_ISSUER_PUBLIC_KEY || 'GBBD47IF6LWK7P7MDEVSCWT73IQIGCEZHR7OMXMBZQ3ZONN2T4U6W23Y';
 const getUsdcAsset = () => new Asset('USDC', USDC_ISSUER());
 
+// Policy configuration
+const UNDERPAYMENT_THRESHOLD = parseFloat(process.env.UNDERPAYMENT_ACCEPT_THRESHOLD || '0.1');
+const PARTIAL_PAYMENT_TIMEOUT = parseInt(process.env.PARTIAL_PAYMENT_TIMEOUT_MS || '3600000', 10);
+const STALE_PAYMENT_TIMEOUT = parseInt(process.env.STALE_PAYMENT_TIMEOUT_MS || '1800000', 10);
+const ACCEPT_OVERPAYMENTS = process.env.ACCEPT_OVERPAYMENTS !== 'false';
+
 const prisma = new PrismaClient();
 const getServer = () => new Horizon.Server(HORIZON_URL());
 
@@ -27,12 +33,33 @@ const getServer = () => new Horizon.Server(HORIZON_URL());
  */
 export async function runPaymentMonitorTick(): Promise<void> {
   const now = new Date();
+  const partialPaymentExpiry = new Date(now.getTime() - PARTIAL_PAYMENT_TIMEOUT);
+  const stalePaymentExpiry = new Date(now.getTime() - STALE_PAYMENT_TIMEOUT);
 
-  // 1. Check for expired payments (pending or partially_paid)
+  // 1. Check for expired payments by expiration date
   await prisma.payment.updateMany({
     where: {
       status: { in: [PaymentStatus.PENDING, PaymentStatus.PARTIALLY_PAID] },
       expiration: { lte: now },
+    },
+    data: { status: PaymentStatus.EXPIRED },
+  });
+
+  // 2. Check for partial payments that have timed out
+  await prisma.payment.updateMany({
+    where: {
+      status: PaymentStatus.PARTIALLY_PAID,
+      last_seen_at: { lte: partialPaymentExpiry },
+    },
+    data: { status: PaymentStatus.EXPIRED },
+  });
+
+  // 3. Check for stale payments (no recent activity)
+  await prisma.payment.updateMany({
+    where: {
+      status: { in: [PaymentStatus.PENDING, PaymentStatus.PARTIALLY_PAID] },
+      last_seen_at: { lte: stalePaymentExpiry },
+      expiration: { gt: now }, // Not already expired by date
     },
     data: { status: PaymentStatus.EXPIRED },
   });
@@ -95,14 +122,32 @@ export async function runPaymentMonitorTick(): Promise<void> {
         }
       }
 
-      // Determine new status based on total balance
+      // Determine new status based on total balance and policies
       let newStatus: PaymentStatus | undefined;
       const expectedAmount = Number(payment.amount as any as Decimal);
+      const underpaymentThreshold = expectedAmount * UNDERPAYMENT_THRESHOLD;
 
       if (totalReceived >= expectedAmount) {
-        newStatus = totalReceived > expectedAmount ? PaymentStatus.OVERPAID : PaymentStatus.CONFIRMED;
+        // Full payment or overpayment
+        if (totalReceived > expectedAmount && ACCEPT_OVERPAYMENTS) {
+          newStatus = PaymentStatus.OVERPAID;
+        } else if (totalReceived > expectedAmount && !ACCEPT_OVERPAYMENTS) {
+          // Treat overpayment as confirmed if overpayments not accepted
+          newStatus = PaymentStatus.CONFIRMED;
+        } else {
+          newStatus = PaymentStatus.CONFIRMED;
+        }
       } else if (totalReceived > 0) {
-        newStatus = PaymentStatus.PARTIALLY_PAID;
+        // Partial payment - check if it meets threshold
+        if (totalReceived >= underpaymentThreshold && UNDERPAYMENT_THRESHOLD > 0) {
+          newStatus = PaymentStatus.PARTIALLY_PAID;
+        } else if (UNDERPAYMENT_THRESHOLD === 0) {
+          // No partial payments accepted - keep as pending
+          newStatus = undefined;
+        } else {
+          // Below threshold - keep as pending for now
+          newStatus = undefined;
+        }
       }
 
       // Update database if status changed or new activity detected
@@ -111,14 +156,24 @@ export async function runPaymentMonitorTick(): Promise<void> {
           where: { id: payment.id },
           data: {
             status: newStatus as any,
+            paid_amount: totalReceived,
+            last_seen_at: new Date(),
             last_paging_token: latestPagingToken,
             ...(latestTxHash && { transaction_hash: latestTxHash }),
+            ...(newStatus === PaymentStatus.CONFIRMED && { confirmed_at: new Date() }),
           },
         });
 
         // Emit generic status change event
         const { eventBus, AppEvents } = await import('./EventService');
         eventBus.emit(AppEvents.PAYMENT_UPDATED, updatedPayment);
+
+        // Emit specific webhook events for partial and overpayment scenarios
+        if (newStatus === PaymentStatus.PARTIALLY_PAID) {
+          eventBus.emit(AppEvents.PAYMENT_PARTIALLY_PAID, updatedPayment);
+        } else if (newStatus === PaymentStatus.OVERPAID) {
+          eventBus.emit(AppEvents.PAYMENT_OVERPAID, updatedPayment);
+        }
 
         // Trigger on-chain verification via Soroban contract
         if ((newStatus === PaymentStatus.CONFIRMED || newStatus === PaymentStatus.OVERPAID) && latestTxHash) {
@@ -147,7 +202,10 @@ export async function runPaymentMonitorTick(): Promise<void> {
         // Just update paging token if no status change
         await prisma.payment.update({
           where: { id: payment.id },
-          data: { last_paging_token: latestPagingToken },
+          data: { 
+            last_paging_token: latestPagingToken,
+            last_seen_at: new Date(),
+          },
         });
       }
     } catch (e) {
