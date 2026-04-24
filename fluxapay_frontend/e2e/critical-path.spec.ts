@@ -104,6 +104,34 @@ test.describe("Critical path (signup → OTP → login → payment → checkout 
         });
       });
 
+      await p.route(`**/payments/checkout/${CP_PAYMENT_ID}/status`, async (route) => {
+        if (route.request().method() !== "GET") return route.continue();
+        statusPollCount += 1;
+        const status = statusPollCount >= 2 ? "confirmed" : "pending";
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ status }),
+        });
+      });
+
+      await p.route(`**/payments/checkout/${CP_PAYMENT_ID}/stream`, async (route) => {
+        await route.fulfill({
+          status: 404,
+          contentType: "application/json",
+          body: "{}",
+        });
+      });
+
+      await p.route(`**/payments/checkout/${CP_PAYMENT_ID}`, async (route) => {
+        if (route.request().method() !== "GET") return route.continue();
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify(pendingPaymentJson),
+        });
+      });
+
       await p.route(`**/payments/${CP_PAYMENT_ID}`, async (route) => {
         if (route.request().method() !== "GET") return route.continue();
         await route.fulfill({
