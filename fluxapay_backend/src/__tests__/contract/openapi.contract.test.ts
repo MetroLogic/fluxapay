@@ -48,6 +48,7 @@ let testMerchantId: string;
  * Setup test server and authentication
  */
 beforeAll(async () => {
+  process.env.DISABLE_STELLAR_PREPARE = 'true';
   clearSpecCache();
   // Create Express app
   app = express();

@@ -21,7 +21,8 @@
     "test:contract": "jest --testPathPatterns=openapi.contract.test.ts --runInBand",
     "validate:openapi": "ts-node scripts/validate-openapi-spec.ts",
     "check:route-coverage": "ts-node scripts/check-route-coverage.ts",
-    "detect-breaking-changes": "ts-node scripts/detect-breaking-changes.ts"
+    "detect-breaking-changes": "ts-node scripts/detect-breaking-changes.ts",
+    "loadtest:k6:payments": "k6 run load-tests/k6-payment-create-list.js"
   },
   "repository": {
     "type": "git",

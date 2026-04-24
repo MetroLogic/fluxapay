@@ -16,7 +16,7 @@ const router = Router();
  * @swagger
  * /api/v1/merchants/export:
  *   post:
- *     summary: Request a GDPR-style data export for the authenticated merchant
+ *     summary: Request a data export for the authenticated merchant
  *     tags: [Merchants]
  *     security:
  *       - apiKeyAuth: []
@@ -62,7 +62,7 @@ router.get("/:jobId", authenticateApiKey, getExportStatus);
  *         schema: { type: string }
  *     responses:
  *       200:
- *         description: Export file or payload reference
+ *         description: Export payload
  *       404:
  *         description: Job not found or not ready
  */
@@ -93,7 +93,7 @@ router.post("/admin/:merchantId", authenticateToken, adminAuth, adminRequestExpo
  * @swagger
  * /api/v1/merchants/export/admin/{merchantId}/{jobId}/download:
  *   get:
- *     summary: Operator download of a merchant export artifact
+ *     summary: Operator download of merchant export artifact
  *     tags: [Merchants]
  *     security:
  *       - bearerAuth: []
