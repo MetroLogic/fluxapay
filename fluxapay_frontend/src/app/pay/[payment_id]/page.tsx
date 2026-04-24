@@ -8,6 +8,7 @@ import { usePaymentStatus } from '@/hooks/usePaymentStatus';
 import { PaymentQRCode } from '@/components/checkout/PaymentQRCode';
 import { PaymentTimer } from '@/components/checkout/PaymentTimer';
 import { PaymentStatus } from '@/components/checkout/PaymentStatus';
+import { CopyField } from '@/components/checkout/CopyField';
 import {
   CheckoutBrandingShell,
   DEFAULT_ACCENT,
@@ -38,7 +39,7 @@ export default function CheckoutPage() {
     }
   }, [payment?.status, payment?.successUrl]);
 
-  const handleExpire = () => {};
+  const handleExpire = () => { };
 
   return (
     <CheckoutBrandingShell
@@ -283,17 +284,36 @@ export default function CheckoutPage() {
               />
             </div>
 
+            <div className="mb-8 space-y-4">
+              <CopyField label="Payment Address" value={payment.address} truncate />
+
+              {payment.memo && (
+                <CopyField
+                  label={`Memo (${payment.memoType?.replace('MEMO_', '') || 'TEXT'})`}
+                  value={payment.memo}
+                  required={payment.memoRequired}
+                />
+              )}
+            </div>
+
             {payment.memoRequired && (
               <div
-                className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-900"
+                className="mb-8 overflow-hidden rounded-xl border border-amber-200 bg-amber-50 shadow-sm"
                 role="alert"
                 aria-live="polite"
               >
-                <p className="font-semibold">Memo required</p>
-                <p className="mt-1 text-sm">
-                  This payment destination requires a memo/tag. Please include the
-                  memo exactly as shown, or your payment may not be credited.
-                </p>
+                <div className="flex items-center gap-3 bg-amber-100/50 px-4 py-2 border-b border-amber-200">
+                  <AlertCircle className="h-4 w-4 text-amber-700" />
+                  <span className="text-xs font-bold uppercase tracking-wider text-amber-800">
+                    Mandatory Memo
+                  </span>
+                </div>
+                <div className="p-4">
+                  <p className="text-sm leading-relaxed text-amber-900">
+                    This destination requires a memo to identify your payment.
+                    <strong> You must include the memo exactly as shown</strong>, or your funds may be lost.
+                  </p>
+                </div>
               </div>
             )}
 
