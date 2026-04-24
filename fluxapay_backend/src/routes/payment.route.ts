@@ -40,17 +40,47 @@ const publicPaymentStreamRateLimit = simpleRateLimit({
  *   get:
  *     summary: Publicly accessible view of a payment's status
  *     tags: [Payments]
+ *     description: Safe public DTO with minimal fields. No authentication required. Rate-limited by IP and payment ID.
  *     parameters:
  *       - in: path
  *         name: id
  *         required: true
  *         schema:
  *           type: string
+ *         description: Payment ID
  *     responses:
  *       200:
- *         description: Payment status details
+ *         description: Payment status details (PII-free)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 id:
+ *                   type: string
+ *                   example: pay_123abc
+ *                 status:
+ *                   type: string
+ *                   enum: [pending, confirmed, failed, expired, settled]
+ *                   example: pending
+ *                 amount:
+ *                   type: number
+ *                   example: 100.50
+ *                 currency:
+ *                   type: string
+ *                   example: USDC
+ *                 address:
+ *                   type: string
+ *                   description: Stellar address for payment
+ *                   example: GBUQWP3BOUZX34ULNQG23RQ6F5DOBAB4NSTOF5AUFF6GPBK476QC6G5
+ *                 expiresAt:
+ *                   type: string
+ *                   format: date-time
+ *                   example: 2026-04-24T12:30:00Z
  *       404:
  *         description: Payment not found
+ *       429:
+ *         description: Rate limit exceeded
  */
 router.get('/:id/status', publicPaymentStatusRateLimit, getPaymentStatus);
 
@@ -60,15 +90,29 @@ router.get('/:id/status', publicPaymentStatusRateLimit, getPaymentStatus);
  *   get:
  *     summary: SSE stream for real-time payment updates
  *     tags: [Payments]
+ *     description: Server-Sent Events stream for real-time payment status updates. No authentication required. Rate-limited by IP.
  *     parameters:
  *       - in: path
  *         name: id
  *         required: true
  *         schema:
  *           type: string
+ *         description: Payment ID
  *     responses:
  *       200:
- *         description: SSE stream
+ *         description: SSE stream of payment status updates
+ *         content:
+ *           text/event-stream:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   enum: [pending, confirmed, failed, expired, settled]
+ *       404:
+ *         description: Payment not found
+ *       429:
+ *         description: Rate limit exceeded
  */
 router.get('/:id/stream', publicPaymentStreamRateLimit, streamPaymentStatus);
 

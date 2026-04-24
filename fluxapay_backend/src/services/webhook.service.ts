@@ -1,6 +1,7 @@
 import { PrismaClient, WebhookEventType, WebhookStatus, Payment, Merchant } from "../generated/client/client";
 import crypto from "crypto";
 import { webhookEventTypes } from "../schemas/webhook.schema";
+import { normalizeEventName, toLegacyEventName } from "../utils/webhook-event-mapping.util";
 
 export class WebhookDispatcher {
   private prisma: PrismaClient;
@@ -418,23 +419,39 @@ function generateTestPayload(
   override?: Record<string, any>,
   eventId?: string,
 ): Record<string, any> {
+  const canonicalEventType = normalizeEventName(eventType as any);
+
   const basePayload = {
     event_id: eventId ?? crypto.randomUUID(),
     webhook_id: `test_${Date.now()}`,
-    event_type: eventType,
+    event_type: canonicalEventType,
     timestamp: new Date().toISOString(),
     test_mode: true,
   };
 
   const eventPayloads: Record<string, Record<string, any>> = {
-    payment_completed: {
+    'payment.created': {
       payment_id: `pay_test_${Date.now()}`,
       amount: 100.00,
       currency: "USD",
-      status: "completed",
+      status: "created",
       customer_email: "test@example.com",
     },
-    payment_failed: {
+    'payment.pending': {
+      payment_id: `pay_test_${Date.now()}`,
+      amount: 100.00,
+      currency: "USD",
+      status: "pending",
+      customer_email: "test@example.com",
+    },
+    'payment.confirmed': {
+      payment_id: `pay_test_${Date.now()}`,
+      amount: 100.00,
+      currency: "USD",
+      status: "confirmed",
+      customer_email: "test@example.com",
+    },
+    'payment.failed': {
       payment_id: `pay_test_${Date.now()}`,
       amount: 100.00,
       currency: "USD",
@@ -442,21 +459,28 @@ function generateTestPayload(
       failure_reason: "Insufficient funds",
       customer_email: "test@example.com",
     },
-    payment_pending: {
+    'payment.settled': {
       payment_id: `pay_test_${Date.now()}`,
       amount: 100.00,
       currency: "USD",
-      status: "pending",
+      status: "settled",
       customer_email: "test@example.com",
     },
-    refund_completed: {
+    'refund.created': {
+      refund_id: `ref_test_${Date.now()}`,
+      payment_id: `pay_test_${Date.now()}`,
+      amount: 50.00,
+      currency: "USD",
+      status: "created",
+    },
+    'refund.completed': {
       refund_id: `ref_test_${Date.now()}`,
       payment_id: `pay_test_${Date.now()}`,
       amount: 50.00,
       currency: "USD",
       status: "completed",
     },
-    refund_failed: {
+    'refund.failed': {
       refund_id: `ref_test_${Date.now()}`,
       payment_id: `pay_test_${Date.now()}`,
       amount: 50.00,
@@ -464,21 +488,88 @@ function generateTestPayload(
       status: "failed",
       failure_reason: "Refund window expired",
     },
-    subscription_created: {
+    'subscription.created': {
       subscription_id: `sub_test_${Date.now()}`,
       plan_id: "plan_test",
       customer_email: "test@example.com",
       status: "active",
       billing_cycle: "monthly",
     },
-    subscription_cancelled: {
+    'subscription.cancelled': {
       subscription_id: `sub_test_${Date.now()}`,
       plan_id: "plan_test",
       customer_email: "test@example.com",
       status: "cancelled",
       cancelled_at: new Date().toISOString(),
     },
-    subscription_renewed: {
+    'subscription.renewed': {
+      subscription_id: `sub_test_${Date.now()}`,
+      plan_id: "plan_test",
+      customer_email: "test@example.com",
+      status: "active",
+      renewed_at: new Date().toISOString(),
+      next_billing_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+    },
+    // Legacy event names (for backward compatibility)
+    'payment_completed': {
+      payment_id: `pay_test_${Date.now()}`,
+      amount: 100.00,
+      currency: "USD",
+      status: "completed",
+      customer_email: "test@example.com",
+    },
+    'payment_failed': {
+      payment_id: `pay_test_${Date.now()}`,
+      amount: 100.00,
+      currency: "USD",
+      status: "failed",
+      failure_reason: "Insufficient funds",
+      customer_email: "test@example.com",
+    },
+    'payment_pending': {
+      payment_id: `pay_test_${Date.now()}`,
+      amount: 100.00,
+      currency: "USD",
+      status: "pending",
+      customer_email: "test@example.com",
+    },
+    'payment_confirmed': {
+      payment_id: `pay_test_${Date.now()}`,
+      amount: 100.00,
+      currency: "USD",
+      status: "confirmed",
+      customer_email: "test@example.com",
+    },
+    'refund_completed': {
+      refund_id: `ref_test_${Date.now()}`,
+      payment_id: `pay_test_${Date.now()}`,
+      amount: 50.00,
+      currency: "USD",
+      status: "completed",
+    },
+    'refund_failed': {
+      refund_id: `ref_test_${Date.now()}`,
+      payment_id: `pay_test_${Date.now()}`,
+      amount: 50.00,
+      currency: "USD",
+      status: "failed",
+      failure_reason: "Refund window expired",
+    },
+    'subscription_created': {
+      subscription_id: `sub_test_${Date.now()}`,
+      plan_id: "plan_test",
+      customer_email: "test@example.com",
+      status: "active",
+      billing_cycle: "monthly",
+    },
+    'subscription_cancelled': {
+      subscription_id: `sub_test_${Date.now()}`,
+      plan_id: "plan_test",
+      customer_email: "test@example.com",
+      status: "cancelled",
+      cancelled_at: new Date().toISOString(),
+    },
+    'subscription_renewed': {
       subscription_id: `sub_test_${Date.now()}`,
       plan_id: "plan_test",
       customer_email: "test@example.com",
@@ -491,7 +582,7 @@ function generateTestPayload(
   return {
     ...basePayload,
     data: {
-      ...eventPayloads[eventType],
+      ...eventPayloads[canonicalEventType],
       ...override,
     },
   };
