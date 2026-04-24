@@ -12,6 +12,12 @@ import { generateToken } from "../helpers/jwt.helper";
 import { merchantRegistryService } from "./merchantRegistry.service";
 import { generateApiKey, generateWebhookSecret, hashKey, getLastFour } from "../helpers/crypto.helper";
 import * as crypto from "crypto";
+import {
+  logMerchantProfileUpdate,
+  logBankAccountChange,
+  logApiKeyRotation,
+  logWebhookSecretRotation,
+} from "./audit.service";
 
 const prisma = new PrismaClient();
 
@@ -185,6 +191,9 @@ export async function regenerateApiKeyService(data: {
     },
   });
 
+  // Audit log: API key rotation
+  logApiKeyRotation({ merchantId, lastFour: apiKeyLastFour }).catch(() => {});
+
   return { message: "API key regenerated", apiKey };
 }
 
@@ -200,10 +209,34 @@ export async function updateMerchantProfileService(data: {
   email?: string;
 }) {
   const { merchantId, ...updateData } = data;
+
+  // Fetch old values for audit log
+  const existing = await prisma.merchant.findUnique({
+    where: { id: merchantId },
+    select: { business_name: true, email: true },
+  });
+
   const merchant = await prisma.merchant.update({
     where: { id: merchantId },
     data: updateData,
   });
+
+  // Audit log: profile change
+  if (existing) {
+    const changedFields = Object.keys(updateData).filter(
+      (k) => (updateData as any)[k] !== (existing as any)[k],
+    );
+    if (changedFields.length > 0) {
+      const oldValues: Record<string, any> = {};
+      const newValues: Record<string, any> = {};
+      for (const field of changedFields) {
+        oldValues[field] = (existing as any)[field];
+        newValues[field] = (updateData as any)[field];
+      }
+      logMerchantProfileUpdate({ merchantId, changedFields, oldValues, newValues }).catch(() => {});
+    }
+  }
+
   return { message: "Profile updated", merchant };
 }
 
@@ -228,6 +261,10 @@ export async function rotateWebhookSecretService(data: {
     where: { id: merchantId },
     data: { webhook_secret: newSecret },
   });
+
+  // Audit log: webhook secret rotation (value is never logged)
+  logWebhookSecretRotation({ merchantId }).catch(() => {});
+
   return { message: "Webhook secret rotated", webhook_secret: newSecret };
 }
 
@@ -254,10 +291,35 @@ export async function addBankAccountService(data: {
   country: string;
 }) {
   const { merchantId, ...bankData } = data;
+
+  // Fetch existing bank account for audit diff
+  const existing = await prisma.bankAccount.findUnique({
+    where: { merchantId },
+  });
+
   const bankAccount = await prisma.bankAccount.upsert({
     where: { merchantId },
     create: { merchantId, ...bankData },
     update: bankData,
   });
+
+  // Audit log: bank account created or updated
+  const action = existing ? "updated" : "created";
+  const changedFields = existing
+    ? Object.keys(bankData).filter((k) => (bankData as any)[k] !== (existing as any)[k])
+    : Object.keys(bankData);
+
+  const oldValues: Record<string, any> = {};
+  const newValues: Record<string, any> = {};
+  for (const field of changedFields) {
+    oldValues[field] = existing ? (existing as any)[field] : null;
+    // Mask account number in audit log
+    newValues[field] = field === "account_number"
+      ? `****${String((bankData as any)[field]).slice(-4)}`
+      : (bankData as any)[field];
+  }
+
+  logBankAccountChange({ merchantId, action, changedFields, oldValues, newValues }).catch(() => {});
+
   return { message: "Bank account updated", bankAccount };
 }

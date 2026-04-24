@@ -21,6 +21,7 @@ import { authenticateApiKey } from "../middleware/apiKeyAuth.middleware";
 import { idempotencyMiddleware } from "../middleware/idempotency.middleware";
 import { adminAuth } from "../middleware/adminAuth.middleware";
 import { updateSettlementScheduleSchema, bankAccountSchema } from "../schemas/merchant.schema";
+import { authRateLimit, merchantRateLimit } from "../middleware/rateLimit.middleware";
 
 const router = Router();
 
@@ -63,7 +64,7 @@ const router = Router();
  *       400:
  *         description: Email or phone already exists
  */
-router.post("/signup", idempotencyMiddleware, validate(merchantSchema.signupSchema), signupMerchant);
+router.post("/signup", idempotencyMiddleware, authRateLimit(), validate(merchantSchema.signupSchema), signupMerchant);
 
 /**
  * @swagger
@@ -91,7 +92,7 @@ router.post("/signup", idempotencyMiddleware, validate(merchantSchema.signupSche
  *       400:
  *         description: Invalid credentials
  */
-router.post("/login", validate(merchantSchema.loginSchema), loginMerchant);
+router.post("/login", authRateLimit(), validate(merchantSchema.loginSchema), loginMerchant);
 
 /**
  * @swagger
@@ -123,7 +124,7 @@ router.post("/login", validate(merchantSchema.loginSchema), loginMerchant);
  *       400:
  *         description: Invalid or expired OTP
  */
-router.post("/verify-otp", idempotencyMiddleware, validate(merchantSchema.verifyOtpSchema), verifyOtp);
+router.post("/verify-otp", idempotencyMiddleware, authRateLimit(), validate(merchantSchema.verifyOtpSchema), verifyOtp);
 /**
  * @swagger
  * /api/v1/merchants/resend-otp:
@@ -151,7 +152,7 @@ router.post("/verify-otp", idempotencyMiddleware, validate(merchantSchema.verify
  *       404:
  *         description: Merchant not found
  */
-router.post("/resend-otp", idempotencyMiddleware, validate(merchantSchema.resendOtpSchema), resendOtp);
+router.post("/resend-otp", idempotencyMiddleware, authRateLimit(), validate(merchantSchema.resendOtpSchema), resendOtp);
 
 /**
  * @swagger
@@ -261,7 +262,7 @@ router.patch("/me/webhook", authenticateApiKey, updateMerchantWebhook);
  *                 apiKey:
  *                   type: string
  */
-router.post("/keys/rotate-api-key", authenticateApiKey, rotateApiKey);
+router.post("/keys/rotate-api-key", authenticateApiKey, merchantRateLimit(), rotateApiKey);
 
 /**
  * @swagger
@@ -287,6 +288,7 @@ router.post("/keys/rotate-api-key", authenticateApiKey, rotateApiKey);
 router.post(
   "/keys/rotate-webhook-secret",
   authenticateApiKey,
+  merchantRateLimit(),
   rotateWebhookSecret,
 );
 
