@@ -6,6 +6,8 @@ export const DOCS_URLS = {
   API_REFERENCE: "/docs/api-reference",
   GETTING_STARTED: "/docs/getting-started",
   AUTHENTICATION: "/docs/authentication",
+  /** Webhook HMAC / signature verification (see on-page section). */
+  WEBHOOK_VERIFICATION: "/docs/authentication#webhook-verification",
   RATE_LIMITS: "/docs/rate-limits",
   FULL_DOCS: "/docs",
   COMMUNITY: "/community",

@@ -18,6 +18,7 @@ import { Suspense } from "react";
 import toast from "react-hot-toast";
 import { api } from "@/lib/api";
 import { QRCodeCanvas } from "qrcode.react";
+import { DataTableCard, TablePaginationBar } from "@/components/data-table";
 
 const PAGE_SIZE = 20;
 
@@ -97,6 +98,7 @@ function PaymentsContent() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -130,6 +132,7 @@ function PaymentsContent() {
 
   const fetchPayments = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const result = (await api.payments.list({
         page,
@@ -141,7 +144,9 @@ function PaymentsContent() {
       setPayments(result.data.map(mapBackendPayment));
       setTotal(result.meta.total);
     } catch {
-      toast.error("Failed to load payments.");
+      const msg = "Failed to load payments.";
+      setLoadError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -273,8 +278,6 @@ function PaymentsContent() {
     }
   };
 
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -299,91 +302,71 @@ function PaymentsContent() {
         </div>
       </div>
 
-      <div className="bg-card rounded-2xl border p-6 shadow-sm">
-        {recentLinks.length > 0 && (
-          <div className="mb-6 space-y-3">
-            <div>
-              <h3 className="text-sm font-semibold">Recent payment links</h3>
-              <p className="text-xs text-muted-foreground">Links you&apos;ve generated in this session.</p>
-            </div>
-            <div className="space-y-2">
-              {recentLinks.map((link) => (
-                <div
-                  key={link.id}
-                  className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 rounded-md border border-border bg-muted/40 px-3 py-2"
-                >
-                  <div className="min-w-0">
-                    <p className="text-xs font-medium break-all">{link.url}</p>
-                    <p className="mt-1 text-[11px] text-muted-foreground">
-                      {link.amount} {link.currency}
-                      {link.description ? ` • ${link.description}` : ""} •{" "}
-                      {new Date(link.createdAt).toLocaleString()}
-                    </p>
-                  </div>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    className="shrink-0 mt-1 sm:mt-0"
-                    onClick={async () => {
-                      await navigator.clipboard.writeText(link.url);
-                      toast.success("Payment link copied to clipboard.");
-                    }}
-                  >
-                    Copy
-                  </Button>
+      {recentLinks.length > 0 && (
+        <div className="bg-card rounded-2xl border p-6 shadow-sm space-y-3">
+          <div>
+            <h3 className="text-sm font-semibold">Recent payment links</h3>
+            <p className="text-xs text-muted-foreground">Links you&apos;ve generated in this session.</p>
+          </div>
+          <div className="space-y-2">
+            {recentLinks.map((link) => (
+              <div
+                key={link.id}
+                className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 rounded-md border border-border bg-muted/40 px-3 py-2"
+              >
+                <div className="min-w-0">
+                  <p className="text-xs font-medium break-all">{link.url}</p>
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    {link.amount} {link.currency}
+                    {link.description ? ` • ${link.description}` : ""} •{" "}
+                    {new Date(link.createdAt).toLocaleString()}
+                  </p>
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <PaymentsFilters
-          searchValue={search}
-          statusValue={statusFilter}
-          currencyValue={currencyFilter}
-          onSearchChange={handleSearchChange}
-          onStatusChange={(v) => setStatusFilter(v)}
-          onCurrencyChange={(v) => setCurrencyFilter(v)}
-        />
-
-        {loading ? (
-          <div className="flex items-center justify-center py-16">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-          </div>
-        ) : (
-          <PaymentsTable
-            payments={payments}
-            onRowClick={(payment) => setSelectedPaymentId(payment.id)}
-          />
-        )}
-
-        <div className="mt-6 flex items-center justify-between text-sm text-muted-foreground">
-          <p>
-            Showing {payments.length} of {total} payments
-          </p>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="secondary"
-              size="sm"
-              disabled={page <= 1 || loading}
-              onClick={() => setPage((p) => p - 1)}
-            >
-              Previous
-            </Button>
-            <span className="text-xs">
-              {page} / {totalPages}
-            </span>
-            <Button
-              variant="secondary"
-              size="sm"
-              disabled={page >= totalPages || loading}
-              onClick={() => setPage((p) => p + 1)}
-            >
-              Next
-            </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="shrink-0 mt-1 sm:mt-0"
+                  onClick={async () => {
+                    await navigator.clipboard.writeText(link.url);
+                    toast.success("Payment link copied to clipboard.");
+                  }}
+                >
+                  Copy
+                </Button>
+              </div>
+            ))}
           </div>
         </div>
-      </div>
+      )}
+
+      <DataTableCard
+        toolbar={
+          <PaymentsFilters
+            searchValue={search}
+            statusValue={statusFilter}
+            currencyValue={currencyFilter}
+            onSearchChange={handleSearchChange}
+            onStatusChange={(v) => setStatusFilter(v)}
+            onCurrencyChange={(v) => setCurrencyFilter(v)}
+          />
+        }
+        footer={
+          <TablePaginationBar
+            page={page}
+            pageSize={PAGE_SIZE}
+            total={total}
+            loading={loading}
+            onPageChange={setPage}
+          />
+        }
+      >
+        <PaymentsTable
+          isLoading={loading}
+          error={loadError}
+          payments={payments}
+          onRowClick={(payment) => setSelectedPaymentId(payment.id)}
+        />
+      </DataTableCard>
 
       <Modal
         isOpen={!!selectedPayment}

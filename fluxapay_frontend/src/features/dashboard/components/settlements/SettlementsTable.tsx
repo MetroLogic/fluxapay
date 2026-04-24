@@ -1,17 +1,19 @@
 'use client';
 
 import { FileText } from 'lucide-react';
-import EmptyState from '@/components/EmptyState';
+import { DataTableBodyState } from '@/components/data-table';
 import { Settlement } from '../types';
 
 type Props = {
     settlements: Settlement[];
     onSelect: (settlement: Settlement) => void;
+    isLoading?: boolean;
+    error?: string | null;
 };
 
-export function SettlementsTable({ settlements, onSelect }: Props) {
+export function SettlementsTable({ settlements, onSelect, isLoading = false, error = null }: Props) {
     return (
-        <div className="rounded-xl border bg-card shadow overflow-hidden">
+        <div className="bg-card shadow overflow-hidden">
             <div className="overflow-x-auto">
                 <table className="w-full">
                     <thead className="bg-muted/50 border-b">
@@ -44,14 +46,21 @@ export function SettlementsTable({ settlements, onSelect }: Props) {
                     </thead>
 
                     <tbody className="divide-y">
-                        {settlements.length === 0 ? (
-                            <EmptyState
-                                colSpan={8}
-                                className="py-12 text-muted-foreground"
-                                message="No settlements found matching your filters."
-                            />
-                        ) : (
-                            settlements.map((settlement) => (
+                        <DataTableBodyState
+                            colSpan={8}
+                            state={
+                                error
+                                    ? 'error'
+                                    : isLoading
+                                        ? 'loading'
+                                        : settlements.length === 0
+                                            ? 'empty'
+                                            : 'ready'
+                            }
+                            errorMessage={error ?? undefined}
+                            emptyMessage="No settlements found matching your filters."
+                        >
+                            {settlements.map((settlement) => (
                                 <tr
                                     key={settlement.id}
                                     onClick={() => onSelect(settlement)}
@@ -101,8 +110,8 @@ export function SettlementsTable({ settlements, onSelect }: Props) {
                                         {settlement.bankReference}
                                     </td>
                                 </tr>
-                            ))
-                        )}
+                            ))}
+                        </DataTableBodyState>
                     </tbody>
                 </table>
             </div>
