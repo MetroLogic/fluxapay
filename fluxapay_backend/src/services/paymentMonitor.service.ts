@@ -3,6 +3,7 @@ import { Horizon, Asset } from "@stellar/stellar-sdk";
 import { PrismaClient } from "../generated/client/client";
 import { Decimal } from "@prisma/client/runtime/library";
 import { paymentContractService } from "./paymentContract.service";
+import { PaymentStatus } from "../types/payment";
 
 /**
  * paymentMonitor.service.ts
@@ -30,16 +31,16 @@ export async function runPaymentMonitorTick(): Promise<void> {
   // 1. Check for expired payments (pending or partially_paid)
   await prisma.payment.updateMany({
     where: {
-      status: { in: ['pending', 'partially_paid'] },
+      status: { in: [PaymentStatus.PENDING, PaymentStatus.PARTIALLY_PAID] },
       expiration: { lte: now },
     },
-    data: { status: 'expired' },
+    data: { status: PaymentStatus.EXPIRED },
   });
 
   // 2. Monitor active payments
   const payments = await prisma.payment.findMany({
     where: {
-      status: { in: ['pending', 'partially_paid'] },
+      status: { in: [PaymentStatus.PENDING, PaymentStatus.PARTIALLY_PAID] },
       expiration: { gt: now },
       stellar_address: { not: null },
     },
@@ -95,13 +96,13 @@ export async function runPaymentMonitorTick(): Promise<void> {
       }
 
       // Determine new status based on total balance
-      let newStatus: string | undefined;
+      let newStatus: PaymentStatus | undefined;
       const expectedAmount = Number(payment.amount as any as Decimal);
 
       if (totalReceived >= expectedAmount) {
-        newStatus = totalReceived > expectedAmount ? 'overpaid' : 'confirmed';
+        newStatus = totalReceived > expectedAmount ? PaymentStatus.OVERPAID : PaymentStatus.CONFIRMED;
       } else if (totalReceived > 0) {
-        newStatus = 'partially_paid';
+        newStatus = PaymentStatus.PARTIALLY_PAID;
       }
 
       // Update database if status changed or new activity detected
@@ -120,7 +121,7 @@ export async function runPaymentMonitorTick(): Promise<void> {
         eventBus.emit(AppEvents.PAYMENT_UPDATED, updatedPayment);
 
         // Trigger on-chain verification via Soroban contract
-        if ((newStatus === 'confirmed' || newStatus === 'overpaid') && latestTxHash) {
+        if ((newStatus === PaymentStatus.CONFIRMED || newStatus === PaymentStatus.OVERPAID) && latestTxHash) {
           // Use the newer paymentContractService with retry logic
           paymentContractService.verify_payment(
             payment.id,

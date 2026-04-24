@@ -15,6 +15,7 @@
 import { PrismaClient } from "../generated/client/client";
 import { createAndDeliverWebhook } from "./webhook.service";
 import { eventBus, AppEvents } from "./EventService";
+import { PaymentStatus } from "../types/payment";
 
 const prisma = new PrismaClient();
 
@@ -77,7 +78,7 @@ export async function runPaymentExpiryJob(): Promise<PaymentExpiryResult> {
     // Find all pending payments past their expiration in one query
     const expiredPayments = await prisma.payment.findMany({
       where: {
-        status: "pending",
+        status: PaymentStatus.PENDING,
         expiration: { lt: now },
       },
       select: {
@@ -102,8 +103,8 @@ export async function runPaymentExpiryJob(): Promise<PaymentExpiryResult> {
     for (const payment of expiredPayments) {
       // Idempotent update: only transitions rows still in "pending"
       const updated = await prisma.payment.updateMany({
-        where: { id: payment.id, status: "pending" },
-        data: { status: "expired" },
+        where: { id: payment.id, status: PaymentStatus.PENDING },
+        data: { status: PaymentStatus.EXPIRED },
       });
 
       if (updated.count === 0) {
@@ -114,7 +115,7 @@ export async function runPaymentExpiryJob(): Promise<PaymentExpiryResult> {
       result.expired++;
 
       // Emit internal event (for any in-process listeners)
-      eventBus.emit(AppEvents.PAYMENT_EXPIRED, { ...payment, status: "expired" });
+      eventBus.emit(AppEvents.PAYMENT_EXPIRED, { ...payment, status: PaymentStatus.EXPIRED });
 
       // Fire webhook — stable event_id ensures idempotent delivery
       const eventId = `${payment.id}:expired`;
@@ -128,7 +129,7 @@ export async function runPaymentExpiryJob(): Promise<PaymentExpiryResult> {
               payment_id: payment.id,
               amount: payment.amount.toString(),
               currency: payment.currency,
-              status: "expired",
+              status: PaymentStatus.EXPIRED,
               customer_email: payment.customer_email,
               expired_at: now.toISOString(),
               reason: "Payment window expired without on-chain confirmation.",

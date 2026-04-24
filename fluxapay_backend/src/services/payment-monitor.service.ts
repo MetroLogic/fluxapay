@@ -1,6 +1,7 @@
 import * as StellarSdk from '@stellar/stellar-sdk';
-import { PrismaClient, Payment } from '../generated/client/client';
+import { PrismaClient, Payment, WorkerState } from '../generated/client/client';
 import { WebhookDispatcher } from './webhook.service';
+import { PaymentStatus } from '../types/payment';
 
 export class PaymentMonitorService {
     private prisma: PrismaClient;
@@ -62,7 +63,7 @@ export class PaymentMonitorService {
         const pendingPayment = await this.prisma.payment.findFirst({
             where: {
                 stellar_address: toAddress,
-                status: 'pending'
+                status: PaymentStatus.PENDING
             },
             include: { merchant: true }
         });
@@ -74,7 +75,7 @@ export class PaymentMonitorService {
         const requiredAmount = parseFloat(pendingPayment.amount.toString());
 
         // Check idempotency: did we already process this exact tx?
-        if (pendingPayment.transaction_hash === txHash || pendingPayment.status === 'confirmed') {
+        if (pendingPayment.transaction_hash === txHash || pendingPayment.status === PaymentStatus.CONFIRMED) {
             return;
         }
 
@@ -91,7 +92,7 @@ export class PaymentMonitorService {
             const updatedPayment = await this.prisma.payment.update({
                 where: { id: pendingPayment.id },
                 data: {
-                    status: 'confirmed',
+                    status: PaymentStatus.CONFIRMED,
                     transaction_hash: txHash,
                     confirmed_at: new Date(),
                 }
