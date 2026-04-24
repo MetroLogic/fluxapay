@@ -20,6 +20,7 @@ import { runSettlementBatch } from "./settlementBatch.service";
 import { processBillingCycle } from "./plan.service";
 import { runSweepWithLock } from "./sweepCron.service";
 import { funderMonitorService } from "./funderMonitor.service";
+import { runPaymentExpiryJob } from "./paymentExpiry.service";
 
 const SETTLEMENT_CRON_EXPR = process.env.SETTLEMENT_CRON ?? "0 0 * * *";
 const BILLING_CRON_EXPR = process.env.BILLING_CRON ?? "0 1 * * *";
@@ -27,11 +28,13 @@ const BILLING_CRON_EXPR = process.env.BILLING_CRON ?? "0 1 * * *";
 // Override with SWEEP_CRON in env for less frequent schedules.
 const SWEEP_CRON_EXPR = process.env.SWEEP_CRON ?? "*/5 * * * *"; // every 5 minutes
 const FUNDER_MONITOR_CRON_EXPR = process.env.FUNDER_MONITOR_CRON ?? "*/10 * * * *"; // every 10 minutes
+const PAYMENT_EXPIRY_CRON_EXPR = process.env.PAYMENT_EXPIRY_CRON ?? "*/5 * * * *"; // every 5 minutes
 
 let settlementTask: ScheduledTask | null = null;
 let billingTask: ScheduledTask | null = null;
 let sweepTask: ScheduledTask | null = null;
 let funderMonitorTask: ScheduledTask | null = null;
+let paymentExpiryTask: ScheduledTask | null = null;
 
 /**
  * Starts all scheduled cron jobs.
@@ -161,6 +164,36 @@ export function startCronJobs(): void {
   } else {
     console.log("[Cron] DISABLE_FUNDER_MONITOR_CRON=true – funder monitor job disabled.");
   }
+
+  // ── Payment Expiry Job (pending → expired) ────────────────────────────────
+  if (process.env.DISABLE_PAYMENT_EXPIRY_CRON !== "true") {
+    if (validate(PAYMENT_EXPIRY_CRON_EXPR)) {
+      paymentExpiryTask = schedule(
+        PAYMENT_EXPIRY_CRON_EXPR,
+        async () => {
+          console.log(`[Cron] ⏰ Payment expiry job triggered at ${new Date().toISOString()}`);
+          try {
+            const result = await runPaymentExpiryJob();
+            if (result.processed > 0) {
+              console.log(
+                `[Cron] ✅ Payment expiry — ${result.expired}/${result.processed} expired, ` +
+                `${result.webhookErrors.length} webhook error(s).`,
+              );
+            }
+          } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            console.error(`[Cron] ❌ Payment expiry job failed: ${msg}`);
+          }
+        },
+        { timezone: "UTC" },
+      );
+      console.log(`[Cron] ✅ Payment expiry job scheduled (${PAYMENT_EXPIRY_CRON_EXPR}) in UTC.`);
+    } else {
+      console.warn(`[Cron] Invalid PAYMENT_EXPIRY_CRON "${PAYMENT_EXPIRY_CRON_EXPR}" – payment expiry disabled.`);
+    }
+  } else {
+    console.log("[Cron] DISABLE_PAYMENT_EXPIRY_CRON=true – payment expiry job disabled.");
+  }
 }
 
 /**
@@ -173,6 +206,7 @@ export function stopCronJobs(): void {
     [billingTask, "Billing cycle"],
     [sweepTask, "Sweep"],
     [funderMonitorTask, "Funder monitor"],
+    [paymentExpiryTask, "Payment expiry"],
   ];
   for (const [task, name] of tasks) {
     if (task) {
@@ -184,4 +218,5 @@ export function stopCronJobs(): void {
   billingTask = null;
   sweepTask = null;
   funderMonitorTask = null;
+  paymentExpiryTask = null;
 }

@@ -467,6 +467,7 @@ enum WebhookEventType {
   payment_completed
   payment_failed
   payment_pending
+  payment_expired
   refund_completed
   refund_failed
   settlement_completed
