@@ -52,7 +52,7 @@ const LoginForm = () => {
         throw new Error("Login response missing token");
       }
 
-      storeToken(data.token);
+      storeToken(data.token, Boolean(validData.keepLoggedIn));
       toast.success(data.message || "Login successful!");
       router.push("/dashboard");
     } catch (err) {
