@@ -5,7 +5,6 @@ import Input from "@/components/Input";
 import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
 import { api, ApiError, clearToken } from "@/lib/api";
-import { useRouter } from "@/i18n/routing";
 
 import {
   Copy,
@@ -19,7 +18,6 @@ import {
 } from "lucide-react";
 
 export default function SettingsPage() {
-  const router = useRouter();
   // Account Details State
   const [businessName, setBusinessName] = useState("");
   const [contactEmail, setContactEmail] = useState("");
@@ -256,7 +254,7 @@ export default function SettingsPage() {
   const handleSignOutCurrentSession = () => {
     setIsSigningOut(true);
     clearToken();
-    router.replace("/login");
+    window.location.href = "/login";
   };
 
   const handleSignOutAllSessions = async () => {
@@ -270,7 +268,7 @@ export default function SettingsPage() {
       }
     } finally {
       clearToken();
-      router.replace("/login");
+      window.location.href = "/login";
     }
   };
 
