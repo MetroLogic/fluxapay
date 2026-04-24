@@ -33,7 +33,7 @@ import {
 import toast from "react-hot-toast";
 
 import { useAdminReconciliation } from "../../../hooks/useAdminReconciliation";
-import { ReconciliationRecord, DiscrepancyAlert } from "../../../types/reconciliation";
+import { ReconciliationRecord } from "../../../types/reconciliation";
 
 interface StatusConfig {
   color: string;
@@ -64,7 +64,7 @@ const AdminReconciliationPage = () => {
   
   const [activeTab, setActiveTab] = useState<"overview" | "alerts">("overview");
 
-  const { records: rawRecords, summary, discrepancies, loading, resolveDiscrepancy } = 
+  const { records: rawRecords, summary, discrepancies, resolveDiscrepancy } =
     useAdminReconciliation({ start: globalStart, end: globalEnd });
     
   const records = rawRecords.map(r => ({
@@ -419,7 +419,7 @@ const AdminReconciliationPage = () => {
                     <p className="text-xs text-slate-400 mt-1 flex items-center gap-1">
                       <ArrowUpRight className="w-3 h-3 text-emerald-400" />
                       {records.reduce(
-                        (sum, r) => sum + 0,
+                        (sum) => sum + 0,
                         0,
                       )}{" "}
                       payments processed
@@ -454,7 +454,7 @@ const AdminReconciliationPage = () => {
                     <p className="text-xs text-slate-400 mt-1 flex items-center gap-1">
                       <ArrowDownRight className="w-3 h-3 text-rose-400" />
                       {records.reduce(
-                        (sum, r) => sum + 0,
+                        (sum) => sum + 0,
                         0,
                       )}{" "}
                       settlements processed

@@ -27,7 +27,11 @@ export function PaymentLinksPage() {
     setLinks(await res.json());
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    queueMicrotask(() => {
+      void load();
+    });
+  }, []);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();

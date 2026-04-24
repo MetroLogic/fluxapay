@@ -35,14 +35,16 @@ export const PaymentsFilters = memo(({
 
     // Load presets on mount
     useEffect(() => {
-        try {
-            const saved = localStorage.getItem("fluxapay_payment_presets");
-            if (saved) {
-                setPresets(JSON.parse(saved));
+        queueMicrotask(() => {
+            try {
+                const saved = localStorage.getItem("fluxapay_payment_presets");
+                if (saved) {
+                    setPresets(JSON.parse(saved) as SavedPreset[]);
+                }
+            } catch (e) {
+                console.error("Failed to load presets", e);
             }
-        } catch (e) {
-            console.error("Failed to load presets", e);
-        }
+        });
     }, []);
 
     const savePresets = (newPresets: SavedPreset[]) => {
