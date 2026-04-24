@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 
 /**
  * global-error.tsx — catches errors thrown inside the root layout itself.
@@ -75,7 +76,7 @@ export default function GlobalError({
             >
               Try again
             </button>
-            <a
+            <Link
               href="/"
               style={{
                 padding: "0.75rem 2rem",
@@ -89,7 +90,7 @@ export default function GlobalError({
               }}
             >
               Go to Home
-            </a>
+            </Link>
           </div>
         </div>
       </body>
