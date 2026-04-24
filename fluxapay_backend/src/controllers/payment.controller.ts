@@ -82,6 +82,9 @@ export const createPayment = async (req: Request, res: Response) => {
 export const getPayments = async (req: Request, res: Response) => {
     try {
         const merchantId = await validateUserId(req as AuthRequest);
+        if (!merchantId) {
+            return res.status(401).json({ error: "Unauthorized" });
+        }
 
         // 1. Destructure with explicit type casting immediately
         const query = req.query as Record<string, unknown>;
@@ -147,6 +150,15 @@ export const getPayments = async (req: Request, res: Response) => {
 
         res.json({ data, meta: { total, page, limit } });
     } catch (error: unknown) {
+        if (
+            error &&
+            typeof error === "object" &&
+            "status" in error &&
+            typeof (error as { status?: unknown }).status === "number"
+        ) {
+            const e = error as { status: number; message?: string };
+            return res.status(e.status).json({ error: e.message || "Unauthorized" });
+        }
         res.status(500).json({ error: "Internal Server Error" });
     }
 };
