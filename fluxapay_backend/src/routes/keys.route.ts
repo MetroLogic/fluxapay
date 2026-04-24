@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { authenticateApiKey } from "../middleware/apiKeyAuth.middleware";
+import { merchantApiKeyRateLimit } from "../middleware/rateLimit.middleware";
 import { regenerateApiKey } from "../controllers/keys.controller";
 
 const router = Router();
@@ -25,6 +26,6 @@ const router = Router();
  *                 apiKey:
  *                   type: string
  */
-router.post("/regenerate", authenticateApiKey, regenerateApiKey);
+router.post("/regenerate", authenticateApiKey, merchantApiKeyRateLimit(), regenerateApiKey);
 
 export default router;

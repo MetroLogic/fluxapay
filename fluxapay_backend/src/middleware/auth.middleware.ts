@@ -16,8 +16,11 @@ export function authenticateToken(
   if (!token) return res.status(401).json({ message: "Token missing" });
 
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET!) as JwtPayload;
-    req.user = { id: payload?.id, email: payload?.email }; // attach payload to request for later use
+    const payload = jwt.verify(token, process.env.JWT_SECRET!) as JwtPayload & { id?: string };
+    req.user = { id: payload?.id, email: payload?.email };
+    if (payload?.id) {
+      req.merchantId = payload.id;
+    }
     next();
   } catch (_err) {
     return res.status(403).json({ message: "Invalid or expired token" });

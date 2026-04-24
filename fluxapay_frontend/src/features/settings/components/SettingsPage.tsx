@@ -1,10 +1,13 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import Link from "next/link";
 import Input from "@/components/Input";
 import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
 import { api, ApiError, clearToken } from "@/lib/api";
+import { DOCS_URLS } from "@/lib/docs";
+import { isValidHttpsWebhookUrl } from "@/lib/webhookUrl";
 
 import {
   Copy,
@@ -220,13 +223,12 @@ export default function SettingsPage() {
   const handleWebhookUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setWebhookUrl(value);
-
-    // Validate HTTPS
-    if (value && !value.startsWith("https://")) {
-      setWebhookError("Webhook URL must start with https://");
-    } else {
+    if (!value.trim()) {
       setWebhookError("");
+      return;
     }
+    const v = isValidHttpsWebhookUrl(value);
+    setWebhookError(v.ok ? "" : v.message);
   };
 
   // Handle Webhook Save
@@ -642,7 +644,16 @@ export default function SettingsPage() {
               error={webhookError}
             />
             <p className="text-xs text-muted-foreground mt-2">
-              We&apos;ll send payment notifications to this endpoint.
+              We&apos;ll send payment notifications to this public HTTPS endpoint. Learn how to{" "}
+              <Link
+                href={DOCS_URLS.WEBHOOK_VERIFICATION}
+                className="text-primary font-medium underline"
+                target="_blank"
+                rel="noreferrer"
+              >
+                verify webhook signatures
+              </Link>
+              . Use the Webhooks page to send a test delivery.
             </p>
           </div>
 
@@ -674,7 +685,7 @@ export default function SettingsPage() {
             </Button>
           </div>
 
-          {webhookError && !webhookError.includes("https://") && (
+          {webhookError && (
             <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-800">
               <p className="text-sm">{webhookError}</p>
             </div>

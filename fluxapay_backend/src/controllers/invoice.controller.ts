@@ -23,11 +23,18 @@ export async function createInvoice(req: AuthRequest, res: Response) {
 export async function listInvoices(req: Request, res: Response) {
   try {
     const merchantId = await validateUserId(req as AuthRequest);
+    const q = req.query as {
+      page?: number;
+      limit?: number;
+      status?: "pending" | "paid" | "cancelled" | "overdue";
+      search?: string;
+    };
     const result = await listInvoicesService({
       merchantId,
-      page: Number(req.query.page) || 1,
-      limit: Number(req.query.limit) || 10,
-      status: req.query.status as "pending" | "paid" | "cancelled" | "overdue" | undefined,
+      page: q.page ?? 1,
+      limit: q.limit ?? 10,
+      status: q.status,
+      search: q.search,
     });
     res.status(200).json(result);
   } catch (err: any) {
