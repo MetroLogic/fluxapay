@@ -21,7 +21,8 @@ import {
 export default function CheckoutPage() {
   const params = useParams();
   const paymentId = params.payment_id as string;
-  const { payment, loading, error } = usePaymentStatus(paymentId);
+  const { payment, loading, error, isOffline, retryConnection } =
+    usePaymentStatus(paymentId);
 
   const accentHex = payment?.checkoutAccentColor ?? DEFAULT_ACCENT;
   const showBrandHeader = Boolean(payment && !error);
@@ -46,6 +47,30 @@ export default function CheckoutPage() {
       merchantName={payment?.merchantName}
       showBrandHeader={showBrandHeader}
     >
+      {isOffline && (
+        <div
+          className="mx-auto mt-4 w-full max-w-2xl rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-amber-900"
+          role="status"
+          aria-live="polite"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm font-medium">
+              You are offline. We will resume payment updates when your network
+              reconnects.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                void retryConnection();
+              }}
+              className="rounded-md border border-amber-400 bg-white px-3 py-1 text-sm font-semibold text-amber-900 hover:bg-amber-100"
+            >
+              Retry now
+            </button>
+          </div>
+        </div>
+      )}
+
       {loading && (
         <div
           className="flex flex-1 items-center justify-center p-4"
