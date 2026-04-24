@@ -1,6 +1,22 @@
 import { z } from 'zod';
 
+// Canonical event names aligned with product spec
 export const webhookEventTypes = [
+  // Payment events (canonical names)
+  'payment.created',
+  'payment.pending',
+  'payment.confirmed',
+  'payment.failed',
+  'payment.settled',
+  // Refund events
+  'refund.created',
+  'refund.completed',
+  'refund.failed',
+  // Subscription events
+  'subscription.created',
+  'subscription.cancelled',
+  'subscription.renewed',
+  // Legacy event names (for backward compatibility)
   'payment_completed',
   'payment_confirmed',
   'payment_failed',
