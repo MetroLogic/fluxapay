@@ -61,7 +61,12 @@ export const validatePayment = [
   body('amount').isFloat({ gt: 0 }).withMessage('Amount must be greater than 0'),
   body('currency').equals('USDC').withMessage('Only USDC is supported'),
   body('customer_email').isEmail().withMessage('Invalid customer email'),
-  body('description').optional().isString().trim().withMessage('description must be a string'),
+  body('description')
+    .optional()
+    .isString()
+    .trim()
+    .isLength({ max: 500 })
+    .withMessage('description must be a string with a maximum of 500 characters'),
   body('metadata')
     .optional()
     .isObject()
@@ -90,11 +95,15 @@ export const validatePayment = [
   body('success_url')
     .optional()
     .isString()
+    .isLength({ max: 2048 })
+    .withMessage('success_url must not exceed 2048 characters')
     .custom(isHttpsUrl)
     .withMessage('success_url must be a valid https URL'),
   body('cancel_url')
     .optional()
     .isString()
+    .isLength({ max: 2048 })
+    .withMessage('cancel_url must not exceed 2048 characters')
     .custom(isHttpsUrl)
     .withMessage('cancel_url must be a valid https URL'),
   validate,

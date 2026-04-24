@@ -190,3 +190,123 @@ describe("getPaymentById controller — preservation tests", () => {
     expect(res.json).toHaveBeenCalledWith({ error: "Payment not found" });
   });
 });
+
+// ---------------------------------------------------------------------------
+// Issue #446 — Public Checkout DTO shape tests
+// ---------------------------------------------------------------------------
+import { buildPublicCheckoutDto } from "../payment.controller";
+
+function makeCheckoutPayment(overrides: Partial<Parameters<typeof buildPublicCheckoutDto>[0]> = {}): Parameters<typeof buildPublicCheckoutDto>[0] {
+  return {
+    id: "pay_test_123",
+    amount: 50,
+    currency: "USDC",
+    stellar_address: "GABCDEFG",
+    expiration: new Date("2026-05-01T00:00:00Z"),
+    status: "pending",
+    success_url: "https://merchant.com/success",
+    cancel_url: "https://merchant.com/cancel",
+    description: "Test payment",
+    metadata: {},
+    merchant: {
+      business_name: "Test Store",
+      checkout_logo_url: "https://cdn.example.com/logo.png",
+      checkout_accent_color: "#ff5500",
+    },
+    ...overrides,
+  };
+}
+
+describe("buildPublicCheckoutDto — DTO shape and PII safety", () => {
+  it("should include all whitelisted public fields", () => {
+    const dto = buildPublicCheckoutDto(makeCheckoutPayment());
+
+    expect(dto).toMatchObject({
+      id: "pay_test_123",
+      amount: 50,
+      currency: "USDC",
+      address: "GABCDEFG",
+      status: "pending",
+      successUrl: "https://merchant.com/success",
+      cancelUrl: "https://merchant.com/cancel",
+      merchantName: "Test Store",
+      description: "Test payment",
+      checkoutLogoUrl: "https://cdn.example.com/logo.png",
+    });
+    expect(typeof dto.expiresAt).toBe("string");
+  });
+
+  it("should never expose merchantId, customerId, or customer_email", () => {
+    const paymentWithPii = {
+      ...makeCheckoutPayment(),
+      // These fields exist on the Prisma Payment model but must NOT appear in DTO.
+      merchantId: "merchant_secret",
+      customerId: "customer_secret",
+      customer_email: "buyer@private.com",
+    } as any;
+
+    const dto = buildPublicCheckoutDto(paymentWithPii) as Record<string, unknown>;
+
+    expect(dto).not.toHaveProperty("merchantId");
+    expect(dto).not.toHaveProperty("customerId");
+    expect(dto).not.toHaveProperty("customer_email");
+  });
+
+  it("should never expose internal fields like encrypted_key_data, payment_index, or derivation_path", () => {
+    const paymentWithInternal = {
+      ...makeCheckoutPayment(),
+      encrypted_key_data: "SENSITIVE",
+      payment_index: 42,
+      derivation_path: "m/44'/148'/0'/0/42",
+      order_id: "internal-order-99",
+    } as any;
+
+    const dto = buildPublicCheckoutDto(paymentWithInternal) as Record<string, unknown>;
+
+    expect(dto).not.toHaveProperty("encrypted_key_data");
+    expect(dto).not.toHaveProperty("payment_index");
+    expect(dto).not.toHaveProperty("derivation_path");
+    expect(dto).not.toHaveProperty("order_id");
+  });
+
+  it("should omit optional fields when they are null", () => {
+    const dto = buildPublicCheckoutDto(
+      makeCheckoutPayment({
+        success_url: null,
+        cancel_url: null,
+        description: null,
+        metadata: {},
+        merchant: {
+          business_name: "Minimal Store",
+          checkout_logo_url: null,
+          checkout_accent_color: null,
+        },
+      })
+    );
+
+    expect(dto).not.toHaveProperty("successUrl");
+    expect(dto).not.toHaveProperty("cancelUrl");
+    expect(dto).not.toHaveProperty("description");
+    expect(dto).not.toHaveProperty("checkoutLogoUrl");
+    expect(dto).not.toHaveProperty("checkoutAccentColor");
+  });
+
+  it("should surface memo fields from metadata when present", () => {
+    const dto = buildPublicCheckoutDto(
+      makeCheckoutPayment({
+        metadata: { memo: "inv-001", memo_type: "text", memoRequired: true },
+      })
+    );
+
+    expect(dto.memo).toBe("inv-001");
+    expect(dto.memoType).toBe("text");
+    expect(dto.memoRequired).toBe(true);
+  });
+
+  it("should convert amount to a plain number", () => {
+    // Prisma returns Decimal objects; the DTO must be a JS number.
+    const dto = buildPublicCheckoutDto(makeCheckoutPayment({ amount: 99.99 }));
+    expect(typeof dto.amount).toBe("number");
+    expect(dto.amount).toBe(99.99);
+  });
+});
