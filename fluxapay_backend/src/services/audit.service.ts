@@ -1,8 +1,5 @@
 import { PrismaClient, AuditActionType, AuditEntityType, KYCStatus, Prisma } from '../generated/client/client';
 import {
-  AuditActionType,
-  AuditEntityType,
-  KYCStatus,
   CreateAuditLogParams,
   QueryAuditLogsParams,
   PaginationInfo,
@@ -145,11 +142,16 @@ export async function logKycDecision(
     reviewed_at: new Date().toISOString(),
   };
 
+  const actionType =
+    params.action === "approve"
+      ? AuditActionType.kyc_approve
+      : AuditActionType.kyc_reject;
+
   return await createAuditLog(
     {
       admin_id: params.adminId,
-      action_type: AuditActionType.kyc_decision,
-      entity_type: AuditEntityType.merchant,
+      action_type: actionType,
+      entity_type: AuditEntityType.merchant_kyc,
       entity_id: params.merchantId,
       details,
     },
@@ -208,8 +210,8 @@ export async function logSweepTrigger(params: {
 
   return await createAuditLog({
     admin_id: params.adminId,
-    action_type: AuditActionType.sweep_operation,
-    entity_type: AuditEntityType.payment_gateway,
+    action_type: AuditActionType.sweep_trigger,
+    entity_type: AuditEntityType.sweep_operation,
     entity_id: sweepId,
     details,
   });
@@ -244,11 +246,16 @@ export async function updateSweepCompletion(params: {
       failure_reason: params.failureReason,
     };
 
+    const sweepActionType =
+      params.status === "completed"
+        ? AuditActionType.sweep_complete
+        : AuditActionType.sweep_fail;
+
     const updatedLog = await prisma.auditLog.update({
       where: { id: params.auditLogId },
       data: {
         details: updatedDetails,
-        action_type: AuditActionType.sweep_operation,
+        action_type: sweepActionType,
       },
     });
 
@@ -272,8 +279,8 @@ export async function logSettlementBatch(params: {
 
   return await createAuditLog({
     admin_id: params.adminId,
-    action_type: AuditActionType.settlement_batch,
-    entity_type: AuditEntityType.settlement,
+    action_type: AuditActionType.settlement_batch_initiate,
+    entity_type: AuditEntityType.settlement_batch,
     entity_id: params.batchId,
     details,
   });
@@ -309,11 +316,16 @@ export async function updateSettlementBatchCompletion(params: {
       failure_reason: params.failureReason,
     };
 
+    const completionActionType =
+      params.status === "completed"
+        ? AuditActionType.settlement_batch_complete
+        : AuditActionType.settlement_batch_fail;
+
     const updatedLog = await prisma.auditLog.update({
       where: { id: params.auditLogId },
       data: {
         details: updatedDetails,
-        action_type: AuditActionType.settlement_batch,
+        action_type: completionActionType,
       },
     });
 

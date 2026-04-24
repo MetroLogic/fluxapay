@@ -110,14 +110,17 @@ export class PaymentService {
     });
 
     // Prepare the Stellar account asynchronously (fund and add trustline)
-    // This runs in the background to avoid blocking payment creation
-    const stellarService = new StellarService();
-    stellarService.prepareAccount(merchantId, paymentId).catch((error) => {
-      console.error(
-        `Failed to prepare Stellar account for payment ${paymentId}:`,
-        error,
-      );
-    });
+    // This runs in the background to avoid blocking payment creation.
+    // Contract tests can disable this side effect to avoid post-test async logs.
+    if (process.env.DISABLE_STELLAR_PREPARE !== "true") {
+      const stellarService = new StellarService();
+      stellarService.prepareAccount(merchantId, paymentId).catch((error) => {
+        console.error(
+          `Failed to prepare Stellar account for payment ${paymentId}:`,
+          error,
+        );
+      });
+    }
 
     return payment;
   }
