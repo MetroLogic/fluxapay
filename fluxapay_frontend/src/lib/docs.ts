@@ -1,4 +1,7 @@
 // Documentation URLs
+// STATUS_URL can be overridden via NEXT_PUBLIC_STATUS_URL env var (e.g. https://status.fluxapay.com)
+const STATUS_URL = process.env.NEXT_PUBLIC_STATUS_URL ?? "/status";
+
 export const DOCS_URLS = {
   API_REFERENCE: "/docs/api-reference",
   GETTING_STARTED: "/docs/getting-started",
@@ -7,7 +10,7 @@ export const DOCS_URLS = {
   FULL_DOCS: "/docs",
   COMMUNITY: "/community",
   SUPPORT: "/support",
-  STATUS: "/status",
+  STATUS: STATUS_URL,
   FAQS: "/faqs",
   CONTACT: "/contact",
   PRICING: "/pricing",

@@ -156,7 +156,8 @@
     "login": "Entrar",
     "faqs": "FAQs / Suporte",
     "contact": "Contate-nos",
-    "resources": "Recursos"
+    "resources": "Recursos",
+    "status": "Status do Sistema"
   },
   "dashboard": {
     "overview": "Visão Geral",
@@ -211,7 +212,10 @@
     "country": "País",
     "createAccount": "Criar Conta",
     "signingIn": "Entrando...",
-    "creatingAccount": "Criando conta..."
+    "creatingAccount": "Criando conta...",
+    "keepLoggedIn": "Manter-me conectado",
+    "sessionExpiry": "Você será desconectado ao fechar o navegador.",
+    "sessionPersistent": "Você ficará conectado por 30 dias. Use apenas em um dispositivo confiável."
   },
   "settings": {
     "profile": "Perfil",

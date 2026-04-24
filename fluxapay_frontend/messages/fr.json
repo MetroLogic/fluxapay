@@ -156,7 +156,8 @@
     "login": "Se connecter",
     "faqs": "FAQs / Support",
     "contact": "Contactez-nous",
-    "resources": "Ressources"
+    "resources": "Ressources",
+    "status": "Statut du Système"
   },
   "dashboard": {
     "overview": "Aperçu",
@@ -211,7 +212,10 @@
     "country": "Pays",
     "createAccount": "Créer un Compte",
     "signingIn": "Connexion en cours...",
-    "creatingAccount": "Création du compte..."
+    "creatingAccount": "Création du compte...",
+    "keepLoggedIn": "Rester connecté",
+    "sessionExpiry": "Vous serez déconnecté à la fermeture du navigateur.",
+    "sessionPersistent": "Vous resterez connecté pendant 30 jours. Utilisez uniquement sur un appareil de confiance."
   },
   "settings": {
     "profile": "Profil",

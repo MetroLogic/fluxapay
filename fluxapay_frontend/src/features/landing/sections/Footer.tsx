@@ -5,6 +5,25 @@ import { Link } from "@/i18n/routing";
 import { useTranslations } from "next-intl";
 import { DOCS_URLS } from "@/lib/docs";
 
+/** Renders an anchor. External URLs (http/https) open in a new tab. */
+const FooterLink = ({ href, label }: { href: string; label: string }) => {
+  const isExternal = href.startsWith("http://") || href.startsWith("https://");
+  const className = "text-[#A0A0A0] hover:text-white transition-colors duration-200 text-sm";
+
+  if (isExternal) {
+    return (
+      <a href={href} target="_blank" rel="noopener noreferrer" className={className}>
+        {label}
+      </a>
+    );
+  }
+  return (
+    <Link href={href} className={className}>
+      {label}
+    </Link>
+  );
+};
+
 const FooterSection = ({
   title,
   links,
@@ -19,12 +38,7 @@ const FooterSection = ({
     <ul className="space-y-3">
       {links.map((link, idx) => (
         <li key={idx}>
-          <Link
-            href={link.href}
-            className="text-[#A0A0A0] hover:text-white transition-colors duration-200 text-sm"
-          >
-            {link.label}
-          </Link>
+          <FooterLink href={link.href} label={link.label} />
         </li>
       ))}
     </ul>
@@ -49,6 +63,7 @@ export const Footer = () => {
       { label: t("documentation"), href: DOCS_URLS.FULL_DOCS },
       { label: t("faqs"), href: DOCS_URLS.FAQS },
       { label: t("contact"), href: DOCS_URLS.CONTACT },
+      { label: t("status"), href: DOCS_URLS.STATUS },
     ],
   };
 

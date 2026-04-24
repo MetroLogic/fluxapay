@@ -56,21 +56,25 @@ class ApiError extends Error {
 }
 
 function getToken(): string {
-  const token = localStorage.getItem("token");
+  // Check localStorage first (persistent), then sessionStorage (session-only)
+  const token = localStorage.getItem("token") ?? sessionStorage.getItem("token");
   if (!token) {
     throw new ApiError(401, "No authentication token found");
   }
   return token;
 }
 
-/** Persist auth token; uses sessionStorage when keepLoggedIn is false. */
+/** Persist auth token.
+ *  keepLoggedIn=true  → localStorage  (survives browser close, expires with JWT TTL ~30 days)
+ *  keepLoggedIn=false → sessionStorage (cleared when the tab/browser is closed)
+ */
 export function storeToken(token: string, keepLoggedIn = false): void {
   if (keepLoggedIn) {
     localStorage.setItem("token", token);
+    sessionStorage.removeItem("token"); // clear any leftover session token
   } else {
     sessionStorage.setItem("token", token);
-    // Keep localStorage in sync so fetchWithAuth can find it
-    localStorage.setItem("token", token);
+    localStorage.removeItem("token"); // ensure no persistent copy remains
   }
 }
 
@@ -81,7 +85,7 @@ export function clearToken(): void {
 }
 
 async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
-  const token = localStorage.getItem("token");
+  const token = localStorage.getItem("token") ?? sessionStorage.getItem("token");
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
