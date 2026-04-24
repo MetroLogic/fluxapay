@@ -79,13 +79,21 @@ export async function listInvoicesService(params: {
   page: number;
   limit: number;
   status?: "pending" | "paid" | "cancelled" | "overdue";
+  search?: string;
 }) {
-  const { merchantId, page, limit, status } = params;
+  const { merchantId, page, limit, status, search } = params;
   const skip = (page - 1) * limit;
 
-  const where: Record<string, unknown> = { merchantId };
+  const where: Prisma.InvoiceWhereInput = { merchantId };
   if (status) {
     where.status = status;
+  }
+  const q = search?.trim();
+  if (q) {
+    where.OR = [
+      { invoice_number: { contains: q, mode: "insensitive" } },
+      { customer_email: { contains: q, mode: "insensitive" } },
+    ];
   }
 
   const [invoices, total] = await Promise.all([
@@ -98,16 +106,16 @@ export async function listInvoicesService(params: {
     prisma.invoice.count({ where }),
   ]);
 
+  const totalPages = Math.max(1, Math.ceil(total / limit) || 1);
+
   return {
     message: "Invoices retrieved",
-    data: {
-      invoices,
-      pagination: {
-        page,
-        limit,
-        total,
-        total_pages: Math.ceil(total / limit),
-      },
+    data: { invoices },
+    meta: {
+      page,
+      limit,
+      total,
+      total_pages: totalPages,
     },
   };
 }

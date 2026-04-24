@@ -58,7 +58,8 @@ app.use((req, res, next) => {
   next();
 });
 
-// Global rate limit for all public API routes
+// Per-IP cap for all /api/v1 traffic (see PUBLIC_API_IP_RATE_MAX). Authenticated
+// routes also use merchantApiKeyRateLimit in route files.
 app.use("/api/v1", globalRateLimit());
 
 // Swagger UI

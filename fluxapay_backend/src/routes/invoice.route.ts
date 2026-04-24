@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { authenticateApiKey } from "../middleware/apiKeyAuth.middleware";
+import { merchantApiKeyRateLimit } from "../middleware/rateLimit.middleware";
 import { validate, validateQuery } from "../middleware/validation.middleware";
 import { createInvoice, listInvoices, exportInvoice } from "../controllers/invoice.controller";
 import { createInvoiceSchema, listInvoicesQuerySchema, exportInvoiceSchema } from "../schemas/invoice.schema";
@@ -44,12 +45,17 @@ const router = Router();
  *         schema:
  *           type: string
  *           enum: [pending, paid, cancelled, overdue]
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Search invoice number or customer email
  *     responses:
  *       200:
  *         description: Invoices retrieved
  */
-router.post("/", authenticateApiKey, validate(createInvoiceSchema), createInvoice);
-router.get("/", authenticateApiKey, validateQuery(listInvoicesQuerySchema), listInvoices);
+router.post("/", authenticateApiKey, merchantApiKeyRateLimit(), validate(createInvoiceSchema), createInvoice);
+router.get("/", authenticateApiKey, merchantApiKeyRateLimit(), validateQuery(listInvoicesQuerySchema), listInvoices);
 
 /**
  * @swagger
@@ -77,6 +83,6 @@ router.get("/", authenticateApiKey, validateQuery(listInvoicesQuerySchema), list
  *       404:
  *         description: Invoice not found
  */
-router.get("/:invoice_id/export", authenticateApiKey, validate(exportInvoiceSchema), exportInvoice);
+router.get("/:invoice_id/export", authenticateApiKey, merchantApiKeyRateLimit(), validate(exportInvoiceSchema), exportInvoice);
 
 export default router;

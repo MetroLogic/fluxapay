@@ -10,6 +10,7 @@ import {
 } from '../controllers/payment.controller';
 import { validatePayment } from '../validators/payment.validator';
 import { authenticateApiKey } from '../middleware/apiKeyAuth.middleware';
+import { merchantApiKeyRateLimit } from '../middleware/rateLimit.middleware';
 import { idempotencyMiddleware } from '../middleware/idempotency.middleware';
 import { simpleRateLimit } from "../middleware/simpleRateLimit.middleware";
 
@@ -196,7 +197,7 @@ router.get('/checkout/:id/stream', (_req, res) => {
 router.get('/checkout/:id/status', getPublicCheckoutPaymentStatus);
 router.get('/checkout/:id', getPublicCheckoutPayment);
 
-router.post('/', authenticateApiKey, idempotencyMiddleware, validatePayment, createPayment);
+router.post('/', authenticateApiKey, merchantApiKeyRateLimit(), idempotencyMiddleware, validatePayment, createPayment);
 
 /**
  * @swagger
@@ -232,7 +233,7 @@ router.post('/', authenticateApiKey, idempotencyMiddleware, validatePayment, cre
  *       200:
  *         description: Paginated list of payments
  */
-router.get('/', authenticateApiKey, getPayments);
+router.get('/', authenticateApiKey, merchantApiKeyRateLimit(), getPayments);
 
 /**
  * @swagger
@@ -246,7 +247,7 @@ router.get('/', authenticateApiKey, getPayments);
  *       200:
  *         description: CSV file download
  */
-router.get('/export', authenticateApiKey, getPayments);
+router.get('/export', authenticateApiKey, merchantApiKeyRateLimit(), getPayments);
 
 /**
  * @swagger
@@ -270,6 +271,6 @@ router.get('/export', authenticateApiKey, getPayments);
  *       404:
  *         description: Payment not found
  */
-router.get('/:id', authenticateApiKey, getPaymentById);
+router.get('/:id', authenticateApiKey, merchantApiKeyRateLimit(), getPaymentById);
 
 export default router;
