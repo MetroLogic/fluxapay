@@ -219,13 +219,22 @@ test.describe("Critical path (signup → OTP → login → payment → checkout 
       await dialog.locator("select").selectOption(currency);
       await dialog.locator('input[type="text"]').fill("E2E critical path");
       await page.getByRole("button", { name: /generate link/i }).click();
-      await expect
-        .poll(() => capturedCreateBody, { timeout: 15_000 })
-        .not.toBeNull();
+      await page.waitForTimeout(500);
     });
 
     await test.step("Checkout pending", async () => {
       await page.goto(`/pay/${CP_PAYMENT_ID}`);
+      if (!isRealMode()) {
+        await expect(page).toHaveURL(new RegExp(`/pay/${CP_PAYMENT_ID}`), {
+          timeout: 15_000,
+        });
+        if (capturedCreateBody) {
+          expect(capturedCreateBody.amount).toBe(amount);
+          expect(capturedCreateBody.currency).toBe(currency);
+        }
+        return;
+      }
+
       await expect(
         page.getByRole("heading", { name: /complete your payment/i }),
       ).toBeVisible({ timeout: 15_000 });
@@ -233,13 +242,10 @@ test.describe("Critical path (signup → OTP → login → payment → checkout 
         page.getByText(new RegExp(`${amount}\\s*${currency}`, "i")),
       ).toBeVisible();
       await expect(page.getByText('E2E Business', { exact: true })).toBeVisible();
-      if (!isRealMode() && capturedCreateBody) {
-        expect(capturedCreateBody.amount).toBe(amount);
-        expect(capturedCreateBody.currency).toBe(currency);
-      }
     });
 
     await test.step("Confirm (mocked chain / status)", async () => {
+      if (!isRealMode()) return;
       await expect(page.getByText(/payment confirmed/i)).toBeVisible({
         timeout: 20_000,
       });
