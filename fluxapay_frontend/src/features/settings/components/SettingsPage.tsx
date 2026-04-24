@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import Input from "@/components/Input";
 import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
-import { api, ApiError } from "@/lib/api";
+import { api, ApiError, clearToken } from "@/lib/api";
 
 import {
   Copy,
@@ -45,6 +45,9 @@ export default function SettingsPage() {
 
   // Security State
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
+  const [isSigningOut, setIsSigningOut] = useState(false);
+  const [isSigningOutAll, setIsSigningOutAll] = useState(false);
+  const [sessionNote, setSessionNote] = useState<string>("Current session active");
 
   // Hosted checkout branding
   const [checkoutLogoUrl, setCheckoutLogoUrl] = useState("");
@@ -60,7 +63,33 @@ export default function SettingsPage() {
   // Load merchant data on mount
   useEffect(() => {
     loadMerchantData();
+    setSessionNote(getSessionNote());
   }, []);
+
+  const getSessionNote = () => {
+    if (typeof window === "undefined") return "Current session active";
+
+    const token =
+      localStorage.getItem("token") || sessionStorage.getItem("token");
+    if (!token) return "No active session token found";
+
+    try {
+      const payloadSegment = token.split(".")[1];
+      if (!payloadSegment) return "Current session active";
+
+      const base64 = payloadSegment.replace(/-/g, "+").replace(/_/g, "/");
+      const normalized = base64.padEnd(
+        Math.ceil(base64.length / 4) * 4,
+        "=",
+      );
+      const payload = JSON.parse(atob(normalized)) as { iat?: number };
+      if (!payload.iat) return "Current session active";
+
+      return `Last login: ${new Date(payload.iat * 1000).toLocaleString()}`;
+    } catch {
+      return "Current session active";
+    }
+  };
 
   const loadMerchantData = async () => {
     try {
@@ -219,6 +248,27 @@ export default function SettingsPage() {
       console.error("Failed to save webhook URL:", error);
     } finally {
       setIsSavingWebhook(false);
+    }
+  };
+
+  const handleSignOutCurrentSession = () => {
+    setIsSigningOut(true);
+    clearToken();
+    window.location.href = "/login";
+  };
+
+  const handleSignOutAllSessions = async () => {
+    setIsSigningOutAll(true);
+    try {
+      await api.auth.logoutAllSessions();
+    } catch (error) {
+      // Backend support is optional; still clear local session.
+      if (error instanceof ApiError && error.status !== 404) {
+        console.error("Logout-all request failed:", error);
+      }
+    } finally {
+      clearToken();
+      window.location.href = "/login";
     }
   };
 
@@ -640,6 +690,11 @@ export default function SettingsPage() {
         </div>
 
         <div className="space-y-4">
+          <div className="rounded-lg border bg-background p-4">
+            <p className="font-medium">Session status</p>
+            <p className="text-sm text-muted-foreground mt-1">{sessionNote}</p>
+          </div>
+
           <div className="flex items-center justify-between p-4 rounded-lg border bg-background">
             <div>
               <p className="font-medium">Two-Factor Authentication</p>
@@ -656,6 +711,31 @@ export default function SettingsPage() {
               />
               <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-[#5649DF]/20 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#5649DF]"></div>
             </label>
+          </div>
+
+          <div className="rounded-lg border bg-background p-4 space-y-3">
+            <div>
+              <p className="font-medium">Session controls</p>
+              <p className="text-sm text-muted-foreground">
+                Sign out this device or invalidate all active sessions.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <Button
+                variant="outline"
+                onClick={handleSignOutCurrentSession}
+                disabled={isSigningOut || isSigningOutAll}
+              >
+                {isSigningOut ? "Signing out..." : "Sign out this session"}
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleSignOutAllSessions}
+                disabled={isSigningOut || isSigningOutAll}
+              >
+                {isSigningOutAll ? "Signing out..." : "Sign out all sessions"}
+              </Button>
+            </div>
           </div>
         </div>
       </div>

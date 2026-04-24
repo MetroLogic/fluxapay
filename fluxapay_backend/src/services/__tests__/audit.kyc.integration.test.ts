@@ -4,34 +4,53 @@ import { updateKycStatusService } from '../kyc.service';
 const prisma = new PrismaClient();
 const describeWithDatabase = process.env.DATABASE_URL ? describe : describe.skip;
 
+/**
+ * Remove one merchant and dependent rows. Scoped so parallel Jest workers do not
+ * wipe shared fixtures (e.g. OpenAPI contract tests use a stable merchant email).
+ */
+async function purgeMerchant(merchantId: string): Promise<void> {
+  await prisma.webhookRetryAttempt.deleteMany({
+    where: { webhookLog: { merchantId } },
+  });
+  await prisma.webhookLog.deleteMany({ where: { merchantId } });
+  await prisma.refund.deleteMany({ where: { merchantId } });
+  await prisma.invoice.deleteMany({ where: { merchantId } });
+  await prisma.payment.deleteMany({ where: { merchantId } });
+  await prisma.settlement.deleteMany({ where: { merchantId } });
+  await prisma.discrepancyAlert.deleteMany({
+    where: {
+      OR: [{ merchantId }, { reconciliationRecord: { merchantId } }],
+    },
+  });
+  await prisma.reconciliationRecord.deleteMany({ where: { merchantId } });
+  await prisma.discrepancyThreshold.deleteMany({ where: { merchantId } });
+  await prisma.auditLog.deleteMany({ where: { entity_id: merchantId } });
+  await prisma.kYCDocument.deleteMany({ where: { kyc: { merchantId } } });
+  await prisma.merchantKYC.deleteMany({ where: { merchantId } });
+  await prisma.merchantHDIndex.deleteMany({ where: { merchantId } });
+  await prisma.bankAccount.deleteMany({ where: { merchantId } });
+  await prisma.merchantSubscription.deleteMany({ where: { merchantId } });
+  await prisma.oTP.deleteMany({ where: { merchantId } });
+  await prisma.customer.deleteMany({ where: { merchantId } });
+  await prisma.dataExportJob.deleteMany({ where: { merchantId } });
+  await prisma.merchantDeletionRequest.deleteMany({ where: { merchantId } });
+  await prisma.merchant.delete({ where: { id: merchantId } }).catch(() => undefined);
+}
+
 describeWithDatabase('Audit Logging - KYC Integration', () => {
-  let testMerchantId: string;
+  /** Empty until first `beforeEach` run; then the current suite merchant id. */
+  let testMerchantId = '';
 
   beforeEach(async () => {
-    // Clean up in FK-dependency order to avoid constraint violations
-    await prisma.discrepancyAlert.deleteMany({});
-    await prisma.discrepancyThreshold.deleteMany({});
-    await prisma.reconciliationRecord.deleteMany({});
-    await prisma.refund.deleteMany({});
-    await prisma.invoice.deleteMany({});
-    await prisma.payment.deleteMany({});
-    await prisma.settlement.deleteMany({});
-    await prisma.webhookRetryAttempt.deleteMany({});
-    await prisma.webhookLog.deleteMany({});
-    await prisma.auditLog.deleteMany({});
-    await prisma.kYCDocument.deleteMany({});
-    await prisma.merchantKYC.deleteMany({});
-    await prisma.merchantHDIndex.deleteMany({});
-    await prisma.bankAccount.deleteMany({});
-    await prisma.merchantSubscription.deleteMany({});
-    await prisma.oTP.deleteMany({});
-    await prisma.merchant.deleteMany({});
+    if (testMerchantId) {
+      await purgeMerchant(testMerchantId);
+    }
 
     // Create test merchant
     const merchant = await prisma.merchant.create({
       data: {
         business_name: 'Test Business',
-        email: `test-${Date.now()}@example.com`,
+        email: `audit-kyc-${Date.now()}@example.com`,
         phone_number: `+1234567${Date.now()}`,
         country: 'US',
         settlement_currency: 'USD',
@@ -61,6 +80,7 @@ describeWithDatabase('Audit Logging - KYC Integration', () => {
   });
 
   afterAll(async () => {
+    if (testMerchantId) await purgeMerchant(testMerchantId);
     await prisma.$disconnect();
   });
 

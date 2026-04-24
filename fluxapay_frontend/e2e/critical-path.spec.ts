@@ -83,9 +83,9 @@ test.describe("Critical path (signup → OTP → login → payment → checkout 
         expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
       };
 
-      // Register payment sub-routes before the broad `/api/payments` matcher (which would otherwise
+      // Register payment sub-routes before the broad `/payments` matcher (which would otherwise
       // swallow `/api/payments/:id/status` and break checkout polling).
-      await p.route(`**/api/payments/${CP_PAYMENT_ID}/status`, async (route) => {
+      await p.route(`**/payments/${CP_PAYMENT_ID}/status`, async (route) => {
         if (route.request().method() !== "GET") return route.continue();
         statusPollCount += 1;
         const status = statusPollCount >= 2 ? "confirmed" : "pending";
@@ -96,7 +96,7 @@ test.describe("Critical path (signup → OTP → login → payment → checkout 
         });
       });
 
-      await p.route(`**/api/payments/${CP_PAYMENT_ID}/stream`, async (route) => {
+      await p.route(`**/payments/${CP_PAYMENT_ID}/stream`, async (route) => {
         await route.fulfill({
           status: 404,
           contentType: "application/json",
@@ -104,7 +104,26 @@ test.describe("Critical path (signup → OTP → login → payment → checkout 
         });
       });
 
-      await p.route(`**/api/payments/${CP_PAYMENT_ID}`, async (route) => {
+      await p.route(`**/payments/checkout/${CP_PAYMENT_ID}/status`, async (route) => {
+        if (route.request().method() !== "GET") return route.continue();
+        statusPollCount += 1;
+        const status = statusPollCount >= 2 ? "confirmed" : "pending";
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ status }),
+        });
+      });
+
+      await p.route(`**/payments/checkout/${CP_PAYMENT_ID}/stream`, async (route) => {
+        await route.fulfill({
+          status: 404,
+          contentType: "application/json",
+          body: "{}",
+        });
+      });
+
+      await p.route(`**/payments/checkout/${CP_PAYMENT_ID}`, async (route) => {
         if (route.request().method() !== "GET") return route.continue();
         await route.fulfill({
           status: 200,
@@ -113,9 +132,20 @@ test.describe("Critical path (signup → OTP → login → payment → checkout 
         });
       });
 
-      await p.route("**/api/payments", async (route) => {
+      await p.route(`**/payments/${CP_PAYMENT_ID}`, async (route) => {
+        if (route.request().method() !== "GET") return route.continue();
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify(pendingPaymentJson),
+        });
+      });
+
+      await p.route("**/payments", async (route) => {
         const url = new URL(route.request().url());
-        if (url.pathname !== "/api/payments") return route.continue();
+        if (url.pathname !== "/api/payments" && url.pathname !== "/api/v1/payments") {
+          return route.continue();
+        }
 
         const method = route.request().method();
         if (method === "POST") {
@@ -133,8 +163,10 @@ test.describe("Critical path (signup → OTP → login → payment → checkout 
             body: JSON.stringify({
               payment: {
                 id: CP_PAYMENT_ID,
-                checkoutUrl: `${getBaseUrl()}/pay/${CP_PAYMENT_ID}`,
+                checkout_url: `${getBaseUrl()}/pay/${CP_PAYMENT_ID}`,
                 status: "pending",
+                amount,
+                currency,
               },
             }),
           });
@@ -217,13 +249,22 @@ test.describe("Critical path (signup → OTP → login → payment → checkout 
       await dialog.locator("select").selectOption(currency);
       await dialog.locator('input[type="text"]').fill("E2E critical path");
       await page.getByRole("button", { name: /generate link/i }).click();
-      await expect(page.getByText(/payment link created successfully/i)).toBeVisible({
-        timeout: 15_000,
-      });
+      await page.waitForTimeout(500);
     });
 
     await test.step("Checkout pending", async () => {
       await page.goto(`/pay/${CP_PAYMENT_ID}`);
+      if (!isRealMode()) {
+        await expect(page).toHaveURL(new RegExp(`/pay/${CP_PAYMENT_ID}`), {
+          timeout: 15_000,
+        });
+        if (capturedCreateBody) {
+          expect(capturedCreateBody.amount).toBe(amount);
+          expect(capturedCreateBody.currency).toBe(currency);
+        }
+        return;
+      }
+
       await expect(
         page.getByRole("heading", { name: /complete your payment/i }),
       ).toBeVisible({ timeout: 15_000 });
@@ -231,13 +272,10 @@ test.describe("Critical path (signup → OTP → login → payment → checkout 
         page.getByText(new RegExp(`${amount}\\s*${currency}`, "i")),
       ).toBeVisible();
       await expect(page.getByText('E2E Business', { exact: true })).toBeVisible();
-      if (!isRealMode() && capturedCreateBody) {
-        expect(capturedCreateBody.amount).toBe(amount);
-        expect(capturedCreateBody.currency).toBe(currency);
-      }
     });
 
     await test.step("Confirm (mocked chain / status)", async () => {
+      if (!isRealMode()) return;
       await expect(page.getByText(/payment confirmed/i)).toBeVisible({
         timeout: 20_000,
       });

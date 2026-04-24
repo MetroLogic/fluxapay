@@ -1,4 +1,4 @@
-import { PrismaClient } from './generated/client';
+import { PrismaClient } from './generated/client/client';
 import { WebhookDispatcher } from './services/webhook.service';
 import { PaymentMonitorService } from './services/payment-monitor.service';
 

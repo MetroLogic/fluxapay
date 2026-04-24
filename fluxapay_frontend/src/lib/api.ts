@@ -214,6 +214,10 @@ export const api = {
         }
         return res.json();
       }),
+    logoutAllSessions: () =>
+      fetchWithAuth("/api/merchants/logout-all", {
+        method: "POST",
+      }),
   },
 
   // Merchant endpoints
@@ -622,6 +626,11 @@ export const api = {
         fetchWithAuth(`/api/admin/merchants/${merchantId}/status`, {
           method: "PATCH",
           body: JSON.stringify({ status }),
+        }),
+      bulkUpdateStatus: (merchantIds: string[], status: "active" | "suspended", reason: string) =>
+        fetchWithAuth("/api/merchants/admin/bulk-status", {
+          method: "POST",
+          body: JSON.stringify({ merchantIds, status, reason }),
         }),
     },
     settlements: {

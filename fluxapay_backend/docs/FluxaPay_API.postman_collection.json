@@ -1,0 +1,724 @@
+﻿{
+  "info": {
+    "_postman_id": "fluxapay-api-collection-v1",
+    "name": "FluxaPay API",
+    "description": "Complete API collection for the FluxaPay payment gateway backend.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Health check passes\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().status).to.eql(\"ok\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": ["{{base_url}}"],
+              "path": ["health"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Signup Merchant",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"business_name\": \"Acme Corp\",\n  \"email\": \"merchant@example.com\",\n  \"phone_number\": \"+1234567890\",\n  \"country\": \"US\",\n  \"settlement_currency\": \"USD\",\n  \"password\": \"SecurePassword123!\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/merchants/signup",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "merchants", "signup"]
+            }
+          }
+        },
+        {
+          "name": "Login Merchant",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  pm.environment.set(\"jwt_token\", pm.response.json().token);",
+                  "  pm.environment.set(\"merchant_id\", pm.response.json().merchantId);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"merchant@example.com\",\n  \"password\": \"SecurePassword123!\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/merchants/login",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "merchants", "login"]
+            }
+          }
+        },
+        {
+          "name": "Verify OTP",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"merchantId\": \"{{merchant_id}}\",\n  \"channel\": \"email\",\n  \"otp\": \"123456\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/merchants/verify-otp",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "merchants", "verify-otp"]
+            }
+          }
+        },
+        {
+          "name": "Resend OTP",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"merchantId\": \"{{merchant_id}}\",\n  \"channel\": \"email\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/merchants/resend-otp",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "merchants", "resend-otp"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Merchant",
+      "item": [
+        {
+          "name": "Get Profile",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{jwt_token}}"}],
+            "url": {
+              "raw": "{{base_url}}/api/v1/merchants/me",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "merchants", "me"]
+            }
+          }
+        },
+        {
+          "name": "Update Profile",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{jwt_token}}"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"business_name\": \"Updated Business Name\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/merchants/me",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "merchants", "me"]
+            }
+          }
+        },
+        {
+          "name": "Update Webhook URL",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{jwt_token}}"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"webhook_url\": \"https://example.com/webhooks/fluxapay\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/merchants/me/webhook",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "merchants", "me", "webhook"]
+            }
+          }
+        },
+        {
+          "name": "Rotate API Key",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Authorization", "value": "Bearer {{jwt_token}}"}],
+            "url": {
+              "raw": "{{base_url}}/api/v1/merchants/keys/rotate-api-key",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "merchants", "keys", "rotate-api-key"]
+            }
+          }
+        },
+        {
+          "name": "Rotate Webhook Secret",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Authorization", "value": "Bearer {{jwt_token}}"}],
+            "url": {
+              "raw": "{{base_url}}/api/v1/merchants/keys/rotate-webhook-secret",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "merchants", "keys", "rotate-webhook-secret"]
+            }
+          }
+        },
+        {
+          "name": "Update Settlement Schedule",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{jwt_token}}"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"settlement_schedule\": \"weekly\",\n  \"settlement_day\": \"monday\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/merchants/me/settlement-schedule",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "merchants", "me", "settlement-schedule"]
+            }
+          }
+        },
+        {
+          "name": "Add Bank Account",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{jwt_token}}"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"account_name\": \"Acme Corp\",\n  \"account_number\": \"1234567890\",\n  \"bank_name\": \"First National Bank\",\n  \"bank_code\": \"FNB001\",\n  \"currency\": \"USD\",\n  \"country\": \"US\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/merchants/me/bank-account",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "merchants", "me", "bank-account"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Payments",
+      "item": [
+        {
+          "name": "Create Payment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "x-api-key", "value": "{{api_key}}"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 1000,\n  \"currency\": \"USD\",\n  \"customer_email\": \"customer@example.com\",\n  \"description\": \"Payment for order #1234\",\n  \"metadata\": {\n    \"order_id\": \"1234\"\n  },\n  \"expiration\": 3600\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/payments",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "payments"]
+            }
+          }
+        },
+        {
+          "name": "List Payments",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "x-api-key", "value": "{{api_key}}"}],
+            "url": {
+              "raw": "{{base_url}}/api/v1/payments?page=1&limit=20&status=completed",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "payments"],
+              "query": [
+                {"key": "page", "value": "1"},
+                {"key": "limit", "value": "20"},
+                {"key": "status", "value": "completed"}
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Payment",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "x-api-key", "value": "{{api_key}}"}],
+            "url": {
+              "raw": "{{base_url}}/api/v1/payments/:id",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "payments", ":id"],
+              "variable": [{"key": "id", "value": ""}]
+            }
+          }
+        },
+        {
+          "name": "Get Payment Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/payments/:id/status",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "payments", ":id", "status"],
+              "variable": [{"key": "id", "value": ""}]
+            }
+          }
+        },
+        {
+          "name": "Get Checkout Payment",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/payments/checkout/:id",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "payments", "checkout", ":id"],
+              "variable": [{"key": "id", "value": ""}]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Invoices",
+      "item": [
+        {
+          "name": "Create Invoice",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "x-api-key", "value": "{{api_key}}"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 2500,\n  \"currency\": \"USD\",\n  \"customer_email\": \"customer@example.com\",\n  \"due_date\": \"2025-12-31\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/invoices",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "invoices"]
+            }
+          }
+        },
+        {
+          "name": "List Invoices",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "x-api-key", "value": "{{api_key}}"}],
+            "url": {
+              "raw": "{{base_url}}/api/v1/invoices",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "invoices"]
+            }
+          }
+        },
+        {
+          "name": "Get Invoice",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "x-api-key", "value": "{{api_key}}"}],
+            "url": {
+              "raw": "{{base_url}}/api/v1/invoices/:id",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "invoices", ":id"],
+              "variable": [{"key": "id", "value": ""}]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Customers",
+      "item": [
+        {
+          "name": "Create Customer",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "x-api-key", "value": "{{api_key}}"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"customer@example.com\",\n  \"metadata\": {\n    \"name\": \"John Doe\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/customers",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "customers"]
+            }
+          }
+        },
+        {
+          "name": "List Customers",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "x-api-key", "value": "{{api_key}}"}],
+            "url": {
+              "raw": "{{base_url}}/api/v1/customers",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "customers"]
+            }
+          }
+        },
+        {
+          "name": "Get Customer",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "x-api-key", "value": "{{api_key}}"}],
+            "url": {
+              "raw": "{{base_url}}/api/v1/customers/:id",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "customers", ":id"],
+              "variable": [{"key": "id", "value": ""}]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Refunds",
+      "item": [
+        {
+          "name": "Create Refund",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "x-api-key", "value": "{{api_key}}"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"payment_id\": \"pay_abc123\",\n  \"amount\": 500,\n  \"reason\": \"Customer requested refund\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/refunds",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "refunds"]
+            }
+          }
+        },
+        {
+          "name": "List Refunds",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "x-api-key", "value": "{{api_key}}"}],
+            "url": {
+              "raw": "{{base_url}}/api/v1/refunds",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "refunds"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Webhooks",
+      "item": [
+        {
+          "name": "List Webhook Logs",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "x-api-key", "value": "{{api_key}}"}],
+            "url": {
+              "raw": "{{base_url}}/api/v1/webhooks/logs",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "webhooks", "logs"]
+            }
+          }
+        },
+        {
+          "name": "Get Webhook Log",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "x-api-key", "value": "{{api_key}}"}],
+            "url": {
+              "raw": "{{base_url}}/api/v1/webhooks/logs/:log_id",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "webhooks", "logs", ":log_id"],
+              "variable": [{"key": "log_id", "value": ""}]
+            }
+          }
+        },
+        {
+          "name": "Retry Webhook",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "x-api-key", "value": "{{api_key}}"}],
+            "url": {
+              "raw": "{{base_url}}/api/v1/webhooks/logs/:log_id/retry",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "webhooks", "logs", ":log_id", "retry"],
+              "variable": [{"key": "log_id", "value": ""}]
+            }
+          }
+        },
+        {
+          "name": "Send Test Webhook",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "x-api-key", "value": "{{api_key}}"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event_type\": \"payment.completed\",\n  \"endpoint_url\": \"https://example.com/webhooks/test\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/webhooks/test",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "webhooks", "test"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Settlements",
+      "item": [
+        {
+          "name": "List Settlements",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "x-api-key", "value": "{{api_key}}"}],
+            "url": {
+              "raw": "{{base_url}}/api/v1/settlements",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "settlements"]
+            }
+          }
+        },
+        {
+          "name": "Get Settlement",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "x-api-key", "value": "{{api_key}}"}],
+            "url": {
+              "raw": "{{base_url}}/api/v1/settlements/:id",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "settlements", ":id"],
+              "variable": [{"key": "id", "value": ""}]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "KYC",
+      "item": [
+        {
+          "name": "Submit KYC",
+          "request": {
+            "method": "POST",
+            "header": [
+              {"key": "x-api-key", "value": "{{api_key}}"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"business_type\": \"llc\",\n  \"legal_business_name\": \"Acme Corp LLC\",\n  \"registration_number\": \"REG123456\",\n  \"tax_id\": \"TAX987654\",\n  \"business_address\": \"123 Main St, New York, NY 10001\",\n  \"website\": \"https://acmecorp.example.com\",\n  \"industry\": \"technology\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/merchants/kyc",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "merchants", "kyc"]
+            }
+          }
+        },
+        {
+          "name": "Get KYC Status",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "x-api-key", "value": "{{api_key}}"}],
+            "url": {
+              "raw": "{{base_url}}/api/v1/merchants/kyc",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "merchants", "kyc"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Dashboard",
+      "item": [
+        {
+          "name": "Overview Metrics",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{jwt_token}}"}],
+            "url": {
+              "raw": "{{base_url}}/api/v1/dashboard/overview/metrics",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "dashboard", "overview", "metrics"]
+            }
+          }
+        },
+        {
+          "name": "Analytics Charts",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{jwt_token}}"}],
+            "url": {
+              "raw": "{{base_url}}/api/v1/dashboard/overview/charts",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "dashboard", "overview", "charts"]
+            }
+          }
+        },
+        {
+          "name": "Recent Activity",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{jwt_token}}"}],
+            "url": {
+              "raw": "{{base_url}}/api/v1/dashboard/overview/activity",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "dashboard", "overview", "activity"]
+            }
+          }
+        },
+        {
+          "name": "Merchant Audit Logs",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "Authorization", "value": "Bearer {{jwt_token}}"}],
+            "url": {
+              "raw": "{{base_url}}/api/v1/dashboard/audit-logs",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "dashboard", "audit-logs"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin",
+      "item": [
+        {
+          "name": "List All Merchants",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "X-Admin-Secret", "value": "{{admin_secret}}"}],
+            "url": {
+              "raw": "{{base_url}}/api/v1/merchants/admin/list",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "merchants", "admin", "list"]
+            }
+          }
+        },
+        {
+          "name": "Get Merchant (Admin)",
+          "request": {
+            "method": "GET",
+            "header": [{"key": "X-Admin-Secret", "value": "{{admin_secret}}"}],
+            "url": {
+              "raw": "{{base_url}}/api/v1/merchants/admin/:merchantId",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "merchants", "admin", ":merchantId"],
+              "variable": [{"key": "merchantId", "value": "{{merchant_id}}"}]
+            }
+          }
+        },
+        {
+          "name": "Update Merchant Status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {"key": "X-Admin-Secret", "value": "{{admin_secret}}"},
+              {"key": "Content-Type", "value": "application/json"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"active\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/merchants/admin/:merchantId/status",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "merchants", "admin", ":merchantId", "status"],
+              "variable": [{"key": "merchantId", "value": "{{merchant_id}}"}]
+            }
+          }
+        },
+        {
+          "name": "Query Audit Logs",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{jwt_token}}"},
+              {"key": "X-Admin-Secret", "value": "{{admin_secret}}"}
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/audit-logs",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "audit-logs"]
+            }
+          }
+        },
+        {
+          "name": "Get Audit Log",
+          "request": {
+            "method": "GET",
+            "header": [
+              {"key": "Authorization", "value": "Bearer {{jwt_token}}"},
+              {"key": "X-Admin-Secret", "value": "{{admin_secret}}"}
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/audit-logs/:id",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "audit-logs", ":id"],
+              "variable": [{"key": "id", "value": ""}]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

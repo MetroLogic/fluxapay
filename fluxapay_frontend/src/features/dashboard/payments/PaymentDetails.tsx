@@ -227,7 +227,7 @@ export const PaymentDetails = ({
                 </div>
               </div>
             )}
-            {payment.settlementLinkage && (
+            {payment.settlementLinkage != null ? (
               <div>
                 <p className="text-xs text-muted-foreground">Settlement Linkage</p>
                 <code className="mt-1 block rounded bg-muted p-1.5 text-[11px] leading-relaxed break-all max-h-24 overflow-auto scrollbar-thin">
@@ -236,7 +236,7 @@ export const PaymentDetails = ({
                     : JSON.stringify(payment.settlementLinkage)}
                 </code>
               </div>
-            )}
+            ) : null}
           </div>
         </div>
       </div>

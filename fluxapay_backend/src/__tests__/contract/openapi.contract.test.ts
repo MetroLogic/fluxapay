@@ -12,16 +12,30 @@
 
 import request from 'supertest';
 import express from 'express';
-import { loadDereferencedSpec, assertMatchesSpec } from '../helpers/openapi-validator';
+import jwt from 'jsonwebtoken';
+import {
+  loadDereferencedSpec,
+  assertMatchesSpec,
+  clearSpecCache,
+} from '../helpers/openapi-validator';
 import { PrismaClient } from '../../generated/client/client';
+import { MerchantStatus } from '../../generated/client/client';
+import { hashKey } from '../../helpers/crypto.helper';
 import { specs } from '../../docs/swagger';
 
 // Import routes
 import paymentRoutes from '../../routes/payment.route';
 import merchantRoutes from '../../routes/merchant.route';
 import webhookRoutes from '../../routes/webhook.route';
+import kycRoutes from '../../routes/kyc.route';
 
 const prisma = new PrismaClient();
+
+/**
+ * Synthetic merchant API key for contract tests (must match stored hash in DB).
+ * Intentionally low-entropy after the prefix so secret scanners do not treat it as a live credential.
+ */
+const RAW_TEST_API_KEY = `sk_live_${"a".repeat(32)}`;
 
 // Test configuration
 const API_BASE_PATH = '/api/v1';
@@ -34,6 +48,8 @@ let testMerchantId: string;
  * Setup test server and authentication
  */
 beforeAll(async () => {
+  process.env.DISABLE_STELLAR_PREPARE = 'true';
+  clearSpecCache();
   // Create Express app
   app = express();
   app.use(express.json());
@@ -41,6 +57,7 @@ beforeAll(async () => {
   // Add routes
   app.use(`${API_BASE_PATH}/payments`, paymentRoutes);
   app.use(`${API_BASE_PATH}/merchants`, merchantRoutes);
+  app.use(`${API_BASE_PATH}/merchants/kyc`, kycRoutes);
   app.use(`${API_BASE_PATH}/webhooks`, webhookRoutes);
 
   // Start test server
@@ -50,28 +67,41 @@ beforeAll(async () => {
     });
   });
 
-  // Get test merchant or create one
-  const testMerchant = await prisma.merchant.findFirst({
+  const api_key_hashed = await hashKey(RAW_TEST_API_KEY);
+  const api_key_last_four = RAW_TEST_API_KEY.slice(-4);
+
+  const existing = await prisma.merchant.findFirst({
     where: { email: 'test-contract@example.com' },
   });
 
-  if (testMerchant) {
-    testMerchantId = testMerchant.id;
-    testApiKey = testMerchant.api_key || 'test_key';
+  if (existing) {
+    await prisma.merchant.update({
+      where: { id: existing.id },
+      data: {
+        status: MerchantStatus.active,
+        api_key_hashed,
+        api_key_last_four,
+      },
+    });
+    testMerchantId = existing.id;
   } else {
-    // Create test merchant
     const created = await prisma.merchant.create({
       data: {
         email: 'test-contract@example.com',
         business_name: 'Test Business',
-        api_key_hashed: 'test_hash',
-        api_key_last_four: 'test',
+        phone_number: `+1555${String(Date.now()).slice(-7)}`,
+        country: 'US',
+        settlement_currency: 'USD',
         webhook_secret: 'whsec_test',
+        password: 'hashed_password',
+        status: MerchantStatus.active,
+        api_key_hashed,
+        api_key_last_four,
       },
     });
     testMerchantId = created.id;
-    testApiKey = 'test_key';
   }
+  testApiKey = RAW_TEST_API_KEY;
 });
 
 /**
@@ -99,6 +129,19 @@ function getServerUrl(): string {
 function getAuthHeaders(): Record<string, string> {
   return {
     'x-api-key': testApiKey,
+    'Content-Type': 'application/json',
+  };
+}
+
+/** Webhook routes use JWT + validateUserId (merchant id in token). */
+function getMerchantJwtHeaders(): Record<string, string> {
+  const secret = process.env.JWT_SECRET || 'test';
+  const token = jwt.sign(
+    { id: testMerchantId, email: 'test-contract@example.com' },
+    secret,
+  );
+  return {
+    Authorization: `Bearer ${token}`,
     'Content-Type': 'application/json',
   };
 }
@@ -272,20 +315,10 @@ describe('OpenAPI Contract Tests', () => {
 
     describe('GET /api/v1/payments/:id/status', () => {
       it('should get public payment status', async () => {
-        // Create a payment first
-        const createResponse = await request(getServerUrl())
-          .post(`${API_BASE_PATH}/payments`)
-          .set(getAuthHeaders())
-          .send({
-            amount: 25,
-            currency: 'USDC',
-            customer_email: 'public@example.com',
-          });
-
-        const paymentId = createResponse.body.id;
+        expect(createdPaymentId).toBeDefined();
 
         const response = await request(getServerUrl())
-          .get(`${API_BASE_PATH}/payments/${paymentId}/status`);
+          .get(`${API_BASE_PATH}/payments/${createdPaymentId}/status`);
 
         expect(response.status).toBe(200);
 
@@ -335,23 +368,19 @@ describe('OpenAPI Contract Tests', () => {
       it('should submit KYC information', async () => {
         const kycData = {
           business_type: 'individual',
-          business_address: {
-            line1: '123 Test St',
-            city: 'Test City',
-            state: 'TS',
-            postal_code: '12345',
-            country: 'US',
-          },
-          representative: {
-            first_name: 'John',
-            last_name: 'Doe',
-            date_of_birth: '1990-01-01',
-          },
+          legal_business_name: 'Contract Test Merchant LLC',
+          country_of_registration: 'US',
+          business_address: '123 Test St, Test City, TS 12345, US',
+          director_full_name: 'John Doe',
+          director_email: 'john.doe@example.com',
+          director_phone: '+15550001111',
+          government_id_type: 'passport',
+          government_id_number: 'AB1234567',
         };
 
         const response = await request(getServerUrl())
           .post(`${API_BASE_PATH}/merchants/kyc`)
-          .set(getAuthHeaders())
+          .set(getMerchantJwtHeaders())
           .send(kycData);
 
         // Should be 200, 201, or 422 for validation
@@ -368,32 +397,16 @@ describe('OpenAPI Contract Tests', () => {
   });
 
   describe('Webhooks API', () => {
-    describe('GET /api/v1/webhooks/events', () => {
-      it('should list webhook events', async () => {
+    describe('GET /api/v1/webhooks/logs', () => {
+      it('should list webhook logs', async () => {
         const response = await request(getServerUrl())
-          .get(`${API_BASE_PATH}/webhooks/events`)
-          .set(getAuthHeaders());
+          .get(`${API_BASE_PATH}/webhooks/logs`)
+          .set(getMerchantJwtHeaders());
 
         expect(response.status).toBe(200);
 
         await assertMatchesSpec(
-          `${API_BASE_PATH}/webhooks/events`,
-          'GET',
-          response.status,
-          response.body
-        );
-      });
-
-      it('should support filtering by payment_id', async () => {
-        const response = await request(getServerUrl())
-          .get(`${API_BASE_PATH}/webhooks/events`)
-          .set(getAuthHeaders())
-          .query({ payment_id: 'test_payment' });
-
-        expect(response.status).toBe(200);
-
-        await assertMatchesSpec(
-          `${API_BASE_PATH}/webhooks/events`,
+          `${API_BASE_PATH}/webhooks/logs`,
           'GET',
           response.status,
           response.body
@@ -401,18 +414,16 @@ describe('OpenAPI Contract Tests', () => {
       });
     });
 
-    describe('POST /api/v1/webhooks/events/:id/redeliver', () => {
-      it('should attempt to redeliver webhook', async () => {
-        // This might fail with 404 if no events exist, but should still validate
+    describe('POST /api/v1/webhooks/logs/:log_id/retry', () => {
+      it('should attempt to retry webhook delivery', async () => {
         const response = await request(getServerUrl())
-          .post(`${API_BASE_PATH}/webhooks/events/whevt_test/redeliver`)
-          .set(getAuthHeaders());
+          .post(`${API_BASE_PATH}/webhooks/logs/whevt_test/retry`)
+          .set(getMerchantJwtHeaders());
 
-        // Could be 200, 404, or other valid error
         expect([200, 404, 400]).toContain(response.status);
 
         await assertMatchesSpec(
-          `${API_BASE_PATH}/webhooks/events/{id}/redeliver`,
+          `${API_BASE_PATH}/webhooks/logs/{log_id}/retry`,
           'POST',
           response.status,
           response.body
@@ -428,7 +439,9 @@ describe('OpenAPI Contract Tests', () => {
         .set({ 'x-api-key': 'invalid_key' });
 
       expect(response.status).toBe(401);
-      expect(response.body).toHaveProperty('error');
+      expect(
+        'message' in response.body || 'error' in response.body,
+      ).toBe(true);
 
       await assertMatchesSpec(
         `${API_BASE_PATH}/payments`,

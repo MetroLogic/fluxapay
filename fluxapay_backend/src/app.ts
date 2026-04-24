@@ -10,6 +10,7 @@ import {
 } from "./middleware/requestLogging.middleware";
 import { metricsMiddleware } from "./middleware/metrics.middleware";
 import { corsMiddleware } from "./middleware/cors.middleware";
+import { globalRateLimit, merchantRateLimit, authRateLimit } from "./middleware/rateLimit.middleware";
 import merchantRoutes from "./routes/merchant.route";
 import settlementRoutes from "./routes/settlement.route";
 import kycRoutes from "./routes/kyc.route";
@@ -57,6 +58,9 @@ app.use((req, res, next) => {
   next();
 });
 
+// Global rate limit for all public API routes
+app.use("/api/v1", globalRateLimit());
+
 // Swagger UI
 app.use(
   "/api-docs",
@@ -84,7 +88,7 @@ app.use("/api/v1/invoices", invoiceRoutes);
 app.use("/api/v1/customers", customerRoutes);
 app.use("/api/v1/refunds", refundRoutes);
 app.use("/api/v1/keys", keysRoutes);
-app.use("/api/v1/dashboard", dashboardRoutes);
+app.use("/api/v1/dashboard", merchantRateLimit(), dashboardRoutes);
 app.use("/api/v1/admin/reconciliation", reconciliationRoutes);
 app.use("/api/v1/admin/settlement", settlementBatchRoutes);
 app.use("/api/v1/admin/sweep", sweepRoutes);
