@@ -1,4 +1,4 @@
-import express from "express";
+import express, { Router } from "express";
 import helmet from "helmet";
 import swaggerUi from "swagger-ui-express";
 import { specs } from "./docs/swagger";
@@ -11,6 +11,7 @@ import {
 import { metricsMiddleware } from "./middleware/metrics.middleware";
 import { corsMiddleware } from "./middleware/cors.middleware";
 import { globalRateLimit, merchantRateLimit, authRateLimit } from "./middleware/rateLimit.middleware";
+
 import merchantRoutes from "./routes/merchant.route";
 import settlementRoutes from "./routes/settlement.route";
 import kycRoutes from "./routes/kyc.route";
@@ -79,9 +80,18 @@ app.use(
   swaggerUi.setup(specs),
 );
 
-app.use("/api/v1/merchants", merchantRoutes);
+// ── Merchants (single canonical mount) ────────────────────────────────────────
+// All merchant-scoped sub-routers are combined here so that
+// /api/v1/merchants is mounted exactly once.
+const merchantRouter = Router();
+merchantRouter.use("/kyc", kycRoutes);
+merchantRouter.use("/export", dataExportRoutes);
+merchantRouter.use("/", merchantDeletionRoutes);
+merchantRouter.use("/", merchantRoutes);
+app.use("/api/v1/merchants", merchantRouter);
+
+// ── Core resource routes ───────────────────────────────────────────────────────
 app.use("/api/v1/settlements", settlementRoutes);
-app.use("/api/v1/merchants/kyc", kycRoutes);
 app.use("/api/v1/webhooks", webhookRoutes);
 app.use("/api/v1/payments", paymentRoutes);
 app.use("/api/v1/invoices", invoiceRoutes);
@@ -89,12 +99,12 @@ app.use("/api/v1/customers", customerRoutes);
 app.use("/api/v1/refunds", refundRoutes);
 app.use("/api/v1/keys", keysRoutes);
 app.use("/api/v1/dashboard", merchantRateLimit(), dashboardRoutes);
+
+// ── Admin routes ───────────────────────────────────────────────────────────────
 app.use("/api/v1/admin/reconciliation", reconciliationRoutes);
 app.use("/api/v1/admin/settlement", settlementBatchRoutes);
 app.use("/api/v1/admin/sweep", sweepRoutes);
 app.use("/api/v1/admin", auditRoutes);
-app.use("/api/v1/merchants", merchantDeletionRoutes);
-app.use("/api/v1/merchants/export", dataExportRoutes);
 
 // Basic health check
 app.get("/health", (req, res) => {
