@@ -8,6 +8,7 @@ import {
 import { validate, validateQuery } from "../middleware/validation.middleware";
 import * as webhookSchema from "../schemas/webhook.schema";
 import { authenticateToken } from "../middleware/auth.middleware";
+import { merchantApiKeyRateLimit } from "../middleware/rateLimit.middleware";
 
 const router = Router();
 
@@ -95,7 +96,7 @@ const router = Router();
  */
 router.get(
   "/logs",
-  authenticateToken,
+  authenticateToken, merchantApiKeyRateLimit(),
   validateQuery(webhookSchema.getWebhookLogsSchema),
   getWebhookLogs
 );
@@ -151,7 +152,7 @@ router.get(
  *       401:
  *         description: Unauthorized
  */
-router.get("/logs/:log_id", authenticateToken, getWebhookLogDetails);
+router.get("/logs/:log_id", authenticateToken, merchantApiKeyRateLimit(), getWebhookLogDetails);
 
 /**
  * @swagger
@@ -196,7 +197,11 @@ router.get("/logs/:log_id", authenticateToken, getWebhookLogDetails);
  *       401:
  *         description: Unauthorized
  */
-router.post("/logs/:log_id/retry", authenticateToken, retryWebhook);
+router.post(
+  "/logs/:log_id/retry",
+  authenticateToken, merchantApiKeyRateLimit(),
+  retryWebhook,
+);
 
 /**
  * @swagger
@@ -264,7 +269,7 @@ router.post("/logs/:log_id/retry", authenticateToken, retryWebhook);
  */
 router.post(
   "/test",
-  authenticateToken,
+  authenticateToken, merchantApiKeyRateLimit(),
   validate(webhookSchema.sendTestWebhookSchema),
   sendTestWebhook
 );

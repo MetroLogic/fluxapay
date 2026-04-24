@@ -1,3 +1,4 @@
+import { ListPageFilterBar } from "@/components/data-table";
 import { Input } from "@/components/Input";
 import { Select } from "@/components/Select";
 import { Search } from "lucide-react";
@@ -38,7 +39,7 @@ export const WebhooksFilters = memo(({
         onDateToChange(e.target.value);
     }, [onDateToChange]);
     return (
-        <div className="flex flex-col md:flex-row gap-4 mb-6">
+        <ListPageFilterBar>
             <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -81,7 +82,7 @@ export const WebhooksFilters = memo(({
                     onChange={handleDateToChange}
                 />
             </div>
-        </div>
+        </ListPageFilterBar>
     );
 });
 WebhooksFilters.displayName = "WebhooksFilters";

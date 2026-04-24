@@ -28,6 +28,15 @@ export interface SweepOptions {
   enableAccountMerge?: boolean;
 }
 
+export interface SweepDecision {
+  paymentId: string;
+  action: "sweep" | "skip";
+  /** Populated for action=sweep: USDC amount that would be / was moved. */
+  amount?: string;
+  /** Populated for action=skip: human-readable reason the payment was skipped. */
+  reason?: string;
+}
+
 export interface SweepResult {
   sweepId: string;
   startedAt: Date;
@@ -37,6 +46,8 @@ export interface SweepResult {
   masterVaultPublicKey: string;
   txHashes: string[];
   skipped: Array<{ paymentId: string; reason: string }>;
+  /** Per-payment decisions; only populated when dryRun=true. */
+  decisions?: SweepDecision[];
 }
 
 function requiredEnv(name: string): string {
@@ -216,6 +227,7 @@ export class SweepService {
 
     const txHashes: string[] = [];
     const skipped: Array<{ paymentId: string; reason: string }> = [];
+    const decisions: SweepDecision[] = [];
     let total = 0;
     let addressesSwept = 0;
 
@@ -237,7 +249,9 @@ export class SweepService {
       try {
         const expected = Number(p.amount as any as Decimal);
         if (!Number.isFinite(expected) || expected <= 0) {
-          skipped.push({ paymentId: p.id, reason: "Invalid amount" });
+          const skipEntry = { paymentId: p.id, reason: "Invalid amount" };
+          skipped.push(skipEntry);
+          if (dryRun) decisions.push({ ...skipEntry, action: "skip" });
           continue;
         }
 
@@ -268,7 +282,9 @@ export class SweepService {
 
         // Ensure address matches DB (defense in depth)
         if (p.stellar_address && kp.publicKey !== p.stellar_address) {
-          skipped.push({ paymentId: p.id, reason: "Derived address mismatch" });
+          const skipEntry = { paymentId: p.id, reason: "Derived address mismatch" };
+          skipped.push(skipEntry);
+          if (dryRun) decisions.push({ ...skipEntry, action: "skip" });
           continue;
         }
 
@@ -282,11 +298,14 @@ export class SweepService {
 
         const accountUsdcAmount = Number(usdcBalanceEntry?.balance ?? "0");
         if (!Number.isFinite(accountUsdcAmount) || accountUsdcAmount <= 0) {
-          skipped.push({ paymentId: p.id, reason: "No USDC balance to sweep" });
+          const skipEntry = { paymentId: p.id, reason: "No USDC balance to sweep" };
+          skipped.push(skipEntry);
+          if (dryRun) decisions.push({ ...skipEntry, action: "skip" });
           continue;
         }
 
         if (dryRun) {
+          decisions.push({ paymentId: p.id, action: "sweep", amount: accountUsdcAmount.toFixed(7) });
           addressesSwept += 1;
           total += accountUsdcAmount;
           continue;
@@ -315,6 +334,7 @@ export class SweepService {
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
         skipped.push({ paymentId: p.id, reason: msg });
+        if (dryRun) decisions.push({ paymentId: p.id, action: "skip", reason: msg });
       }
     }
 
@@ -349,6 +369,7 @@ export class SweepService {
       masterVaultPublicKey: this.vaultKeypair.publicKey(),
       txHashes,
       skipped,
+      ...(dryRun && { decisions }),
     };
   }
 }

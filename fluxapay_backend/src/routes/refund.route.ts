@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { authenticateApiKey } from "../middleware/apiKeyAuth.middleware";
+import { merchantApiKeyRateLimit } from "../middleware/rateLimit.middleware";
 import { validate, validateQuery } from "../middleware/validation.middleware";
 import { idempotencyMiddleware } from "../middleware/idempotency.middleware";
 import {
@@ -57,14 +58,14 @@ const router = Router();
  */
 router.post(
   "/",
-  authenticateApiKey,
+  authenticateApiKey, merchantApiKeyRateLimit(),
   idempotencyMiddleware,
   validate(createRefundSchema),
   createRefund,
 );
 router.get(
   "/",
-  authenticateApiKey,
+  authenticateApiKey, merchantApiKeyRateLimit(),
   validateQuery(listRefundsQuerySchema),
   listRefunds,
 );
@@ -97,7 +98,7 @@ router.get(
  */
 router.patch(
   "/:refund_id/status",
-  authenticateApiKey,
+  authenticateApiKey, merchantApiKeyRateLimit(),
   validate(updateRefundStatusSchema),
   updateRefundStatus,
 );

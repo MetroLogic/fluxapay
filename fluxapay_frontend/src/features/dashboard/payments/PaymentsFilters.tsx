@@ -1,3 +1,4 @@
+import { ListPageFilterBar } from "@/components/data-table";
 import { Input } from "@/components/Input";
 import { Select } from "@/components/Select";
 import { Button } from "@/components/Button";
@@ -111,7 +112,7 @@ export const PaymentsFilters = memo(({
     };
 
     return (
-        <div className="flex flex-col gap-4 mb-6 bg-slate-50 p-4 rounded-xl border border-slate-100">
+        <ListPageFilterBar stack>
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div className="flex items-center gap-3 w-full md:w-auto">
                     <span className="text-sm font-semibold text-slate-700 whitespace-nowrap">Saved Filters:</span>
@@ -184,7 +185,7 @@ export const PaymentsFilters = memo(({
                     </Select>
                 </div>
             </div>
-        </div>
+        </ListPageFilterBar>
     );
 });
 PaymentsFilters.displayName = "PaymentsFilters";

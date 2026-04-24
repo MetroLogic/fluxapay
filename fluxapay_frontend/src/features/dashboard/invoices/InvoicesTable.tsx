@@ -1,5 +1,5 @@
 import { Badge } from "@/components/Badge";
-import EmptyState from "@/components/EmptyState";
+import { DataTableBodyState } from "@/components/data-table";
 import { Invoice, InvoiceStatus } from "./invoices-mock";
 import { ChevronDown, ChevronUp, Copy, Eye } from "lucide-react";
 import { useState } from "react";
@@ -7,6 +7,8 @@ import { useState } from "react";
 interface InvoicesTableProps {
   invoices: Invoice[];
   onRowClick: (invoice: Invoice) => void;
+  isLoading?: boolean;
+  error?: string | null;
 }
 
 interface SortIconProps {
@@ -34,12 +36,19 @@ const getStatusBadge = (status: InvoiceStatus) => {
       return <Badge variant="error">Overdue</Badge>;
     case "unpaid":
       return <Badge variant="secondary">Unpaid</Badge>;
+    case "cancelled":
+      return <Badge variant="secondary">Cancelled</Badge>;
     default:
       return <Badge>{status}</Badge>;
   }
 };
 
-export const InvoicesTable = ({ invoices, onRowClick }: InvoicesTableProps) => {
+export const InvoicesTable = ({
+  invoices,
+  onRowClick,
+  isLoading = false,
+  error = null,
+}: InvoicesTableProps) => {
   const [sortConfig, setSortConfig] = useState<{
     key: keyof Invoice;
     direction: "asc" | "desc";
@@ -62,7 +71,7 @@ export const InvoicesTable = ({ invoices, onRowClick }: InvoicesTableProps) => {
   });
 
   return (
-    <div className="rounded-xl border bg-card overflow-hidden">
+    <div className="bg-card overflow-hidden">
       <div className="overflow-x-auto">
         <table className="w-full text-sm text-left">
           <thead>
@@ -104,14 +113,21 @@ export const InvoicesTable = ({ invoices, onRowClick }: InvoicesTableProps) => {
             </tr>
           </thead>
           <tbody className="divide-y">
-            {sorted.length === 0 ? (
-              <EmptyState
-                colSpan={6}
-                className="px-4 py-12 text-muted-foreground"
-                message="No invoices found matching your filters."
-              />
-            ) : (
-              sorted.map((invoice) => (
+            <DataTableBodyState
+              colSpan={6}
+              state={
+                error
+                  ? "error"
+                  : isLoading
+                    ? "loading"
+                    : sorted.length === 0
+                      ? "empty"
+                      : "ready"
+              }
+              errorMessage={error ?? undefined}
+              emptyMessage="No invoices found."
+            >
+              {sorted.map((invoice) => (
                 <tr
                   key={invoice.id}
                   className="group hover:bg-muted/50 cursor-pointer transition-colors"
@@ -122,7 +138,9 @@ export const InvoicesTable = ({ invoices, onRowClick }: InvoicesTableProps) => {
                   </td>
                   <td className="px-4 py-4">
                     <div className="flex flex-col">
-                      <span className="font-medium">{invoice.customer_name}</span>
+                      <span className="font-medium">
+                        {invoice.customer_name || "—"}
+                      </span>
                       <span className="text-xs text-muted-foreground">
                         {invoice.customer_email}
                       </span>
@@ -164,8 +182,8 @@ export const InvoicesTable = ({ invoices, onRowClick }: InvoicesTableProps) => {
                     </div>
                   </td>
                 </tr>
-              ))
-            )}
+              ))}
+            </DataTableBodyState>
           </tbody>
         </table>
       </div>
