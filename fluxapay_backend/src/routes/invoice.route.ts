@@ -2,7 +2,7 @@ import { Router } from "express";
 import { authenticateApiKey } from "../middleware/apiKeyAuth.middleware";
 import { merchantApiKeyRateLimit } from "../middleware/rateLimit.middleware";
 import { validate, validateQuery } from "../middleware/validation.middleware";
-import { createInvoice, listInvoices, exportInvoice, updateInvoiceStatus } from "../controllers/invoice.controller";
+import { createInvoice, listInvoices, getInvoiceById, updateInvoiceStatus, exportInvoice } from "../controllers/invoice.controller";
 import { createInvoiceSchema, listInvoicesQuerySchema, exportInvoiceSchema, updateInvoiceStatusSchema } from "../schemas/invoice.schema";
 
 const router = Router();
@@ -59,6 +59,28 @@ router.get("/", authenticateApiKey, merchantApiKeyRateLimit(), validateQuery(lis
 
 /**
  * @swagger
+ * /api/v1/invoices/{invoice_id}:
+ *   get:
+ *     summary: Get invoice by ID
+ *     tags: [Invoices]
+ *     security:
+ *       - apiKeyAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: invoice_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Invoice retrieved
+ *       404:
+ *         description: Invoice not found
+ */
+router.get("/:invoice_id", authenticateApiKey, getInvoiceById);
+
+/**
+ * @swagger
  * /api/v1/invoices/{invoice_id}/status:
  *   patch:
  *     summary: Update invoice status
@@ -77,14 +99,17 @@ router.get("/", authenticateApiKey, merchantApiKeyRateLimit(), validateQuery(lis
  *         application/json:
  *           schema:
  *             type: object
- *             required: [status]
  *             properties:
  *               status:
  *                 type: string
  *                 enum: [pending, paid, cancelled, overdue]
+ *             required:
+ *               - status
  *     responses:
  *       200:
- *         description: Status updated
+ *         description: Invoice status updated
+ *       400:
+ *         description: Invalid status transition
  *       404:
  *         description: Invoice not found
  */

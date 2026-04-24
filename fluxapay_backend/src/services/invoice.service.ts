@@ -1,4 +1,4 @@
-import { PrismaClient, Prisma } from "../generated/client/client";
+import { PrismaClient, Prisma, InvoiceStatus } from "../generated/client/client";
 import crypto from "crypto";
 
 const prisma = new PrismaClient();
@@ -27,16 +27,22 @@ export async function createInvoiceService(params: {
   metadata?: Record<string, unknown>;
   due_date?: string;
 }) {
-  const { 
-    merchantId, 
-    currency, 
-    customer_email, 
-    customer_name, 
-    line_items, 
-    notes, 
-    metadata = {}, 
-    due_date 
+  const {
+    merchantId,
+    currency,
+    customer_email,
+    customer_name,
+    line_items,
+    notes,
+    metadata = {},
+    due_date,
   } = params;
+  const metadataJson = {
+    ...metadata,
+    ...(customer_name ? { customer_name } : {}),
+    ...(line_items ? { line_items } : {}),
+    ...(notes ? { notes } : {}),
+  } as Prisma.InputJsonValue;
 
   // Calculate amount from line items if not provided
   let amount = params.amount;
@@ -100,30 +106,6 @@ export async function createInvoiceService(params: {
   };
 }
 
-export async function updateInvoiceStatusService(
-  merchantId: string,
-  invoiceId: string,
-  status: "pending" | "paid" | "cancelled" | "overdue"
-) {
-  const invoice = await prisma.invoice.findUnique({
-    where: { id: invoiceId, merchantId },
-  });
-
-  if (!invoice) {
-    throw new Error("Invoice not found");
-  }
-
-  const updatedInvoice = await prisma.invoice.update({
-    where: { id: invoiceId },
-    data: { status },
-  });
-
-  return {
-    message: "Invoice status updated",
-    data: updatedInvoice,
-  };
-}
-
 export async function listInvoicesService(params: {
   merchantId: string;
   page: number;
@@ -166,6 +148,96 @@ export async function listInvoicesService(params: {
       limit,
       total,
       total_pages: totalPages,
+    },
+  };
+}
+
+export async function getInvoiceByIdService(
+  merchantId: string,
+  invoiceId: string
+) {
+  const invoice = await prisma.invoice.findUnique({
+    where: { id: invoiceId, merchantId },
+    include: { payment: true },
+  });
+
+  if (!invoice) {
+    throw new Error("Invoice not found");
+  }
+
+  return {
+    message: "Invoice retrieved",
+    data: {
+      id: invoice.id,
+      invoice_number: invoice.invoice_number,
+      amount: Number(invoice.amount),
+      currency: invoice.currency,
+      customer_email: invoice.customer_email,
+      status: invoice.status,
+      due_date: invoice.due_date,
+      created_at: invoice.created_at,
+      metadata: invoice.metadata,
+      payment_id: invoice.payment_id,
+      payment_link: invoice.payment_link,
+      payment: invoice.payment
+        ? {
+            id: invoice.payment.id,
+            amount: Number(invoice.payment.amount),
+            currency: invoice.payment.currency,
+            status: invoice.payment.status,
+            customer_email: invoice.payment.customer_email,
+            created_at: invoice.payment.createdAt,
+            checkout_url: invoice.payment.checkout_url,
+          }
+        : null,
+    },
+  };
+}
+
+export async function updateInvoiceStatusService(
+  merchantId: string,
+  invoiceId: string,
+  newStatus: string
+) {
+  // Validate status transition
+  const validStatuses = ["pending", "paid", "cancelled", "overdue"];
+  if (!validStatuses.includes(newStatus)) {
+    throw new Error("Invalid status");
+  }
+
+  const invoice = await prisma.invoice.findUnique({
+    where: { id: invoiceId, merchantId },
+  });
+
+  if (!invoice) {
+    throw new Error("Invoice not found");
+  }
+
+  // Check if status transition is valid
+  const currentStatus = invoice.status;
+  const validTransitions: Record<string, string[]> = {
+    pending: ["paid", "cancelled", "overdue"],
+    paid: [], // Paid is terminal
+    cancelled: [], // Cancelled is terminal
+    overdue: ["paid", "cancelled"], // Overdue can be paid or cancelled
+  };
+
+  if (!validTransitions[currentStatus]?.includes(newStatus)) {
+    throw new Error("Invalid status transition");
+  }
+
+  const updatedInvoice = await prisma.invoice.update({
+    where: { id: invoiceId },
+    data: { status: newStatus as InvoiceStatus },
+  });
+
+  return {
+    message: "Invoice status updated",
+    data: {
+      id: updatedInvoice.id,
+      invoice_number: updatedInvoice.invoice_number,
+      status: updatedInvoice.status,
+      updated_at: updatedInvoice.updated_at,
     },
   };
 }

@@ -8,6 +8,8 @@ export type CanonicalEventName =
     | 'payment.created'
     | 'payment.pending'
     | 'payment.confirmed'
+    | 'payment.partially_paid'
+    | 'payment.overpaid'
     | 'payment.failed'
     | 'payment.settled'
     | 'refund.created'
@@ -20,6 +22,8 @@ export type CanonicalEventName =
 export type LegacyEventName =
     | 'payment_completed'
     | 'payment_confirmed'
+    | 'payment_partially_paid'
+    | 'payment_overpaid'
     | 'payment_failed'
     | 'payment_pending'
     | 'refund_completed'
@@ -34,6 +38,8 @@ export type WebhookEventName = CanonicalEventName | LegacyEventName;
 const legacyToCanonical: Record<LegacyEventName, CanonicalEventName> = {
     'payment_completed': 'payment.settled',
     'payment_confirmed': 'payment.confirmed',
+    'payment_partially_paid': 'payment.partially_paid',
+    'payment_overpaid': 'payment.overpaid',
     'payment_failed': 'payment.failed',
     'payment_pending': 'payment.pending',
     'refund_completed': 'refund.completed',
@@ -48,6 +54,8 @@ const canonicalToLegacy: Record<CanonicalEventName, LegacyEventName> = {
     'payment.created': 'payment_pending',
     'payment.pending': 'payment_pending',
     'payment.confirmed': 'payment_confirmed',
+    'payment.partially_paid': 'payment_partially_paid',
+    'payment.overpaid': 'payment_overpaid',
     'payment.failed': 'payment_failed',
     'payment.settled': 'payment_completed',
     'refund.created': 'refund_completed',
