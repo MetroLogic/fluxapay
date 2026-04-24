@@ -58,3 +58,15 @@ export const sendTestWebhookSchema = z.object({
   endpoint_url: z.string().url('Invalid endpoint URL'),
   payload_override: z.record(z.string(), z.any()).optional(),
 });
+
+export const getDeadLetterQueueSchema = z.object({
+  date_from: z.string().datetime().optional(),
+  date_to: z.string().datetime().optional(),
+  merchant_id: z.string().optional(),
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().positive().max(100).default(10),
+});
+
+export const requeueWebhookSchema = z.object({
+  log_id: z.string().min(1, 'Log ID is required'),
+});
