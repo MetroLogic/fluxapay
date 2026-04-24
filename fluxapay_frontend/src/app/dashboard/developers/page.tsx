@@ -876,7 +876,17 @@ export default function DevelopersPage() {
 
           {/* API Status */}
           <section style={card}>
-            <h2 style={{ fontSize: "1.5rem", fontWeight: "bold", color: "#1a1a3e", marginBottom: "1.5rem" }}>API Status</h2>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.5rem" }}>
+              <h2 style={{ fontSize: "1.5rem", fontWeight: "bold", color: "#1a1a3e" }}>API Status</h2>
+              <a
+                href={DOCS_URLS.STATUS}
+                target={DOCS_URLS.STATUS.startsWith("http") ? "_blank" : undefined}
+                rel={DOCS_URLS.STATUS.startsWith("http") ? "noopener noreferrer" : undefined}
+                style={{ fontSize: "0.75rem", color: "#fbbf24", fontWeight: 600, textDecoration: "none" }}
+              >
+                Full status page →
+              </a>
+            </div>
             <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
               {(
                 [
@@ -994,15 +1004,22 @@ export default function DevelopersPage() {
           <h2 style={{ fontSize: "1.875rem", fontWeight: "bold", color: "#1a1a3e", marginBottom: "1.5rem" }}>Need Help?</h2>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: "1.5rem" }}>
             {[
-              { icon: "📖", title: "Full Documentation", desc: "Comprehensive API docs with detailed examples and use cases.", href: DOCS_URLS.FULL_DOCS, cta: "Read docs →" },
-              { icon: "💬", title: "Community Support", desc: "Join our community forums and chat with other developers.", href: DOCS_URLS.COMMUNITY, cta: "Join community →" },
-              { icon: "⚙️", title: "Status & Support", desc: "Check system status and get technical support from our team.", href: DOCS_URLS.STATUS, cta: "Get help →" },
-            ].map(({ icon, title, desc, href, cta }) => (
+              { icon: "📖", title: "Full Documentation", desc: "Comprehensive API docs with detailed examples and use cases.", href: DOCS_URLS.FULL_DOCS, cta: "Read docs →", external: false },
+              { icon: "💬", title: "Community Support", desc: "Join our community forums and chat with other developers.", href: DOCS_URLS.COMMUNITY, cta: "Join community →", external: false },
+              { icon: "⚙️", title: "Status & Support", desc: "Check system status and get technical support from our team.", href: DOCS_URLS.STATUS, cta: "Get help →", external: DOCS_URLS.STATUS.startsWith("http") },
+            ].map(({ icon, title, desc, href, cta, external }) => (
               <div key={title} style={{ backgroundColor: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "0.5rem", padding: "1.5rem" }}>
                 <div style={{ fontSize: "1.5rem", marginBottom: "0.5rem" }}>{icon}</div>
                 <h3 style={{ fontSize: "1.125rem", fontWeight: 600, color: "#1a1a3e", marginBottom: "0.5rem" }}>{title}</h3>
                 <p style={{ fontSize: "0.875rem", color: "#6b7280", marginBottom: "1rem", lineHeight: 1.5 }}>{desc}</p>
-                <a href={href} style={{ color: "#fbbf24", textDecoration: "none", fontSize: "0.875rem", fontWeight: 600 }}>{cta}</a>
+                <a
+                  href={href}
+                  target={external ? "_blank" : undefined}
+                  rel={external ? "noopener noreferrer" : undefined}
+                  style={{ color: "#fbbf24", textDecoration: "none", fontSize: "0.875rem", fontWeight: 600 }}
+                >
+                  {cta}
+                </a>
               </div>
             ))}
           </div>

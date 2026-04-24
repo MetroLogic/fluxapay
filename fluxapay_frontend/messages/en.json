@@ -156,7 +156,8 @@
     "login": "Log In",
     "faqs": "FAQs / Support",
     "contact": "Contact us",
-    "resources": "Resources"
+    "resources": "Resources",
+    "status": "System Status"
   },
   "dashboard": {
     "overview": "Overview",
@@ -211,7 +212,10 @@
     "country": "Country",
     "createAccount": "Create Account",
     "signingIn": "Signing in...",
-    "creatingAccount": "Creating account..."
+    "creatingAccount": "Creating account...",
+    "keepLoggedIn": "Keep me logged in",
+    "sessionExpiry": "You'll be signed out when you close your browser.",
+    "sessionPersistent": "You'll stay signed in for 30 days. Only use this on a trusted device."
   },
   "settings": {
     "profile": "Profile",

@@ -164,26 +164,35 @@ const LoginForm = () => {
               </div>
 
               {/* Keep me logged in */}
-              <div className="flex items-center justify-between">
-                <label className="flex items-center gap-2 cursor-pointer select-none text-sm text-slate-600">
-                  <input
-                    type="checkbox"
-                    name="keepLoggedIn"
-                    checked={formData.keepLoggedIn}
-                    onChange={handleChange}
-                    className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                  />
-                  <span className="text-black font-medium text-[16px]">
-                    Keep me logged in
-                  </span>
-                </label>
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="flex items-center gap-2 cursor-pointer select-none text-sm text-slate-600">
+                    <input
+                      type="checkbox"
+                      name="keepLoggedIn"
+                      checked={formData.keepLoggedIn}
+                      onChange={handleChange}
+                      className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <span className="text-black font-medium text-[16px]">
+                      {tAuth("keepLoggedIn")}
+                    </span>
+                  </label>
+                </div>
+                <p className="text-xs text-slate-500 pl-6">
+                  {formData.keepLoggedIn
+                    ? tAuth("sessionPersistent")
+                    : tAuth("sessionExpiry")}
+                </p>
               </div>
 
               {/* Submit button */}
               <Button
                 type="submit"
                 disabled={isSubmitting}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-linear-to-r from-[#5649DF] to-violet-500 px-6 py-3 text-sm md:text-[16px] font-semibold text-[#FFFFFF] shadow-md transition hover:shadow-lg hover:from-indigo-600 hover:to-violet-600 disabled:cursor-not-allowed disabled:opacity-70"
+                variant="brand"
+                size="xl"
+                className="w-full rounded-xl font-semibold"
               >
                 {isSubmitting && (
                   <svg

@@ -106,7 +106,9 @@ export const ForgotPasswordForm = () => {
               <Button
                 type="submit"
                 disabled={isSubmitting || cooldown > 0}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-linear-to-r from-[#5649DF] to-violet-500 px-6 py-3 text-sm md:text-[16px] font-semibold text-[#FFFFFF] shadow-md transition hover:shadow-lg hover:from-indigo-600 hover:to-violet-600 disabled:cursor-not-allowed disabled:opacity-70"
+                variant="brand"
+                size="xl"
+                className="w-full rounded-xl font-semibold"
               >
                 {isSubmitting && (
                   <svg
