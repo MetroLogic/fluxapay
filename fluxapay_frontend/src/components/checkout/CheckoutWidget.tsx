@@ -31,7 +31,6 @@ export function CheckoutWidget({
   amount,
   currency,
   merchantName,
-  description,
   customization,
   callbacks,
   mode = "modal",

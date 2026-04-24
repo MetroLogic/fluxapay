@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, ChevronRight, Copy, Check } from "lucide-react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { CodeBlock } from "./CodeBlock";
 
 interface EndpointParam {
@@ -46,14 +46,7 @@ export function EndpointCard({
   pythonExample,
 }: EndpointCardProps) {
   const [expanded, setExpanded] = useState(false);
-  const [copiedPath, setCopiedPath] = useState(false);
   const [activeTab, setActiveTab] = useState<"ts" | "python">("ts");
-
-  const handleCopyPath = async () => {
-    await navigator.clipboard.writeText(path);
-    setCopiedPath(true);
-    setTimeout(() => setCopiedPath(false), 2000);
-  };
 
   return (
     <div className="border border-slate-200 rounded-xl bg-white overflow-hidden mb-4">

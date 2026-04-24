@@ -179,7 +179,7 @@ export function SettlementReportsPage() {
       document.body.removeChild(a);
 
       toast.success("CSV downloaded successfully");
-    } catch (error) {
+    } catch {
       toast.error("Failed to download CSV");
     } finally {
       setIsLoading(false);
@@ -205,7 +205,7 @@ export function SettlementReportsPage() {
       document.body.removeChild(a);
 
       toast.success("PDF downloaded successfully");
-    } catch (error) {
+    } catch {
       toast.error("Failed to download PDF");
     } finally {
       setIsLoading(false);
