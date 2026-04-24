@@ -9,7 +9,7 @@ export async function GET(
 ) {
   const { payment_id: paymentId } = await params;
 
-  const backendBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+  const backendBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
 
   const upstream = await fetch(
     `${backendBaseUrl}/api/v1/payments/checkout/${encodeURIComponent(paymentId)}/status`,

@@ -14,15 +14,49 @@ function buildInvoiceNumber() {
 
 export async function createInvoiceService(params: {
   merchantId: string;
-  amount: number;
+  amount?: number;
   currency: string;
   customer_email: string;
+  customer_name?: string;
+  line_items?: Array<{
+    description: string;
+    quantity: number;
+    unit_price: number;
+  }>;
+  notes?: string;
   metadata?: Record<string, unknown>;
   due_date?: string;
 }) {
-  const { merchantId, amount, currency, customer_email, metadata, due_date } = params;
-  const metadataJson = (metadata ?? {}) as Prisma.InputJsonValue;
+  const { 
+    merchantId, 
+    currency, 
+    customer_email, 
+    customer_name, 
+    line_items, 
+    notes, 
+    metadata = {}, 
+    due_date 
+  } = params;
 
+  // Calculate amount from line items if not provided
+  let amount = params.amount;
+  if (amount === undefined && line_items) {
+    amount = line_items.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
+  }
+
+  if (amount === undefined) {
+    throw new Error("Amount is required if line_items are not provided");
+  }
+
+  // Merge everything into metadata for persistence
+  const enrichedMetadata: Record<string, any> = {
+    ...metadata,
+    customer_name,
+    line_items,
+    notes,
+  };
+  
+  const metadataJson = enrichedMetadata as Prisma.InputJsonValue;
   const paymentId = crypto.randomUUID();
 
   const payment = await prisma.payment.create({
@@ -33,6 +67,7 @@ export async function createInvoiceService(params: {
       currency,
       customer_email,
       metadata: metadataJson,
+      description: notes || `Invoice for ${customer_email}`,
       expiration: due_date ? new Date(due_date) : new Date(Date.now() + 15 * 60 * 1000),
       status: "pending",
       checkout_url: `/pay/${paymentId}`,
@@ -68,6 +103,30 @@ export async function createInvoiceService(params: {
       due_date: invoice.due_date,
       created_at: invoice.created_at,
     },
+  };
+}
+
+export async function updateInvoiceStatusService(
+  merchantId: string,
+  invoiceId: string,
+  status: "pending" | "paid" | "cancelled" | "overdue"
+) {
+  const invoice = await prisma.invoice.findUnique({
+    where: { id: invoiceId, merchantId },
+  });
+
+  if (!invoice) {
+    throw new Error("Invoice not found");
+  }
+
+  const updatedInvoice = await prisma.invoice.update({
+    where: { id: invoiceId },
+    data: { status },
+  });
+
+  return {
+    message: "Invoice status updated",
+    data: updatedInvoice,
   };
 }
 

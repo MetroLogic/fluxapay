@@ -11,10 +11,26 @@ export async function createInvoice(req: AuthRequest, res: Response) {
       amount: req.body.amount,
       currency: req.body.currency,
       customer_email: req.body.customer_email,
+      customer_name: req.body.customer_name,
+      line_items: req.body.line_items,
+      notes: req.body.notes,
       metadata: req.body.metadata,
       due_date: req.body.due_date,
     });
     res.status(201).json(result);
+  } catch (err: any) {
+    res.status(err.status || 500).json({ message: err.message || "Server error" });
+  }
+}
+
+export async function updateInvoiceStatus(req: AuthRequest, res: Response) {
+  try {
+    const merchantId = await validateUserId(req);
+    const { invoice_id } = req.params;
+    const { status } = req.body;
+
+    const result = await updateInvoiceStatusService(merchantId, invoice_id, status);
+    res.status(200).json(result);
   } catch (err: any) {
     res.status(err.status || 500).json({ message: err.message || "Server error" });
   }

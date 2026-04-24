@@ -1,8 +1,8 @@
 import { Router } from "express";
 import { authenticateApiKey } from "../middleware/apiKeyAuth.middleware";
 import { validate, validateQuery } from "../middleware/validation.middleware";
-import { createInvoice, listInvoices, exportInvoice } from "../controllers/invoice.controller";
-import { createInvoiceSchema, listInvoicesQuerySchema, exportInvoiceSchema } from "../schemas/invoice.schema";
+import { createInvoice, listInvoices, exportInvoice, updateInvoiceStatus } from "../controllers/invoice.controller";
+import { createInvoiceSchema, listInvoicesQuerySchema, exportInvoiceSchema, updateInvoiceStatusSchema } from "../schemas/invoice.schema";
 
 const router = Router();
 
@@ -50,6 +50,39 @@ const router = Router();
  */
 router.post("/", authenticateApiKey, validate(createInvoiceSchema), createInvoice);
 router.get("/", authenticateApiKey, validateQuery(listInvoicesQuerySchema), listInvoices);
+
+/**
+ * @swagger
+ * /api/v1/invoices/{invoice_id}/status:
+ *   patch:
+ *     summary: Update invoice status
+ *     tags: [Invoices]
+ *     security:
+ *       - apiKeyAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: invoice_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [status]
+ *             properties:
+ *               status:
+ *                 type: string
+ *                 enum: [pending, paid, cancelled, overdue]
+ *     responses:
+ *       200:
+ *         description: Status updated
+ *       404:
+ *         description: Invoice not found
+ */
+router.patch("/:invoice_id/status", authenticateApiKey, validate(updateInvoiceStatusSchema), updateInvoiceStatus);
 
 /**
  * @swagger

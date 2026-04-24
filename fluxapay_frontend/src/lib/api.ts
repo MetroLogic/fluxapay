@@ -523,13 +523,17 @@ export const api = {
         quantity: number;
         unit_price: number;
       }>;
+      total_amount?: number;
       currency: string;
       due_date: string;
       notes?: string;
     }) =>
       fetchWithAuth("/api/v1/invoices", {
         method: "POST",
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          ...data,
+          amount: data.total_amount,
+        }),
       }),
 
     list: (params?: {
@@ -541,10 +545,30 @@ export const api = {
       if (params?.page != null) sp.set("page", String(params.page));
       if (params?.limit != null) sp.set("limit", String(params.limit));
       if (params?.status && params.status !== "all") sp.set("status", params.status);
-      return fetchWithAuth(`/api/v1/invoices?${sp.toString()}`);
+      return fetchWithAuth(`/api/v1/invoices?${sp.toString()}`).then(res => ({
+        invoices: (res.data?.invoices || []).map((inv: any) => ({
+          ...inv,
+          total_amount: Number(inv.amount),
+          customer_name: inv.metadata?.customer_name,
+          line_items: inv.metadata?.line_items || [],
+          notes: inv.metadata?.notes,
+        })),
+        hasMore: (res.data?.pagination?.page || 0) < (res.data?.pagination?.total_pages || 0),
+        total: res.data?.pagination?.total || 0,
+      }));
     },
 
-    getById: (invoiceId: string) => fetchWithAuth(`/api/v1/invoices/${invoiceId}`),
+    getById: (invoiceId: string) => 
+      fetchWithAuth(`/api/v1/invoices/${invoiceId}`).then(res => {
+        const inv = res.data;
+        return {
+          ...inv,
+          total_amount: Number(inv.amount),
+          customer_name: inv.metadata?.customer_name,
+          line_items: inv.metadata?.line_items || [],
+          notes: inv.metadata?.notes,
+        };
+      }),
 
     updateStatus: (invoiceId: string, status: string) =>
       fetchWithAuth(`/api/v1/invoices/${invoiceId}/status`, {
