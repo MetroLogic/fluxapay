@@ -627,6 +627,11 @@ export const api = {
           method: "PATCH",
           body: JSON.stringify({ status }),
         }),
+      bulkUpdateStatus: (merchantIds: string[], status: "active" | "suspended", reason: string) =>
+        fetchWithAuth("/api/merchants/admin/bulk-status", {
+          method: "POST",
+          body: JSON.stringify({ merchantIds, status, reason }),
+        }),
     },
     settlements: {
       list: (params?: { page?: number; limit?: number; status?: string }) => {

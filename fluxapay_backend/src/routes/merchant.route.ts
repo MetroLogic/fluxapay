@@ -12,6 +12,7 @@ import {
   adminListMerchants,
   adminGetMerchant,
   adminUpdateMerchantStatus,
+  adminBulkUpdateMerchantStatus,
   updateSettlementSchedule,
   addBankAccount,
 } from "../controllers/merchant.controller";
@@ -368,6 +369,41 @@ router.get("/admin/:merchantId", adminAuth, adminGetMerchant);
  *         description: Merchant not found
  */
 router.patch("/admin/:merchantId/status", adminAuth, adminUpdateMerchantStatus);
+
+/**
+ * @swagger
+ * /api/v1/merchants/admin/bulk-status:
+ *   post:
+ *     summary: Bulk suspend or activate merchants (Admin only)
+ *     tags: [Admin - Merchants]
+ *     security:
+ *       - adminSecret: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [merchantIds, status, reason]
+ *             properties:
+ *               merchantIds:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *               status:
+ *                 type: string
+ *                 enum: [active, suspended]
+ *               reason:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Bulk update result with per-merchant success/failure
+ *       400:
+ *         description: Validation error
+ *       401:
+ *         description: Unauthorized
+ */
+router.post("/admin/bulk-status", adminAuth, adminBulkUpdateMerchantStatus);
 /**
  * @swagger
  * /api/v1/merchants/me/settlement-schedule:

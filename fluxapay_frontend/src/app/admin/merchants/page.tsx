@@ -21,7 +21,10 @@ import {
     UserCheck,
     UserX,
     FileText,
+    ShieldOff,
+    ShieldCheck,
 } from 'lucide-react';
+import BulkConfirmModal from '@/features/admin/merchants/BulkConfirmModal';
 import toast from 'react-hot-toast';
 import { toastApiError } from '@/lib/toastApiError';
 import EmptyState from '@/components/EmptyState';
@@ -45,6 +48,8 @@ const AdminMerchantsPage = () => {
     const [accountFilter, setAccountFilter] = useState<string>('all');
     const [selectedMerchant, setSelectedMerchant] = useState<AdminMerchant | null>(null);
     const [showResetKeyModal, setShowResetKeyModal] = useState<string | null>(null);
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [bulkAction, setBulkAction] = useState<'suspend' | 'activate' | null>(null);
     const [showExportMenu, setShowExportMenu] = useState<boolean>(false);
     const [isExporting, setIsExporting] = useState<boolean>(false);
     const [exportProgress, setExportProgress] = useState<number>(0);
@@ -158,6 +163,42 @@ const AdminMerchantsPage = () => {
         }
         setSelectedMerchant(null);
     };
+
+    const toggleSelectAll = () => {
+        if (selectedIds.size === filteredMerchants.length) {
+            setSelectedIds(new Set());
+        } else {
+            setSelectedIds(new Set(filteredMerchants.map(m => m.id)));
+        }
+    };
+
+    const toggleSelectOne = (id: string) => {
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            next.has(id) ? next.delete(id) : next.add(id);
+            return next;
+        });
+    };
+
+    const handleBulkConfirm = async (reason: string) => {
+        if (!bulkAction) return { succeeded: 0, failed: [] };
+        const status = bulkAction === 'suspend' ? 'suspended' : 'active';
+        try {
+            const data = await api.admin.merchants.bulkUpdateStatus(
+                Array.from(selectedIds),
+                status,
+                reason,
+            );
+            void mutate();
+            setSelectedIds(new Set());
+            return { succeeded: data.succeeded ?? 0, failed: data.failed ?? [] };
+        } catch (err) {
+            toastApiError(err);
+            return { succeeded: 0, failed: Array.from(selectedIds).map(id => ({ id, error: 'Request failed' })) };
+        }
+    };
+
+    const closeBulkModal = () => setBulkAction(null);
 
     const resetApiKeys = (id: string) => {
         toast.success(`API keys reset for merchant ${id}`);
@@ -469,6 +510,35 @@ const AdminMerchantsPage = () => {
                     </div>
                 )}
 
+                {/* Bulk Action Bar */}
+                {selectedIds.size > 0 && (
+                    <div className="mb-4 p-3 bg-slate-900 text-white rounded-xl flex items-center justify-between gap-4">
+                        <span className="text-sm font-medium">{selectedIds.size} merchant{selectedIds.size !== 1 ? 's' : ''} selected</span>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => setBulkAction('activate')}
+                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors"
+                            >
+                                <ShieldCheck className="w-3.5 h-3.5" />
+                                Activate
+                            </button>
+                            <button
+                                onClick={() => setBulkAction('suspend')}
+                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-rose-600 hover:bg-rose-700 rounded-lg transition-colors"
+                            >
+                                <ShieldOff className="w-3.5 h-3.5" />
+                                Suspend
+                            </button>
+                            <button
+                                onClick={() => setSelectedIds(new Set())}
+                                className="p-1.5 hover:bg-slate-700 rounded-lg transition-colors"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+                    </div>
+                )}
+
                 {/* Search and Filters */}
                 <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 mb-6">
                     <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -520,6 +590,14 @@ const AdminMerchantsPage = () => {
                         <table className="min-w-full divide-y divide-slate-200">
                             <thead className="bg-slate-50">
                                 <tr>
+                                    <th className="px-4 py-4">
+                                        <input
+                                            type="checkbox"
+                                            className="rounded border-slate-300"
+                                            checked={filteredMerchants.length > 0 && selectedIds.size === filteredMerchants.length}
+                                            onChange={toggleSelectAll}
+                                        />
+                                    </th>
                                      <th className="px-2 py-4 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
                                         s/n
                                     </th>
@@ -555,7 +633,15 @@ const AdminMerchantsPage = () => {
                                         const accountConfig = getAccountStatusConfig(merchant.accountStatus);
 
                                         return (
-                                            <tr key={merchant.id} className="hover:bg-slate-50/50 transition-colors">
+                                            <tr key={merchant.id} className={`hover:bg-slate-50/50 transition-colors ${selectedIds.has(merchant.id) ? 'bg-slate-50' : ''}`}>
+                                                <td className="px-4 py-4">
+                                                    <input
+                                                        type="checkbox"
+                                                        className="rounded border-slate-300"
+                                                        checked={selectedIds.has(merchant.id)}
+                                                        onChange={() => toggleSelectOne(merchant.id)}
+                                                    />
+                                                </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
                                                     <span className="text-sm font-medium text-slate-900 font-mono">
                                                         {index + 1}
@@ -760,6 +846,16 @@ const AdminMerchantsPage = () => {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* Bulk Action Confirmation Modal */}
+            {bulkAction && (
+                <BulkConfirmModal
+                    count={selectedIds.size}
+                    action={bulkAction}
+                    onConfirm={handleBulkConfirm}
+                    onClose={closeBulkModal}
+                />
             )}
 
             {/* Reset API Key Warning Modal */}
