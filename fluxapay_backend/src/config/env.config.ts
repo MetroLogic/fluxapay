@@ -104,6 +104,13 @@ const envSchema = z.object({
     FUNDER_MONITOR_CRON: z.string().default('*/10 * * * *'),
     DISABLE_CRON: z.enum(['true', 'false']).default('false'),
 
+    // Checkout expiry reminder
+    CHECKOUT_REMINDER_ENABLED: z.enum(['true', 'false']).default('false'),
+    CHECKOUT_REMINDER_MINUTES: z.coerce.number().int().positive().default(5),
+    CHECKOUT_REMINDER_SEND_WEBHOOK: z.enum(['true', 'false']).default('true'),
+    CHECKOUT_REMINDER_SEND_EMAIL: z.enum(['true', 'false']).default('true'),
+    CHECKOUT_REMINDER_CRON: z.string().default('*/2 * * * *'),
+
     // Admin
     ADMIN_INTERNAL_SECRET: z.string().optional(),
 

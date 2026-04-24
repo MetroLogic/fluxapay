@@ -303,6 +303,9 @@ model Payment {
   settlementId       String?
   settlement         Settlement? @relation(fields: [settlementId], references: [id])
   
+  // reminder
+  reminder_sent_at   DateTime?
+
   // webhook fields
   webhook_status     WebhookDeliveryStatus @default(PENDING)
   webhook_retries    Int                   @default(0)
