@@ -63,6 +63,25 @@ function getToken(): string {
   return token;
 }
 
+/** Persist auth token; uses sessionStorage when keepLoggedIn is false. */
+export function storeToken(token: string, keepLoggedIn = false): void {
+  if (keepLoggedIn) {
+    localStorage.setItem("token", token);
+    sessionStorage.removeItem("token");
+    return;
+  }
+
+  sessionStorage.setItem("token", token);
+  // Keep localStorage in sync so fetchWithAuth can find it.
+  localStorage.setItem("token", token);
+}
+
+/** Remove auth token from all storage locations. */
+export function clearToken(): void {
+  localStorage.removeItem("token");
+  sessionStorage.removeItem("token");
+}
+
 async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
   const token = localStorage.getItem("token");
 
