@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { authenticateApiKey } from "../middleware/apiKeyAuth.middleware";
+import { merchantApiKeyRateLimit } from "../middleware/rateLimit.middleware";
 import { validate, validateQuery } from "../middleware/validation.middleware";
 import {
   createCustomer,
@@ -58,10 +59,10 @@ const router = Router();
  *       200:
  *         description: Paginated customers
  */
-router.post("/", authenticateApiKey, validate(createCustomerSchema), createCustomer);
+router.post("/", authenticateApiKey, merchantApiKeyRateLimit(), validate(createCustomerSchema), createCustomer);
 router.get(
   "/",
-  authenticateApiKey,
+  authenticateApiKey, merchantApiKeyRateLimit(),
   validateQuery(listCustomersQuerySchema),
   listCustomers,
 );
@@ -126,19 +127,19 @@ router.get(
  */
 router.get(
   "/:id",
-  authenticateApiKey,
+  authenticateApiKey, merchantApiKeyRateLimit(),
   validate(customerIdParamsSchema),
   getCustomerById,
 );
 router.patch(
   "/:id",
-  authenticateApiKey,
+  authenticateApiKey, merchantApiKeyRateLimit(),
   validate(updateCustomerSchema),
   updateCustomer,
 );
 router.delete(
   "/:id",
-  authenticateApiKey,
+  authenticateApiKey, merchantApiKeyRateLimit(),
   validate(customerIdParamsSchema),
   deleteCustomer,
 );

@@ -16,6 +16,7 @@ import { PrismaClient } from "../generated/client/client";
 import { createAndDeliverWebhook } from "./webhook.service";
 import { eventBus, AppEvents } from "./EventService";
 import { PaymentStatus } from "../types/payment";
+import { trackPaymentExpired } from "../middleware/metrics.middleware";
 
 const prisma = new PrismaClient();
 
@@ -113,6 +114,7 @@ export async function runPaymentExpiryJob(): Promise<PaymentExpiryResult> {
       }
 
       result.expired++;
+      trackPaymentExpired(1);
 
       // Emit internal event (for any in-process listeners)
       eventBus.emit(AppEvents.PAYMENT_EXPIRED, { ...payment, status: PaymentStatus.EXPIRED });

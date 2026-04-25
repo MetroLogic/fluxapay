@@ -13,6 +13,8 @@
  *   ANCHOR_API_URL            – Anchor base URL
  */
 
+import { sanitizeObject } from "../utils/piiRedactor";
+
 export interface ExchangeQuoteResult {
   /** Amount of fiat the merchant will receive before fees */
   fiat_gross: number;
@@ -104,10 +106,21 @@ export class MockExchangePartner implements ExchangePartner {
       `[MockExchange] Simulating payout: ${usdcAmount} USDC → ${targetCurrency} | ref: ${reference}`,
     );
 
+    const transferRef = `mock_transfer_${reference}_${Date.now()}`;
+    const exchangeRef = `mock_exchange_${Date.now()}`;
     return {
-      transfer_ref: `mock_transfer_${reference}_${Date.now()}`,
-      exchange_ref: `mock_exchange_${Date.now()}`,
+      transfer_ref: transferRef,
+      exchange_ref: exchangeRef,
       initiated_at: new Date().toISOString(),
+      raw_partner_payload: {
+        partner: 'mock',
+        transfer_ref: transferRef,
+        exchange_ref: exchangeRef,
+        usdc_amount: usdcAmount,
+        target_currency: targetCurrency,
+        reference,
+        timestamp: new Date().toISOString(),
+      },
     };
   }
 }
@@ -195,7 +208,7 @@ export class YellowCardPartner implements ExchangePartner {
       initiated_at: new Date().toISOString(),
       raw_partner_payload: {
         partner: 'yellowcard',
-        response: data,
+        response: sanitizeObject(data),
         timestamp: new Date().toISOString(),
       },
     };
@@ -278,7 +291,7 @@ export class AnchorPartner implements ExchangePartner {
       initiated_at: new Date().toISOString(),
       raw_partner_payload: {
         partner: 'anchor',
-        response: data,
+        response: sanitizeObject(data),
         timestamp: new Date().toISOString(),
       },
     };

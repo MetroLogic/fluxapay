@@ -1,4 +1,5 @@
 import { Metadata } from "next";
+import Link from "next/link";
 import { DocsLayout } from "@/components/docs/DocsLayout";
 import { CodeBlock } from "@/components/docs/CodeBlock";
 import { EditOnGitHub } from "@/components/docs/EditOnGitHub";
@@ -237,7 +238,7 @@ export default function LocalizedAuthenticationPage() {
               <div>
                 <h3 className="font-semibold text-slate-900">Generate New Key</h3>
                 <p className="text-sm text-slate-600 mt-1">
-                  Click "Generate New Key" and select the environment (Sandbox or Production)
+                  Click &quot;Generate New Key&quot; and select the environment (Sandbox or Production)
                 </p>
               </div>
             </div>
@@ -249,7 +250,7 @@ export default function LocalizedAuthenticationPage() {
               <div>
                 <h3 className="font-semibold text-slate-900">Copy and Store Securely</h3>
                 <p className="text-sm text-slate-600 mt-1">
-                  Copy your API key and store it securely. You won't be able to see it again!
+                  Copy your API key and store it securely. You won&apos;t be able to see it again!
                 </p>
               </div>
             </div>
@@ -309,7 +310,7 @@ export default function LocalizedAuthenticationPage() {
         </section>
 
         {/* Webhook Signature Verification */}
-        <section>
+        <section id="webhook-verification">
           <h2 className="text-2xl font-bold text-slate-900 mb-4">Webhook Signature Verification</h2>
           <p className="text-slate-600 mb-4">
             All webhook requests from FluxaPay include a signature in the{" "}
@@ -360,15 +361,15 @@ export default function LocalizedAuthenticationPage() {
               </p>
               <ul className="text-sm text-slate-600 mt-2 space-y-1 list-disc list-inside">
                 <li>Your API key is correctly set in the Authorization header</li>
-                <li>You're using the correct key for the environment (sandbox vs production)</li>
-                <li>Your key hasn't been revoked or rotated</li>
+                <li>You&apos;re using the correct key for the environment (sandbox vs production)</li>
+                <li>Your key hasn&apos;t been revoked or rotated</li>
               </ul>
             </div>
 
             <div className="p-4 rounded-xl border border-slate-200 bg-white">
               <h3 className="font-semibold text-slate-900 mb-2">429 Too Many Requests</h3>
               <p className="text-sm text-slate-600">
-                You've exceeded the rate limit. Implement exponential backoff and retry logic.
+                You&apos;ve exceeded the rate limit. Implement exponential backoff and retry logic.
                 See the Rate Limits documentation for details.
               </p>
             </div>
@@ -376,7 +377,7 @@ export default function LocalizedAuthenticationPage() {
             <div className="p-4 rounded-xl border border-slate-200 bg-white">
               <h3 className="font-semibold text-slate-900 mb-2">Invalid Webhook Signature</h3>
               <p className="text-sm text-slate-600">
-                Ensure you're using the correct webhook secret and verifying the signature correctly.
+                Ensure you&apos;re using the correct webhook secret and verifying the signature correctly.
                 Use timing-safe comparison functions to prevent timing attacks.
               </p>
             </div>
@@ -389,12 +390,12 @@ export default function LocalizedAuthenticationPage() {
           <p className="text-slate-600 mb-4">
             Now that you understand authentication, explore the API reference to start building.
           </p>
-          <a
+          <Link
             href="/docs/api-reference"
             className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-colors"
           >
             View API Reference
-          </a>
+          </Link>
         </section>
 
         {/* Edit on GitHub */}

@@ -7,12 +7,14 @@ import {
     getSettlementBatch,
 } from "../controllers/settlement.controller";
 import { authenticateApiKey } from "../middleware/apiKeyAuth.middleware";
+import { merchantApiKeyRateLimit } from "../middleware/rateLimit.middleware";
 import { validate } from "../middleware/validation.middleware";
 import * as settlementSchema from "../schemas/settlement.schema";
 
 const router = Router();
 
 router.use(authenticateApiKey);
+router.use(merchantApiKeyRateLimit());
 
 /**
  * @swagger

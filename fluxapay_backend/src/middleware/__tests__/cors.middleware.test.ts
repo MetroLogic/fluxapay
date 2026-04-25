@@ -36,19 +36,55 @@ describe('CORS Middleware', () => {
       process.env.CORS_ORIGINS = '';
     });
 
-    it('should allow all origins in development', () => {
+    it('should allow localhost origins in development', () => {
       const options = getCorsOptions();
       expect(options.origin).toBeDefined();
       expect(typeof options.origin).toBe('function');
-      
-      // Test the origin function
+
+      // Standard localhost ports should be allowed
       const callback = jest.fn();
       (options.origin as Function)('http://localhost:3000', callback);
       expect(callback).toHaveBeenCalledWith(null, true);
-      
+
       callback.mockClear();
       (options.origin as Function)('http://localhost:8080', callback);
       expect(callback).toHaveBeenCalledWith(null, true);
+
+      callback.mockClear();
+      (options.origin as Function)('http://127.0.0.1:4000', callback);
+      expect(callback).toHaveBeenCalledWith(null, true);
+    });
+
+    it('should block non-localhost origins in development', () => {
+      const options = getCorsOptions();
+      const callback = jest.fn();
+
+      (options.origin as Function)('https://evil.com', callback);
+      expect(callback.mock.calls[0][0]).toBeInstanceOf(Error);
+      expect(callback.mock.calls[0][1]).toBe(false);
+    });
+
+    it('should allow requests with no origin header in development', () => {
+      const options = getCorsOptions();
+      const callback = jest.fn();
+
+      (options.origin as Function)(undefined, callback);
+      expect(callback).toHaveBeenCalledWith(null, true);
+    });
+
+    it('should honour CORS_ORIGINS override in development when set', () => {
+      process.env.CORS_ORIGINS = 'https://staging.fluxapay.com';
+      resetEnvConfig();
+
+      const options = getCorsOptions();
+      const callback = jest.fn();
+
+      (options.origin as Function)('https://staging.fluxapay.com', callback);
+      expect(callback).toHaveBeenCalledWith(null, true);
+
+      callback.mockClear();
+      (options.origin as Function)('http://localhost:3000', callback);
+      expect(callback.mock.calls[0][0]).toBeInstanceOf(Error);
     });
 
     it('should allow credentials in development', () => {

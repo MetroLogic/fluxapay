@@ -6,11 +6,13 @@ const STATUS_URL = process.env.NEXT_PUBLIC_STATUS_URL ?? "/status";
 const EXTERNAL_DOCS_URL = process.env.NEXT_PUBLIC_EXTERNAL_DOCS_URL;
 
 export const DOCS_URLS = {
-  API_REFERENCE: EXTERNAL_DOCS_URL ? `${EXTERNAL_DOCS_URL}/api-reference` : "/docs/api-reference",
-  GETTING_STARTED: EXTERNAL_DOCS_URL ? `${EXTERNAL_DOCS_URL}/getting-started` : "/docs/getting-started",
-  AUTHENTICATION: EXTERNAL_DOCS_URL ? `${EXTERNAL_DOCS_URL}/authentication` : "/docs/authentication",
-  RATE_LIMITS: EXTERNAL_DOCS_URL ? `${EXTERNAL_DOCS_URL}/rate-limits` : "/docs/rate-limits",
-  FULL_DOCS: EXTERNAL_DOCS_URL ?? "/docs",
+  API_REFERENCE: "/docs/api-reference",
+  GETTING_STARTED: "/docs/getting-started",
+  AUTHENTICATION: "/docs/authentication",
+  /** Webhook HMAC / signature verification (see on-page section). */
+  WEBHOOK_VERIFICATION: "/docs/authentication#webhook-verification",
+  RATE_LIMITS: "/docs/rate-limits",
+  FULL_DOCS: "/docs",
   COMMUNITY: "/community",
   SUPPORT: "/support",
   STATUS: STATUS_URL,

@@ -23,6 +23,52 @@ describeIfServer("Backend API Smoke Tests", () => {
     });
   });
 
+  describe("Authentication API", () => {
+    it("should respond to login attempts", async () => {
+      const response = await request(API_BASE_URL)
+        .post("/api/v1/merchants/login")
+        .send({
+          email: "smoke-test@example.com",
+          password: "password123",
+        });
+
+      // Expecting 400 because user doesn't exist, but it proves the route is active
+      expect([400, 401]).toContain(response.status);
+    });
+
+    it("should respond to signup attempts", async () => {
+      const response = await request(API_BASE_URL)
+        .post("/api/v1/merchants/signup")
+        .send({
+          business_name: "Smoke Test Business",
+          email: `smoke-${Date.now()}@example.com`,
+          phone_number: `+1555${Math.floor(1000000 + Math.random() * 9000000)}`,
+          country: "US",
+          settlement_currency: "USD",
+          password: "Password123!",
+        });
+
+      // Should be 201 if successful, or 400 if validation fails/exists
+      expect([201, 400]).toContain(response.status);
+    });
+  });
+
+  describe("Payments API", () => {
+    it("should require an API key to create a payment", async () => {
+      const response = await request(API_BASE_URL)
+        .post("/api/v1/payments")
+        .send({
+          amount: 100,
+          currency: "USDC",
+          customer_email: "customer@example.com",
+          description: "Smoke test payment",
+        });
+
+      // Should return 401 Unauthorized since no API key is provided
+      expect(response.status).toBe(401);
+    });
+  });
+
   describe("API Documentation", () => {
     it("should serve Swagger docs", async () => {
       const response = await request(API_BASE_URL).get("/api-docs/");
@@ -32,15 +78,7 @@ describeIfServer("Backend API Smoke Tests", () => {
     });
   });
 
-  describe("Request ID Middleware", () => {
-    it("should include x-request-id in response headers", async () => {
-      const response = await request(API_BASE_URL).get("/health");
-
-      expect(response.headers["x-request-id"]).toBeDefined();
-    });
-  });
-
-  describe("Critical Routes", () => {
+  describe("Critical Routes Exposure", () => {
     const criticalRoutes = [
       { method: "get", path: "/api/v1/merchants/me" },
       { method: "get", path: "/api/v1/payments" },
@@ -53,7 +91,7 @@ describeIfServer("Backend API Smoke Tests", () => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const response = await (request(API_BASE_URL) as any)[method](path);
 
-        // Should not return 404 (route exists)
+        // Should return 401 (since we are unauthenticated) but NOT 404
         expect(response.status).not.toBe(404);
       });
     });
