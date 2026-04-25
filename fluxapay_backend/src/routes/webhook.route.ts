@@ -6,10 +6,12 @@ import {
   sendTestWebhook,
   getDeadLetterQueue,
   requeueWebhook,
+  exportWebhookLogs,
 } from "../controllers/webhook.controller";
 import { validate, validateQuery } from "../middleware/validation.middleware";
 import * as webhookSchema from "../schemas/webhook.schema";
 import { authenticateToken } from "../middleware/auth.middleware";
+import { merchantApiKeyRateLimit } from "../middleware/rateLimit.middleware";
 import { adminAuth } from "../middleware/adminAuth.middleware";
 
 const router = Router();
@@ -101,6 +103,53 @@ router.get(
   authenticateToken, merchantApiKeyRateLimit(),
   validateQuery(webhookSchema.getWebhookLogsSchema),
   getWebhookLogs
+);
+
+/**
+ * @swagger
+ * /api/v1/webhooks/logs/export:
+ *   get:
+ *     summary: Export webhook logs as CSV
+ *     tags: [Webhooks]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: event_type
+ *         schema:
+ *           type: string
+ *         description: Filter by event type
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *         description: Filter by webhook status
+ *       - in: query
+ *         name: date_from
+ *         schema:
+ *           type: string
+ *         description: Filter logs from this date
+ *       - in: query
+ *         name: date_to
+ *         schema:
+ *           type: string
+ *         description: Filter logs until this date
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Search by webhook ID or payment ID
+ *     responses:
+ *       200:
+ *         description: CSV file download
+ *       401:
+ *         description: Unauthorized
+ */
+router.get(
+  "/logs/export",
+  authenticateToken, merchantApiKeyRateLimit(),
+  validateQuery(webhookSchema.getWebhookLogsSchema),
+  exportWebhookLogs,
 );
 
 /**

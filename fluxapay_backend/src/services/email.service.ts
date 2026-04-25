@@ -133,6 +133,8 @@ export async function sendCheckoutExpiryReminderEmail(
     throw err;
   }
 }
+
+export interface PaymentConfirmationDetails {
   amount: string;
   currency: string;
   payment_id: string;

@@ -20,9 +20,6 @@ export interface CreateAuditLogParams {
   details: Record<string, any>;
 }
 
-// Re-export enums for convenience
-export { AuditActionType, AuditEntityType, KYCStatus };
-
 export interface QueryAuditLogsParams {
   dateFrom?: Date;
   dateTo?: Date;

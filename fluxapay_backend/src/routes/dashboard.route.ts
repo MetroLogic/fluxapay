@@ -247,8 +247,6 @@ router.get("/overview/activity", dashboardController.activity);
  */
 router.get("/audit-logs", dashboardController.getMerchantAuditLogs);
 
-export default router;
-
 /**
  * @swagger
  * /api/v1/dashboard/overview/metrics:

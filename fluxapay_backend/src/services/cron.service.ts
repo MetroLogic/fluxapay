@@ -11,7 +11,7 @@
  *
  * Environment variables:
  *  SETTLEMENT_CRON        – Cron for settlement (default: "0 0 * * *")
- *  PAYMENT_MONITOR_CRON   – Cron for on-chain payment checks (default: "*/2 * * * *")
+ *  PAYMENT_MONITOR_CRON   – Cron for on-chain payment checks (default: "asterisk-slash-2 * * * *")
  *  BILLING_CRON           – Cron for subscription billing (default: "0 1 * * *")
  *  DB_BACKUP_CRON         – Cron for database backup (default: "0 2 * * *")
  *  DISABLE_CRON           – Set to "true" to disable all jobs (e.g. in test environments)

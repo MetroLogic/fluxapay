@@ -8,6 +8,7 @@ import {
   sendTestWebhookService,
   getDeadLetterQueueService,
   requeueWebhookService,
+  exportWebhookLogsService,
 } from "../services/webhook.service";
 import { WebhookEventType, WebhookStatus } from "../generated/client/client";
 import { AuthRequest } from "../types/express";
@@ -33,6 +34,29 @@ export async function getWebhookLogs(req: AuthRequest, res: Response) {
     });
 
     res.status(200).json(result);
+  } catch (err) {
+    console.error(err);
+    res.status((err as any).status || 500).json({ message: (err as any).message || "Server error" });
+  }
+}
+
+export async function exportWebhookLogs(req: AuthRequest, res: Response) {
+  try {
+    const merchantId = await validateUserId(req);
+    const query = req.query as Record<string, string | undefined>;
+
+    const result = await exportWebhookLogsService({
+      merchantId,
+      event_type: query.event_type as WebhookEventType | undefined,
+      status: query.status as WebhookStatus | undefined,
+      date_from: query.date_from,
+      date_to: query.date_to,
+      search: query.search,
+    });
+
+    res.setHeader("Content-Type", result.contentType);
+    res.attachment(result.filename);
+    return res.status(200).send(result.content);
   } catch (err) {
     console.error(err);
     res.status((err as any).status || 500).json({ message: (err as any).message || "Server error" });

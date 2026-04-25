@@ -406,7 +406,8 @@ export const getPublicCheckoutPayment = async (req: Request, res: Response) => {
             return res.status(404).json({ error: "Payment not found" });
         }
 
-        res.json(buildPublicCheckoutDto(payment));
+        const checkoutPayment = payment as Parameters<typeof buildPublicCheckoutDto>[0];
+        res.json(buildPublicCheckoutDto(checkoutPayment));
     } catch (error: unknown) {
         console.error("getPublicCheckoutPayment", error);
         res.status(500).json({ error: "Failed to load payment" });

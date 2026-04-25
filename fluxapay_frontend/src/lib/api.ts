@@ -352,7 +352,7 @@ export const api = {
       date_from?: string;
       date_to?: string;
       format?: "pdf" | "csv";
-    }): Promise<Blob> => {
+    }): Promise<Blob | any> => {
       const sp = new URLSearchParams();
       if (params.date_from) sp.set("date_from", params.date_from);
       if (params.date_to) sp.set("date_to", params.date_to);
@@ -363,6 +363,9 @@ export const api = {
       );
       if (!response.ok) {
         throw new ApiError(response.status, `Failed to export settlements: ${response.statusText}`);
+      }
+      if (params.format === "pdf") {
+        return response.json();
       }
       return response.blob();
     },
@@ -590,6 +593,26 @@ export const api = {
       return fetchWithAuth(`/api/v1/webhooks/logs?${sp.toString()}`);
     },
     logDetails: (logId: string) => fetchWithAuth(`/api/v1/webhooks/logs/${logId}`),
+    export: async (params?: {
+      event_type?: string;
+      status?: string;
+      date_from?: string;
+      date_to?: string;
+      search?: string;
+    }): Promise<Blob> => {
+      const sp = new URLSearchParams();
+      if (params?.event_type && params.event_type !== "all") sp.set("event_type", params.event_type);
+      if (params?.status && params.status !== "all") sp.set("status", params.status);
+      if (params?.date_from) sp.set("date_from", params.date_from);
+      if (params?.date_to) sp.set("date_to", params.date_to);
+      if (params?.search) sp.set("search", params.search);
+      const response = await fetch(
+        `${API_BASE_URL}/api/v1/webhooks/logs/export?${sp.toString()}`,
+        { headers: { Authorization: `Bearer ${getToken()}` } },
+      );
+      if (!response.ok) throw new ApiError(response.status, "Failed to export webhook logs");
+      return response.blob();
+    },
     retry: (logId: string) =>
       fetchWithAuth(`/api/v1/webhooks/logs/${logId}/retry`, { method: "POST" }),
     sendTest: (data: {
