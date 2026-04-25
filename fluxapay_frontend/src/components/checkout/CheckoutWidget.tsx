@@ -1,6 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import { useTranslations } from "next-intl";
+import { X } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export interface CheckoutWidgetConfig {
   paymentId: string;
@@ -37,6 +40,7 @@ export function CheckoutWidget({
 }: CheckoutWidgetProps) {
   const t = useTranslations("payment.checkout");
   const [isOpen, setIsOpen] = useState(mode === "embedded");
+  const [isLoading, setIsLoading] = useState(true);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const modalRef = useRef<HTMLDivElement>(null);
 
@@ -86,13 +90,25 @@ export function CheckoutWidget({
       <div
         ref={containerRef}
         className="w-full h-full rounded-lg overflow-hidden border border-slate-200"
+        aria-busy={isLoading}
+        aria-live="polite"
       >
+        {isLoading && (
+          <div className="w-full h-full p-6 space-y-4">
+            <Skeleton className="h-8 w-3/4" />
+            <Skeleton className="h-4 w-1/2" />
+            <Skeleton className="h-32 w-full" />
+            <Skeleton className="h-10 w-full" />
+          </div>
+        )}
         <iframe
           ref={iframeRef}
           src={checkoutUrl.toString()}
           className="w-full h-full border-none"
           title="FluxaPay Checkout"
           allow="payment"
+          onLoad={() => setIsLoading(false)}
+          style={{ display: isLoading ? 'none' : 'block' }}
         />
       </div>
     );
@@ -140,13 +156,23 @@ export function CheckoutWidget({
             </div>
 
             {/* Iframe */}
-            <div className="h-[calc(90vh-80px)] overflow-hidden">
+            <div className="h-[calc(90vh-80px)] overflow-hidden" aria-busy={isLoading} aria-live="polite">
+              {isLoading && (
+                <div className="w-full h-full p-6 space-y-4">
+                  <Skeleton className="h-8 w-3/4" />
+                  <Skeleton className="h-4 w-1/2" />
+                  <Skeleton className="h-32 w-full" />
+                  <Skeleton className="h-10 w-full" />
+                </div>
+              )}
               <iframe
                 ref={iframeRef}
                 src={checkoutUrl.toString()}
                 className="w-full h-full border-none"
                 title="FluxaPay Checkout"
                 allow="payment"
+                onLoad={() => setIsLoading(false)}
+                style={{ display: isLoading ? 'none' : 'block' }}
               />
             </div>
           </div>
