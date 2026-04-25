@@ -5,9 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { PaymentsTable } from "@/features/dashboard/payments/PaymentsTable";
 import { PaymentsFilters } from "@/features/dashboard/payments/PaymentsFilters";
 import { PaymentDetails } from "@/features/dashboard/payments/PaymentDetails";
-import { type Payment } from "@/features/dashboard/payments/payments-mock";
+import { type Payment } from "@/features/dashboard/payments/types";
 import {
-  MOCK_REFUNDS,
   type RefundRecord,
   type RefundReason,
 } from "@/features/dashboard/refunds/refunds-mock";
@@ -103,10 +102,12 @@ function PaymentsContent() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [currencyFilter, setCurrencyFilter] = useState("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
   const [selectedPaymentId, setSelectedPaymentId] = useState<string | null>(paymentIdFromQuery || null);
   const [detailedPayment, setDetailedPayment] = useState<Payment | null>(null);
-  const [refunds, setRefunds] = useState<RefundRecord[]>(MOCK_REFUNDS);
+  const [refunds, setRefunds] = useState<RefundRecord[]>([]);
 
   const [showCreateLinkModal, setShowCreateLinkModal] = useState(shouldOpenCreateLink);
   const [linkAmount, setLinkAmount] = useState("100");
@@ -140,6 +141,8 @@ function PaymentsContent() {
         status: statusFilter,
         currency: currencyFilter,
         search: debouncedSearch || undefined,
+        date_from: dateFrom || undefined,
+        date_to: dateTo || undefined,
       })) as { data: BackendPayment[]; meta: { total: number } };
       setPayments(result.data.map(mapBackendPayment));
       setTotal(result.meta.total);
@@ -150,11 +153,11 @@ function PaymentsContent() {
     } finally {
       setLoading(false);
     }
-  }, [page, statusFilter, currencyFilter, debouncedSearch]);
+  }, [page, statusFilter, currencyFilter, debouncedSearch, dateFrom, dateTo]);
 
   useEffect(() => {
     setPage(1);
-  }, [statusFilter, currencyFilter, debouncedSearch]);
+  }, [statusFilter, currencyFilter, debouncedSearch, dateFrom, dateTo]);
 
   useEffect(() => {
     fetchPayments();
@@ -171,6 +174,7 @@ function PaymentsContent() {
   useEffect(() => {
     if (!selectedIdToFetch) {
       setDetailedPayment(null);
+      setRefunds([]);
       return;
     }
     const fetchDetailedPayment = async () => {
@@ -182,7 +186,17 @@ function PaymentsContent() {
         console.error("Failed to fetch detailed payment", error);
       }
     };
+    const fetchRefunds = async () => {
+      try {
+        const res = (await api.refunds.list({ paymentId: selectedIdToFetch })) as { data?: BackendRefund[] };
+        const list = res?.data ?? [];
+        setRefunds(list.map(mapBackendRefund));
+      } catch {
+        // non-critical — leave empty
+      }
+    };
     fetchDetailedPayment();
+    fetchRefunds();
   }, [selectedIdToFetch]);
 
   const handleExportCSV = async () => {
@@ -345,9 +359,13 @@ function PaymentsContent() {
             searchValue={search}
             statusValue={statusFilter}
             currencyValue={currencyFilter}
+            dateFrom={dateFrom}
+            dateTo={dateTo}
             onSearchChange={handleSearchChange}
             onStatusChange={(v) => setStatusFilter(v)}
             onCurrencyChange={(v) => setCurrencyFilter(v)}
+            onDateFromChange={(v) => setDateFrom(v)}
+            onDateToChange={(v) => setDateTo(v)}
           />
         }
         footer={

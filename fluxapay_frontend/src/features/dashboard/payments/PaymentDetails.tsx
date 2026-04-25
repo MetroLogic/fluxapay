@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Payment } from "./payments-mock";
+import { Payment } from "./types";
 import { Badge } from "@/components/Badge";
 import {
   Copy,

@@ -10,9 +10,13 @@ interface PaymentsFiltersProps {
     searchValue: string;
     statusValue: string;
     currencyValue: string;
+    dateFrom: string;
+    dateTo: string;
     onSearchChange: (value: string) => void;
     onStatusChange: (value: string) => void;
     onCurrencyChange: (value: string) => void;
+    onDateFromChange: (value: string) => void;
+    onDateToChange: (value: string) => void;
 }
 
 interface SavedPreset {
@@ -27,9 +31,13 @@ export const PaymentsFilters = memo(({
     searchValue,
     statusValue,
     currencyValue,
+    dateFrom,
+    dateTo,
     onSearchChange,
     onStatusChange,
     onCurrencyChange,
+    onDateFromChange,
+    onDateToChange,
 }: PaymentsFiltersProps) => {
     const [presets, setPresets] = useState<SavedPreset[]>([]);
     const [selectedPresetId, setSelectedPresetId] = useState<string>("default");
@@ -108,6 +116,8 @@ export const PaymentsFilters = memo(({
         onSearchChange("");
         onStatusChange("all");
         onCurrencyChange("all");
+        onDateFromChange("");
+        onDateToChange("");
         setSelectedPresetId("default");
     };
 
@@ -170,6 +180,10 @@ export const PaymentsFilters = memo(({
                         <option value="all">All Statuses</option>
                         <option value="pending">Pending</option>
                         <option value="confirmed">Confirmed</option>
+                        <option value="partially_paid">Partially Paid</option>
+                        <option value="overpaid">Overpaid</option>
+                        <option value="paid">Paid</option>
+                        <option value="completed">Completed</option>
                         <option value="expired">Expired</option>
                         <option value="failed">Failed</option>
                     </Select>
@@ -183,6 +197,20 @@ export const PaymentsFilters = memo(({
                         <option value="XLM">XLM</option>
                         <option value="EURC">EURC</option>
                     </Select>
+                    <Input
+                        type="date"
+                        className="w-[150px]"
+                        title="From date"
+                        value={dateFrom}
+                        onChange={(e) => onDateFromChange(e.target.value)}
+                    />
+                    <Input
+                        type="date"
+                        className="w-[150px]"
+                        title="To date"
+                        value={dateTo}
+                        onChange={(e) => onDateToChange(e.target.value)}
+                    />
                 </div>
             </div>
         </ListPageFilterBar>
