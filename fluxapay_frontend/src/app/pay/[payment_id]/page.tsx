@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Loader2, XCircle, CheckCircle, AlertCircle } from 'lucide-react';
 import { usePaymentStatus } from '@/hooks/usePaymentStatus';
+import { TxHashLink } from '@/components/TxHashLink';
 import { PaymentQRCode } from '@/components/checkout/PaymentQRCode';
 import { PaymentTimer } from '@/components/checkout/PaymentTimer';
 import { PaymentStatus } from '@/components/checkout/PaymentStatus';
@@ -135,6 +136,20 @@ export default function CheckoutPage() {
             <p className="mb-2 text-lg text-gray-600">
               {t('checkout.confirmedDescription')}
             </p>
+
+            {/* Transaction hash — clickable link to Stellar Expert */}
+            {payment.transactionHash && (
+              <div className="my-6 mx-auto inline-flex flex-col items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-5 py-3">
+                <p className="text-xs font-medium text-green-800">Transaction Hash</p>
+                <TxHashLink
+                  txHash={payment.transactionHash}
+                  truncateStart={10}
+                  truncateEnd={6}
+                  showCopy
+                />
+              </div>
+            )}
+
             <p className="text-sm text-gray-500">{t('checkout.redirecting')}</p>
           </div>
         </div>
