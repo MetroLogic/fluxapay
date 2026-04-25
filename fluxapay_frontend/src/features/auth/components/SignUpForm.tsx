@@ -45,7 +45,7 @@ const signupSchema = (t: AuthTranslator) => yup.object({
   bankCode: yup.string().required(t("validation.bankCodeRequired")),
 });
 
-type SignUpFormData = yup.InferType<typeof signupSchema>;
+type SignUpFormData = yup.InferType<ReturnType<typeof signupSchema>>;
 
 const SignUpForm = () => {
   const router = useRouter();

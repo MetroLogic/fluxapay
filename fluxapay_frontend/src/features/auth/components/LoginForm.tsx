@@ -19,7 +19,7 @@ const loginSchema = (t: AuthTranslator) => yup.object({
   keepLoggedIn: yup.boolean(),
 });
 
-type LoginFormData = yup.InferType<typeof loginSchema>;
+type LoginFormData = yup.InferType<ReturnType<typeof loginSchema>>;
 
 const LoginForm = () => {
   const router = useRouter();

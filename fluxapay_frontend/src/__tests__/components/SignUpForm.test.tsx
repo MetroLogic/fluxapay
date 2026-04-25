@@ -6,19 +6,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { SignUpForm } from '@/features/auth';
 
-vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
-vi.mock('next/image', () => ({
-  default: ({ alt }: { alt: string }) => <img alt={alt} />,
-}));
-vi.mock('@/i18n/routing', () => ({
-  Link: ({ children, href }: { children: React.ReactNode; href: string }) => (
-    <a href={href}>{children}</a>
-  ),
-  useRouter: () => ({ push: vi.fn() }),
-}));
-vi.mock('next-intl', () => ({
-  useTranslations: () => (key: string) => key,
-}));
+// Common mocks handled in setup.tsx
 
 describe('SignUpForm', () => {
   beforeEach(() => {
