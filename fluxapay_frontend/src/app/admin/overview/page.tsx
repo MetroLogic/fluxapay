@@ -9,7 +9,8 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/Badge";
 import { Button, buttonVariants } from "@/components/Button";
-import { MOCK_PAYMENTS } from "@/features/admin/payments/mock-data";
+import { useAdminOverviewStats } from "@/hooks/useAdminOverviewStats";
+import { AlertCircle } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import {
@@ -33,84 +34,55 @@ import {
   YAxis,
 } from "recharts";
 
-// Local type for mixed feed
-type ActivityItem =
-  | { type: "payment"; data: (typeof MOCK_PAYMENTS)[0] }
-  | { type: "signup"; id: string; merchantName: string; createdAt: string };
 
 export default function AdminOverviewPage() {
-  // 1. Calculate Metrics
-  const totalVolume = MOCK_PAYMENTS.reduce((sum, p) => sum + p.amount, 0);
-  const totalMerchants = 124;
-  const activeMerchants = 89;
-  const totalFees = totalVolume * 0.01;
-  const pendingSettlements = 14;
+  const { stats, isLoading, error } = useAdminOverviewStats();
 
-  // 2. Prepare Mixed Activity Feed
-  const signups: ActivityItem[] = [
-    {
-      type: "signup",
-      id: "mer_new_001",
-      merchantName: "Cafe Nero",
-      createdAt: "2025-10-24T09:45:00Z",
-    },
-    {
-      type: "signup",
-      id: "mer_new_002",
-      merchantName: "Digital Arts LLC",
-      createdAt: "2025-10-23T14:15:00Z",
-    },
-  ];
+  if (error) {
+    return (
+      <div className="p-6 flex flex-col items-center justify-center min-h-[400px] text-center space-y-4">
+        <AlertCircle className="w-12 h-12 text-destructive" />
+        <div>
+          <h2 className="text-xl font-bold">Failed to load overview data</h2>
+          <p className="text-muted-foreground mt-2">You might not have the right permissions, or the server is unreachable.</p>
+        </div>
+        <Button onClick={() => window.location.reload()} variant="outline">Try Again</Button>
+      </div>
+    );
+  }
 
-  const paymentActivities: ActivityItem[] = MOCK_PAYMENTS.map((p) => ({
-    type: "payment",
-    data: p,
-  }));
+  if (isLoading || !stats) {
+    return (
+      <div className="p-6 space-y-6">
+        <div className="flex justify-between items-center mb-6">
+          <div className="h-10 w-64 animate-pulse bg-muted rounded-md" />
+          <div className="h-10 w-32 animate-pulse bg-muted rounded-md" />
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="h-[120px] animate-pulse bg-muted rounded-xl" />
+          ))}
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+          <div className="col-span-4 h-[300px] animate-pulse bg-muted rounded-xl" />
+          <div className="col-span-3 h-[300px] animate-pulse bg-muted rounded-xl" />
+        </div>
+        <div className="h-[400px] animate-pulse bg-muted rounded-xl" />
+      </div>
+    );
+  }
 
-  const recentActivity = [...paymentActivities, ...signups]
-    .sort(
-      (a, b) =>
-        new Date(
-          b.type === "payment" ? b.data.createdAt : b.createdAt,
-        ).getTime() -
-        new Date(
-          a.type === "payment" ? a.data.createdAt : a.createdAt,
-        ).getTime(),
-    )
-    .slice(0, 5);
+  const {
+    totalVolume,
+    totalMerchants,
+    activeMerchants,
+    totalFees,
+    pendingSettlements,
+    volumeData,
+    statusChartData,
+    recentActivity,
+  } = stats;
 
-  const statusCounts = MOCK_PAYMENTS.reduce(
-    (acc, p) => {
-      acc[p.status] = (acc[p.status] || 0) + 1;
-      return acc;
-    },
-    {} as Record<string, number>,
-  );
-
-  // 3. Prepare Chart Data
-  const volumeData = [
-    { name: "Day 1", volume: 6500 },
-    { name: "Day 2", volume: 4500 },
-    { name: "Day 3", volume: 7800 },
-    { name: "Day 4", volume: 5200 },
-    { name: "Day 5", volume: 9000 },
-    { name: "Day 6", volume: 8500 },
-    { name: "Day 7", volume: 10000 },
-  ];
-
-  const statusChartData = [
-    {
-      name: "Completed",
-      value: statusCounts["completed"] || 0,
-      color: "#22c55e",
-    }, // green-500
-    {
-      name: "Processing",
-      value: statusCounts["processing"] || 0,
-      color: "#eab308",
-    }, // yellow-500
-    { name: "Failed", value: statusCounts["failed"] || 0, color: "#ef4444" }, // red-500
-  ].filter((d) => d.value > 0);
 
   return (
     <div className="p-6 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -329,7 +301,7 @@ export default function AdminOverviewPage() {
                   <div className="flex flex-col">
                     <span className="font-medium text-sm">
                       {item.type === "payment"
-                        ? item.data.merchantName
+                        ? item.data.merchantName || item.data.merchantId
                         : item.merchantName}
                     </span>
                     <span className="text-xs text-muted-foreground">

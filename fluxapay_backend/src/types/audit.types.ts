@@ -1,4 +1,6 @@
-import { AuditActionType, AuditEntityType, KYCStatus } from '../generated/client';
+import { AuditActionType, AuditEntityType, KYCStatus } from '../generated/client/client';
+
+export { AuditActionType, AuditEntityType, KYCStatus };
 
 export interface AuditLog {
   id: string;
@@ -17,6 +19,9 @@ export interface CreateAuditLogParams {
   entity_id: string;
   details: Record<string, any>;
 }
+
+// Re-export enums for convenience
+export { AuditActionType, AuditEntityType, KYCStatus };
 
 export interface QueryAuditLogsParams {
   dateFrom?: Date;
@@ -55,7 +60,7 @@ export interface ConfigChangeDetails {
 export interface SweepOperationDetails {
   sweep_type: string;
   trigger_reason: string;
-  status?: 'completed' | 'failed';
+  status?: "completed" | "failed";
   statistics?: {
     addresses_swept: number;
     total_amount: string;
@@ -67,10 +72,38 @@ export interface SweepOperationDetails {
 export interface SettlementBatchDetails {
   batch_id: string;
   initiation_reason: string;
-  status?: 'completed' | 'failed';
+  status?: "completed" | "failed";
   transaction_count?: number;
   total_amount?: number;
   currency?: string;
   completed_at?: string;
   failure_reason?: string;
+}
+
+export interface MerchantProfileChangeDetails {
+  merchant_id: string;
+  changed_fields: string[];
+  old_values: Record<string, any>;
+  new_values: Record<string, any>;
+  changed_at: string;
+}
+
+export interface BankAccountChangeDetails {
+  merchant_id: string;
+  action: "created" | "updated";
+  changed_fields: string[];
+  old_values: Record<string, any>;
+  new_values: Record<string, any>;
+  changed_at: string;
+}
+
+export interface ApiKeyRotationDetails {
+  merchant_id: string;
+  rotated_at: string;
+  last_four: string;
+}
+
+export interface WebhookSecretRotationDetails {
+  merchant_id: string;
+  rotated_at: string;
 }

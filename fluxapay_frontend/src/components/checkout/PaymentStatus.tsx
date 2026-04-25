@@ -1,9 +1,11 @@
 'use client';
 
-import { CheckCircle, XCircle, Loader2, AlertTriangle, AlertCircle } from 'lucide-react';
+import { CheckCircle, XCircle, Loader2, AlertCircle } from 'lucide-react';
+import { useTranslations } from 'next-intl';
+import type { PaymentStatus } from '../../types/payment';
 
 interface PaymentStatusProps {
-  status: 'pending' | 'confirmed' | 'expired' | 'failed' | 'partially_paid' | 'overpaid';
+  status: PaymentStatus;
   message?: string;
 }
 
@@ -11,6 +13,8 @@ interface PaymentStatusProps {
  * Component to display payment status with appropriate icons and messages
  */
 export function PaymentStatus({ status, message }: PaymentStatusProps) {
+  const t = useTranslations('payment');
+  
   const getStatusConfig = () => {
     switch (status) {
       case 'confirmed':
@@ -19,8 +23,7 @@ export function PaymentStatus({ status, message }: PaymentStatusProps) {
           iconColor: 'text-green-600',
           bgColor: 'bg-green-50',
           borderColor: 'border-green-200',
-          defaultMessage: 'Payment Confirmed!',
-          ariaLabel: 'Payment status: Payment Confirmed',
+          defaultMessage: t('checkout.confirmed'),
         };
       case 'expired':
         return {
@@ -28,8 +31,7 @@ export function PaymentStatus({ status, message }: PaymentStatusProps) {
           iconColor: 'text-red-600',
           bgColor: 'bg-red-50',
           borderColor: 'border-red-200',
-          defaultMessage: 'Payment Expired',
-          ariaLabel: 'Payment status: Payment Expired',
+          defaultMessage: t('checkout.expiredDescription'), // Wait, en.json has "expired" too.
         };
       case 'failed':
         return {
@@ -37,36 +39,41 @@ export function PaymentStatus({ status, message }: PaymentStatusProps) {
           iconColor: 'text-red-600',
           bgColor: 'bg-red-50',
           borderColor: 'border-red-200',
-          defaultMessage: 'Payment Failed',
-          ariaLabel: 'Payment status: Payment Failed',
+          defaultMessage: t('failed'),
         };
       case 'partially_paid':
         return {
-          icon: AlertTriangle,
+          icon: AlertCircle,
           iconColor: 'text-amber-600',
           bgColor: 'bg-amber-50',
           borderColor: 'border-amber-200',
-          defaultMessage: 'Partial Payment Received',
-          ariaLabel: 'Payment status: Partial Payment Received',
+          defaultMessage: t('checkout.partialReceived'),
         };
       case 'overpaid':
         return {
           icon: AlertCircle,
-          iconColor: 'text-orange-600',
-          bgColor: 'bg-orange-50',
-          borderColor: 'border-orange-200',
-          defaultMessage: 'Overpayment Detected',
-          ariaLabel: 'Payment status: Overpayment Detected',
+          iconColor: 'text-blue-600',
+          bgColor: 'bg-blue-50',
+          borderColor: 'border-blue-200',
+          defaultMessage: t('checkout.overpaymentReceived'),
+        };
+      case 'paid':
+      case 'completed':
+        return {
+          icon: CheckCircle,
+          iconColor: 'text-green-600',
+          bgColor: 'bg-green-50',
+          borderColor: 'border-green-200',
+          defaultMessage: t('status.completed'), // Using common status
         };
       case 'pending':
       default:
         return {
           icon: Loader2,
-          iconColor: 'text-blue-600',
-          bgColor: 'bg-blue-50',
-          borderColor: 'border-blue-200',
-          defaultMessage: 'Waiting for payment...',
-          ariaLabel: 'Payment status: Waiting for payment',
+          iconColor: 'text-[color:var(--checkout-accent)]',
+          bgColor: 'bg-transparent',
+          borderColor: 'border-transparent',
+          defaultMessage: t('waitingForPayment'),
         };
     }
   };
@@ -76,20 +83,26 @@ export function PaymentStatus({ status, message }: PaymentStatusProps) {
   const isPending = status === 'pending';
   const statusMessage = message || config.defaultMessage;
 
+  const pendingStyle = isPending
+    ? ({
+        borderColor: `color-mix(in srgb, var(--checkout-accent) 35%, transparent)`,
+        backgroundColor: `color-mix(in srgb, var(--checkout-accent) 12%, white)`,
+      } as React.CSSProperties)
+    : undefined;
+
   return (
     <div
       role="status"
       aria-live="polite"
-      aria-label={config.ariaLabel}
-      className={`flex flex-col items-center justify-center gap-3 px-6 py-4 rounded-lg border ${config.bgColor} ${config.borderColor}`}
+      aria-label={`Payment status: ${statusMessage}`}
+      className={`flex flex-col items-center justify-center gap-3 rounded-lg border px-6 py-4 ${config.bgColor} ${config.borderColor}`}
+      style={pendingStyle}
     >
       <Icon
         aria-hidden="true"
-        className={`w-8 h-8 ${config.iconColor} ${isPending ? 'animate-spin' : ''}`}
+        className={`h-8 w-8 ${config.iconColor} ${isPending ? 'animate-spin' : ''}`}
       />
-      <p className={`font-semibold ${config.iconColor}`}>
-        {statusMessage}
-      </p>
+      <p className={`font-semibold ${config.iconColor}`}>{statusMessage}</p>
     </div>
   );
 }

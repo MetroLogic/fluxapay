@@ -2,6 +2,12 @@ import type { NextConfig } from "next";
 import path from "node:path";
 
 const nextConfig: NextConfig = {
+  env: {
+    // Expose status page URL to the browser bundle.
+    // Set NEXT_PUBLIC_STATUS_URL in your .env to point at an external
+    // uptime page (e.g. https://status.fluxapay.com). Falls back to /status.
+    NEXT_PUBLIC_STATUS_URL: process.env.NEXT_PUBLIC_STATUS_URL ?? "/status",
+  },
   turbopack: {
     root: __dirname,
     resolveAlias: {

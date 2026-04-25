@@ -1,12 +1,23 @@
-import { PrismaClient } from "../generated/client/client";
+import { PrismaClient, Prisma } from "../generated/client/client";
+import {
+  normalizeCheckoutAccentHex,
+  normalizeCheckoutLogoUrl,
+} from "../utils/checkout-branding.util";
 import bcrypt from "bcrypt";
 import { createOtp, verifyOtp as verifyOtpService } from "./otp.service";
 import { sendOtpEmail } from "./email.service";
+import { sendMerchantOtpSms } from "./smsOtp.service";
 import { isDevEnv } from "../helpers/env.helper";
 import { generateToken } from "../helpers/jwt.helper";
 import { merchantRegistryService } from "./merchantRegistry.service";
-import { generateApiKey, hashKey, getLastFour } from "../helpers/crypto.helper";
+import { generateApiKey, generateWebhookSecret, hashKey, getLastFour } from "../helpers/crypto.helper";
 import * as crypto from "crypto";
+import {
+  logMerchantProfileUpdate,
+  logBankAccountChange,
+  logApiKeyRotation,
+  logWebhookSecretRotation,
+} from "./audit.service";
 
 const prisma = new PrismaClient();
 
@@ -132,7 +143,11 @@ export async function resendOtpMerchantService(data: {
 
 
   const otp = await createOtp(merchantId, channel);
-  if (channel === "email") await sendOtpEmail(merchant.email, otp);
+  if (channel === "email") {
+    await sendOtpEmail(merchant.email, otp);
+  } else {
+    await sendMerchantOtpSms(merchantId, merchant.phone_number, otp);
+  }
 
   return { message: "OTP resent" };
 }
@@ -155,6 +170,7 @@ export async function getMerchantUserService(data: {
     merchant: {
       ...merchantData,
       api_key_masked: apiKeyMasked,
+      api_key_last_four: merchant.api_key_last_four,
     }
   };
 }
@@ -176,6 +192,9 @@ export async function regenerateApiKeyService(data: {
     },
   });
 
+  // Audit log: API key rotation
+  logApiKeyRotation({ merchantId, lastFour: apiKeyLastFour }).catch(() => {});
+
   return { message: "API key regenerated", apiKey };
 }
 
@@ -183,4 +202,125 @@ export async function rotateApiKeyService(data: {
   merchantId: string;
 }) {
   return regenerateApiKeyService(data); // Same logic as regenerate
+}
+
+export async function updateMerchantProfileService(data: {
+  merchantId: string;
+  business_name?: string;
+  email?: string;
+}) {
+  const { merchantId, ...updateData } = data;
+
+  // Fetch old values for audit log
+  const existing = await prisma.merchant.findUnique({
+    where: { id: merchantId },
+    select: { business_name: true, email: true },
+  });
+
+  const merchant = await prisma.merchant.update({
+    where: { id: merchantId },
+    data: updateData,
+  });
+
+  // Audit log: profile change
+  if (existing) {
+    const changedFields = Object.keys(updateData).filter(
+      (k) => (updateData as any)[k] !== (existing as any)[k],
+    );
+    if (changedFields.length > 0) {
+      const oldValues: Record<string, any> = {};
+      const newValues: Record<string, any> = {};
+      for (const field of changedFields) {
+        oldValues[field] = (existing as any)[field];
+        newValues[field] = (updateData as any)[field];
+      }
+      logMerchantProfileUpdate({ merchantId, changedFields, oldValues, newValues }).catch(() => {});
+    }
+  }
+
+  return { message: "Profile updated", merchant };
+}
+
+export async function updateMerchantWebhookService(data: {
+  merchantId: string;
+  webhook_url: string;
+}) {
+  const { merchantId, webhook_url } = data;
+  await prisma.merchant.update({
+    where: { id: merchantId },
+    data: { webhook_url },
+  });
+  return { message: "Webhook URL updated", webhook_url };
+}
+
+export async function rotateWebhookSecretService(data: {
+  merchantId: string;
+}) {
+  const { merchantId } = data;
+  const newSecret = crypto.randomBytes(32).toString("hex");
+  await prisma.merchant.update({
+    where: { id: merchantId },
+    data: { webhook_secret: newSecret },
+  });
+
+  // Audit log: webhook secret rotation (value is never logged)
+  logWebhookSecretRotation({ merchantId }).catch(() => {});
+
+  return { message: "Webhook secret rotated", webhook_secret: newSecret };
+}
+
+export async function updateSettlementScheduleService(data: {
+  merchantId: string;
+  settlement_schedule: "daily" | "weekly";
+  settlement_day?: number;
+}) {
+  const { merchantId, settlement_schedule, settlement_day } = data;
+  await prisma.merchant.update({
+    where: { id: merchantId },
+    data: { settlement_schedule, settlement_day },
+  });
+  return { message: "Settlement schedule updated", settlement_schedule, settlement_day };
+}
+
+export async function addBankAccountService(data: {
+  merchantId: string;
+  account_name: string;
+  account_number: string;
+  bank_name: string;
+  bank_code?: string;
+  currency: string;
+  country: string;
+}) {
+  const { merchantId, ...bankData } = data;
+
+  // Fetch existing bank account for audit diff
+  const existing = await prisma.bankAccount.findUnique({
+    where: { merchantId },
+  });
+
+  const bankAccount = await prisma.bankAccount.upsert({
+    where: { merchantId },
+    create: { merchantId, ...bankData },
+    update: bankData,
+  });
+
+  // Audit log: bank account created or updated
+  const action = existing ? "updated" : "created";
+  const changedFields = existing
+    ? Object.keys(bankData).filter((k) => (bankData as any)[k] !== (existing as any)[k])
+    : Object.keys(bankData);
+
+  const oldValues: Record<string, any> = {};
+  const newValues: Record<string, any> = {};
+  for (const field of changedFields) {
+    oldValues[field] = existing ? (existing as any)[field] : null;
+    // Mask account number in audit log
+    newValues[field] = field === "account_number"
+      ? `****${String((bankData as any)[field]).slice(-4)}`
+      : (bankData as any)[field];
+  }
+
+  logBankAccountChange({ merchantId, action, changedFields, oldValues, newValues }).catch(() => {});
+
+  return { message: "Bank account updated", bankAccount };
 }

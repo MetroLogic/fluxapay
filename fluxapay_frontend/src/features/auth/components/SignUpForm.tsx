@@ -2,11 +2,12 @@
 
 import React, { useState } from "react";
 import toast from "react-hot-toast";
+import { toastApiError } from "@/lib/toastApiError";
 import Image from "next/image";
 import * as yup from "yup";
 import Input from "@/components/Input";
 import { Button } from "@/components/Button";
-import { Link } from "@/i18n/routing";
+import { Link, useRouter } from "@/i18n/routing";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 import {
@@ -24,27 +25,28 @@ const COUNTRIES = [
   { code: "KE", name: "Kenya", currency: "KES", Icon: KE },
 ];
 
-const signupSchema = yup.object({
-  name: yup.string().required("Name is required"),
-  businessName: yup.string().required("Business name is required"),
+const signupSchema = (t: any) => yup.object({
+  name: yup.string().required(t("validation.nameRequired")),
+  businessName: yup.string().required(t("validation.businessNameRequired")),
   email: yup
     .string()
-    .email("Please enter a valid email address")
-    .required("Email is required"),
+    .email(t("validation.emailInvalid"))
+    .required(t("validation.emailRequired")),
   password: yup
     .string()
-    .min(6, "Password must be at least 6 characters")
-    .required("Password is required"),
-  country: yup.string().required("Country is required"),
-  settlementCurrency: yup.string().required("Settlement currency is required"),
-  accountNumber: yup.string().required("Account number is required"),
-  bankName: yup.string().required("Bank name is required"),
-  bankCode: yup.string().required("Bank code is required"),
+    .min(6, t("validation.passwordMin"))
+    .required(t("validation.passwordRequired")),
+  country: yup.string().required(t("validation.countryRequired")),
+  settlementCurrency: yup.string().required(t("validation.currencyRequired")),
+  accountNumber: yup.string().required(t("validation.accountNumberRequired")),
+  bankName: yup.string().required(t("validation.bankNameRequired")),
+  bankCode: yup.string().required(t("validation.bankCodeRequired")),
 });
 
 type SignUpFormData = yup.InferType<typeof signupSchema>;
 
 const SignUpForm = () => {
+  const router = useRouter();
   const tAuth = useTranslations("auth");
   const [formData, setFormData] = useState<SignUpFormData>({
     name: "",
@@ -75,17 +77,9 @@ const SignUpForm = () => {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-
+    setFormData((prev) => ({ ...prev, [name]: value }));
     if (errors[name as keyof typeof errors]) {
-      setErrors((prev) => ({
-        ...prev,
-        [name]: "",
-      }));
+      setErrors((prev) => ({ ...prev, [name]: "" }));
     }
   };
 
@@ -96,28 +90,27 @@ const SignUpForm = () => {
       country: value,
       settlementCurrency: selectedCountry?.currency || "",
     }));
-
-    setErrors((prev) => ({
-      ...prev,
-      country: "",
-      settlementCurrency: "",
-    }));
+    setErrors((prev) => ({ ...prev, country: "", settlementCurrency: "" }));
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     try {
-      const validData = await signupSchema.validate(formData, {
-        abortEarly: false,
-      });
+      const validData = await signupSchema(tAuth).validate(formData, { abortEarly: false });
 
       setErrors({});
       setIsSubmitting(true);
 
-      await api.auth.signup(validData);
+      const response = await api.auth.signup(validData);
 
-      toast.success("Signup successful!");
+      toast.success(tAuth("signupSuccess"));
+      
+      if (response.merchantId) {
+        router.push(
+          `/verify-otp?merchantId=${response.merchantId}&channel=email`,
+        );
+      }
     } catch (err) {
       if (err instanceof yup.ValidationError) {
         const fieldErrors: {
@@ -131,22 +124,16 @@ const SignUpForm = () => {
           bankName?: string;
           bankCode?: string;
         } = {};
-
         err.inner.forEach((issue) => {
           if (issue.path && !fieldErrors[issue.path as keyof SignUpFormData]) {
             fieldErrors[issue.path as keyof SignUpFormData] = issue.message;
           }
         });
-
         setErrors(fieldErrors);
         return;
       }
 
-      const message =
-        err instanceof Error
-          ? err.message
-          : "Unable to create your account right now. Please try again.";
-      toast.error(message);
+      toastApiError(err);
     } finally {
       setIsSubmitting(false);
     }
@@ -165,7 +152,7 @@ const SignUpForm = () => {
       </div>
       <div className="flex h-screen w-full items-stretch justify-between gap-0 px-3">
         {/* Card: 40% width */}
-        <div className="flex h-full w-full md:w-[40%] items-center justify-center bg-transparent ">
+        <div className="flex h-full w-full md:w-[40%] items-center justify-center bg-transparent">
           <div className="w-full max-md:max-w-md rounded-none lg:rounded-r-2xl bg-white p-8 shadow-none animate-slide-in-left">
             {/* Form header */}
             <div className="space-y-2 mb-8 animate-fade-in [animation-delay:200ms]">
@@ -173,13 +160,15 @@ const SignUpForm = () => {
                 {tAuth("signup")}
               </h1>
               <p className="text-sm md:text-[18px] font-normal text-muted-foreground">
-                Please signup to get started.
+                {tAuth("signupPrompt")}
               </p>
             </div>
 
             {/* Form */}
             <form
               onSubmit={handleSubmit}
+              aria-label="Sign up form"
+              noValidate
               className="space-y-5 animate-fade-in [animation-delay:200ms]"
             >
               {/* Name */}
@@ -190,7 +179,7 @@ const SignUpForm = () => {
                   label={tAuth("fullName")}
                   value={formData.name}
                   onChange={handleChange}
-                  placeholder="Your name"
+                  placeholder={tAuth("fullNamePlaceholder")}
                   error={errors.name}
                 />
               </div>
@@ -203,7 +192,7 @@ const SignUpForm = () => {
                   label={tAuth("businessName")}
                   value={formData.businessName}
                   onChange={handleChange}
-                  placeholder="Business name"
+                  placeholder={tAuth("businessNamePlaceholder")}
                   error={errors.businessName}
                 />
               </div>
@@ -216,7 +205,7 @@ const SignUpForm = () => {
                   label={tAuth("email")}
                   value={formData.email}
                   onChange={handleChange}
-                  placeholder="you@example.com"
+                  placeholder={tAuth("emailSignupPlaceholder")}
                   error={errors.email}
                 />
               </div>
@@ -227,23 +216,23 @@ const SignUpForm = () => {
                   <label id="country-label" className="block text-sm font-medium text-slate-700">
                     {tAuth("country")}
                   </label>
-                  <Select
-                    value={formData.country}
-                    onValueChange={handleCountryChange}
-                  >
+                  <Select value={formData.country} onValueChange={handleCountryChange}>
                     <SelectTrigger
                       aria-labelledby="country-label"
+                      aria-describedby={errors.country ? "country-error" : undefined}
+                      aria-invalid={errors.country ? "true" : undefined}
                       className={cn(
                         "w-full h-[46px] rounded-[10px] border px-4 text-sm bg-white focus:ring-2 focus:ring-[#5649DF] focus:border-[#5649DF]",
-                        errors.country ? "border-red-500" : "border-[#D9D9D9]"
-                      )}>
-                      <SelectValue placeholder="Select Country" />
+                        errors.country ? "border-red-500" : "border-[#D9D9D9]",
+                      )}
+                    >
+                      <SelectValue placeholder={tAuth("selectCountry")} />
                     </SelectTrigger>
                     <SelectContent>
                       {COUNTRIES.map((country) => (
                         <SelectItem key={country.code} value={country.code}>
                           <div className="flex items-center gap-2">
-                            <country.Icon className="w-4 h-3" />
+                            <country.Icon className="w-4 h-3" aria-hidden="true" />
                             <span>{country.name}</span>
                           </div>
                         </SelectItem>
@@ -251,7 +240,7 @@ const SignUpForm = () => {
                     </SelectContent>
                   </Select>
                   {errors.country && (
-                    <span className="text-xs text-red-500">{errors.country}</span>
+                    <span id="country-error" role="alert" className="text-xs text-red-500">{errors.country}</span>
                   )}
                 </div>
 
@@ -259,10 +248,10 @@ const SignUpForm = () => {
                   <Input
                     type="text"
                     name="settlementCurrency"
-                    label="Currency"
+                    label={tAuth("currencyLabel")}
                     value={formData.settlementCurrency}
                     readOnly
-                    placeholder="Currency"
+                    placeholder={tAuth("currencyLabel")}
                     error={errors.settlementCurrency}
                     className="bg-slate-50 cursor-not-allowed"
                   />
@@ -274,28 +263,28 @@ const SignUpForm = () => {
                 <Input
                   type="text"
                   name="bankName"
-                  label="Bank"
+                  label={tAuth("bankLabel")}
                   value={formData.bankName}
                   onChange={handleChange}
-                  placeholder="Bank Name"
+                  placeholder={tAuth("bankNamePlaceholder")}
                   error={errors.bankName}
                 />
                 <Input
                   type="text"
                   name="bankCode"
-                  label="Code"
+                  label={tAuth("codeLabel")}
                   value={formData.bankCode}
                   onChange={handleChange}
-                  placeholder="Bank Code"
+                  placeholder={tAuth("bankCodePlaceholder")}
                   error={errors.bankCode}
                 />
                 <Input
                   type="text"
                   name="accountNumber"
-                  label="Account"
+                  label={tAuth("accountLabel")}
                   value={formData.accountNumber}
                   onChange={handleChange}
-                  placeholder="Account Number"
+                  placeholder={tAuth("accountNumberPlaceholder")}
                   error={errors.accountNumber}
                 />
               </div>
@@ -309,13 +298,17 @@ const SignUpForm = () => {
                     label={tAuth("password")}
                     value={formData.password}
                     onChange={handleChange}
-                    placeholder="Password"
+                    placeholder={tAuth("passwordPlaceholder")}
                     error={errors.password}
                     className="pr-10 focus:ring-indigo-500 focus:border-indigo-500"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
+                    aria-label={
+                      showPassword ? "Hide concealed characters" : "Show concealed characters"
+                    }
+                    aria-pressed={showPassword}
                     className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-500 transition-colors"
                   >
                     {showPassword ? (
@@ -326,6 +319,7 @@ const SignUpForm = () => {
                         fill="none"
                         stroke="currentColor"
                         strokeWidth="2"
+                        aria-hidden="true"
                       >
                         <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
                         <line x1="1" y1="1" x2="23" y2="23" />
@@ -338,6 +332,7 @@ const SignUpForm = () => {
                         fill="none"
                         stroke="currentColor"
                         strokeWidth="2"
+                        aria-hidden="true"
                       >
                         <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
                         <circle cx="12" cy="12" r="3" />
@@ -351,33 +346,44 @@ const SignUpForm = () => {
               <Button
                 type="submit"
                 disabled={isSubmitting}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-linear-to-r from-[#5649DF] to-violet-500 px-6 py-3 text-sm md:text-[16px] font-semibold text-[#FFFFFF] shadow-md transition hover:shadow-lg hover:from-indigo-600 hover:to-violet-600 disabled:cursor-not-allowed disabled:opacity-70"
+                variant="brand"
+                size="xl"
+                className="w-full rounded-xl font-semibold"
               >
                 {isSubmitting && (
-                  <svg
-                    className="h-5 w-5 animate-spin"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="3"
-                  >
+                  <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
                     <circle cx="12" cy="12" r="10" className="opacity-30" />
                     <path d="M22 12a10 10 0 0 1-10 10" />
                   </svg>
                 )}
-                <span>
-                  {isSubmitting ? "Creating account..." : "Create account"}
-                </span>
+                <span>{isSubmitting ? tAuth("creatingAccount") : tAuth("signup")}</span>
               </Button>
+              <p className="mt-4 text-center text-xs text-slate-500">
+                {tAuth("agreeToTermsSignup")}{" "}
+                <Link
+                  href="/terms"
+                  className="font-medium text-slate-700 hover:text-indigo-600 underline underline-offset-4"
+                >
+                  {tAuth("terms")}
+                </Link>{" "}
+                {tAuth("and")}{" "}
+                <Link
+                  href="/privacy"
+                  className="font-medium text-slate-700 hover:text-indigo-600 underline underline-offset-4"
+                >
+                  {tAuth("privacy")}
+                </Link>
+                .
+              </p>
 
               {/* Have account */}
               <div className="pt-2 text-center text-xs md:text-[18px] text-muted-foreground font-semibold">
-                Already have an account?{" "}
+                {tAuth("hasAccount")}{" "}
                 <Link
                   href="/login"
                   className="font-semibold text-indigo-500 hover:text-indigo-600 underline underline-offset-4 hover:underline"
                 >
-                  Sign in
+                  {tAuth("login")}
                 </Link>
               </div>
             </form>

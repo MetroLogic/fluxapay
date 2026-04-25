@@ -5,6 +5,7 @@ import { WebhookEvent, WebhookStatus } from "./webhooks-mock";
 import { Copy, RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
+import { toastApiError, toastApiErrorWithRetry } from "@/lib/toastApiError";
 import { api } from "@/lib/api";
 
 interface WebhookDetailsProps {
@@ -52,14 +53,14 @@ export const WebhookDetails = ({
                         status: Number(d.http_status ?? 0),
                         body: d.response_body,
                     },
-                    retryHistory: retryAttempts.map((a: any) => ({
+                    retryHistory: retryAttempts.map((a: Record<string, unknown>) => ({
                         timestamp: String(a.timestamp),
                         status: d.status,
                         responseCode: Number(a.http_status ?? 0),
                     })),
                 });
             } catch (e) {
-                if (!cancelled) toast.error(e instanceof Error ? e.message : "Failed to load webhook details");
+                if (!cancelled) toastApiError(e);
             } finally {
                 if (!cancelled) setLoading(false);
             }
@@ -68,6 +69,8 @@ export const WebhookDetails = ({
         return () => {
             cancelled = true;
         };
+        // Intentionally omit `webhook` object: refetch when id or open state changes only.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [webhook?.id, isOpen]);
 
     const handleCopy = (text: string) => {
@@ -220,7 +223,7 @@ export const WebhookDetails = ({
                                     setDetails((prev) => prev ? { ...prev, status: d.status } : prev);
                                 }
                             } catch (e) {
-                                toast.error(e instanceof Error ? e.message : "Retry failed");
+                                toastApiErrorWithRetry(e, () => api.webhooks.retry(webhook.id));
                             } finally {
                                 setLoading(false);
                             }

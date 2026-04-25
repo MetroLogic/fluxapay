@@ -145,6 +145,45 @@ export class LocalKMSProvider implements IKMSProvider {
   }
 
   /**
+   * Rotates the encryption key by re-encrypting the master seed with a new passphrase
+   * Returns the new encrypted seed to be stored in environment
+   */
+  async rotateEncryptionKey(newPassphrase: string): Promise<string> {
+    // 1. Decrypt the current master seed with old key
+    const currentSeed = await this.getMasterSeed();
+
+    // 2. Derive new encryption key from new passphrase
+    const newEncryptionKey = crypto.pbkdf2Sync(
+      newPassphrase,
+      "fluxapay-kms-salt",
+      100000,
+      32,
+      "sha256",
+    );
+
+    // 3. Encrypt the seed with the new key
+    const iv = crypto.randomBytes(16);
+    const cipher = crypto.createCipheriv("aes-256-gcm", newEncryptionKey, iv);
+
+    let encrypted = cipher.update(currentSeed, "utf8", "hex");
+    encrypted += cipher.final("hex");
+
+    const authTag = cipher.getAuthTag();
+
+    const newEncryptedSeed = `${iv.toString("hex")}:${authTag.toString("hex")}:${encrypted}`;
+
+    // 4. Update the internal encryption key to the new one
+    this.encryptionKey = newEncryptionKey;
+    this.cachedSeed = null; // Invalidate cache
+
+    console.log("✅ Encryption key rotated successfully");
+    console.log("New KMS_ENCRYPTED_MASTER_SEED:", newEncryptedSeed);
+    console.log("Update your environment variable with the new value");
+
+    return newEncryptedSeed;
+  }
+
+  /**
    * Local KMS is always "healthy" if the key is derived
    */
   async healthCheck(): Promise<boolean> {

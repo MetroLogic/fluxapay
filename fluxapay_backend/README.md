@@ -110,6 +110,57 @@ Make stablecoin payments simple, practical, and accessible so merchants can sell
 Contributions are welcome!  
 Open an issue or submit a PR to help build Fluxapay.
 
+### API Documentation & Testing
+
+FluxaPay uses OpenAPI 3.0.0 for API documentation. We enforce contract testing to ensure docs stay in sync with implementation.
+
+**Quick Start:**
+```bash
+# Validate OpenAPI spec
+npm run validate:openapi
+
+# Check route documentation coverage
+npm run check:route-coverage
+
+# Run contract tests
+npm run test:contract
+```
+
+**Learn more:** See [docs/OPENAPI_CONTRACT_TESTING.md](docs/OPENAPI_CONTRACT_TESTING.md) for complete guide on documenting endpoints and understanding contract tests.
+
 ## Telegram link
 
 https://t.me/+m23gN14007w0ZmQ0
+
+## Security Hardening Notes
+
+Backend responses now use Helmet defaults plus route-specific CSP profiles:
+
+- API routes use strict CSP: `default-src 'none'; frame-ancestors 'none'; base-uri 'none'`
+- Swagger docs route uses a relaxed CSP needed by Swagger UI.
+
+For reverse proxy deployments, see:
+
+- `docs/REVERSE_PROXY_SECURITY_HEADERS.md`
+
+## Payment Metadata Guardrails
+
+Create payment metadata is now protected with configurable abuse controls:
+
+- `PAYMENT_METADATA_MAX_BYTES` (default: `16384`)
+- `PAYMENT_METADATA_MAX_DEPTH` (default: `5`)
+
+User-provided string fields in metadata are sanitized to strip HTML/script content before storage.
+
+## Stellar Congestion Fee Strategy
+
+Transaction submission now retries with bounded fee bumps. Configuration:
+
+- `STELLAR_BASE_FEE` (default: `100`)
+- `STELLAR_MAX_FEE` (default: `2000`)
+- `STELLAR_FEE_BUMP_MULTIPLIER` (default: `2`)
+- `STELLAR_TX_MAX_RETRIES` (default: `3`)
+
+Details are documented in:
+
+- `docs/STELLAR_FEE_BUMP_STRATEGY.md`

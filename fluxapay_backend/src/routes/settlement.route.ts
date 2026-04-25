@@ -6,22 +6,24 @@ import {
     exportSettlement,
     getSettlementBatch,
 } from "../controllers/settlement.controller";
-import { authenticateToken } from "../middleware/auth.middleware";
+import { authenticateApiKey } from "../middleware/apiKeyAuth.middleware";
+import { merchantApiKeyRateLimit } from "../middleware/rateLimit.middleware";
 import { validate } from "../middleware/validation.middleware";
 import * as settlementSchema from "../schemas/settlement.schema";
 
 const router = Router();
 
-router.use(authenticateToken);
+router.use(authenticateApiKey);
+router.use(merchantApiKeyRateLimit());
 
 /**
  * @swagger
- * /api/settlements:
+ * /api/v1/settlements:
  *   get:
  *     summary: List settlements
  *     tags: [Settlements]
  *     security:
- *       - bearerAuth: []
+ *       - apiKeyAuth: []
  *     parameters:
  *       - in: query
  *         name: page
@@ -60,12 +62,12 @@ router.get("/", validate(settlementSchema.listSettlementsSchema), listSettlement
 
 /**
  * @swagger
- * /api/settlements/summary:
+ * /api/v1/settlements/summary:
  *   get:
  *     summary: Get settlement summary
  *     tags: [Settlements]
  *     security:
- *       - bearerAuth: []
+ *       - apiKeyAuth: []
  *     parameters:
  *       - in: query
  *         name: month
@@ -83,12 +85,12 @@ router.get("/summary", validate(settlementSchema.settlementSummarySchema), getSe
 
 /**
  * @swagger
- * /api/settlements/batch:
+ * /api/v1/settlements/batch:
  *   get:
  *     summary: Get settlement batch summary by scheduled date
  *     tags: [Settlements]
  *     security:
- *       - bearerAuth: []
+ *       - apiKeyAuth: []
  *     parameters:
  *       - in: query
  *         name: date_from
@@ -108,7 +110,7 @@ router.get("/batch", validate(settlementSchema.settlementBatchSchema), getSettle
 
 /**
  * @swagger
- * /api/settlements/{settlement_id}:
+ * /api/v1/settlements/{settlement_id}:
  *   get:
  *     summary: Get settlement details
  *     tags: [Settlements]
@@ -130,7 +132,7 @@ router.get("/:settlement_id", validate(settlementSchema.settlementDetailsSchema)
 
 /**
  * @swagger
- * /api/settlements/{settlement_id}/export:
+ * /api/v1/settlements/{settlement_id}/export:
  *   get:
  *     summary: Export settlement report
  *     tags: [Settlements]

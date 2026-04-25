@@ -15,6 +15,9 @@ const envSchema = z.object({
     BASE_URL: z.string().url().default('http://localhost:3000'),
     PAY_CHECKOUT_BASE: z.string().url().optional(),
     PAYMENT_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(5),
+    PAYMENT_METADATA_MAX_BYTES: z.coerce.number().int().positive().default(16384),
+    PAYMENT_METADATA_MAX_DEPTH: z.coerce.number().int().positive().default(5),
+    CORS_ORIGINS: z.string().optional(),
 
     // Database (CRITICAL)
     DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
@@ -30,18 +33,39 @@ const envSchema = z.object({
     // Email (optional)
     RESEND_API_KEY: z.string().optional(),
 
+    // SMS OTP (optional) — SMS_PROVIDER: none | mock | twilio | messagebird
+    SMS_PROVIDER: z
+      .enum(['none', 'mock', 'twilio', 'messagebird'])
+      .default('none'),
+    TWILIO_ACCOUNT_SID: z.string().optional(),
+    TWILIO_AUTH_TOKEN: z.string().optional(),
+    TWILIO_FROM_NUMBER: z.string().optional(),
+    MESSAGEBIRD_API_KEY: z.string().optional(),
+    MESSAGEBIRD_ORIGINATOR: z.string().optional(),
+    OTP_SMS_MAX_PER_MERCHANT_HOUR: z.coerce.number().int().positive().default(10),
+    OTP_SMS_COST_ALERT_DAILY_THRESHOLD: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(1000),
+
     // Webhook
     WEBHOOK_SECRET: z.string().optional(),
 
     // Stellar (CRITICAL)
     STELLAR_HORIZON_URL: z.string().url().default('https://horizon-testnet.stellar.org'),
     STELLAR_NETWORK_PASSPHRASE: z.string().default('Test SDF Network ; September 2015'),
+    STELLAR_BASE_FEE: z.coerce.number().int().positive().default(100),
+    STELLAR_MAX_FEE: z.coerce.number().int().positive().default(2000),
+    STELLAR_FEE_BUMP_MULTIPLIER: z.coerce.number().positive().default(2),
+    STELLAR_TX_MAX_RETRIES: z.coerce.number().int().positive().default(3),
     FUNDER_SECRET_KEY: z.string().min(1, 'FUNDER_SECRET_KEY is required'),
     USDC_ISSUER_PUBLIC_KEY: z.string().min(1, 'USDC_ISSUER_PUBLIC_KEY is required'),
     MASTER_VAULT_SECRET_KEY: z.string().min(1, 'MASTER_VAULT_SECRET_KEY is required'),
     FUNDER_PUBLIC_KEY: z.string().optional(),
     SWEEP_ENABLE_ACCOUNT_MERGE: z.enum(['true', 'false']).default('false'),
     SWEEP_CRON: z.string().default('*/5 * * * *'),
+    SWEEP_LOCK_TTL_MS: z.coerce.number().int().positive().default(600000),
 
     // KMS Configuration (CRITICAL)
     KMS_PROVIDER: z.enum(['local', 'aws']).default('local'),
@@ -70,11 +94,29 @@ const envSchema = z.object({
     SETTLEMENT_CRON: z.string().default('0 0 * * *'),
     SETTLEMENT_BATCH_LIMIT: z.coerce.number().int().positive().default(500),
 
+    // Exchange Partner Feature Flags
+    ENABLE_YELLOWCARD_VALIDATION: z.enum(['true', 'false']).default('false'),
+    ENABLE_ANCHOR_VALIDATION: z.enum(['true', 'false']).default('false'),
+
+    // Payment Oracle Configuration
+    ORACLE_POLLING_INTERVAL_MS: z.coerce.number().int().positive().default(30000),
+    ORACLE_MAX_MISSED_POLLS: z.coerce.number().int().positive().default(5),
+    ORACLE_BATCH_SIZE: z.coerce.number().int().positive().default(50),
+    ORACLE_HORIZON_TIMEOUT_MS: z.coerce.number().int().positive().default(10000),
+    ENABLE_SOROBAN_VERIFICATION: z.enum(['true', 'false']).default('false'),
+
     // Cron Jobs
     PAYMENT_MONITOR_CRON: z.string().default('*/2 * * * *'),
     BILLING_CRON: z.string().default('0 1 * * *'),
     FUNDER_MONITOR_CRON: z.string().default('*/10 * * * *'),
     DISABLE_CRON: z.enum(['true', 'false']).default('false'),
+
+    // Checkout expiry reminder
+    CHECKOUT_REMINDER_ENABLED: z.enum(['true', 'false']).default('false'),
+    CHECKOUT_REMINDER_MINUTES: z.coerce.number().int().positive().default(5),
+    CHECKOUT_REMINDER_SEND_WEBHOOK: z.enum(['true', 'false']).default('true'),
+    CHECKOUT_REMINDER_SEND_EMAIL: z.enum(['true', 'false']).default('true'),
+    CHECKOUT_REMINDER_CRON: z.string().default('*/2 * * * *'),
 
     // Admin
     ADMIN_INTERNAL_SECRET: z.string().optional(),
@@ -143,6 +185,24 @@ export function validateEnv(): EnvConfig {
 
     if (config.EXCHANGE_PARTNER === 'anchor' && !config.ANCHOR_API_KEY) {
         conditionalErrors.push('  • ANCHOR_API_KEY is required when EXCHANGE_PARTNER=anchor');
+    }
+
+    if (config.SMS_PROVIDER === 'twilio') {
+        if (!config.TWILIO_ACCOUNT_SID) {
+            conditionalErrors.push('  • TWILIO_ACCOUNT_SID is required when SMS_PROVIDER=twilio');
+        }
+        if (!config.TWILIO_AUTH_TOKEN) {
+            conditionalErrors.push('  • TWILIO_AUTH_TOKEN is required when SMS_PROVIDER=twilio');
+        }
+        if (!config.TWILIO_FROM_NUMBER) {
+            conditionalErrors.push('  • TWILIO_FROM_NUMBER is required when SMS_PROVIDER=twilio');
+        }
+    }
+
+    if (config.SMS_PROVIDER === 'messagebird') {
+        if (!config.MESSAGEBIRD_API_KEY) {
+            conditionalErrors.push('  • MESSAGEBIRD_API_KEY is required when SMS_PROVIDER=messagebird');
+        }
     }
 
     // KMS seed validation

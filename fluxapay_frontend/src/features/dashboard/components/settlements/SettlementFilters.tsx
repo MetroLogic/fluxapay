@@ -1,5 +1,7 @@
 'use client';
 
+import { ListPageFilterBar } from "@/components/data-table";
+
 type Props = {
     status: string;
     currency: string;
@@ -18,8 +20,8 @@ export function SettlementFilters({
     onDateChange,
 }: Props) {
     return (
-        <div className="rounded-xl border bg-card p-4 shadow">
-            <div className="grid gap-4 md:grid-cols-4">
+        <ListPageFilterBar>
+            <div className="grid gap-4 md:grid-cols-4 w-full">
                 {/* Status */}
                 <div>
                     <label className="text-sm font-medium mb-1.5 block">Status</label>
@@ -76,6 +78,6 @@ export function SettlementFilters({
                     />
                 </div>
             </div>
-        </div>
+        </ListPageFilterBar>
     );
 }

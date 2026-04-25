@@ -1,19 +1,20 @@
 import { Router } from "express";
-import { authenticateToken } from "../middleware/auth.middleware";
+import { authenticateApiKey } from "../middleware/apiKeyAuth.middleware";
+import { merchantApiKeyRateLimit } from "../middleware/rateLimit.middleware";
 import { validate, validateQuery } from "../middleware/validation.middleware";
-import { createInvoice, listInvoices } from "../controllers/invoice.controller";
-import { createInvoiceSchema, listInvoicesQuerySchema } from "../schemas/invoice.schema";
+import { createInvoice, listInvoices, getInvoiceById, updateInvoiceStatus, exportInvoice } from "../controllers/invoice.controller";
+import { createInvoiceSchema, listInvoicesQuerySchema, exportInvoiceSchema } from "../schemas/invoice.schema";
 
 const router = Router();
 
 /**
  * @swagger
- * /api/invoices:
+ * /api/v1/invoices:
  *   post:
  *     summary: Create invoice and payment intent
  *     tags: [Invoices]
  *     security:
- *       - bearerAuth: []
+ *       - apiKeyAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -29,7 +30,7 @@ const router = Router();
  *     summary: List merchant invoices
  *     tags: [Invoices]
  *     security:
- *       - bearerAuth: []
+ *       - apiKeyAuth: []
  *     parameters:
  *       - in: query
  *         name: page
@@ -44,11 +45,102 @@ const router = Router();
  *         schema:
  *           type: string
  *           enum: [pending, paid, cancelled, overdue]
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Search invoice number or customer email
  *     responses:
  *       200:
  *         description: Invoices retrieved
  */
-router.post("/", authenticateToken, validate(createInvoiceSchema), createInvoice);
-router.get("/", authenticateToken, validateQuery(listInvoicesQuerySchema), listInvoices);
+router.post("/", authenticateApiKey, merchantApiKeyRateLimit(), validate(createInvoiceSchema), createInvoice);
+router.get("/", authenticateApiKey, merchantApiKeyRateLimit(), validateQuery(listInvoicesQuerySchema), listInvoices);
+
+/**
+ * @swagger
+ * /api/v1/invoices/{invoice_id}:
+ *   get:
+ *     summary: Get invoice by ID
+ *     tags: [Invoices]
+ *     security:
+ *       - apiKeyAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: invoice_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Invoice retrieved
+ *       404:
+ *         description: Invoice not found
+ */
+router.get("/:invoice_id", authenticateApiKey, getInvoiceById);
+
+/**
+ * @swagger
+ * /api/v1/invoices/{invoice_id}/status:
+ *   patch:
+ *     summary: Update invoice status
+ *     tags: [Invoices]
+ *     security:
+ *       - apiKeyAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: invoice_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               status:
+ *                 type: string
+ *                 enum: [pending, paid, cancelled, overdue]
+ *             required:
+ *               - status
+ *     responses:
+ *       200:
+ *         description: Invoice status updated
+ *       400:
+ *         description: Invalid status transition
+ *       404:
+ *         description: Invoice not found
+ */
+router.patch("/:invoice_id/status", authenticateApiKey, updateInvoiceStatus);
+
+/**
+ * @swagger
+ * /api/v1/invoices/{invoice_id}/export:
+ *   get:
+ *     summary: Export invoice in CSV or JSON format
+ *     tags: [Invoices]
+ *     security:
+ *       - apiKeyAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: invoice_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: format
+ *         schema:
+ *           type: string
+ *           enum: [csv, json]
+ *           default: json
+ *     responses:
+ *       200:
+ *         description: Invoice exported
+ *       404:
+ *         description: Invoice not found
+ */
+router.get("/:invoice_id/export", authenticateApiKey, merchantApiKeyRateLimit(), validate(exportInvoiceSchema), exportInvoice);
 
 export default router;

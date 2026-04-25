@@ -49,12 +49,16 @@ export const getLoggedInMerchant = createController(
 );
 
 export const updateMerchantProfile = createController(
-  async (body: { business_name?: string; email?: string }, req: AuthRequest) => {
+  async (body: Record<string, unknown>, req: AuthRequest) => {
     const merchantId = await validateUserId(req);
+    const { params: _p, query: _q, ...profile } = body;
 
     return updateMerchantProfileService({
       merchantId,
-      ...body,
+      ...(profile as Omit<
+        Parameters<typeof updateMerchantProfileService>[0],
+        "merchantId"
+      >),
     });
   },
 );
@@ -160,6 +164,54 @@ export async function adminUpdateMerchantStatus(req: Request, res: Response) {
     });
 
     res.json({ message: "Merchant status updated", merchant });
+  } catch (err: any) {
+    res.status(500).json({ message: err.message || "Server error" });
+  }
+}
+
+/** POST /api/merchants/admin/bulk-status – bulk suspend / activate */
+export async function adminBulkUpdateMerchantStatus(req: Request, res: Response) {
+  try {
+    const { merchantIds, status, reason } = req.body as {
+      merchantIds: string[];
+      status: string;
+      reason: string;
+    };
+
+    if (!Array.isArray(merchantIds) || merchantIds.length === 0) {
+      return res.status(400).json({ message: "merchantIds must be a non-empty array" });
+    }
+    if (!["active", "suspended"].includes(status)) {
+      return res.status(400).json({ message: "status must be active or suspended" });
+    }
+    if (!reason || reason.trim().length < 3) {
+      return res.status(400).json({ message: "reason is required" });
+    }
+
+    const results: { id: string; success: boolean; error?: string }[] = [];
+
+    for (const id of merchantIds) {
+      try {
+        await adminPrisma.merchant.update({
+          where: { id },
+          data: { status },
+          select: { id: true },
+        });
+        results.push({ id, success: true });
+      } catch (err: any) {
+        results.push({ id, success: false, error: err.message || "Update failed" });
+      }
+    }
+
+    const succeeded = results.filter((r) => r.success).length;
+    const failed = results.filter((r) => !r.success);
+
+    res.json({
+      message: `${succeeded} of ${merchantIds.length} merchants updated`,
+      results,
+      succeeded,
+      failed,
+    });
   } catch (err: any) {
     res.status(500).json({ message: err.message || "Server error" });
   }
