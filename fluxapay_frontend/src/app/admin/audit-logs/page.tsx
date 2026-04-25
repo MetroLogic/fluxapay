@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
     Search,
     Filter,
@@ -12,12 +12,14 @@ import {
     AlertCircle,
     ChevronLeft,
     ChevronRight,
-    Loader2
+    Loader2,
+    Eye,
+    X,
+    Clock
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import EmptyState from '@/components/EmptyState';
 import { api } from '@/lib/api';
-import { useEffect, useCallback } from 'react';
 
 // -- Enums & Constants --
 
@@ -54,6 +56,63 @@ interface AuditLogEntry {
     entity_id: string | null;
     details: unknown;
 }
+
+// -- Components --
+
+const DetailsModal = ({ log, onClose }: { log: AuditLogEntry; onClose: () => void }) => {
+    if (!log) return null;
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col animate-in fade-in zoom-in duration-200">
+                <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+                    <h3 className="font-bold text-slate-900 flex items-center gap-2">
+                        <Activity className="w-5 h-5 text-slate-500" />
+                        Action Details
+                    </h3>
+                    <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
+                        <X className="w-5 h-5 text-slate-500" />
+                    </button>
+                </div>
+                <div className="p-6 overflow-y-auto space-y-6">
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Timestamp</p>
+                            <p className="text-sm font-medium text-slate-700">{new Date(log.created_at).toLocaleString()}</p>
+                        </div>
+                        <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Admin ID</p>
+                            <p className="text-sm font-mono text-slate-700 truncate" title={log.admin_id}>{log.admin_id}</p>
+                        </div>
+                        <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Action Type</p>
+                            <p className="text-sm font-medium text-slate-700">{ACTION_MAP[log.action_type] || log.action_type}</p>
+                        </div>
+                        <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Resource</p>
+                            <p className="text-sm font-medium text-slate-700">{log.entity_type || 'N/A'}: {log.entity_id || 'N/A'}</p>
+                        </div>
+                    </div>
+
+                    <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Raw Payload / Details</p>
+                        <pre className="bg-slate-900 text-slate-100 p-4 rounded-xl text-xs font-mono overflow-x-auto whitespace-pre-wrap">
+                            {JSON.stringify(log.details, null, 2)}
+                        </pre>
+                    </div>
+                </div>
+                <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 text-right">
+                    <button 
+                        onClick={onClose}
+                        className="px-6 py-2 bg-slate-900 text-white rounded-lg font-medium hover:bg-slate-800 transition-colors"
+                    >
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 // -- Helper Functions --
 
@@ -103,6 +162,9 @@ export default function AdminAuditLogsPage() {
     const [loading, setLoading] = useState(true);
     const [actionFilter, setActionFilter] = useState('all');
     const [adminIdFilter, setAdminIdFilter] = useState('');
+    const [dateFrom, setDateFrom] = useState('');
+    const [dateTo, setDateTo] = useState('');
+    const [selectedLog, setSelectedLog] = useState<AuditLogEntry | null>(null);
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
     const limit = 20;
@@ -115,6 +177,8 @@ export default function AdminAuditLogsPage() {
                 limit,
                 action_type: actionFilter === 'all' ? undefined : actionFilter,
                 admin_id: adminIdFilter || undefined,
+                date_from: dateFrom || undefined,
+                date_to: dateTo || undefined,
             });
 
             if (response.success) {
@@ -127,7 +191,7 @@ export default function AdminAuditLogsPage() {
         } finally {
             setLoading(false);
         }
-    }, [page, actionFilter, adminIdFilter]);
+    }, [page, actionFilter, adminIdFilter, dateFrom, dateTo]);
 
     useEffect(() => {
         fetchLogs();
@@ -171,7 +235,7 @@ export default function AdminAuditLogsPage() {
                                 className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors flex items-center gap-2"
                              >
                                 <Download className="w-4 h-4" />
-                                Export
+                                Export CSV
                              </button>
                         </div>
                     </div>
@@ -182,14 +246,15 @@ export default function AdminAuditLogsPage() {
                 
                 {/* Filters */}
                 <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 mb-6">
-                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                        <div className="flex-1">
+                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-end">
+                        <div className="lg:col-span-1">
+                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Search Admin</label>
                             <div className="relative">
                                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-5 h-5" />
                                 <input
                                     type="text"
-                                    placeholder="Search by Admin ID..."
-                                    className="w-full pl-10 pr-4 py-3 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-300 focus:border-transparent transition-shadow"
+                                    placeholder="Admin ID or Email..."
+                                    className="w-full pl-10 pr-4 py-2.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900/5 focus:border-slate-900 transition-all shadow-sm"
                                     value={adminIdFilter}
                                     onChange={(e) => {
                                         setAdminIdFilter(e.target.value);
@@ -199,11 +264,12 @@ export default function AdminAuditLogsPage() {
                             </div>
                         </div>
 
-                        <div className="flex items-center gap-3">
-                            <div className="flex items-center gap-2">
-                                <Filter className="w-4 h-4 text-slate-500" />
+                        <div className="lg:col-span-1">
+                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Action Type</label>
+                            <div className="relative">
+                                <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none" />
                                 <select
-                                    className="px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-300 focus:border-transparent bg-white"
+                                    className="w-full pl-10 pr-4 py-2.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900/5 focus:border-slate-900 bg-white appearance-none"
                                     value={actionFilter}
                                     onChange={(e) => {
                                         setActionFilter(e.target.value);
@@ -211,16 +277,44 @@ export default function AdminAuditLogsPage() {
                                     }}
                                 >
                                     <option value="all">All Actions</option>
-                                    <option value="kyc_approve">KYC Approval</option>
-                                    <option value="kyc_reject">KYC Rejection</option>
-                                    <option value="config_change">Config Change</option>
-                                    <option value="sweep_trigger">Sweep Trigger</option>
-                                    <option value="sweep_complete">Sweep Complete</option>
-                                    <option value="sweep_fail">Sweep Failure</option>
-                                    <option value="settlement_batch_initiate">Settlement Start</option>
-                                    <option value="settlement_batch_complete">Settlement Complete</option>
-                                    <option value="settlement_batch_fail">Settlement Failure</option>
+                                    {Object.entries(ACTION_MAP).map(([val, label]) => (
+                                        <option key={val} value={val}>{label}</option>
+                                    ))}
                                 </select>
+                            </div>
+                        </div>
+
+                        <div className="lg:col-span-1">
+                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">From Date</label>
+                            <div className="relative">
+                                <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none" />
+                                <input
+                                    type="date"
+                                    className="w-full pl-10 pr-4 py-2.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900/5 focus:border-slate-900"
+                                    value={dateFrom}
+                                    max={dateTo}
+                                    onChange={(e) => {
+                                        setDateFrom(e.target.value);
+                                        setPage(1);
+                                    }}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="lg:col-span-1">
+                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">To Date</label>
+                            <div className="relative">
+                                <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none" />
+                                <input
+                                    type="date"
+                                    className="w-full pl-10 pr-4 py-2.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900/5 focus:border-slate-900"
+                                    value={dateTo}
+                                    min={dateFrom}
+                                    onChange={(e) => {
+                                        setDateTo(e.target.value);
+                                        setPage(1);
+                                    }}
+                                />
                             </div>
                         </div>
                     </div>
@@ -247,8 +341,8 @@ export default function AdminAuditLogsPage() {
                                     <th className="px-6 py-4 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
                                         Status
                                     </th>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                                        Details
+                                    <th className="px-6 py-4 text-right text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                                        Action
                                     </th>
                                 </tr>
                             </thead>
@@ -272,20 +366,19 @@ export default function AdminAuditLogsPage() {
                                             <tr key={log.id} className="hover:bg-slate-50/50 transition-colors">
                                                 <td className="px-6 py-4 whitespace-nowrap">
                                                     <div className="flex items-center gap-2 text-sm text-slate-600">
-                                                        <Calendar className="w-4 h-4 text-slate-400" />
+                                                        <Clock className="w-4 h-4 text-slate-400" />
                                                         {formatDate(log.created_at)}
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
                                                     <div className="flex items-center gap-3">
                                                         <div
-                                                            className="w-8 h-8 rounded-full flex items-center justify-center bg-slate-100 text-slate-600 font-medium text-xs"
+                                                            className="w-8 h-8 rounded-full flex items-center justify-center bg-slate-900 text-white font-bold text-[10px]"
                                                         >
-                                                            {log.admin_id.charAt(0)}
+                                                            {log.admin_id.charAt(0).toUpperCase()}
                                                         </div>
                                                         <div>
-                                                            <p className="text-sm font-medium text-slate-900">{log.admin_id}</p>
-                                                            <p className="text-xs text-slate-500 text-clip overflow-hidden w-32" title={log.admin_id}>{log.admin_id}</p>
+                                                            <p className="text-sm font-medium text-slate-900 truncate w-32" title={log.admin_id}>{log.admin_id}</p>
                                                         </div>
                                                     </div>
                                                 </td>
@@ -296,22 +389,30 @@ export default function AdminAuditLogsPage() {
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
-                                                    <span className="font-mono text-xs text-slate-600 bg-slate-100 px-2 py-1 rounded">
-                                                        {log.entity_type}: {log.entity_id}
-                                                    </span>
+                                                    {log.entity_type ? (
+                                                        <span className="font-mono text-[10px] text-slate-600 bg-slate-100 px-2 py-1 rounded">
+                                                            {log.entity_type}: {log.entity_id}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-slate-400 text-xs">—</span>
+                                                    )}
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
                                                     <span
-                                                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium ${statusConfig.bg} ${statusConfig.color} ${statusConfig.border}`}
+                                                        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${statusConfig.bg} ${statusConfig.color} border ${statusConfig.border}`}
                                                     >
                                                         {statusConfig.icon}
                                                         {statusConfig.label}
                                                     </span>
                                                 </td>
-                                                <td className="px-6 py-4">
-                                                    <p className="text-sm text-slate-600 max-w-xs truncate" title={JSON.stringify(log.details)}>
-                                                        {JSON.stringify(log.details)}
-                                                    </p>
+                                                <td className="px-6 py-4 text-right">
+                                                    <button 
+                                                        onClick={() => setSelectedLog(log)}
+                                                        className="p-2 text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-all"
+                                                        title="View Details"
+                                                    >
+                                                        <Eye className="w-5 h-5" />
+                                                    </button>
                                                 </td>
                                             </tr>
                                         );
@@ -325,26 +426,36 @@ export default function AdminAuditLogsPage() {
                 {/* Pagination */}
                 <div className="mt-6 flex items-center justify-between">
                     <p className="text-sm text-slate-500">
-                        Page <span className="font-medium text-slate-900">{page}</span> of <span className="font-medium text-slate-900">{totalPages}</span>
+                        Showing page <span className="font-bold text-slate-900">{page}</span> of <span className="font-bold text-slate-900">{totalPages}</span>
                     </p>
                     <div className="flex items-center gap-2">
                         <button
                             disabled={page === 1 || loading}
                             onClick={() => setPage(prev => prev - 1)}
-                            className="p-2 border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors"
+                            className="flex items-center gap-2 px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors text-sm font-medium"
                         >
-                            <ChevronLeft className="w-5 h-5" />
+                            <ChevronLeft className="w-4 h-4" />
+                            Previous
                         </button>
                         <button
                             disabled={page === totalPages || loading}
                             onClick={() => setPage(prev => prev + 1)}
-                            className="p-2 border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors"
+                            className="flex items-center gap-2 px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors text-sm font-medium"
                         >
-                            <ChevronRight className="w-5 h-5" />
+                            Next
+                            <ChevronRight className="w-4 h-4" />
                         </button>
                     </div>
                 </div>
             </div>
+
+            {/* Details Modal */}
+            {selectedLog && (
+                <DetailsModal 
+                    log={selectedLog} 
+                    onClose={() => setSelectedLog(null)} 
+                />
+            )}
         </div>
     );
 }
