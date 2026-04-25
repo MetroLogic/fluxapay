@@ -5,6 +5,7 @@ import toast from "react-hot-toast";
 import { toastApiError } from "@/lib/toastApiError";
 import Image from "next/image";
 import { Link, useRouter } from "@/i18n/routing";
+import { useSearchParams } from "next/navigation";
 import * as yup from "yup";
 import Input from "@/components/Input";
 import { Button } from "@/components/Button";
@@ -21,6 +22,7 @@ type LoginFormData = yup.InferType<typeof loginSchema>;
 
 const LoginForm = () => {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const tAuth = useTranslations("auth");
   const [formData, setFormData] = useState<LoginFormData>({ email: "", password: "", keepLoggedIn: false });
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({ email: "", password: "" });
@@ -54,7 +56,15 @@ const LoginForm = () => {
 
       storeToken(data.token, Boolean(validData.keepLoggedIn));
       toast.success(data.message || "Login successful!");
-      router.push("/dashboard");
+      
+      const redirectUrl = searchParams.get("redirect");
+      if (redirectUrl) {
+        // We use window.location.href here because redirectUrl might contain the locale
+        // and using router.push with next-intl can sometimes double-prefix or strip it.
+        window.location.href = redirectUrl;
+      } else {
+        router.push("/dashboard");
+      }
     } catch (err) {
       if (err instanceof ApiError) {
         toast.error(err.message);
