@@ -73,11 +73,11 @@ export const ForgotPasswordForm = () => {
         <div className="flex h-full w-full md:w-[40%] items-center justify-center bg-transparent">
           <div className="w-full max-w-md rounded-none lg:rounded-r-2xl bg-white p-8 shadow-none animate-slide-in-left">
             <div className="space-y-2 mb-8 animate-fade-in [animation-delay:200ms]">
-              <h1 className="text-2xl md:text-[40px] font-bold text-black tracking-tight">Reset Password</h1>
+              <h1 className="text-2xl md:text-[40px] font-bold text-black tracking-tight">{tAuth("resetPassword")}</h1>
               <p className="text-sm md:text-[18px] font-normal text-muted-foreground">
                 {isSuccess 
-                  ? "We have sent a password reset link to your email." 
-                  : "Enter your email address and we will send you a link to reset your password."}
+                  ? tAuth("resetLinkSent")
+                  : tAuth("forgotPasswordDescription")}
               </p>
             </div>
 
@@ -97,7 +97,7 @@ export const ForgotPasswordForm = () => {
                     setEmail(e.target.value);
                     if (error) setError("");
                   }}
-                  placeholder="test@gmail.com"
+                  placeholder={tAuth("emailPlaceholder")}
                   error={error}
                   disabled={isSubmitting || cooldown > 0}
                 />
@@ -124,16 +124,16 @@ export const ForgotPasswordForm = () => {
                 )}
                 <span>
                   {isSubmitting 
-                    ? "Sending..." 
+                    ? tAuth("sending") 
                     : cooldown > 0 
-                      ? `Send again in ${cooldown}s` 
-                      : "Send Reset Link"}
+                      ? tAuth("sendAgainIn", { seconds: cooldown }) 
+                      : tAuth("sendResetLink")}
                 </span>
               </Button>
 
               <div className="pt-4 text-center text-xs md:text-[16px] text-muted-foreground font-semibold">
-                Remember your password?{" "}
-                <Link href="/login" className="font-semibold text-indigo-500 hover:text-indigo-600 underline underline-offset-4">Sign in</Link>
+                {tAuth("rememberPassword")}{" "}
+                <Link href="/login" className="font-semibold text-indigo-500 hover:text-indigo-600 underline underline-offset-4">{tAuth("login")}</Link>
               </div>
             </form>
           </div>

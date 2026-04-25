@@ -1,4 +1,4 @@
-import { PrismaClient, Prisma } from "../generated/client/client";
+import { PrismaClient, Prisma, InvoiceStatus } from "../generated/client/client";
 import crypto from "crypto";
 
 const prisma = new PrismaClient();
@@ -23,7 +23,10 @@ export async function createInvoiceService(params: {
   const { merchantId, amount, currency, customer_email, metadata, due_date } = params;
   const metadataJson = (metadata ?? {}) as Prisma.InputJsonValue;
 
+  // Create payment first
   const paymentId = crypto.randomUUID();
+  const checkoutBase = process.env.PAY_CHECKOUT_BASE || process.env.BASE_URL || "http://localhost:3000";
+  const checkout_url = `${checkoutBase.replace(/\/$/, "")}/pay/${paymentId}`;
 
   const payment = await prisma.payment.create({
     data: {
@@ -35,7 +38,7 @@ export async function createInvoiceService(params: {
       metadata: metadataJson,
       expiration: due_date ? new Date(due_date) : new Date(Date.now() + 15 * 60 * 1000),
       status: "pending",
-      checkout_url: `/pay/${paymentId}`,
+      checkout_url,
     },
   });
 
@@ -76,13 +79,21 @@ export async function listInvoicesService(params: {
   page: number;
   limit: number;
   status?: "pending" | "paid" | "cancelled" | "overdue";
+  search?: string;
 }) {
-  const { merchantId, page, limit, status } = params;
+  const { merchantId, page, limit, status, search } = params;
   const skip = (page - 1) * limit;
 
-  const where: Record<string, unknown> = { merchantId };
+  const where: Prisma.InvoiceWhereInput = { merchantId };
   if (status) {
     where.status = status;
+  }
+  const q = search?.trim();
+  if (q) {
+    where.OR = [
+      { invoice_number: { contains: q, mode: "insensitive" } },
+      { customer_email: { contains: q, mode: "insensitive" } },
+    ];
   }
 
   const [invoices, total] = await Promise.all([
@@ -95,16 +106,106 @@ export async function listInvoicesService(params: {
     prisma.invoice.count({ where }),
   ]);
 
+  const totalPages = Math.max(1, Math.ceil(total / limit) || 1);
+
   return {
     message: "Invoices retrieved",
+    data: { invoices },
+    meta: {
+      page,
+      limit,
+      total,
+      total_pages: totalPages,
+    },
+  };
+}
+
+export async function getInvoiceByIdService(
+  merchantId: string,
+  invoiceId: string
+) {
+  const invoice = await prisma.invoice.findUnique({
+    where: { id: invoiceId, merchantId },
+    include: { payment: true },
+  });
+
+  if (!invoice) {
+    throw new Error("Invoice not found");
+  }
+
+  return {
+    message: "Invoice retrieved",
     data: {
-      invoices,
-      pagination: {
-        page,
-        limit,
-        total,
-        total_pages: Math.ceil(total / limit),
-      },
+      id: invoice.id,
+      invoice_number: invoice.invoice_number,
+      amount: Number(invoice.amount),
+      currency: invoice.currency,
+      customer_email: invoice.customer_email,
+      status: invoice.status,
+      due_date: invoice.due_date,
+      created_at: invoice.created_at,
+      metadata: invoice.metadata,
+      payment_id: invoice.payment_id,
+      payment_link: invoice.payment_link,
+      payment: invoice.payment
+        ? {
+            id: invoice.payment.id,
+            amount: Number(invoice.payment.amount),
+            currency: invoice.payment.currency,
+            status: invoice.payment.status,
+            customer_email: invoice.payment.customer_email,
+            created_at: invoice.payment.createdAt,
+            checkout_url: invoice.payment.checkout_url,
+          }
+        : null,
+    },
+  };
+}
+
+export async function updateInvoiceStatusService(
+  merchantId: string,
+  invoiceId: string,
+  newStatus: string
+) {
+  // Validate status transition
+  const validStatuses = ["pending", "paid", "cancelled", "overdue"];
+  if (!validStatuses.includes(newStatus)) {
+    throw new Error("Invalid status");
+  }
+
+  const invoice = await prisma.invoice.findUnique({
+    where: { id: invoiceId, merchantId },
+  });
+
+  if (!invoice) {
+    throw new Error("Invoice not found");
+  }
+
+  // Check if status transition is valid
+  const currentStatus = invoice.status;
+  const validTransitions: Record<string, string[]> = {
+    pending: ["paid", "cancelled", "overdue"],
+    paid: [], // Paid is terminal
+    cancelled: [], // Cancelled is terminal
+    overdue: ["paid", "cancelled"], // Overdue can be paid or cancelled
+  };
+
+  if (!validTransitions[currentStatus]?.includes(newStatus)) {
+    throw new Error("Invalid status transition");
+  }
+
+  const updatedInvoice = await prisma.invoice.update({
+    where: { id: invoiceId },
+    data: { status: newStatus as InvoiceStatus },
+  });
+
+  return {
+    message: "Invoice status updated",
+    data: {
+      id: updatedInvoice.id,
+      invoice_number: updatedInvoice.invoice_number,
+      status: updatedInvoice.status,
+      updated_at: updatedInvoice.updated_at,
     },
   };
 }
@@ -167,13 +268,13 @@ export async function exportInvoiceService(
       },
       payment: payment
         ? {
-            id: payment.id,
-            amount: Number(payment.amount),
-            currency: payment.currency,
-            status: payment.status,
-            customer_email: payment.customer_email,
-            created_at: payment.createdAt,
-          }
+          id: payment.id,
+          amount: Number(payment.amount),
+          currency: payment.currency,
+          status: payment.status,
+          customer_email: payment.customer_email,
+          created_at: payment.createdAt,
+        }
         : null,
     },
     contentType: "application/json",

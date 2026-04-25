@@ -12,6 +12,8 @@ export const listInvoicesQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(100).default(10),
   status: z.enum(["pending", "paid", "cancelled", "overdue"]).optional(),
+  /** Search invoice number or customer email (case-insensitive) */
+  search: z.string().trim().max(200).optional(),
 });
 
 export const exportInvoiceSchema = z.object({

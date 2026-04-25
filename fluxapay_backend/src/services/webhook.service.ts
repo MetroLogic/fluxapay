@@ -1,6 +1,7 @@
 import { PrismaClient, WebhookEventType, WebhookStatus, Payment, Merchant } from "../generated/client/client";
 import crypto from "crypto";
 import { webhookEventTypes } from "../schemas/webhook.schema";
+import { normalizeEventName, toLegacyEventName } from "../utils/webhook-event-mapping.util";
 
 export class WebhookDispatcher {
   private prisma: PrismaClient;
@@ -15,8 +16,16 @@ export class WebhookDispatcher {
       return;
     }
 
+    if (!merchant.webhook_secret) {
+      console.error(`[WebhookDispatcher] No webhook_secret configured for merchant ${merchant.id}. Skipping.`);
+      return;
+    }
+
+    const timestamp = new Date().toISOString();
     const payload = JSON.stringify({
       event: 'payment.confirmed',
+      event_id: crypto.randomUUID(),
+      timestamp,
       data: {
         payment_id: payment.id,
         amount: payment.amount.toString(),
@@ -26,8 +35,7 @@ export class WebhookDispatcher {
       }
     });
 
-    const secret = process.env.WEBHOOK_SECRET || merchant.webhook_secret || '';
-    const signature = crypto.createHmac('sha256', secret).update(payload).digest('hex');
+    const signature = generateWebhookSignature(JSON.parse(payload), merchant.webhook_secret, timestamp);
 
     let deliveryStatus: 'SUCCESS' | 'FAILED' = 'FAILED';
 
@@ -36,7 +44,8 @@ export class WebhookDispatcher {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-webhook-signature': signature
+          'X-FluxaPay-Signature': signature,
+          'X-FluxaPay-Timestamp': timestamp,
         },
         body: payload,
       });
@@ -247,8 +256,9 @@ export async function retryWebhookService(params: RetryWebhookParams) {
   );
 
   const newRetryCount = log.retry_count + 1;
+  const isPermanentlyFailed = !result.success && newRetryCount >= log.max_retries;
   const newStatus: WebhookStatus = result.success ? "delivered" :
-    newRetryCount >= log.max_retries ? "failed" : "retrying";
+    isPermanentlyFailed ? "failed" : "retrying";
 
   // Create retry attempt record
   await prisma.webhookRetryAttempt.create({
@@ -266,7 +276,7 @@ export async function retryWebhookService(params: RetryWebhookParams) {
     ? new Date(Date.now() + Math.pow(2, newRetryCount) * 60 * 1000)
     : null;
 
-  // Update the webhook log
+  // Update the webhook log — persist DLQ metadata on permanent failure
   const updatedLog = await prisma.webhookLog.update({
     where: { id: log.id },
     data: {
@@ -275,6 +285,10 @@ export async function retryWebhookService(params: RetryWebhookParams) {
       http_status: result.httpStatus,
       response_body: result.responseBody,
       next_retry_at: nextRetryAt,
+      ...(isPermanentlyFailed && {
+        failed_at: new Date(),
+        failure_reason: result.error || `HTTP ${result.httpStatus || 0}`,
+      }),
     },
   });
 
@@ -287,6 +301,131 @@ export async function retryWebhookService(params: RetryWebhookParams) {
       status: updatedLog.status,
       http_status: updatedLog.http_status,
       retry_count: updatedLog.retry_count,
+      next_retry_at: updatedLog.next_retry_at,
+      failed_at: updatedLog.failed_at,
+      failure_reason: updatedLog.failure_reason,
+    },
+  };
+}
+
+interface GetDeadLetterQueueParams {
+  page: number;
+  limit: number;
+  date_from?: string;
+  date_to?: string;
+  merchant_id?: string;
+}
+
+interface RequeueWebhookParams {
+  log_id: string;
+}
+
+export async function getDeadLetterQueueService(params: GetDeadLetterQueueParams) {
+  const { page, limit, date_from, date_to, merchant_id } = params;
+  const skip = (page - 1) * limit;
+
+  const where: any = {
+    status: "failed",
+    failed_at: { not: null },
+  };
+
+  if (merchant_id) {
+    where.merchantId = merchant_id;
+  }
+
+  if (date_from || date_to) {
+    if (date_from) {
+      where.failed_at.gte = new Date(date_from);
+    }
+    if (date_to) {
+      where.failed_at.lte = new Date(date_to);
+    }
+  }
+
+  const [logs, total] = await Promise.all([
+    prisma.webhookLog.findMany({
+      where,
+      skip,
+      take: limit,
+      orderBy: { failed_at: "desc" },
+      include: {
+        merchant: {
+          select: {
+            business_name: true,
+            email: true,
+          },
+        },
+      },
+    }),
+    prisma.webhookLog.count({ where }),
+  ]);
+
+  return {
+    message: "Dead-letter queue retrieved successfully",
+    data: {
+      logs: logs.map((log: any) => ({
+        id: log.id,
+        merchant_id: log.merchantId,
+        merchant_name: log.merchant?.business_name,
+        merchant_email: log.merchant?.email,
+        event_type: log.event_type,
+        endpoint_url: log.endpoint_url,
+        http_status: log.http_status,
+        status: log.status,
+        event_id: log.event_id,
+        payment_id: log.payment_id,
+        retry_count: log.retry_count,
+        max_retries: log.max_retries,
+        failure_reason: log.failure_reason,
+        failed_at: log.failed_at,
+        request_payload: log.request_payload,
+        created_at: log.created_at,
+        updated_at: log.updated_at,
+      })),
+      pagination: {
+        page,
+        limit,
+        total,
+        total_pages: Math.ceil(total / limit),
+      },
+    },
+  };
+}
+
+export async function requeueWebhookService(params: RequeueWebhookParams) {
+  const { log_id } = params;
+
+  const log = await prisma.webhookLog.findUnique({
+    where: { id: log_id },
+  });
+
+  if (!log) {
+    throw { status: 404, message: "Webhook log not found" };
+  }
+
+  if (log.status !== "failed") {
+    throw { status: 400, message: "Only failed webhooks can be requeued" };
+  }
+
+  const updatedLog = await prisma.webhookLog.update({
+    where: { id: log.id },
+    data: {
+      status: "pending",
+      retry_count: 0,
+      max_retries: log.max_retries + 3,
+      failed_at: null,
+      failure_reason: null,
+      next_retry_at: new Date(),
+    },
+  });
+
+  return {
+    message: "Webhook requeued for delivery",
+    data: {
+      id: updatedLog.id,
+      status: updatedLog.status,
+      retry_count: updatedLog.retry_count,
+      max_retries: updatedLog.max_retries,
       next_retry_at: updatedLog.next_retry_at,
     },
   };
@@ -418,23 +557,39 @@ function generateTestPayload(
   override?: Record<string, any>,
   eventId?: string,
 ): Record<string, any> {
+  const canonicalEventType = normalizeEventName(eventType as any);
+
   const basePayload = {
     event_id: eventId ?? crypto.randomUUID(),
     webhook_id: `test_${Date.now()}`,
-    event_type: eventType,
+    event_type: canonicalEventType,
     timestamp: new Date().toISOString(),
     test_mode: true,
   };
 
   const eventPayloads: Record<string, Record<string, any>> = {
-    payment_completed: {
+    'payment.created': {
       payment_id: `pay_test_${Date.now()}`,
       amount: 100.00,
       currency: "USD",
-      status: "completed",
+      status: "created",
       customer_email: "test@example.com",
     },
-    payment_failed: {
+    'payment.pending': {
+      payment_id: `pay_test_${Date.now()}`,
+      amount: 100.00,
+      currency: "USD",
+      status: "pending",
+      customer_email: "test@example.com",
+    },
+    'payment.confirmed': {
+      payment_id: `pay_test_${Date.now()}`,
+      amount: 100.00,
+      currency: "USD",
+      status: "confirmed",
+      customer_email: "test@example.com",
+    },
+    'payment.failed': {
       payment_id: `pay_test_${Date.now()}`,
       amount: 100.00,
       currency: "USD",
@@ -442,21 +597,28 @@ function generateTestPayload(
       failure_reason: "Insufficient funds",
       customer_email: "test@example.com",
     },
-    payment_pending: {
+    'payment.settled': {
       payment_id: `pay_test_${Date.now()}`,
       amount: 100.00,
       currency: "USD",
-      status: "pending",
+      status: "settled",
       customer_email: "test@example.com",
     },
-    refund_completed: {
+    'refund.created': {
+      refund_id: `ref_test_${Date.now()}`,
+      payment_id: `pay_test_${Date.now()}`,
+      amount: 50.00,
+      currency: "USD",
+      status: "created",
+    },
+    'refund.completed': {
       refund_id: `ref_test_${Date.now()}`,
       payment_id: `pay_test_${Date.now()}`,
       amount: 50.00,
       currency: "USD",
       status: "completed",
     },
-    refund_failed: {
+    'refund.failed': {
       refund_id: `ref_test_${Date.now()}`,
       payment_id: `pay_test_${Date.now()}`,
       amount: 50.00,
@@ -464,21 +626,88 @@ function generateTestPayload(
       status: "failed",
       failure_reason: "Refund window expired",
     },
-    subscription_created: {
+    'subscription.created': {
       subscription_id: `sub_test_${Date.now()}`,
       plan_id: "plan_test",
       customer_email: "test@example.com",
       status: "active",
       billing_cycle: "monthly",
     },
-    subscription_cancelled: {
+    'subscription.cancelled': {
       subscription_id: `sub_test_${Date.now()}`,
       plan_id: "plan_test",
       customer_email: "test@example.com",
       status: "cancelled",
       cancelled_at: new Date().toISOString(),
     },
-    subscription_renewed: {
+    'subscription.renewed': {
+      subscription_id: `sub_test_${Date.now()}`,
+      plan_id: "plan_test",
+      customer_email: "test@example.com",
+      status: "active",
+      renewed_at: new Date().toISOString(),
+      next_billing_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+    },
+    // Legacy event names (for backward compatibility)
+    'payment_completed': {
+      payment_id: `pay_test_${Date.now()}`,
+      amount: 100.00,
+      currency: "USD",
+      status: "completed",
+      customer_email: "test@example.com",
+    },
+    'payment_failed': {
+      payment_id: `pay_test_${Date.now()}`,
+      amount: 100.00,
+      currency: "USD",
+      status: "failed",
+      failure_reason: "Insufficient funds",
+      customer_email: "test@example.com",
+    },
+    'payment_pending': {
+      payment_id: `pay_test_${Date.now()}`,
+      amount: 100.00,
+      currency: "USD",
+      status: "pending",
+      customer_email: "test@example.com",
+    },
+    'payment_confirmed': {
+      payment_id: `pay_test_${Date.now()}`,
+      amount: 100.00,
+      currency: "USD",
+      status: "confirmed",
+      customer_email: "test@example.com",
+    },
+    'refund_completed': {
+      refund_id: `ref_test_${Date.now()}`,
+      payment_id: `pay_test_${Date.now()}`,
+      amount: 50.00,
+      currency: "USD",
+      status: "completed",
+    },
+    'refund_failed': {
+      refund_id: `ref_test_${Date.now()}`,
+      payment_id: `pay_test_${Date.now()}`,
+      amount: 50.00,
+      currency: "USD",
+      status: "failed",
+      failure_reason: "Refund window expired",
+    },
+    'subscription_created': {
+      subscription_id: `sub_test_${Date.now()}`,
+      plan_id: "plan_test",
+      customer_email: "test@example.com",
+      status: "active",
+      billing_cycle: "monthly",
+    },
+    'subscription_cancelled': {
+      subscription_id: `sub_test_${Date.now()}`,
+      plan_id: "plan_test",
+      customer_email: "test@example.com",
+      status: "cancelled",
+      cancelled_at: new Date().toISOString(),
+    },
+    'subscription_renewed': {
       subscription_id: `sub_test_${Date.now()}`,
       plan_id: "plan_test",
       customer_email: "test@example.com",
@@ -491,7 +720,7 @@ function generateTestPayload(
   return {
     ...basePayload,
     data: {
-      ...eventPayloads[eventType],
+      ...eventPayloads[canonicalEventType],
       ...override,
     },
   };

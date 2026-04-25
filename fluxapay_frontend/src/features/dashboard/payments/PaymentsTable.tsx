@@ -1,5 +1,5 @@
 import { Badge } from "@/components/Badge";
-import EmptyState from "@/components/EmptyState";
+import { DataTableBodyState } from "@/components/data-table";
 import { Payment, PaymentStatus } from "./payments-mock";
 import { ChevronDown, ChevronUp, Copy, Eye } from "lucide-react";
 import { useState, useMemo, memo, useCallback } from "react";
@@ -7,6 +7,8 @@ import { useState, useMemo, memo, useCallback } from "react";
 interface PaymentsTableProps {
   payments: Payment[];
   onRowClick: (payment: Payment) => void;
+  isLoading?: boolean;
+  error?: string | null;
 }
 
 interface SortIconProps {
@@ -123,7 +125,12 @@ const PaymentRow = memo(({ payment, onRowClick }: PaymentRowProps) => {
 });
 PaymentRow.displayName = "PaymentRow";
 
-export const PaymentsTable = ({ payments, onRowClick }: PaymentsTableProps) => {
+export const PaymentsTable = ({
+  payments,
+  onRowClick,
+  isLoading = false,
+  error = null,
+}: PaymentsTableProps) => {
   const [sortConfig, setSortConfig] = useState<{
     key: keyof Payment;
     direction: "asc" | "desc";
@@ -150,7 +157,7 @@ export const PaymentsTable = ({ payments, onRowClick }: PaymentsTableProps) => {
   }, [payments, sortConfig]);
 
   return (
-    <div className="rounded-xl border bg-card overflow-hidden">
+    <div className="bg-card overflow-hidden">
       <div className="overflow-x-auto">
         <table className="w-full text-sm text-left">
           <thead>
@@ -191,21 +198,28 @@ export const PaymentsTable = ({ payments, onRowClick }: PaymentsTableProps) => {
             </tr>
           </thead>
           <tbody className="divide-y">
-            {sortedPayments.length === 0 ? (
-              <EmptyState
-                colSpan={7}
-                className="px-4 py-12 text-muted-foreground"
-                message="No payments found matching your filters."
-              />
-            ) : (
-              sortedPayments.map((payment) => (
+            <DataTableBodyState
+              colSpan={7}
+              state={
+                error
+                  ? "error"
+                  : isLoading
+                    ? "loading"
+                    : sortedPayments.length === 0
+                      ? "empty"
+                      : "ready"
+              }
+              errorMessage={error ?? undefined}
+              emptyMessage="No payments found matching your filters."
+            >
+              {sortedPayments.map((payment) => (
                 <PaymentRow
                   key={payment.id}
                   payment={payment}
                   onRowClick={onRowClick}
                 />
-              ))
-            )}
+              ))}
+            </DataTableBodyState>
           </tbody>
         </table>
       </div>

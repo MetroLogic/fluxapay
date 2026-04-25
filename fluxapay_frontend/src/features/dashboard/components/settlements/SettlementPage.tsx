@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { DollarSign, TrendingUp, Clock, Calendar } from "lucide-react";
 
+import { DataTableCard } from "@/components/data-table";
 import { StatCard } from "./StatCard";
 import { SettlementFilters } from "./SettlementFilters";
 import { SettlementsTable } from "./SettlementsTable";
@@ -81,18 +82,24 @@ export default function SettlementsPage() {
         />
       </div>
 
-      {/* Filters */}
-      <SettlementFilters
-        status={status}
-        currency={currency}
-        date={date}
-        onStatusChange={setStatus}
-        onCurrencyChange={setCurrency}
-        onDateChange={setDate}
-      />
-
-      {/* Table */}
-      <SettlementsTable settlements={filtered} onSelect={setSelected} />
+      <DataTableCard
+        toolbar={
+          <SettlementFilters
+            status={status}
+            currency={currency}
+            date={date}
+            onStatusChange={setStatus}
+            onCurrencyChange={setCurrency}
+            onDateChange={setDate}
+          />
+        }
+      >
+        <SettlementsTable
+          settlements={filtered}
+          onSelect={setSelected}
+          isLoading={isLoading}
+        />
+      </DataTableCard>
 
       {/* Modal */}
       {selected && (

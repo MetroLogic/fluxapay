@@ -342,12 +342,12 @@ export const api = {
       if (params?.currency) sp.set("currency", params.currency);
       if (params?.date_from) sp.set("date_from", params.date_from);
       if (params?.date_to) sp.set("date_to", params.date_to);
-      return fetchWithAuth(`/api/settlements?${sp.toString()}`);
+      return fetchWithAuth(`/api/v1/settlements?${sp.toString()}`);
     },
-    summary: () => fetchWithAuth("/api/settlements/summary"),
-    getById: (id: string) => fetchWithAuth(`/api/settlements/${id}`),
+    summary: () => fetchWithAuth("/api/v1/settlements/summary"),
+    getById: (id: string) => fetchWithAuth(`/api/v1/settlements/${id}`),
     export: (settlementId: string, format: "pdf" | "csv" = "pdf") =>
-      fetchWithAuth(`/api/settlements/${settlementId}/export?format=${format}`),
+      fetchWithAuth(`/api/v1/settlements/${settlementId}/export?format=${format}`),
     exportRange: async (params: {
       date_from?: string;
       date_to?: string;
@@ -358,7 +358,7 @@ export const api = {
       if (params.date_to) sp.set("date_to", params.date_to);
       sp.set("format", params.format || "csv");
       const response = await fetch(
-        `${API_BASE_URL}/api/settlements/export?${sp.toString()}`,
+        `${API_BASE_URL}/api/v1/settlements/export?${sp.toString()}`,
         { headers: { Authorization: `Bearer ${getToken()}` } },
       );
       if (!response.ok) {
@@ -532,16 +532,31 @@ export const api = {
         body: JSON.stringify(data),
       }),
 
-    list: (params?: {
+    list: async (params?: {
       page?: number;
       limit?: number;
       status?: string;
+      search?: string;
     }) => {
       const sp = new URLSearchParams();
       if (params?.page != null) sp.set("page", String(params.page));
       if (params?.limit != null) sp.set("limit", String(params.limit));
       if (params?.status && params.status !== "all") sp.set("status", params.status);
-      return fetchWithAuth(`/api/v1/invoices?${sp.toString()}`);
+      if (params?.search?.trim()) sp.set("search", params.search.trim());
+      const raw = (await fetchWithAuth(
+        `/api/v1/invoices?${sp.toString()}`,
+      )) as {
+        data?: { invoices?: unknown[] };
+        meta?: { page: number; limit: number; total: number; total_pages?: number };
+      };
+      return {
+        invoices: raw.data?.invoices ?? [],
+        meta: raw.meta ?? {
+          page: params?.page ?? 1,
+          limit: params?.limit ?? 10,
+          total: 0,
+        },
+      };
     },
 
     getById: (invoiceId: string) => fetchWithAuth(`/api/v1/invoices/${invoiceId}`),
@@ -572,17 +587,20 @@ export const api = {
       if (params?.search) sp.set("search", params.search);
       if (params?.page != null) sp.set("page", String(params.page));
       if (params?.limit != null) sp.set("limit", String(params.limit));
-      return fetchWithAuth(`/api/webhooks/logs?${sp.toString()}`);
+      return fetchWithAuth(`/api/v1/webhooks/logs?${sp.toString()}`);
     },
-    logDetails: (logId: string) => fetchWithAuth(`/api/webhooks/logs/${logId}`),
+    logDetails: (logId: string) => fetchWithAuth(`/api/v1/webhooks/logs/${logId}`),
     retry: (logId: string) =>
-      fetchWithAuth(`/api/webhooks/logs/${logId}/retry`, { method: "POST" }),
+      fetchWithAuth(`/api/v1/webhooks/logs/${logId}/retry`, { method: "POST" }),
     sendTest: (data: {
       event_type: string;
       endpoint_url: string;
       payload_override?: Record<string, unknown>;
     }) =>
-      fetchWithAuth("/api/webhooks/test", { method: "POST", body: JSON.stringify(data) }),
+      fetchWithAuth("/api/v1/webhooks/test", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
   },
 
   // Dashboard overview
@@ -592,21 +610,21 @@ export const api = {
       if (params?.from) sp.set("from", params.from);
       if (params?.to) sp.set("to", params.to);
       const q = sp.toString();
-      return fetchWithAuth(`/api/dashboard/overview/metrics${q ? `?${q}` : ""}`);
+      return fetchWithAuth(`/api/v1/dashboard/overview/metrics${q ? `?${q}` : ""}`);
     },
     charts: (params?: { from?: string; to?: string }) => {
       const sp = new URLSearchParams();
       if (params?.from) sp.set("from", params.from);
       if (params?.to) sp.set("to", params.to);
       const q = sp.toString();
-      return fetchWithAuth(`/api/dashboard/overview/charts${q ? `?${q}` : ""}`);
+      return fetchWithAuth(`/api/v1/dashboard/overview/charts${q ? `?${q}` : ""}`);
     },
     activity: (params?: { from?: string; to?: string }) => {
       const sp = new URLSearchParams();
       if (params?.from) sp.set("from", params.from);
       if (params?.to) sp.set("to", params.to);
       const q = sp.toString();
-      return fetchWithAuth(`/api/dashboard/overview/activity${q ? `?${q}` : ""}`);
+      return fetchWithAuth(`/api/v1/dashboard/overview/activity${q ? `?${q}` : ""}`);
     },
   },
 

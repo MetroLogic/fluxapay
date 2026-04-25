@@ -1,5 +1,13 @@
 import { PrismaClient } from '@prisma/client';
 import { Horizon } from '@stellar/stellar-sdk';
+import { PaymentStatus } from '../../types/payment';
+
+// Jest globals
+declare const jest: any;
+declare const describe: any;
+declare const it: any;
+declare const expect: any;
+declare const beforeEach: any;
 
 // Mock dependencies
 jest.mock('@prisma/client', () => {
@@ -15,7 +23,7 @@ jest.mock('@prisma/client', () => {
 });
 
 jest.mock('@stellar/stellar-sdk', () => ({
-  Asset: jest.fn().mockImplementation((code, issuer) => ({ code, issuer })),
+  Asset: jest.fn().mockImplementation((code: string, issuer: string) => ({ code, issuer })),
   Horizon: {
     Server: jest.fn().mockImplementation(() => ({
       payments: jest.fn().mockReturnThis(),
@@ -47,7 +55,7 @@ describe('PaymentMonitor Service Logic', () => {
         stellar_address: 'GTEST123',
         last_paging_token: '12345',
         amount: 100,
-        status: 'pending',
+        status: PaymentStatus.PENDING,
       };
 
       mockPrisma.payment.findMany.mockResolvedValue([mockPayment]);
@@ -56,7 +64,7 @@ describe('PaymentMonitor Service Logic', () => {
       // Simulate the monitor logic
       const payments = await mockPrisma.payment.findMany({
         where: {
-          status: 'pending',
+          status: PaymentStatus.PENDING,
           expiration: { gt: new Date() },
           stellar_address: { not: null },
         },
@@ -85,7 +93,7 @@ describe('PaymentMonitor Service Logic', () => {
         stellar_address: 'GTEST123',
         last_paging_token: null,
         amount: 100,
-        status: 'pending',
+        status: PaymentStatus.PENDING,
       };
 
       mockPrisma.payment.findMany.mockResolvedValue([mockPayment]);
@@ -94,7 +102,7 @@ describe('PaymentMonitor Service Logic', () => {
       // Simulate the monitor logic
       const payments = await mockPrisma.payment.findMany({
         where: {
-          status: 'pending',
+          status: PaymentStatus.PENDING,
           expiration: { gt: new Date() },
           stellar_address: { not: null },
         },
@@ -123,7 +131,7 @@ describe('PaymentMonitor Service Logic', () => {
         stellar_address: 'GTEST123',
         last_paging_token: null,
         amount: 100,
-        status: 'pending',
+        status: PaymentStatus.PENDING,
       };
 
       const mockTransactionRecord = {
@@ -148,7 +156,7 @@ describe('PaymentMonitor Service Logic', () => {
       const now = new Date();
       const payments = await mockPrisma.payment.findMany({
         where: {
-          status: { in: ['pending', 'partially_paid'] },
+          status: { in: [PaymentStatus.PENDING, PaymentStatus.PARTIALLY_PAID] },
           expiration: { gt: now },
           stellar_address: { not: null },
         },
@@ -175,7 +183,7 @@ describe('PaymentMonitor Service Logic', () => {
           if (!latestTxHash) latestTxHash = record.transaction_hash;
         }
 
-        let newStatus = usdcBalance >= payment.amount ? 'confirmed' : 'partially_paid';
+        let newStatus = usdcBalance >= payment.amount ? PaymentStatus.CONFIRMED : PaymentStatus.PARTIALLY_PAID;
 
         await mockPrisma.payment.update({
           where: { id: payment.id },
@@ -190,7 +198,7 @@ describe('PaymentMonitor Service Logic', () => {
       expect(mockPrisma.payment.update).toHaveBeenCalledWith({
         where: { id: 'payment_1' },
         data: {
-          status: 'confirmed',
+          status: PaymentStatus.CONFIRMED,
           last_paging_token: '67890',
           transaction_hash: 'tx_1',
         },

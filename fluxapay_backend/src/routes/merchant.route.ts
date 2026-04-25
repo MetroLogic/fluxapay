@@ -22,7 +22,7 @@ import { authenticateApiKey } from "../middleware/apiKeyAuth.middleware";
 import { idempotencyMiddleware } from "../middleware/idempotency.middleware";
 import { adminAuth } from "../middleware/adminAuth.middleware";
 import { updateSettlementScheduleSchema, bankAccountSchema } from "../schemas/merchant.schema";
-import { authRateLimit, merchantRateLimit } from "../middleware/rateLimit.middleware";
+import { authRateLimit, merchantApiKeyRateLimit, merchantRateLimit } from "../middleware/rateLimit.middleware";
 
 const router = Router();
 
@@ -180,7 +180,7 @@ router.post("/resend-otp", idempotencyMiddleware, authRateLimit(), validate(merc
  *       404:
  *         description: Merchant not found
  */
-router.get("/me", authenticateApiKey, getLoggedInMerchant);
+router.get("/me", authenticateApiKey, merchantApiKeyRateLimit(), getLoggedInMerchant);
 
 /**
  * @swagger
@@ -209,7 +209,7 @@ router.get("/me", authenticateApiKey, getLoggedInMerchant);
  */
 router.patch(
   "/me",
-  authenticateApiKey,
+  authenticateApiKey, merchantApiKeyRateLimit(),
   validate(merchantSchema.updateMerchantProfileSchema),
   updateMerchantProfile,
 );
@@ -239,7 +239,7 @@ router.patch(
  *       401:
  *         description: Unauthorized
  */
-router.patch("/me/webhook", authenticateApiKey, updateMerchantWebhook);
+router.patch("/me/webhook", authenticateApiKey, merchantApiKeyRateLimit(), updateMerchantWebhook);
 
 
 /**
@@ -263,7 +263,7 @@ router.patch("/me/webhook", authenticateApiKey, updateMerchantWebhook);
  *                 apiKey:
  *                   type: string
  */
-router.post("/keys/rotate-api-key", authenticateApiKey, merchantRateLimit(), rotateApiKey);
+router.post("/keys/rotate-api-key", authenticateApiKey, merchantApiKeyRateLimit(), merchantRateLimit(), rotateApiKey);
 
 /**
  * @swagger
@@ -288,7 +288,7 @@ router.post("/keys/rotate-api-key", authenticateApiKey, merchantRateLimit(), rot
  */
 router.post(
   "/keys/rotate-webhook-secret",
-  authenticateApiKey,
+  authenticateApiKey, merchantApiKeyRateLimit(),
   merchantRateLimit(),
   rotateWebhookSecret,
 );
@@ -439,7 +439,7 @@ router.post("/admin/bulk-status", adminAuth, adminBulkUpdateMerchantStatus);
  */
 router.patch(
   "/me/settlement-schedule",
-  authenticateApiKey,
+  authenticateApiKey, merchantApiKeyRateLimit(),
   validate(updateSettlementScheduleSchema),
   updateSettlementSchedule,
 );
@@ -488,7 +488,7 @@ router.patch(
  */
 router.post(
   "/me/bank-account",
-  authenticateApiKey,
+  authenticateApiKey, merchantApiKeyRateLimit(),
   validate(bankAccountSchema),
   addBankAccount,
 );
