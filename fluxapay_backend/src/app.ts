@@ -81,6 +81,12 @@ app.use(
   swaggerUi.setup(specs),
 );
 
+// Swagger JSON spec
+app.get("/api-docs.json", (req, res) => {
+  res.setHeader("Content-Type", "application/json");
+  res.send(specs);
+});
+
 app.use("/api/v1/merchants", merchantRoutes);
 app.use("/api/v1/settlements", settlementRoutes);
 app.use("/api/v1/merchants/kyc", kycRoutes);
