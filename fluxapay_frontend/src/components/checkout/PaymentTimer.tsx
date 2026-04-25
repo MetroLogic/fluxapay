@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { Clock } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Clock } from 'lucide-react';
 

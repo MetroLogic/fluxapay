@@ -46,15 +46,34 @@ export const Navbar = () => {
 
         {/* Desktop Links */}
         <div className="hidden md:flex items-center gap-8">
-          {navLinks.map((link) => (
-            <Link
-              key={link.name}
-              href={link.href}
-              className="text-lg font-semibold text-grey hover:text-black transition-colors"
-            >
-              {link.name}
-            </Link>
-          ))}
+          {navLinks.map((link) => {
+            const isExternal = link.href.startsWith("http://") || link.href.startsWith("https://");
+            const className = "text-lg font-semibold text-grey hover:text-black transition-colors";
+
+            if (isExternal) {
+              return (
+                <a
+                  key={link.name}
+                  href={link.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={className}
+                >
+                  {link.name}
+                </a>
+              );
+            }
+
+            return (
+              <Link
+                key={link.name}
+                href={link.href}
+                className={className}
+              >
+                {link.name}
+              </Link>
+            );
+          })}
         </div>
 
         {/* Action Buttons */}
@@ -129,17 +148,37 @@ export const Navbar = () => {
         }`}
       >
         <div className="flex flex-col gap-4">
-          {navLinks.map((link) => (
-            <Link
-              key={link.name}
-              href={link.href}
-              onClick={() => setIsOpen(false)}
-              tabIndex={isOpen ? 0 : -1}
-              className="text-lg font-medium text-grey hover:text-black"
-            >
-              {link.name}
-            </Link>
-          ))}
+          {navLinks.map((link) => {
+            const isExternal = link.href.startsWith("http://") || link.href.startsWith("https://");
+            const className = "text-lg font-medium text-grey hover:text-black";
+
+            if (isExternal) {
+              return (
+                <a
+                  key={link.name}
+                  href={link.href}
+                  onClick={() => setIsOpen(false)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={className}
+                >
+                  {link.name}
+                </a>
+              );
+            }
+
+            return (
+              <Link
+                key={link.name}
+                href={link.href}
+                onClick={() => setIsOpen(false)}
+                tabIndex={isOpen ? 0 : -1}
+                className={className}
+              >
+                {link.name}
+              </Link>
+            );
+          })}
           <div className="h-px bg-zinc-100 my-2" aria-hidden="true" />
           <div className="flex flex-col gap-3">
             <LocaleSwitcher />

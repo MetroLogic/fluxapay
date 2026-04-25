@@ -11,7 +11,9 @@ import { Button } from "@/components/Button";
 import { api, ApiError, storeToken } from "@/lib/api";
 import { useTranslations } from "next-intl";
 
-const loginSchema = (t: any) => yup.object({
+type AuthTranslator = (key: string) => string;
+
+const loginSchema = (t: AuthTranslator) => yup.object({
   email: yup.string().email(t("validation.emailInvalid")).required(t("validation.emailRequired")),
   password: yup.string().min(6, t("validation.passwordMin")).required(t("validation.passwordRequired")),
   keepLoggedIn: yup.boolean(),

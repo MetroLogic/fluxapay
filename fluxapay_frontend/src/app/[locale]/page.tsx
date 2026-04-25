@@ -1,6 +1,13 @@
 import { Metadata } from "next";
-import dynamic from "next/dynamic";
 import Hero from "@/features/landing/sections/Hero";
+import {
+  WhyFluxapay,
+  Bridges,
+  GlobalReach,
+  UseCases,
+  FAQ,
+  Footer,
+} from "@/features/landing";
 import {
   organizationSchema,
   softwareApplicationSchema,

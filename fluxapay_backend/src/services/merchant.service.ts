@@ -3,6 +3,7 @@ import {
   normalizeCheckoutAccentHex,
   normalizeCheckoutLogoUrl,
 } from "../utils/checkout-branding.util";
+import { countryMap } from "../utils/country-map.util";
 import bcrypt from "bcrypt";
 import { createOtp, verifyOtp as verifyOtpService } from "./otp.service";
 import { sendOtpEmail } from "./email.service";
@@ -275,11 +276,67 @@ export async function updateSettlementScheduleService(data: {
   settlement_day?: number;
 }) {
   const { merchantId, settlement_schedule, settlement_day } = data;
+
+  const updateData: { settlement_schedule: string; settlement_day: number | null } = {
+    settlement_schedule,
+    // Clear settlement_day when switching to daily so batch logic stays consistent
+    settlement_day: settlement_schedule === "daily" ? null : (settlement_day ?? null),
+  };
+
   await prisma.merchant.update({
     where: { id: merchantId },
-    data: { settlement_schedule, settlement_day },
+    data: updateData,
   });
-  return { message: "Settlement schedule updated", settlement_schedule, settlement_day };
+  return { message: "Settlement schedule updated", settlement_schedule, settlement_day: updateData.settlement_day };
+}
+
+export async function updateBankAccountService(data: {
+  merchantId: string;
+  account_name?: string;
+  account_number?: string;
+  bank_name?: string;
+  bank_code?: string;
+  currency?: string;
+  country?: string;
+}) {
+  const { merchantId, ...updates } = data;
+
+  const existing = await prisma.bankAccount.findUnique({ where: { merchantId } });
+  if (!existing) throw { status: 404, message: 'No bank account found. Use POST /me/bank-account to create one.' };
+
+  // Cross-validate country/currency when both are present after merge
+  const mergedCountry = updates.country ?? existing.country;
+  const mergedCurrency = updates.currency ?? existing.currency;
+  const entry = countryMap.find((x) => x.countryCode === mergedCountry);
+  if (entry && entry.currencyCode !== mergedCurrency) {
+    throw {
+      status: 400,
+      message: `Currency ${mergedCurrency} is not valid for country ${mergedCountry}. Expected ${entry.currencyCode}.`,
+    };
+  }
+
+  const changedFields = Object.keys(updates).filter(
+    (k) => (updates as any)[k] !== undefined && (updates as any)[k] !== (existing as any)[k],
+  );
+
+  const bankAccount = await prisma.bankAccount.update({
+    where: { merchantId },
+    data: updates,
+  });
+
+  if (changedFields.length > 0) {
+    const oldValues: Record<string, any> = {};
+    const newValues: Record<string, any> = {};
+    for (const field of changedFields) {
+      oldValues[field] = (existing as any)[field];
+      newValues[field] = field === 'account_number'
+        ? `****${String((updates as any)[field]).slice(-4)}`
+        : (updates as any)[field];
+    }
+    logBankAccountChange({ merchantId, action: 'updated', changedFields, oldValues, newValues }).catch(() => {});
+  }
+
+  return { message: 'Bank account updated', bankAccount };
 }
 
 export async function addBankAccountService(data: {

@@ -9,6 +9,7 @@ export interface Payment {
   amount: number;
   currency: string;
   status: PaymentStatus;
+  checkoutUrl?: string;
   merchantId: string;
   customerName: string;
   customerEmail: string;

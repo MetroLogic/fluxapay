@@ -25,7 +25,9 @@ const COUNTRIES = [
   { code: "KE", name: "Kenya", currency: "KES", Icon: KE },
 ];
 
-const signupSchema = (t: any) => yup.object({
+type AuthTranslator = (key: string) => string;
+
+const signupSchema = (t: AuthTranslator) => yup.object({
   name: yup.string().required(t("validation.nameRequired")),
   businessName: yup.string().required(t("validation.businessNameRequired")),
   email: yup

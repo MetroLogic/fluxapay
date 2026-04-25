@@ -1,4 +1,4 @@
-import { WebhookDispatcher, createAndDeliverWebhook, deliverWebhook, generateWebhookSignature, getDeadLetterQueueService, requeueWebhookService } from "../webhook.service";
+import { WebhookDispatcher, createAndDeliverWebhook, deliverWebhook, generateWebhookSignature, getDeadLetterQueueService, requeueWebhookService, verifyWebhookTimestamp } from "../webhook.service";
 import { PrismaClient } from "../../generated/client/client";
 
 // Define mock functions inside the factory to avoid jest-hoisting TDZ issues with const
@@ -406,5 +406,32 @@ describe("DLQ services", () => {
     await expect(requeueWebhookService({ log_id: "missing" })).rejects.toEqual(
       expect.objectContaining({ status: 404, message: "Webhook log not found" })
     );
+  });
+});
+
+describe("verifyWebhookTimestamp (replay protection)", () => {
+  it("accepts a timestamp within the default 5-minute window", () => {
+    const ts = new Date(Date.now() - 60_000).toISOString(); // 1 minute ago
+    expect(verifyWebhookTimestamp(ts)).toBe(true);
+  });
+
+  it("rejects a timestamp older than the window", () => {
+    const ts = new Date(Date.now() - 6 * 60_000).toISOString(); // 6 minutes ago
+    expect(verifyWebhookTimestamp(ts)).toBe(false);
+  });
+
+  it("rejects a timestamp in the future", () => {
+    const ts = new Date(Date.now() + 10_000).toISOString(); // 10 seconds ahead
+    expect(verifyWebhookTimestamp(ts)).toBe(false);
+  });
+
+  it("rejects an invalid timestamp string", () => {
+    expect(verifyWebhookTimestamp("not-a-date")).toBe(false);
+  });
+
+  it("respects a custom window", () => {
+    const ts = new Date(Date.now() - 10_000).toISOString(); // 10 seconds ago
+    expect(verifyWebhookTimestamp(ts, 5_000)).toBe(false);  // 5-second window
+    expect(verifyWebhookTimestamp(ts, 30_000)).toBe(true);  // 30-second window
   });
 });

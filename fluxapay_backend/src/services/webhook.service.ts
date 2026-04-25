@@ -556,6 +556,23 @@ export function generateWebhookSignature(
   return crypto.createHmac("sha256", merchantSecret).update(signingString).digest("hex");
 }
 
+/**
+ * Replay protection: returns true only if the webhook timestamp falls within
+ * the allowed window. Default window is 5 minutes (300 000 ms).
+ *
+ * Merchants should call this before processing any incoming webhook to prevent
+ * replay attacks. Combine with event_id deduplication for full protection.
+ */
+export function verifyWebhookTimestamp(
+  timestamp: string,
+  windowMs: number = 5 * 60 * 1000,
+): boolean {
+  const webhookTime = new Date(timestamp).getTime();
+  if (isNaN(webhookTime)) return false;
+  const diff = Date.now() - webhookTime;
+  return diff >= 0 && diff <= windowMs;
+}
+
 // Helper function to generate test payload based on event type
 function generateTestPayload(
   eventType: WebhookEventType,
@@ -783,8 +800,14 @@ export async function createAndDeliverWebhook(
     return existing;
   }
 
-  // Embed event_id in the outgoing payload so merchants can deduplicate on their side.
-  const enrichedPayload = { event_id: resolvedEventId, ...payload };
+  // Embed event_id and timestamp in the outgoing payload so merchants can
+  // deduplicate and apply replay-protection on their side.
+  const deliveryTimestamp = new Date().toISOString();
+  const enrichedPayload = {
+    event_id: resolvedEventId,
+    timestamp: deliveryTimestamp,
+    ...payload,
+  };
 
   const webhookLog = await prisma.webhookLog.create({
     data: {

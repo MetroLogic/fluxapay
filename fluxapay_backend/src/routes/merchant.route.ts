@@ -15,13 +15,14 @@ import {
   adminBulkUpdateMerchantStatus,
   updateSettlementSchedule,
   addBankAccount,
+  updateBankAccount,
 } from "../controllers/merchant.controller";
 import { validate } from "../middleware/validation.middleware";
 import * as merchantSchema from "../schemas/merchant.schema";
 import { authenticateApiKey } from "../middleware/apiKeyAuth.middleware";
 import { idempotencyMiddleware } from "../middleware/idempotency.middleware";
 import { adminAuth } from "../middleware/adminAuth.middleware";
-import { updateSettlementScheduleSchema, bankAccountSchema } from "../schemas/merchant.schema";
+import { updateSettlementScheduleSchema, bankAccountSchema, updateBankAccountSchema } from "../schemas/merchant.schema";
 import { authRateLimit, merchantApiKeyRateLimit, merchantRateLimit } from "../middleware/rateLimit.middleware";
 
 const router = Router();
@@ -491,6 +492,50 @@ router.post(
   authenticateApiKey, merchantApiKeyRateLimit(),
   validate(bankAccountSchema),
   addBankAccount,
+);
+
+/**
+ * @swagger
+ * /api/v1/merchants/me/bank-account:
+ *   patch:
+ *     summary: Update existing bank account details
+ *     tags: [Merchants]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               account_name:
+ *                 type: string
+ *               account_number:
+ *                 type: string
+ *               bank_name:
+ *                 type: string
+ *               bank_code:
+ *                 type: string
+ *               currency:
+ *                 type: string
+ *               country:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Bank account updated
+ *       400:
+ *         description: Validation error (e.g. currency/country mismatch)
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: No bank account found (use POST to create)
+ */
+router.patch(
+  "/me/bank-account",
+  authenticateApiKey, merchantApiKeyRateLimit(),
+  validate(updateBankAccountSchema),
+  updateBankAccount,
 );
 
 export default router;

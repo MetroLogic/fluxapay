@@ -13,6 +13,7 @@ import {
   rotateWebhookSecretService,
   updateSettlementScheduleService,
   addBankAccountService,
+  updateBankAccountService,
 } from "../services/merchant.service";
 import { AuthRequest } from "../types/express";
 import { validateUserId } from "../helpers/request.helper";
@@ -251,4 +252,25 @@ export const addBankAccount = createController(
     });
   },
   201,
+);
+
+export const updateBankAccount = createController(
+  async (
+    body: {
+      account_name?: string;
+      account_number?: string;
+      bank_name?: string;
+      bank_code?: string;
+      currency?: string;
+      country?: string;
+    },
+    req: AuthRequest,
+  ) => {
+    const merchantId = await validateUserId(req);
+
+    return updateBankAccountService({
+      merchantId,
+      ...body,
+    });
+  },
 );

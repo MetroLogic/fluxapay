@@ -2,16 +2,27 @@
 
 import { FileText } from 'lucide-react';
 import { DataTableBodyState } from '@/components/data-table';
-import { Settlement } from '../types';
+import type { MerchantSettlement } from '@/hooks/useSettlements';
+import { Badge } from '@/components/Badge';
 
 type Props = {
-    settlements: Settlement[];
-    onSelect: (settlement: Settlement) => void;
+    settlements: MerchantSettlement[];
+    onSelect: (settlement: MerchantSettlement) => void;
     isLoading?: boolean;
     error?: string | null;
 };
 
 export function SettlementsTable({ settlements, onSelect, isLoading = false, error = null }: Props) {
+    const getStatusBadge = (status: string) => {
+        switch (status) {
+            case 'completed': return <Badge variant="success">Completed</Badge>;
+            case 'pending': return <Badge variant="warning">Pending</Badge>;
+            case 'processing': return <Badge variant="info">Processing</Badge>;
+            case 'failed': return <Badge variant="error">Failed</Badge>;
+            default: return <Badge>{status}</Badge>;
+        }
+    };
+
     return (
         <div className="bg-card shadow overflow-hidden">
             <div className="overflow-x-auto">
@@ -69,24 +80,26 @@ export function SettlementsTable({ settlements, onSelect, isLoading = false, err
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <div className="flex items-center gap-2">
                                             <FileText className="w-4 h-4 text-muted-foreground" />
-                                            <span className="font-medium">{settlement.id}</span>
+                                            <span className="font-mono text-sm">{settlement.id.slice(0, 12)}…</span>
                                         </div>
                                     </td>
 
                                     <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                        {new Date(settlement.date).toLocaleDateString()}
+                                        {settlement.date
+                                            ? new Date(settlement.date).toLocaleDateString()
+                                            : '—'}
                                     </td>
 
                                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                                         {settlement.paymentsCount}
                                     </td>
 
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                        ${settlement.usdcAmount.toLocaleString()}
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium font-mono">
+                                        ${settlement.usdcAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                     </td>
 
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                        ${settlement.fiatAmount.toLocaleString()}
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium font-mono">
+                                        ${settlement.fiatAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                     </td>
 
                                     <td className="px-6 py-4 whitespace-nowrap text-sm">
@@ -94,20 +107,11 @@ export function SettlementsTable({ settlements, onSelect, isLoading = false, err
                                     </td>
 
                                     <td className="px-6 py-4 whitespace-nowrap">
-                                        <span
-                                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${settlement.status === 'completed'
-                                                ? 'bg-green-100 text-green-800'
-                                                : settlement.status === 'pending'
-                                                    ? 'bg-yellow-100 text-yellow-800'
-                                                    : 'bg-red-100 text-red-800'
-                                                }`}
-                                        >
-                                            {settlement.status}
-                                        </span>
+                                        {getStatusBadge(settlement.status)}
                                     </td>
 
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
-                                        {settlement.bankReference}
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground font-mono">
+                                        {settlement.bankReference || '—'}
                                     </td>
                                 </tr>
                             ))}

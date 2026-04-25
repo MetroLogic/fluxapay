@@ -22,7 +22,21 @@ import { getLogger, getMetricsCollector } from "../utils/logger";
 import { createAndDeliverWebhook } from "./webhook.service";
 
 const prisma = new PrismaClient();
-const logger = getLogger("PaymentOracleService");
+type LoggerLike = {
+  info: (message: string, meta?: unknown) => void;
+  warn: (message: string, meta?: unknown) => void;
+  error: (message: string, meta?: unknown) => void;
+  debug: (message: string, meta?: unknown) => void;
+};
+
+const rawLogger = (getLogger("PaymentOracleService") ?? {}) as Partial<LoggerLike>;
+const noop = () => {};
+const logger: LoggerLike = {
+  info: rawLogger.info ?? noop,
+  warn: rawLogger.warn ?? noop,
+  error: rawLogger.error ?? noop,
+  debug: rawLogger.debug ?? noop,
+};
 const metrics = getMetricsCollector();
 
 // ─── Configuration ───────────────────────────────────────────────────────────
@@ -637,7 +651,15 @@ export function getOracleHealth(): HorizonHealthCheck {
  * Manually triggers a payment verification (for testing/debugging)
  */
 export async function manualVerifyPayment(paymentId: string): Promise<PaymentVerification> {
-  const payment = await prisma.payment.findUnique({
+  const paymentModel = (prisma as PrismaClient & {
+    payment?: { findUnique?: (args: { where: { id: string } }) => Promise<Payment | null> };
+  }).payment;
+
+  if (!paymentModel?.findUnique) {
+    throw new Error(`Payment ${paymentId} not found`);
+  }
+
+  const payment = await paymentModel.findUnique({
     where: { id: paymentId },
   });
 
