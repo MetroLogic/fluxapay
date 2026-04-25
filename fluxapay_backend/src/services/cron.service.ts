@@ -4,17 +4,20 @@
  * Sets up scheduled jobs for FluxaPay.
  *
  * Jobs:
- *  • Settlement batch     – runs daily at 00:00 UTC (swept → fiat payout)
- *  • Payment monitor      – runs every 2 min (on-chain USDC detection)
- *  • Billing cycle        – runs daily at 01:00 UTC (subscription renewals)
- *  • Database backup      – runs daily at 02:00 UTC (encrypted SQL dump)
+ *  • Settlement batch        – runs daily at 00:00 UTC (swept → fiat payout)
+ *  • Payment monitor         – runs every 2 min (on-chain USDC detection)
+ *  • Billing cycle           – runs daily at 01:00 UTC (subscription renewals)
+ *  • Database backup         – runs daily at 02:00 UTC (encrypted SQL dump)
+ *  • Invoice overdue check   – runs every hour
+ *  • Idempotency cleanup     – runs daily at 03:00 UTC
  *
  * Environment variables:
- *  SETTLEMENT_CRON        – Cron for settlement (default: "0 0 * * *")
- *  PAYMENT_MONITOR_CRON   – Cron for on-chain payment checks (default: "*/2 * * * *")
- *  BILLING_CRON           – Cron for subscription billing (default: "0 1 * * *")
- *  DB_BACKUP_CRON         – Cron for database backup (default: "0 2 * * *")
- *  DISABLE_CRON           – Set to "true" to disable all jobs (e.g. in test environments)
+ *  SETTLEMENT_CRON           – Cron for settlement (default: "0 0 * * *")
+ *  BILLING_CRON              – Cron for subscription billing (default: "0 1 * * *")
+ *  DB_BACKUP_CRON            – Cron for database backup (default: "0 2 * * *")
+ *  IDEMPOTENCY_CLEANUP_CRON  – Cron for idempotency cleanup (default: "0 3 * * *")
+ *  INVOICE_OVERDUE_CRON      – Cron for invoice overdue check (default: "0 * * * *")
+ *  DISABLE_CRON              – Set to "true" to disable all jobs (e.g. in test environments)
  */
 
 import { schedule, validate, type ScheduledTask } from "node-cron";
@@ -25,6 +28,8 @@ import { funderMonitorService } from "./funderMonitor.service";
 import { runPaymentExpiryReminderJob } from "./paymentExpiryReminder.service";
 import { runPaymentExpiryJob } from "./paymentExpiry.service";
 import { performDatabaseBackup } from "./dbBackup.service";
+import { runInvoiceOverdueJob } from "./invoiceOverdue.service";
+import { cleanupExpiredIdempotencyRecords } from "../middleware/idempotency.middleware";
 
 const SETTLEMENT_CRON_EXPR = process.env.SETTLEMENT_CRON ?? "0 0 * * *";
 const BILLING_CRON_EXPR = process.env.BILLING_CRON ?? "0 1 * * *";
@@ -33,6 +38,8 @@ const FUNDER_MONITOR_CRON_EXPR = process.env.FUNDER_MONITOR_CRON ?? "*/10 * * * 
 const CHECKOUT_REMINDER_CRON_EXPR = process.env.CHECKOUT_REMINDER_CRON ?? "*/2 * * * *";
 const PAYMENT_EXPIRY_CRON_EXPR = process.env.PAYMENT_EXPIRY_CRON ?? "*/5 * * * *";
 const DB_BACKUP_CRON_EXPR = process.env.DB_BACKUP_CRON ?? "0 2 * * *";
+const INVOICE_OVERDUE_CRON_EXPR = process.env.INVOICE_OVERDUE_CRON ?? "0 * * * *";
+const IDEMPOTENCY_CLEANUP_CRON_EXPR = process.env.IDEMPOTENCY_CLEANUP_CRON ?? "0 3 * * *";
 
 let settlementTask: ScheduledTask | null = null;
 let billingTask: ScheduledTask | null = null;
@@ -41,6 +48,8 @@ let funderMonitorTask: ScheduledTask | null = null;
 let checkoutReminderTask: ScheduledTask | null = null;
 let paymentExpiryTask: ScheduledTask | null = null;
 let dbBackupTask: ScheduledTask | null = null;
+let invoiceOverdueTask: ScheduledTask | null = null;
+let idempotencyCleanupTask: ScheduledTask | null = null;
 
 /**
  * Starts all scheduled cron jobs.
@@ -62,7 +71,7 @@ export function startCronJobs(): void {
     }
   }, { timezone: "UTC" });
 
-  // ── Billing cycle ────────────────────────────────────
+  // ── Billing cycle ──────────────────────────────────────────────────────────
   billingTask = schedule(BILLING_CRON_EXPR, async () => {
     console.log(`[Cron] ⏰ Billing cycle triggered at ${new Date().toISOString()}`);
     try {
@@ -73,13 +82,13 @@ export function startCronJobs(): void {
     }
   }, { timezone: "UTC" });
 
-  // ── Sweep Job ─────────────────────────
+  // ── Sweep Job ──────────────────────────────────────────────────────────────
   sweepTask = schedule(SWEEP_CRON_EXPR, async () => {
     console.log(`[Cron] ⏰ Sweep triggered at ${new Date().toISOString()}`);
     await runSweepWithLock();
   }, { timezone: "UTC" });
 
-  // ── Funder Monitor ───────────────────
+  // ── Funder Monitor ─────────────────────────────────────────────────────────
   funderMonitorTask = schedule(FUNDER_MONITOR_CRON_EXPR, async () => {
     try {
       const status = await funderMonitorService.getBalanceStatus();
@@ -91,7 +100,7 @@ export function startCronJobs(): void {
     }
   }, { timezone: "UTC" });
 
-  // ── Checkout Expiry Reminder ────────────────────────────────────────
+  // ── Checkout Expiry Reminder ───────────────────────────────────────────────
   checkoutReminderTask = schedule(CHECKOUT_REMINDER_CRON_EXPR, async () => {
     try {
       const result = await runPaymentExpiryReminderJob();
@@ -103,22 +112,62 @@ export function startCronJobs(): void {
     }
   }, { timezone: "UTC" });
 
-  // ── Payment Expiry Job ────────────────────────────────
-  paymentExpiryTask = schedule(PAYMENT_EXPIRY_CRON_EXPR, async () => {
-    try {
-      const result = await runPaymentExpiryJob();
-      if (result.processed > 0) {
-        console.log(`[Cron] ✅ Payment expiry — ${result.expired}/${result.processed} expired.`);
-      }
-    } catch (err: any) {
-      console.error(`[Cron] ❌ Payment expiry job failed: ${err.message}`);
+  // ── Payment Expiry Job (pending → expired) ─────────────────────────────────
+  if (process.env.DISABLE_PAYMENT_EXPIRY_CRON !== "true") {
+    if (validate(PAYMENT_EXPIRY_CRON_EXPR)) {
+      paymentExpiryTask = schedule(
+        PAYMENT_EXPIRY_CRON_EXPR,
+        async () => {
+          try {
+            const result = await runPaymentExpiryJob();
+            if (result.processed > 0) {
+              console.log(
+                `[Cron] ✅ Payment expiry — ${result.expired}/${result.processed} expired, ` +
+                `${result.webhookErrors.length} webhook error(s).`,
+              );
+            }
+          } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            console.error(`[Cron] ❌ Payment expiry job failed: ${msg}`);
+          }
+        },
+        { timezone: "UTC" },
+      );
+      console.log(`[Cron] ✅ Payment expiry job scheduled (${PAYMENT_EXPIRY_CRON_EXPR}) in UTC.`);
+    } else {
+      console.warn(`[Cron] Invalid PAYMENT_EXPIRY_CRON "${PAYMENT_EXPIRY_CRON_EXPR}" – payment expiry disabled.`);
     }
-  }, { timezone: "UTC" });
+  } else {
+    console.log("[Cron] DISABLE_PAYMENT_EXPIRY_CRON=true – payment expiry job disabled.");
+  }
 
-  // ── Database Daily Backup ────────────────────────────────
+  // ── Database Daily Backup ──────────────────────────────────────────────────
   dbBackupTask = schedule(DB_BACKUP_CRON_EXPR, async () => {
     console.log(`[Cron] ⏰ Database backup triggered at ${new Date().toISOString()}`);
     await performDatabaseBackup();
+  }, { timezone: "UTC" });
+
+  // ── Invoice Overdue Check ──────────────────────────────────────────────────
+  invoiceOverdueTask = schedule(INVOICE_OVERDUE_CRON_EXPR, async () => {
+    try {
+      const result = await runInvoiceOverdueJob();
+      if (result.updated > 0) {
+        console.log(`[Cron] ✅ Invoice overdue job — ${result.updated} invoice(s) marked overdue.`);
+      }
+    } catch (err: any) {
+      console.error(`[Cron] ❌ Invoice overdue job failed: ${err.message}`);
+    }
+  }, { timezone: "UTC" });
+
+  // ── Idempotency Cleanup ────────────────────────────────────────────────────
+  idempotencyCleanupTask = schedule(IDEMPOTENCY_CLEANUP_CRON_EXPR, async () => {
+    console.log(`[Cron] ⏰ Idempotency cleanup triggered at ${new Date().toISOString()}`);
+    try {
+      const deletedCount = await cleanupExpiredIdempotencyRecords();
+      console.log(`[Cron] ✅ Idempotency cleanup — ${deletedCount} expired records deleted.`);
+    } catch (err: any) {
+      console.error(`[Cron] ❌ Idempotency cleanup failed: ${err.message}`);
+    }
   }, { timezone: "UTC" });
 
   console.log("[Cron] All jobs scheduled successfully.");
@@ -136,6 +185,8 @@ export function stopCronJobs(): void {
     [checkoutReminderTask, "Checkout reminder"],
     [paymentExpiryTask, "Payment expiry"],
     [dbBackupTask, "Database backup"],
+    [invoiceOverdueTask, "Invoice overdue"],
+    [idempotencyCleanupTask, "Idempotency cleanup"],
   ];
   for (const [task, name] of tasks) {
     if (task) {
@@ -150,4 +201,6 @@ export function stopCronJobs(): void {
   checkoutReminderTask = null;
   paymentExpiryTask = null;
   dbBackupTask = null;
+  invoiceOverdueTask = null;
+  idempotencyCleanupTask = null;
 }
