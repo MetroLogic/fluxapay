@@ -16,11 +16,17 @@ export const listInvoicesQuerySchema = z.object({
   search: z.string().trim().max(200).optional(),
 });
 
+export const getInvoiceByIdSchema = z.object({
+  params: z.object({
+    invoice_id: z.string().min(1),
+  }),
+});
+
 export const exportInvoiceSchema = z.object({
   params: z.object({
-    invoice_id: z.string(),
+    invoice_id: z.string().min(1),
   }),
   query: z.object({
-    format: z.enum(["csv", "json"]).default("json"),
+    format: z.enum(["csv", "json", "pdf"]).default("pdf"),
   }),
 });

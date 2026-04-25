@@ -39,7 +39,42 @@ app.use(metricsMiddleware);
 
 // CORS Middleware (before routes, after observability)
 app.use(corsMiddleware);
-app.use(express.json());
+
+/**
+ * JSON body parser with a configurable size limit.
+ *
+ * Express throws a PayloadTooLargeError (status 413, type "entity.too.large")
+ * when the body exceeds the limit. The error handler below converts that into
+ * a structured JSON 413 response before it reaches any route handler.
+ *
+ * Configure via REQUEST_BODY_SIZE_LIMIT env var (default: "1mb").
+ * Accepts any value accepted by the `bytes` package: "500kb", "2mb", etc.
+ */
+const bodyLimit = process.env.REQUEST_BODY_SIZE_LIMIT || "1mb";
+app.use(express.json({ limit: bodyLimit }));
+
+/**
+ * Payload-too-large error handler.
+ * Must be registered immediately after express.json() so it catches the error
+ * before any route middleware runs.
+ */
+app.use(
+  (
+    err: Error & { type?: string; status?: number },
+    req: express.Request,
+    res: express.Response,
+    next: express.NextFunction,
+  ) => {
+    if (err.type === "entity.too.large" || err.status === 413) {
+      return res.status(413).json({
+        error: "Payload Too Large",
+        message: `Request body exceeds the ${bodyLimit} limit. Reduce the payload size and try again.`,
+        limit: bodyLimit,
+      });
+    }
+    next(err);
+  },
+);
 
 app.use(
   helmet({
