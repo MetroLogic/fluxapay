@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { X } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 export interface CheckoutWidgetConfig {
   paymentId: string;
@@ -36,6 +35,7 @@ export function CheckoutWidget({
   mode = "modal",
   containerRef,
 }: CheckoutWidgetProps) {
+  const t = useTranslations("payment.checkout");
   const [isOpen, setIsOpen] = useState(mode === "embedded");
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const modalRef = useRef<HTMLDivElement>(null);
@@ -106,7 +106,7 @@ export function CheckoutWidget({
         onClick={() => setIsOpen(true)}
         className="px-6 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors font-medium"
       >
-        Pay {amount} {currency}
+        {t("payAmount", { amount, currency })}
       </button>
 
       {/* Modal */}
@@ -124,16 +124,16 @@ export function CheckoutWidget({
             <div className="flex items-center justify-between p-4 border-b border-slate-200">
               <div>
                 {merchantName && (
-                  <p className="text-sm text-slate-500">Payment to</p>
+                  <p className="text-sm text-slate-500">{t("paymentTo")}</p>
                 )}
                 <h2 className="text-lg font-bold text-slate-900">
-                  {merchantName || "Complete Payment"}
+                  {merchantName || t("completePayment")}
                 </h2>
               </div>
               <button
                 onClick={() => setIsOpen(false)}
                 className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-                aria-label="Close"
+                aria-label={t("close")}
               >
                 <X className="h-5 w-5 text-slate-500" />
               </button>

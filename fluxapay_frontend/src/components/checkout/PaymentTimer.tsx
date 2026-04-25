@@ -1,7 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Clock } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 
 interface PaymentTimerProps {
   expiresAt: Date;
@@ -13,6 +12,7 @@ interface PaymentTimerProps {
  * Shows MM:SS format and calls onExpire callback when time runs out
  */
 export function PaymentTimer({ expiresAt, onExpire }: PaymentTimerProps) {
+  const t = useTranslations('payment.checkout');
   const [timeLeft, setTimeLeft] = useState<number>(0);
   const [isExpired, setIsExpired] = useState<boolean>(false);
 
@@ -49,10 +49,13 @@ export function PaymentTimer({ expiresAt, onExpire }: PaymentTimerProps) {
     return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   };
 
-  const displayText = isExpired ? 'Expired' : formatTime(timeLeft);
+  const displayText = isExpired ? t('timerExpired') : formatTime(timeLeft);
   const ariaLabel = isExpired
-    ? 'Payment timer expired'
-    : `Time remaining: ${Math.floor(timeLeft / 60000)} minutes and ${Math.floor((timeLeft % 60000) / 1000)} seconds`;
+    ? t('timerExpiredAria')
+    : t('timeRemainingAria', {
+        minutes: Math.floor(timeLeft / 60000),
+        seconds: Math.floor((timeLeft % 60000) / 1000),
+      });
 
   const activeStyle = !isExpired
     ? ({

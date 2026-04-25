@@ -11,6 +11,7 @@ import { Decimal } from "@prisma/client/runtime/library";
 import { HDWalletService } from "./HDWalletService";
 import { logSweepTrigger, updateSweepCompletion } from "./audit.service";
 import { getLogger, getMetricsCollector } from "../utils/logger";
+import { sweepQueue } from "./sweepQueue.service";
 
 const prisma = new PrismaClient();
 
@@ -174,14 +175,17 @@ export class SweepService {
         });
 
         if (attempt >= this.maxRetries) {
-          this.logger.error("ALERT: repeated Stellar sweep transaction failures", {
-            attempts: attempt,
-            feeBudget: {
-              baseFee: this.baseFee,
-              maxFee: this.maxFee,
-              multiplier: this.feeBumpMultiplier,
+          this.logger.error(
+            "ALERT: repeated Stellar sweep transaction failures",
+            {
+              attempts: attempt,
+              feeBudget: {
+                baseFee: this.baseFee,
+                maxFee: this.maxFee,
+                multiplier: this.feeBumpMultiplier,
+              },
             },
-          });
+          );
           this.metrics.increment("stellar.sweep.repeated_failures");
         }
       }
@@ -282,7 +286,10 @@ export class SweepService {
 
         // Ensure address matches DB (defense in depth)
         if (p.stellar_address && kp.publicKey !== p.stellar_address) {
-          const skipEntry = { paymentId: p.id, reason: "Derived address mismatch" };
+          const skipEntry = {
+            paymentId: p.id,
+            reason: "Derived address mismatch",
+          };
           skipped.push(skipEntry);
           if (dryRun) decisions.push({ ...skipEntry, action: "skip" });
           continue;
@@ -290,22 +297,30 @@ export class SweepService {
 
         // Load current on-chain account state and use actual USDC balance.
         const account = await this.server.loadAccount(kp.publicKey);
-        const usdcBalanceEntry = account.balances.find((b) =>
-          b.asset_type === "credit_alphanum4" &&
-          b.asset_code === "USDC" &&
-          b.asset_issuer === this.usdcAsset.issuer,
+        const usdcBalanceEntry = account.balances.find(
+          (b) =>
+            b.asset_type === "credit_alphanum4" &&
+            b.asset_code === "USDC" &&
+            b.asset_issuer === this.usdcAsset.issuer,
         );
 
         const accountUsdcAmount = Number(usdcBalanceEntry?.balance ?? "0");
         if (!Number.isFinite(accountUsdcAmount) || accountUsdcAmount <= 0) {
-          const skipEntry = { paymentId: p.id, reason: "No USDC balance to sweep" };
+          const skipEntry = {
+            paymentId: p.id,
+            reason: "No USDC balance to sweep",
+          };
           skipped.push(skipEntry);
           if (dryRun) decisions.push({ ...skipEntry, action: "skip" });
           continue;
         }
 
         if (dryRun) {
-          decisions.push({ paymentId: p.id, action: "sweep", amount: accountUsdcAmount.toFixed(7) });
+          decisions.push({
+            paymentId: p.id,
+            action: "sweep",
+            amount: accountUsdcAmount.toFixed(7),
+          });
           addressesSwept += 1;
           total += accountUsdcAmount;
           continue;
@@ -334,7 +349,8 @@ export class SweepService {
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
         skipped.push({ paymentId: p.id, reason: msg });
-        if (dryRun) decisions.push({ paymentId: p.id, action: "skip", reason: msg });
+        if (dryRun)
+          decisions.push({ paymentId: p.id, action: "skip", reason: msg });
       }
     }
 
@@ -380,7 +396,7 @@ try {
 } catch (err) {
   console.warn(
     "SweepService failed to initialize (missing Stellar env vars?):",
-    err instanceof Error ? err.message : err
+    err instanceof Error ? err.message : err,
   );
 }
 export const sweepService = _sweepService as SweepService;

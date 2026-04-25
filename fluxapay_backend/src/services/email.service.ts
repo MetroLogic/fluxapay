@@ -135,6 +135,7 @@ export async function sendCheckoutExpiryReminderEmail(
 }
 
 export interface PaymentConfirmationDetails {
+interface PaymentConfirmationDetails {
   amount: string;
   currency: string;
   payment_id: string;
