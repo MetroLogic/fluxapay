@@ -1,7 +1,7 @@
 import { Modal } from "@/components/Modal";
 import { Button } from "@/components/Button";
 import { Badge } from "@/components/Badge";
-import { WebhookEvent, WebhookStatus } from "./webhooks-mock";
+import { WebhookEvent, WebhookStatus } from "./types";
 import { Copy, RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
@@ -12,12 +12,14 @@ interface WebhookDetailsProps {
     webhook: WebhookEvent | null;
     isOpen: boolean;
     onClose: () => void;
+    onRetried?: () => void;
 }
 
 export const WebhookDetails = ({
     webhook,
     isOpen,
     onClose,
+    onRetried,
 }: WebhookDetailsProps) => {
     const [loading, setLoading] = useState(false);
     const [details, setDetails] = useState<WebhookEvent | null>(null);
@@ -222,6 +224,7 @@ export const WebhookDetails = ({
                                 if (d) {
                                     setDetails((prev) => prev ? { ...prev, status: d.status } : prev);
                                 }
+                                onRetried?.();
                             } catch (e) {
                                 toastApiErrorWithRetry(e, () => api.webhooks.retry(webhook.id));
                             } finally {
