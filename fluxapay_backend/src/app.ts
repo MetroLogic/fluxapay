@@ -27,6 +27,7 @@ import dashboardRoutes from "./routes/dashboard.route";
 import auditRoutes from "./routes/audit.route";
 import merchantDeletionRoutes from "./routes/merchantDeletion.route";
 import dataExportRoutes from "./routes/dataExport.route";
+import oracleRoutes from "./routes/oracle.route";
 
 const app = express();
 const prisma = new PrismaClient();
@@ -96,6 +97,7 @@ app.use("/api/v1/admin/sweep", sweepRoutes);
 app.use("/api/v1/admin", auditRoutes);
 app.use("/api/v1/merchants", merchantDeletionRoutes);
 app.use("/api/v1/merchants/export", dataExportRoutes);
+app.use("/api/v1", oracleRoutes);
 
 // Basic health check
 app.get("/health", (req, res) => {

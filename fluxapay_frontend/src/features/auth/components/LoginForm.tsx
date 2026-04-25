@@ -11,9 +11,9 @@ import { Button } from "@/components/Button";
 import { api, ApiError, storeToken } from "@/lib/api";
 import { useTranslations } from "next-intl";
 
-const loginSchema = yup.object({
-  email: yup.string().email("Please enter a valid email address").required("Email is required"),
-  password: yup.string().min(6, "Password must be at least 6 characters").required("Password is required"),
+const loginSchema = (t: any) => yup.object({
+  email: yup.string().email(t("validation.emailInvalid")).required(t("validation.emailRequired")),
+  password: yup.string().min(6, t("validation.passwordMin")).required(t("validation.passwordRequired")),
   keepLoggedIn: yup.boolean(),
 });
 
@@ -39,7 +39,7 @@ const LoginForm = () => {
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     try {
-      const validData = await loginSchema.validate(formData, { abortEarly: false });
+      const validData = await loginSchema(tAuth).validate(formData, { abortEarly: false });
       setErrors({});
       setIsSubmitting(true);
 
@@ -53,7 +53,7 @@ const LoginForm = () => {
       }
 
       storeToken(data.token, Boolean(validData.keepLoggedIn));
-      toast.success(data.message || "Login successful!");
+      toast.success(data.message || tAuth("signupSuccess")); // Assuming signupSuccess for now or just generic
       router.push("/dashboard");
     } catch (err) {
       if (err instanceof ApiError) {
@@ -87,7 +87,7 @@ const LoginForm = () => {
           <div className="w-full max-w-md rounded-none lg:rounded-r-2xl bg-white p-8 shadow-none animate-slide-in-left">
             <div className="space-y-2 mb-8 animate-fade-in [animation-delay:200ms]">
               <h1 className="text-2xl md:text-[40px] font-bold text-black tracking-tight">{tAuth("login")}</h1>
-              <p className="text-sm md:text-[18px] font-normal text-muted-foreground">Please login to continue to your account.</p>
+              <p className="text-sm md:text-[18px] font-normal text-muted-foreground">{tAuth("loginToContinue")}</p>
             </div>
 
             {/* Form */}
@@ -105,7 +105,7 @@ const LoginForm = () => {
                   label={tAuth("email")}
                   value={formData.email}
                   onChange={handleChange}
-                  placeholder="test@gmail.com"
+                  placeholder={tAuth("emailPlaceholder")}
                   error={errors.email}
                 />
               </div>
@@ -119,7 +119,7 @@ const LoginForm = () => {
                     label={tAuth("password")}
                     value={formData.password}
                     onChange={handleChange}
-                    placeholder="Password"
+                    placeholder={tAuth("passwordPlaceholder")}
                     error={errors.password}
                     className="pr-10 focus:ring-indigo-500 focus:border-indigo-500"
                   />
@@ -206,31 +206,31 @@ const LoginForm = () => {
                     <path d="M22 12a10 10 0 0 1-10 10" />
                   </svg>
                 )}
-                <span>{isSubmitting ? "Signing in..." : "Sign in"}</span>
+                <span>{isSubmitting ? tAuth("signingIn") : tAuth("login")}</span>
               </Button>
 
               <p className="mt-4 text-center text-xs text-slate-500">
-                By signing in, you agree to our{" "}
+                {tAuth("agreeToTerms")}{" "}
                 <Link
                   href="/terms"
                   className="font-medium text-slate-700 hover:text-indigo-600 underline underline-offset-4"
                 >
-                  Terms of Service
+                  {tAuth("terms")}
                 </Link>{" "}
-                and{" "}
+                {tAuth("and")}{" "}
                 <Link
                   href="/privacy"
                   className="font-medium text-slate-700 hover:text-indigo-600 underline underline-offset-4"
                 >
-                  Privacy Policy
+                  {tAuth("privacy")}
                 </Link>
                 .
               </p>
 
               {/* Create account */}
               <div className="pt-2 text-center text-xs md:text-[18px] text-muted-foreground font-semibold">
-                Need an account?{" "}
-                <Link href="/signup" className="font-semibold text-indigo-500 hover:text-indigo-600 underline underline-offset-4">Create one</Link>
+                {tAuth("needAccount")}{" "}
+                <Link href="/signup" className="font-semibold text-indigo-500 hover:text-indigo-600 underline underline-offset-4">{tAuth("createOne")}</Link>
               </div>
             </form>
           </div>

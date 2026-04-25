@@ -98,6 +98,13 @@ const envSchema = z.object({
     ENABLE_YELLOWCARD_VALIDATION: z.enum(['true', 'false']).default('false'),
     ENABLE_ANCHOR_VALIDATION: z.enum(['true', 'false']).default('false'),
 
+    // Payment Oracle Configuration
+    ORACLE_POLLING_INTERVAL_MS: z.coerce.number().int().positive().default(30000),
+    ORACLE_MAX_MISSED_POLLS: z.coerce.number().int().positive().default(5),
+    ORACLE_BATCH_SIZE: z.coerce.number().int().positive().default(50),
+    ORACLE_HORIZON_TIMEOUT_MS: z.coerce.number().int().positive().default(10000),
+    ENABLE_SOROBAN_VERIFICATION: z.enum(['true', 'false']).default('false'),
+
     // Cron Jobs
     PAYMENT_MONITOR_CRON: z.string().default('*/2 * * * *'),
     BILLING_CRON: z.string().default('0 1 * * *'),

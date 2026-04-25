@@ -6,6 +6,7 @@ import dotenv from "dotenv";
 import { validateEnv, EnvValidationError } from "./config/env.config";
 import { startCronJobs, stopCronJobs } from "./services/cron.service";
 import { startPaymentMonitor, stopPaymentMonitor } from "./services/paymentMonitor.service";
+import { startPaymentOracle, stopPaymentOracle } from "./services/paymentOracle.service";
 import { initializeEmailNotifications } from "./services/emailNotification.service";
 import { getLogger } from "./utils/logger";
 
@@ -48,8 +49,11 @@ try {
     // Start scheduled jobs (daily settlement batch, etc.)
     startCronJobs();
 
-    // Start payment monitor loop
+    // Start payment monitor loop (legacy polling)
     startPaymentMonitor();
+
+    // Start payment oracle service (enhanced monitoring with smart contract verification)
+    startPaymentOracle();
 
     // Initialize email notification listeners
     initializeEmailNotifications();
@@ -105,6 +109,7 @@ try {
       // 1. Stop background workers — no new cron ticks or monitor polls.
       stopCronJobs();
       stopPaymentMonitor();
+      stopPaymentOracle();
       logger.info("Background workers stopped");
 
       // 2. Stop accepting new HTTP connections; wait for in-flight requests.

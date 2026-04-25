@@ -1,116 +1,151 @@
 import { Request, Response, NextFunction } from "express";
-import crypto from "crypto";
 import { PrismaClient } from "../generated/client/client";
-import { AuthRequest } from "../types/express";
+import crypto from "crypto";
 
 const prisma = new PrismaClient();
 
+const IDEMPOTENCY_TTL_HOURS = 24;
+
+export interface IdempotentRequest extends Request {
+  idempotencyKey?: string;
+}
+
 /**
- * Idempotency Middleware for Express
- * 
- * Flow:
- * 1. Check for 'Idempotency-Key' header on POST requests.
- * 2. If present, query the database for a record matching the key.
- * 3. Verify the request body hash matches the stored hash.
- * 4. If a match is found and user_id matches (if applicable), send the stored response.
- * 5. If not found, execute the request and intercept the response to save it.
+ * Idempotency middleware for payment creation.
+ *
+ * Ensures that duplicate requests with the same Idempotency-Key header
+ * return the cached response instead of creating duplicate payments.
+ *
+ * RFC: https://datatracker.ietf.org/doc/html/draft-ietf-httpapi-idempotency-key-header
  */
 export const idempotencyMiddleware = async (
-    req: Request,
-    res: Response,
-    next: NextFunction
-) => {
-    const key = req.headers["idempotency-key"] as string;
-    const authReq = req as AuthRequest;
-    const userId = authReq.merchantId || authReq.user?.id;
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  const idempotencyKey = req.headers["idempotency-key"] as string | undefined;
 
-    // Only handle POST requests with an idempotency key header
-    if (req.method !== "POST" || !key) {
-        return next();
-    }
+  // If no idempotency key provided, proceed normally
+  if (!idempotencyKey) {
+    return next();
+  }
 
-    // Generate a hash of the request body to detect body changes for the same key
+  // Validate idempotency key format (must be non-empty string, max 255 chars)
+  if (
+    typeof idempotencyKey !== "string" ||
+    idempotencyKey.length === 0 ||
+    idempotencyKey.length > 255
+  ) {
+    res.status(400).json({
+      error:
+        "Invalid Idempotency-Key header. Must be a non-empty string with max 255 characters.",
+    });
+    return;
+  }
+
+  try {
+    // Create a hash of the request body to detect conflicting requests
     const requestHash = crypto
-        .createHash("sha256")
-        .update(JSON.stringify(req.body))
-        .digest("hex");
+      .createHash("sha256")
+      .update(JSON.stringify(req.body))
+      .digest("hex");
 
-    try {
-        // Check if we have seen this key before
-        const record = await prisma.idempotencyRecord.findUnique({
-            where: {
-                idempotency_key: key,
-            },
+    // Check if we have a cached response for this idempotency key
+    const existingRecord = await prisma.idempotencyRecord.findUnique({
+      where: { idempotency_key: idempotencyKey },
+    });
+
+    if (existingRecord) {
+      // Check if the request body matches
+      if (existingRecord.request_hash !== requestHash) {
+        res.status(422).json({
+          error:
+            "Idempotency key conflict: request body differs from original request",
         });
+        return;
+      }
 
-        if (record) {
-            // Security check: if the record has a user_id, it must match the current user
-            if (record.user_id && record.user_id !== userId) {
-                console.warn(`[Idempotency] Potential key theft: ${key}`);
-                return res.status(403).json({ error: "Idempotency key belongs to another user" });
-            }
+      // Check if record is still valid (within TTL)
+      const recordAge = Date.now() - existingRecord.created_at.getTime();
+      const ttlMs = IDEMPOTENCY_TTL_HOURS * 60 * 60 * 1000;
 
-            // Conflict check: if the key is the same but the body changed, it's a conflict
-            if (record.request_hash !== requestHash) {
-                return res.status(422).json({
-                    error: "Conflict: Idempotency-Key used with different request parameters",
-                });
-            }
+      if (recordAge > ttlMs) {
+        // Record expired, delete it and proceed with new request
+        await prisma.idempotencyRecord.delete({
+          where: { idempotency_key: idempotencyKey },
+        });
+        (req as IdempotentRequest).idempotencyKey = idempotencyKey;
+        return next();
+      }
 
-            // Return the cached response
-            console.log(`[Idempotency] HIT for key: ${key}`);
-            res.setHeader("X-Idempotency-Cache", "HIT");
-            return res.status(record.response_code).json(record.response_body);
-        }
-
-        // Capture original response functions to cache the result after execution
-        const originalJson = res.json;
-
-        // Override res.json to capture the response body
-        res.json = function (body: any): Response {
-            res.json = originalJson; // Restore original to prevent infinite loop
-
-            // Only cache successful or non-server-error responses if appropriate
-            // Here we cache everything to fulfill the requirement of "stored response"
-            saveIdempotencyRecord(key, userId, requestHash, res.statusCode, body)
-                .catch(err => console.error("[Idempotency] Failed to save record:", err));
-
-            return originalJson.call(this, body);
-        };
-
-        next();
-    } catch (err) {
-        console.error("[Idempotency] Middleware error:", err);
-        next();
+      // Return cached response
+      res
+        .status(existingRecord.response_code)
+        .json(existingRecord.response_body);
+      return;
     }
+
+    // No existing record, attach idempotency key to request for later storage
+    (req as IdempotentRequest).idempotencyKey = idempotencyKey;
+    next();
+  } catch (error) {
+    console.error("Idempotency middleware error:", error);
+    // On error, proceed without idempotency to avoid blocking legitimate requests
+    next();
+  }
 };
 
 /**
- * Saves the response result to the database for future lookups.
+ * Store the response for future idempotent requests.
+ * Call this after successfully processing the request.
  */
-async function saveIdempotencyRecord(
-    key: string,
-    userId: string | undefined,
-    requestHash: string,
-    statusCode: number,
-    body: any
-) {
+export async function storeIdempotentResponse(
+  idempotencyKey: string,
+  requestBody: unknown,
+  responseCode: number,
+  responseBody: unknown,
+  userId?: string,
+): Promise<void> {
+  try {
+    const requestHash = crypto
+      .createHash("sha256")
+      .update(JSON.stringify(requestBody))
+      .digest("hex");
+
     await prisma.idempotencyRecord.upsert({
-        where: { idempotency_key: key },
-        update: {
-            user_id: userId || null,
-            request_hash: requestHash,
-            response_code: statusCode,
-            response_body: body,
-        },
-        create: {
-            idempotency_key: key,
-            user_id: userId || null,
-            request_hash: requestHash,
-            response_code: statusCode,
-            response_body: body,
-        },
+      where: { idempotency_key: idempotencyKey },
+      create: {
+        idempotency_key: idempotencyKey,
+        user_id: userId,
+        request_hash: requestHash,
+        response_code: responseCode,
+        response_body: responseBody as any,
+      },
+      update: {
+        response_code: responseCode,
+        response_body: responseBody as any,
+        updated_at: new Date(),
+      },
     });
+  } catch (error) {
+    // Log but don't throw - idempotency storage failure shouldn't break the request
+    console.error("Failed to store idempotent response:", error);
+  }
+}
 
+/**
+ * Cleanup expired idempotency records.
+ * Should be run periodically via cron.
+ */
+export async function cleanupExpiredIdempotencyRecords(): Promise<number> {
+  const ttlMs = IDEMPOTENCY_TTL_HOURS * 60 * 60 * 1000;
+  const expiryDate = new Date(Date.now() - ttlMs);
 
+  const result = await prisma.idempotencyRecord.deleteMany({
+    where: {
+      created_at: { lt: expiryDate },
+    },
+  });
+
+  return result.count;
 }
