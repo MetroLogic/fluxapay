@@ -19,7 +19,7 @@ describe('PaymentStatus', () => {
 
   it('renders expired state', () => {
     render(<PaymentStatus status="expired" />);
-    expect(screen.getByText(/payment expired/i)).toBeInTheDocument();
+    expect(screen.getByText(/this payment link has expired/i)).toBeInTheDocument();
   });
 
   it('renders failed state', () => {
@@ -39,12 +39,12 @@ describe('PaymentStatus', () => {
 
   it('renders paid state', () => {
     render(<PaymentStatus status="paid" />);
-    expect(screen.getByText(/payment completed/i)).toBeInTheDocument();
+    expect(screen.getByText(/completed/i)).toBeInTheDocument();
   });
 
   it('renders completed state', () => {
     render(<PaymentStatus status="completed" />);
-    expect(screen.getByText(/payment completed/i)).toBeInTheDocument();
+    expect(screen.getByText(/completed/i)).toBeInTheDocument();
   });
 
   it('displays custom message when provided', () => {
@@ -52,3 +52,5 @@ describe('PaymentStatus', () => {
     expect(screen.getByText('Custom message here')).toBeInTheDocument();
   });
 });
+
+

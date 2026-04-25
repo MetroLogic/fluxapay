@@ -6,19 +6,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { SignUpForm } from '@/features/auth';
 
-vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
-vi.mock('next/image', () => ({
-  default: ({ alt }: { alt: string }) => <img alt={alt} />,
-}));
-vi.mock('@/i18n/routing', () => ({
-  Link: ({ children, href }: { children: React.ReactNode; href: string }) => (
-    <a href={href}>{children}</a>
-  ),
-  useRouter: () => ({ push: vi.fn() }),
-}));
-vi.mock('next-intl', () => ({
-  useTranslations: () => (key: string) => key,
-}));
+// Common mocks handled in setup.tsx
 
 describe('SignUpForm', () => {
   beforeEach(() => {
@@ -36,7 +24,7 @@ describe('SignUpForm', () => {
 
   it('shows error when name is empty on submit', async () => {
     render(<SignUpForm />);
-    fireEvent.click(screen.getByRole('button', { name: /create account/i }));
+    fireEvent.click(screen.getByRole('button', { name: /sign up/i }));
     await waitFor(() => {
       // "Name is required" matches first; use getAllByText to handle multiple matches
       const matches = screen.getAllByText(/name is required/i);
@@ -49,7 +37,7 @@ describe('SignUpForm', () => {
     fireEvent.change(screen.getByPlaceholderText(/your name/i), {
       target: { value: 'John Doe' },
     });
-    fireEvent.click(screen.getByRole('button', { name: /create account/i }));
+    fireEvent.click(screen.getByRole('button', { name: /sign up/i }));
     await waitFor(() => {
       expect(screen.getByText(/business name is required/i)).toBeInTheDocument();
     });

@@ -1,6 +1,8 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { useTranslations } from 'next-intl';
+import { Clock } from 'lucide-react';
 
 interface PaymentTimerProps {
   expiresAt: Date;
@@ -15,6 +17,7 @@ export function PaymentTimer({ expiresAt, onExpire }: PaymentTimerProps) {
   const t = useTranslations('payment.checkout');
   const [timeLeft, setTimeLeft] = useState<number>(0);
   const [isExpired, setIsExpired] = useState<boolean>(false);
+
 
   useEffect(() => {
     const calculateTimeLeft = () => {
