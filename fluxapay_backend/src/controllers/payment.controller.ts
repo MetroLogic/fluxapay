@@ -119,91 +119,142 @@ export const createPayment = async (req: Request, res: Response) => {
 };
 
 export const getPayments = async (req: Request, res: Response) => {
-  try {
-    const merchantId = await validateUserId(req as AuthRequest);
-    if (!merchantId) {
-      return res.status(401).json({ error: "Unauthorized" });
-    }
+    try {
+        const merchantId = await validateUserId(req as AuthRequest);
+        if (!merchantId) {
+            return res.status(401).json({ error: "Unauthorized" });
+        }
 
-    // 1. Destructure with explicit type casting immediately
-    const query = req.query as Record<string, unknown>;
+        // 1. Destructure with explicit type casting immediately
+        const query = req.query as Record<string, unknown>;
 
-    const page = Number(query.page) || 1;
-    const limit = Number(query.limit) || 10;
+        const page = Number(query.page) || 1;
+        const limit = Number(query.limit) || 10;
 
-    // Force these to be strings or undefined (No arrays allowed!)
-    const status = query.status ? String(query.status) : undefined;
-    const currency = query.currency ? String(query.currency) : undefined;
-    const search = query.search ? String(query.search) : undefined;
-    const date_from = query.date_from ? String(query.date_from) : undefined;
-    const date_to = query.date_to ? String(query.date_to) : undefined;
+        // Force these to be strings or undefined (No arrays allowed!)
+        const status = query.status ? String(query.status) : undefined;
+        const currency = query.currency ? String(query.currency) : undefined;
+        const search = query.search ? String(query.search) : undefined;
+        const date_from = query.date_from ? String(query.date_from) : undefined;
+        const date_to = query.date_to ? String(query.date_to) : undefined;
 
-    // 2. We use a constant for Sort/Order to satisfy the Prisma type engine
-    const sortBy =
-      typeof query.sort_by === "string" ? query.sort_by : "createdAt";
-    const sortOrder: "asc" | "desc" = query.order === "asc" ? "asc" : "desc";
+        // 2. We use a constant for Sort/Order to satisfy the Prisma type engine
+        const sortBy = typeof query.sort_by === 'string' ? query.sort_by : 'createdAt';
+        const sortOrder: 'asc' | 'desc' = query.order === 'asc' ? 'asc' : 'desc';
 
-    const where: Record<string, unknown> = {
-      merchantId: merchantId,
-      ...(status && { status }),
-      ...(currency && { currency }),
-      ...((date_from || date_to) && {
-        createdAt: {
-          ...(date_from && { gte: new Date(date_from) }),
-          ...(date_to && { lte: new Date(date_to) }),
-        },
-      }),
-      ...(search && {
-        OR: [
-          { id: { contains: search } },
-          { order_id: { contains: search } },
-          { customer_email: { contains: search, mode: "insensitive" } },
-        ],
-      }),
-    };
+        const where: Record<string, unknown> = {
+            merchantId: merchantId,
+            ...(status && { status }),
+            ...(currency && { currency }),
+            ...((date_from || date_to) && {
+                createdAt: {
+                    ...(date_from && { gte: new Date(date_from) }),
+                    ...(date_to && { lte: new Date(date_to) }),
+                }
+            }),
+            ...(search && {
+                OR: [
+                    { id: { contains: search } },
+                    { order_id: { contains: search } },
+                    { customer_email: { contains: search, mode: 'insensitive' } }
+                ]
+            })
+        };
 
-    // Export Logic
-    if (req.path.includes("/export")) {
-      const payments = await prisma.payment.findMany({
-        where,
-        orderBy: { [sortBy]: sortOrder },
-      });
-      const header = "ID,MerchantID,Amount,Currency,Status,Email,Date\n";
-      const csv = payments
-        .map(
-          (p: (typeof payments)[number]) =>
-            `${p.id},${p.merchantId},${p.amount},${p.currency},${p.status},${p.customer_email},${p.createdAt}`,
-        )
-        .join("\n");
-      res.setHeader("Content-Type", "text/csv");
-      res.attachment("payments_history.csv");
-      return res.status(200).send(header + csv);
-    }
+        // List Logic
+        const [data, total] = await Promise.all([
+            prisma.payment.findMany({
+                where,
+                skip: (page - 1) * limit,
+                take: limit,
+                orderBy: { [sortBy]: sortOrder } // This is line 106/107 - now using strictly typed sortOrder
+            }),
+            prisma.payment.count({ where })
+        ]);
 
-    // List Logic
-    const [data, total] = await Promise.all([
-      prisma.payment.findMany({
-        where,
-        skip: (page - 1) * limit,
-        take: limit,
-        orderBy: { [sortBy]: sortOrder }, // This is line 106/107 - now using strictly typed sortOrder
-      }),
-      prisma.payment.count({ where }),
-    ]);
-
-    res.json({ data, meta: { total, page, limit } });
-  } catch (error: unknown) {
-    if (
-      error &&
-      typeof error === "object" &&
-      "status" in error &&
-      typeof (error as { status?: unknown }).status === "number"
-    ) {
-      const e = error as { status: number; message?: string };
-      return res.status(e.status).json({ error: e.message || "Unauthorized" });
+        res.json({ data, meta: { total, page, limit } });
+    } catch (error: unknown) {
+        if (
+            error &&
+            typeof error === "object" &&
+            "status" in error &&
+            typeof (error as { status?: unknown }).status === "number"
+        ) {
+            const e = error as { status: number; message?: string };
+            return res.status(e.status).json({ error: e.message || "Unauthorized" });
+        }
+        res.status(500).json({ error: "Internal Server Error" });
     }
     res.status(500).json({ error: "Internal Server Error" });
   }
+};
+
+export const exportPayments = async (req: Request, res: Response) => {
+    try {
+        const merchantId = await validateUserId(req as AuthRequest);
+        if (!merchantId) {
+            return res.status(401).json({ error: "Unauthorized" });
+        }
+
+        // 1. Destructure with explicit type casting immediately
+        const query = req.query as Record<string, unknown>;
+
+        // Force these to be strings or undefined (No arrays allowed!)
+        const status = query.status ? String(query.status) : undefined;
+        const currency = query.currency ? String(query.currency) : undefined;
+        const search = query.search ? String(query.search) : undefined;
+        const date_from = query.date_from ? String(query.date_from) : undefined;
+        const date_to = query.date_to ? String(query.date_to) : undefined;
+
+        // 2. We use a constant for Sort/Order to satisfy the Prisma type engine
+        const sortBy = typeof query.sort_by === 'string' ? query.sort_by : 'createdAt';
+        const sortOrder: 'asc' | 'desc' = query.order === 'asc' ? 'asc' : 'desc';
+
+        const where: Record<string, unknown> = {
+            merchantId: merchantId,
+            ...(status && { status }),
+            ...(currency && { currency }),
+            ...((date_from || date_to) && {
+                createdAt: {
+                    ...(date_from && { gte: new Date(date_from) }),
+                    ...(date_to && { lte: new Date(date_to) }),
+                }
+            }),
+            ...(search && {
+                OR: [
+                    { id: { contains: search } },
+                    { order_id: { contains: search } },
+                    { customer_email: { contains: search, mode: 'insensitive' } }
+                ]
+            })
+        };
+
+        const payments = await prisma.payment.findMany({
+            where,
+            orderBy: { [sortBy]: sortOrder }
+        });
+
+        // CSV escaping: wrap fields containing comma or newline in quotes
+        const escapeCsv = (field: string | null | undefined) => {
+            if (!field) return '';
+            const str = String(field);
+            if (str.includes(',') || str.includes('\n') || str.includes('"')) {
+                return `"${str.replace(/"/g, '""')}"`;
+            }
+            return str;
+        };
+
+        const header = "ID,MerchantID,Amount,Currency,Status,Email,Date\n";
+        const csv = payments.map((p) =>
+            `${escapeCsv(p.id)},${escapeCsv(p.merchantId)},${escapeCsv(p.amount)},${escapeCsv(p.currency)},${escapeCsv(p.status)},${escapeCsv(p.customer_email)},${escapeCsv(p.createdAt.toISOString())}`
+        ).join("\n");
+
+        res.setHeader("Content-Type", "text/csv");
+        res.attachment("payments_history.csv");
+        return res.status(200).send(header + csv);
+    } catch (error: unknown) {
+        res.status(500).json({ error: "Internal Server Error" });
+    }
 };
 
 export const getPaymentById = async (req: Request, res: Response) => {

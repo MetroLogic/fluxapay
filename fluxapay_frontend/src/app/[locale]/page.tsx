@@ -1,12 +1,5 @@
 import { Metadata } from "next";
-import {
-  WhyFluxapay,
-  Bridges,
-  GlobalReach,
-  UseCases,
-  FAQ,
-  Footer,
-} from "@/features/landing";
+import dynamic from "next/dynamic";
 import Hero from "@/features/landing/sections/Hero";
 import {
   organizationSchema,
@@ -14,6 +7,13 @@ import {
   jsonLdScript,
 } from "@/lib/seo-schemas";
 import { generatePageMetadata } from "@/lib/seo";
+
+const WhyFluxapay = dynamic(() => import("@/features/landing").then(mod => mod.WhyFluxapay), { ssr: false });
+const Bridges = dynamic(() => import("@/features/landing").then(mod => mod.Bridges), { ssr: false });
+const GlobalReach = dynamic(() => import("@/features/landing").then(mod => mod.GlobalReach), { ssr: false });
+const UseCases = dynamic(() => import("@/features/landing").then(mod => mod.UseCases), { ssr: false });
+const FAQ = dynamic(() => import("@/features/landing").then(mod => mod.FAQ), { ssr: false });
+const Footer = dynamic(() => import("@/features/landing").then(mod => mod.Footer), { ssr: false });
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
   const { locale } = await params;
