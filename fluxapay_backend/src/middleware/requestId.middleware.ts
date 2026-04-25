@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { randomUUID } from "crypto";
 import { AuthRequest } from "../types/express";
+import { requestContextStorage } from "../utils/requestContext";
 
 /**
  * Request ID Middleware
@@ -21,5 +22,8 @@ export function requestIdMiddleware(
   // Add to response headers for client visibility
   res.setHeader("x-request-id", requestId);
 
-  next();
+  // Run the rest of the request within the async local storage context
+  requestContextStorage.run({ requestId }, () => {
+    next();
+  });
 }

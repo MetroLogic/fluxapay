@@ -1,4 +1,5 @@
 import { Logger, LogEntry, LogLevel, LogContext, MetricsCollector, MetricEvent, MetricsTags } from '../types/logging.types';
+import { getRequestId } from './requestContext';
 
 /**
  * Structured JSON Logger for Production Observability
@@ -48,6 +49,13 @@ class StructuredLogger implements Logger {
 
     // Merge default context with provided context
     const mergedContext = { ...this.defaultContext, ...context };
+    
+    // Automatically inject requestId from AsyncLocalStorage if available and not already provided
+    const requestId = getRequestId();
+    if (requestId && !mergedContext.requestId) {
+      mergedContext.requestId = requestId;
+    }
+
     if (Object.keys(mergedContext).length > 0) {
       entry.context = mergedContext;
     }

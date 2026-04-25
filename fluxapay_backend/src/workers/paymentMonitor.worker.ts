@@ -10,9 +10,12 @@
 
 import dotenv from 'dotenv';
 import { startPaymentMonitor, stopPaymentMonitor } from '../services/paymentMonitor.service';
+import { getLogger } from '../utils/logger';
 
 // Load environment variables
 dotenv.config();
+
+const logger = getLogger();
 
 /**
  * Worker configuration from environment variables
@@ -27,7 +30,7 @@ const WORKER_CONFIG = {
  * Graceful shutdown handler
  */
 async function gracefulShutdown(signal: string) {
-  console.log(`[PaymentMonitorWorker] Received ${signal}, initiating graceful shutdown...`);
+  logger.info(`Received ${signal}, initiating graceful shutdown...`);
   
   try {
     // Stop the payment monitor
@@ -36,10 +39,10 @@ async function gracefulShutdown(signal: string) {
     // Wait for graceful shutdown timeout
     await new Promise(resolve => setTimeout(resolve, WORKER_CONFIG.gracefulShutdownTimeout));
     
-    console.log('[PaymentMonitorWorker] Graceful shutdown completed');
+    logger.info('Graceful shutdown completed');
     process.exit(0);
-  } catch (error) {
-    console.error('[PaymentMonitorWorker] Error during graceful shutdown:', error);
+  } catch (error: any) {
+    logger.error('Error during graceful shutdown', { error: error.message });
     process.exit(1);
   }
 }
@@ -48,15 +51,15 @@ async function gracefulShutdown(signal: string) {
  * Main worker function
  */
 async function main() {
-  console.log('[PaymentMonitorWorker] Starting payment monitor worker...');
-  console.log('[PaymentMonitorWorker] Configuration:', {
+  logger.info('Starting payment monitor worker...');
+  logger.info('Configuration', {
     enabled: WORKER_CONFIG.enabled,
     intervalMs: WORKER_CONFIG.intervalMs,
     gracefulShutdownTimeout: WORKER_CONFIG.gracefulShutdownTimeout,
   });
 
   if (!WORKER_CONFIG.enabled) {
-    console.log('[PaymentMonitorWorker] Worker disabled via PAYMENT_MONITOR_WORKER_ENABLED=false');
+    logger.info('Worker disabled via PAYMENT_MONITOR_WORKER_ENABLED=false');
     process.exit(0);
   }
 
@@ -65,13 +68,13 @@ async function main() {
   process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
   // Handle uncaught exceptions
-  process.on('uncaughtException', (error) => {
-    console.error('[PaymentMonitorWorker] Uncaught exception:', error);
+  process.on('uncaughtException', (error: Error) => {
+    logger.error('Uncaught exception', { error: error.message, stack: error.stack });
     gracefulShutdown('uncaughtException');
   });
 
-  process.on('unhandledRejection', (reason, promise) => {
-    console.error('[PaymentMonitorWorker] Unhandled rejection at:', promise, 'reason:', reason);
+  process.on('unhandledRejection', (reason: any, promise: Promise<any>) => {
+    logger.error('Unhandled rejection', { reason });
     gracefulShutdown('unhandledRejection');
   });
 
@@ -79,20 +82,20 @@ async function main() {
     // Start the payment monitor
     startPaymentMonitor();
     
-    console.log('[PaymentMonitorWorker] Payment monitor worker started successfully');
+    logger.info('Payment monitor worker started successfully');
     
     // Keep the process alive
     // The worker will run indefinitely until stopped
-  } catch (error) {
-    console.error('[PaymentMonitorWorker] Failed to start payment monitor:', error);
+  } catch (error: any) {
+    logger.error('Failed to start payment monitor', { error: error.message });
     process.exit(1);
   }
 }
 
 // Run the worker
 if (require.main === module) {
-  main().catch((error) => {
-    console.error('[PaymentMonitorWorker] Worker failed to start:', error);
+  main().catch((error: any) => {
+    logger.error('Worker failed to start', { error: error.message });
     process.exit(1);
   });
 }
