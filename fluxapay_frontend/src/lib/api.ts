@@ -523,13 +523,17 @@ export const api = {
         quantity: number;
         unit_price: number;
       }>;
+      total_amount?: number;
       currency: string;
       due_date: string;
       notes?: string;
     }) =>
       fetchWithAuth("/api/v1/invoices", {
         method: "POST",
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          ...data,
+          amount: data.total_amount,
+        }),
       }),
 
     list: async (params?: {
@@ -559,7 +563,17 @@ export const api = {
       };
     },
 
-    getById: (invoiceId: string) => fetchWithAuth(`/api/v1/invoices/${invoiceId}`),
+    getById: (invoiceId: string) => 
+      fetchWithAuth(`/api/v1/invoices/${invoiceId}`).then(res => {
+        const inv = res.data;
+        return {
+          ...inv,
+          total_amount: Number(inv.amount),
+          customer_name: inv.metadata?.customer_name,
+          line_items: inv.metadata?.line_items || [],
+          notes: inv.metadata?.notes,
+        };
+      }),
 
     updateStatus: (invoiceId: string, status: string) =>
       fetchWithAuth(`/api/v1/invoices/${invoiceId}/status`, {

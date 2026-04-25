@@ -17,14 +17,45 @@ function buildInvoiceNumber() {
 
 export async function createInvoiceService(params: {
   merchantId: string;
-  amount: number;
+  amount?: number;
   currency: string;
   customer_email: string;
+  customer_name?: string;
+  line_items?: Array<{
+    description: string;
+    quantity: number;
+    unit_price: number;
+  }>;
+  notes?: string;
   metadata?: Record<string, unknown>;
   due_date?: string;
 }) {
-  const { merchantId, amount, currency, customer_email, metadata, due_date } = params;
-  const metadataJson = (metadata ?? {}) as Prisma.InputJsonValue;
+  const {
+    merchantId,
+    currency,
+    customer_email,
+    customer_name,
+    line_items,
+    notes,
+    metadata = {},
+    due_date,
+  } = params;
+  const metadataJson = {
+    ...metadata,
+    ...(customer_name ? { customer_name } : {}),
+    ...(line_items ? { line_items } : {}),
+    ...(notes ? { notes } : {}),
+  } as Prisma.InputJsonValue;
+
+  // Calculate amount from line items if not provided
+  let amount = params.amount;
+  if (amount === undefined && line_items) {
+    amount = line_items.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
+  }
+
+  if (amount === undefined) {
+    throw new Error("Amount is required if line_items are not provided");
+  }
 
   // Create payment first
   const paymentId = crypto.randomUUID();
@@ -39,6 +70,7 @@ export async function createInvoiceService(params: {
       currency,
       customer_email,
       metadata: metadataJson,
+      description: notes || `Invoice for ${customer_email}`,
       expiration: due_date ? new Date(due_date) : new Date(Date.now() + 15 * 60 * 1000),
       status: "pending",
       checkout_url,

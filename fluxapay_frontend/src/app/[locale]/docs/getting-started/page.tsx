@@ -1,4 +1,5 @@
 import { Metadata } from "next";
+import Link from "next/link";
 import { DocsLayout } from "@/components/docs/DocsLayout";
 import { CodeBlock } from "@/components/docs/CodeBlock";
 import { EditOnGitHub } from "@/components/docs/EditOnGitHub";
@@ -305,20 +306,20 @@ export default function LocalizedGettingStartedPage() {
             Ready to dive deeper? Explore our comprehensive API reference or learn about authentication.
           </p>
           <div className="flex flex-wrap gap-3">
-            <a
+            <Link
               href="/docs/api-reference"
               className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-colors"
             >
               API Reference
               <ArrowRight className="h-4 w-4" />
-            </a>
-            <a
+            </Link>
+            <Link
               href="/docs/authentication"
               className="inline-flex items-center gap-2 px-4 py-2 bg-white text-slate-900 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
             >
               Authentication Guide
               <ArrowRight className="h-4 w-4" />
-            </a>
+            </Link>
           </div>
         </section>
 

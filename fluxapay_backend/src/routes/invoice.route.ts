@@ -2,18 +2,13 @@ import { Router } from "express";
 import { authenticateApiKey } from "../middleware/apiKeyAuth.middleware";
 import { merchantApiKeyRateLimit } from "../middleware/rateLimit.middleware";
 import { validate, validateQuery } from "../middleware/validation.middleware";
+import { createInvoice, listInvoices, getInvoiceById, updateInvoiceStatus, exportInvoice } from "../controllers/invoice.controller";
 import {
-    createInvoice,
-    getInvoiceById,
-    listInvoices,
-    updateInvoiceStatus,
-    exportInvoice,
-} from "../controllers/invoice.controller";
-import {
-    createInvoiceSchema,
-    listInvoicesQuerySchema,
-    getInvoiceByIdSchema,
-    exportInvoiceSchema,
+  createInvoiceSchema,
+  listInvoicesQuerySchema,
+  getInvoiceByIdSchema,
+  exportInvoiceSchema,
+  updateInvoiceStatusSchema,
 } from "../schemas/invoice.schema";
 
 const router = Router();
@@ -148,7 +143,7 @@ router.get("/:invoice_id", authenticateApiKey, validate(getInvoiceByIdSchema), g
  *       404:
  *         description: Invoice not found
  */
-router.patch("/:invoice_id/status", authenticateApiKey, updateInvoiceStatus);
+router.patch("/:invoice_id/status", authenticateApiKey, validate(updateInvoiceStatusSchema), updateInvoiceStatus);
 
 /**
  * @swagger

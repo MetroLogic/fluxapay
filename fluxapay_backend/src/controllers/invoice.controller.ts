@@ -18,6 +18,9 @@ export async function createInvoice(req: AuthRequest, res: Response) {
       amount: req.body.amount,
       currency: req.body.currency,
       customer_email: req.body.customer_email,
+      customer_name: req.body.customer_name,
+      line_items: req.body.line_items,
+      notes: req.body.notes,
       metadata: req.body.metadata,
       due_date: req.body.due_date,
     });
@@ -72,8 +75,8 @@ export async function updateInvoiceStatus(req: AuthRequest, res: Response) {
   } catch (err: any) {
     if (err.message === "Invoice not found") {
       res.status(404).json({ message: "Invoice not found" });
-    } else if (err.message === "Invalid status transition") {
-      res.status(400).json({ message: "Invalid status transition" });
+    } else if (err.message === "Invalid status transition" || err.message === "Invalid status") {
+      res.status(400).json({ message: err.message });
     } else {
       res.status(err.status || 500).json({ message: err.message || "Server error" });
     }
