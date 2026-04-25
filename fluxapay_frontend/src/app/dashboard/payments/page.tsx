@@ -27,6 +27,8 @@ interface BackendPayment {
   amount: number;
   currency: string;
   status: Payment["status"];
+  checkoutUrl?: string;
+  checkout_url?: string;
   merchantId: string;
   customer_email: string;
   order_id?: string;
@@ -58,6 +60,7 @@ function mapBackendPayment(p: BackendPayment): Payment {
     amount: p.amount,
     currency: p.currency,
     status: p.status,
+    checkoutUrl: p.checkoutUrl ?? p.checkout_url,
     merchantId: p.merchantId,
     customerName: "",
     customerEmail: p.customer_email ?? "",
