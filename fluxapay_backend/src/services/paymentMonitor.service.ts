@@ -4,6 +4,7 @@ import { PrismaClient } from "../generated/client/client";
 import { Decimal } from "@prisma/client/runtime/library";
 import { paymentContractService } from "./paymentContract.service";
 import { PaymentStatus } from "../types/payment";
+import { trackPaymentConfirmed, trackPaymentExpired } from "../middleware/metrics.middleware";
 import { createAndDeliverWebhook } from "./webhook.service";
 import { eventBus, AppEvents } from "./EventService";
 
@@ -38,6 +39,7 @@ export async function runPaymentMonitorTick(): Promise<void> {
   const partialPaymentExpiry = new Date(now.getTime() - PARTIAL_PAYMENT_TIMEOUT);
   const stalePaymentExpiry = new Date(now.getTime() - STALE_PAYMENT_TIMEOUT);
 
+  const expired1 = await prisma.payment.updateMany({
   // 1. Check for expired payments (pending or partially_paid)
   const expiredPayments = await prisma.payment.findMany({
   // 1. Check for expired payments by expiration date
@@ -55,7 +57,9 @@ export async function runPaymentMonitorTick(): Promise<void> {
       expiration: true,
     },
   });
+  if (expired1.count > 0) trackPaymentExpired(expired1.count);
 
+  const expired2 = await prisma.payment.updateMany({
   for (const payment of expiredPayments) {
     // Idempotent update: only transitions rows still in "pending" or "partially_paid"
     const updated = await prisma.payment.updateMany({
@@ -105,9 +109,9 @@ export async function runPaymentMonitorTick(): Promise<void> {
     },
     data: { status: PaymentStatus.EXPIRED },
   });
+  if (expired2.count > 0) trackPaymentExpired(expired2.count);
 
-  // 3. Check for stale payments (no recent activity)
-  await prisma.payment.updateMany({
+  const expired3 = await prisma.payment.updateMany({
     where: {
       status: { in: [PaymentStatus.PENDING, PaymentStatus.PARTIALLY_PAID] },
       last_seen_at: { lte: stalePaymentExpiry },
@@ -115,6 +119,7 @@ export async function runPaymentMonitorTick(): Promise<void> {
     },
     data: { status: PaymentStatus.EXPIRED },
   });
+  if (expired3.count > 0) trackPaymentExpired(expired3.count);
 
   // 2. Monitor active payments
   const payments = await prisma.payment.findMany({
@@ -215,6 +220,10 @@ export async function runPaymentMonitorTick(): Promise<void> {
             ...(newStatus === PaymentStatus.CONFIRMED && { confirmed_at: new Date() }),
           },
         });
+
+        if (newStatus === PaymentStatus.CONFIRMED) {
+          trackPaymentConfirmed();
+        }
 
         // Emit generic status change event
         const { eventBus, AppEvents } = await import('./EventService');

@@ -1,21 +1,5 @@
-/**
- * cron.service.ts
- *
- * Sets up scheduled jobs for FluxaPay.
- *
- * Jobs:
- *  • Settlement batch     – runs daily at 00:00 UTC (swept → fiat payout)
- *  • Payment monitor      – runs every 2 min (on-chain USDC detection)
- *  • Billing cycle        – runs daily at 01:00 UTC (subscription renewals)
- *  • Database backup      – runs daily at 02:00 UTC (encrypted SQL dump)
- *
- * Environment variables:
- *  SETTLEMENT_CRON        – Cron for settlement (default: "0 0 * * *")
- *  PAYMENT_MONITOR_CRON   – Cron for on-chain payment checks (default: "*/2 * * * *")
- *  BILLING_CRON           – Cron for subscription billing (default: "0 1 * * *")
- *  DB_BACKUP_CRON         – Cron for database backup (default: "0 2 * * *")
- *  DISABLE_CRON           – Set to "true" to disable all jobs (e.g. in test environments)
- */
+// cron.service.ts
+// Sets up scheduled jobs for FluxaPay.
 
 import { schedule, validate, type ScheduledTask } from "node-cron";
 import { runSettlementBatch } from "./settlementBatch.service";
