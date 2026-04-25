@@ -4,6 +4,8 @@ import { PrismaClient } from "../generated/client/client";
 import { Decimal } from "@prisma/client/runtime/library";
 import { paymentContractService } from "./paymentContract.service";
 import { PaymentStatus } from "../types/payment";
+import { createAndDeliverWebhook } from "./webhook.service";
+import { eventBus, AppEvents } from "./EventService";
 
 /**
  * paymentMonitor.service.ts
@@ -36,15 +38,65 @@ export async function runPaymentMonitorTick(): Promise<void> {
   const partialPaymentExpiry = new Date(now.getTime() - PARTIAL_PAYMENT_TIMEOUT);
   const stalePaymentExpiry = new Date(now.getTime() - STALE_PAYMENT_TIMEOUT);
 
+  // 1. Check for expired payments (pending or partially_paid)
+  const expiredPayments = await prisma.payment.findMany({
   // 1. Check for expired payments by expiration date
   await prisma.payment.updateMany({
     where: {
       status: { in: [PaymentStatus.PENDING, PaymentStatus.PARTIALLY_PAID] },
       expiration: { lte: now },
     },
-    data: { status: PaymentStatus.EXPIRED },
+    select: {
+      id: true,
+      merchantId: true,
+      amount: true,
+      currency: true,
+      customer_email: true,
+      expiration: true,
+    },
   });
 
+  for (const payment of expiredPayments) {
+    // Idempotent update: only transitions rows still in "pending" or "partially_paid"
+    const updated = await prisma.payment.updateMany({
+      where: { id: payment.id, status: { in: [PaymentStatus.PENDING, PaymentStatus.PARTIALLY_PAID] } },
+      data: { status: PaymentStatus.EXPIRED },
+    });
+
+    if (updated.count === 0) {
+      // Already transitioned
+      continue;
+    }
+
+    // Emit internal event
+    eventBus.emit(AppEvents.PAYMENT_EXPIRED, { ...payment, status: PaymentStatus.EXPIRED });
+
+    // Fire webhook
+    const eventId = `${payment.id}:expired`;
+    try {
+      await createAndDeliverWebhook(
+        payment.merchantId,
+        "payment.failed",
+        {
+          event: "payment.expired",
+          data: {
+            payment_id: payment.id,
+            amount: payment.amount.toString(),
+            currency: payment.currency,
+            status: PaymentStatus.EXPIRED,
+            customer_email: payment.customer_email,
+            expired_at: now.toISOString(),
+            reason: "Payment window expired without on-chain confirmation.",
+          },
+        },
+        payment.id,
+        undefined,
+        eventId,
+      );
+    } catch (err: unknown) {
+      console.error(`[PaymentMonitor] Webhook failed for expired payment ${payment.id}:`, err);
+    }
+  }
   // 2. Check for partial payments that have timed out
   await prisma.payment.updateMany({
     where: {

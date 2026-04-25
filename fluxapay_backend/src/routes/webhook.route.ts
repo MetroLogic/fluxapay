@@ -27,7 +27,7 @@ const router = Router();
  *         name: event_type
  *         schema:
  *           type: string
- *           enum: [payment_completed, payment_failed, payment_pending, refund_completed, refund_failed, subscription_created, subscription_cancelled, subscription_renewed]
+ *           enum: [payment.created, payment.pending, payment.confirmed, payment.failed, payment.settled, refund.created, refund.completed, refund.failed, subscription.created, subscription.cancelled, subscription.renewed]
  *         description: Filter by event type
  *       - in: query
  *         name: status
@@ -225,7 +225,7 @@ router.post(
  *             properties:
  *               event_type:
  *                 type: string
- *                 enum: [payment_completed, payment_failed, payment_pending, refund_completed, refund_failed, subscription_created, subscription_cancelled, subscription_renewed]
+ *                 enum: [payment.created, payment.pending, payment.confirmed, payment.failed, payment.settled, refund.created, refund.completed, refund.failed, subscription.created, subscription.cancelled, subscription.renewed]
  *                 description: The type of webhook event to simulate
  *               endpoint_url:
  *                 type: string
