@@ -25,6 +25,7 @@ import { funderMonitorService } from "./funderMonitor.service";
 import { runPaymentExpiryReminderJob } from "./paymentExpiryReminder.service";
 import { runPaymentExpiryJob } from "./paymentExpiry.service";
 import { performDatabaseBackup } from "./dbBackup.service";
+import { cleanupExpiredIdempotencyRecords } from "../middleware/idempotency.middleware";
 
 const SETTLEMENT_CRON_EXPR = process.env.SETTLEMENT_CRON ?? "0 0 * * *";
 const BILLING_CRON_EXPR = process.env.BILLING_CRON ?? "0 1 * * *";
@@ -33,6 +34,7 @@ const FUNDER_MONITOR_CRON_EXPR = process.env.FUNDER_MONITOR_CRON ?? "*/10 * * * 
 const CHECKOUT_REMINDER_CRON_EXPR = process.env.CHECKOUT_REMINDER_CRON ?? "*/2 * * * *";
 const PAYMENT_EXPIRY_CRON_EXPR = process.env.PAYMENT_EXPIRY_CRON ?? "*/5 * * * *";
 const DB_BACKUP_CRON_EXPR = process.env.DB_BACKUP_CRON ?? "0 2 * * *";
+const IDEMPOTENCY_CLEANUP_CRON_EXPR = process.env.IDEMPOTENCY_CLEANUP_CRON ?? "0 3 * * *";
 
 let settlementTask: ScheduledTask | null = null;
 let billingTask: ScheduledTask | null = null;
@@ -41,6 +43,7 @@ let funderMonitorTask: ScheduledTask | null = null;
 let checkoutReminderTask: ScheduledTask | null = null;
 let paymentExpiryTask: ScheduledTask | null = null;
 let dbBackupTask: ScheduledTask | null = null;
+let idempotencyCleanupTask: ScheduledTask | null = null;
 
 /**
  * Starts all scheduled cron jobs.
@@ -132,6 +135,18 @@ export function startCronJobs(): void {
   } else {
     console.log("[Cron] DISABLE_PAYMENT_EXPIRY_CRON=true – payment expiry job disabled.");
   }
+
+  // ── Idempotency Cleanup Job ────────────────────────────────────────
+  idempotencyCleanupTask = schedule(IDEMPOTENCY_CLEANUP_CRON_EXPR, async () => {
+    console.log(`[Cron] ⏰ Idempotency cleanup triggered at ${new Date().toISOString()}`);
+    try {
+      const deletedCount = await cleanupExpiredIdempotencyRecords();
+      console.log(`[Cron] ✅ Idempotency cleanup — ${deletedCount} expired records deleted.`);
+    } catch (err: any) {
+      console.error(`[Cron] ❌ Idempotency cleanup failed: ${err.message}`);
+    }
+  }, { timezone: "UTC" });
+  console.log(`[Cron] ✅ Idempotency cleanup job scheduled (${IDEMPOTENCY_CLEANUP_CRON_EXPR}) in UTC.`);
 }
 
 /**
@@ -146,6 +161,7 @@ export function stopCronJobs(): void {
     [checkoutReminderTask, "Checkout reminder"],
     [paymentExpiryTask, "Payment expiry"],
     [dbBackupTask, "Database backup"],
+    [idempotencyCleanupTask, "Idempotency cleanup"],
   ];
   for (const [task, name] of tasks) {
     if (task) {
@@ -160,4 +176,5 @@ export function stopCronJobs(): void {
   checkoutReminderTask = null;
   paymentExpiryTask = null;
   dbBackupTask = null;
+  idempotencyCleanupTask = null;
 }
