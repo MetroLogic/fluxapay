@@ -10,6 +10,7 @@ import * as yup from "yup";
 import Input from "@/components/Input";
 import { Button } from "@/components/Button";
 import { api, ApiError } from "@/lib/api";
+import { useTranslations } from "next-intl";
 
 const resetPasswordSchema = yup.object({
   password: yup.string().min(8, "Password must be at least 8 characters").required("Password is required"),
@@ -17,6 +18,7 @@ const resetPasswordSchema = yup.object({
 });
 
 export const ResetPasswordForm = () => {
+  const tAuth = useTranslations("auth");
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get("token") || "";
@@ -35,7 +37,7 @@ export const ResetPasswordForm = () => {
 
   useEffect(() => {
     if (!token) {
-      setTokenError("Missing reset token");
+      setTokenError(tAuth("missingResetToken"));
       setIsValidatingToken(false);
       return;
     }
@@ -48,7 +50,7 @@ export const ResetPasswordForm = () => {
         if (err instanceof ApiError) {
           setTokenError(err.message);
         } else {
-          setTokenError("Invalid or expired token");
+          setTokenError(tAuth("linkExpiredDescription"));
         }
       } finally {
         setIsValidatingToken(false);
@@ -56,7 +58,7 @@ export const ResetPasswordForm = () => {
     };
 
     validateToken();
-  }, [token]);
+  }, [token, tAuth]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -100,7 +102,7 @@ export const ResetPasswordForm = () => {
             <circle cx="12" cy="12" r="10" className="opacity-30" />
             <path d="M22 12a10 10 0 0 1-10 10" />
           </svg>
-          <p className="text-muted-foreground font-medium">Validating reset link...</p>
+          <p className="text-muted-foreground font-medium">{tAuth("validatingLink")}</p>
         </div>
       </div>
     );
@@ -115,13 +117,13 @@ export const ResetPasswordForm = () => {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-slate-900">Link Expired</h1>
-          <p className="text-slate-600">{tokenError || "This password reset link is invalid or has expired."}</p>
+          <h1 className="text-2xl font-bold text-slate-900">{tAuth("linkExpired")}</h1>
+          <p className="text-slate-600">{tokenError || tAuth("linkExpiredDescription")}</p>
           <Button onClick={() => router.push("/forgot-password")} className="w-full">
-            Request New Link
+            {tAuth("requestNewLink")}
           </Button>
           <div className="pt-2 text-center text-sm text-muted-foreground font-medium">
-            <Link href="/login" className="text-indigo-500 hover:text-indigo-600 underline underline-offset-4">Return to sign in</Link>
+            <Link href="/login" className="text-indigo-500 hover:text-indigo-600 underline underline-offset-4">{tAuth("returnToSignIn")}</Link>
           </div>
         </div>
       </div>
@@ -137,9 +139,9 @@ export const ResetPasswordForm = () => {
         <div className="flex h-full w-full md:w-[40%] items-center justify-center bg-transparent">
           <div className="w-full max-w-md rounded-none lg:rounded-r-2xl bg-white p-8 shadow-none animate-slide-in-left">
             <div className="space-y-2 mb-8 animate-fade-in [animation-delay:200ms]">
-              <h1 className="text-2xl md:text-[40px] font-bold text-black tracking-tight">Set New Password</h1>
+              <h1 className="text-2xl md:text-[40px] font-bold text-black tracking-tight">{tAuth("setNewPassword")}</h1>
               <p className="text-sm md:text-[18px] font-normal text-muted-foreground">
-                Please enter your new password below.
+                {tAuth("setNewPasswordDescription")}
               </p>
             </div>
 
@@ -149,13 +151,13 @@ export const ResetPasswordForm = () => {
                   <Input
                     type={showPassword ? "text" : "password"}
                     name="password"
-                    label="New Password"
+                    label={tAuth("newPassword")}
                     value={password}
                     onChange={(e) => {
                       setPassword(e.target.value);
                       if (errors.password) setErrors(prev => ({ ...prev, password: "" }));
                     }}
-                    placeholder="Enter new password"
+                    placeholder={tAuth("newPasswordPlaceholder")}
                     error={errors.password}
                     className="pr-10"
                   />
@@ -178,13 +180,13 @@ export const ResetPasswordForm = () => {
                   <Input
                     type={showConfirmPassword ? "text" : "password"}
                     name="confirmPassword"
-                    label="Confirm Password"
+                    label={tAuth("confirmPassword")}
                     value={confirmPassword}
                     onChange={(e) => {
                       setConfirmPassword(e.target.value);
                       if (errors.confirmPassword) setErrors(prev => ({ ...prev, confirmPassword: "" }));
                     }}
-                    placeholder="Confirm new password"
+                    placeholder={tAuth("confirmNewPasswordPlaceholder")}
                     error={errors.confirmPassword}
                     className="pr-10"
                   />
@@ -215,7 +217,7 @@ export const ResetPasswordForm = () => {
                     <path d="M22 12a10 10 0 0 1-10 10" />
                   </svg>
                 )}
-                <span>{isSubmitting ? "Updating..." : "Reset Password"}</span>
+                <span>{isSubmitting ? tAuth("updating") : tAuth("resetPassword")}</span>
               </Button>
             </form>
           </div>
