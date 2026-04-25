@@ -1,5 +1,6 @@
 import { PrismaClient, Prisma, InvoiceStatus } from "../generated/client/client";
 import crypto from "crypto";
+import { createAndDeliverWebhook } from "./webhook.service";
 
 const prisma = new PrismaClient();
 
@@ -230,6 +231,33 @@ export async function updateInvoiceStatusService(
     where: { id: invoiceId },
     data: { status: newStatus as InvoiceStatus },
   });
+
+  if (newStatus === "paid" || newStatus === "overdue") {
+    try {
+      const eventType = newStatus === "paid" ? "invoice_paid" : "invoice_overdue";
+      const payload = {
+        event: `invoice.${newStatus}`,
+        invoice_id: updatedInvoice.id,
+        invoice_number: updatedInvoice.invoice_number,
+        amount: updatedInvoice.amount.toString(),
+        currency: updatedInvoice.currency,
+        status: newStatus,
+        customer_email: updatedInvoice.customer_email,
+        updated_at: updatedInvoice.updated_at.toISOString(),
+      };
+      
+      // We explicitly cast to 'any' for the enum type to avoid Prisma typing issues immediately after generation
+      await createAndDeliverWebhook(
+        merchantId,
+        eventType as any,
+        payload
+      );
+    } catch (err: any) {
+      if (!err.message?.includes("has no webhook")) {
+        console.error(`[InvoiceService] Failed to deliver webhook for invoice ${invoiceId}:`, err);
+      }
+    }
+  }
 
   return {
     message: "Invoice status updated",
