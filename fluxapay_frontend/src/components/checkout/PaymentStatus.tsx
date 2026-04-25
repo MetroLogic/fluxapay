@@ -1,9 +1,9 @@
 'use client';
 
-import { CheckCircle, XCircle, Loader2 } from 'lucide-react';
+import { CheckCircle, XCircle, Loader2, AlertTriangle, AlertCircle } from 'lucide-react';
 
 interface PaymentStatusProps {
-  status: 'pending' | 'confirmed' | 'expired' | 'failed';
+  status: 'pending' | 'confirmed' | 'expired' | 'failed' | 'partially_paid' | 'overpaid';
   message?: string;
 }
 
@@ -20,6 +20,7 @@ export function PaymentStatus({ status, message }: PaymentStatusProps) {
           bgColor: 'bg-green-50',
           borderColor: 'border-green-200',
           defaultMessage: 'Payment Confirmed!',
+          ariaLabel: 'Payment status: Payment Confirmed',
         };
       case 'expired':
         return {
@@ -28,6 +29,7 @@ export function PaymentStatus({ status, message }: PaymentStatusProps) {
           bgColor: 'bg-red-50',
           borderColor: 'border-red-200',
           defaultMessage: 'Payment Expired',
+          ariaLabel: 'Payment status: Payment Expired',
         };
       case 'failed':
         return {
@@ -36,6 +38,25 @@ export function PaymentStatus({ status, message }: PaymentStatusProps) {
           bgColor: 'bg-red-50',
           borderColor: 'border-red-200',
           defaultMessage: 'Payment Failed',
+          ariaLabel: 'Payment status: Payment Failed',
+        };
+      case 'partially_paid':
+        return {
+          icon: AlertTriangle,
+          iconColor: 'text-amber-600',
+          bgColor: 'bg-amber-50',
+          borderColor: 'border-amber-200',
+          defaultMessage: 'Partial Payment Received',
+          ariaLabel: 'Payment status: Partial Payment Received',
+        };
+      case 'overpaid':
+        return {
+          icon: AlertCircle,
+          iconColor: 'text-orange-600',
+          bgColor: 'bg-orange-50',
+          borderColor: 'border-orange-200',
+          defaultMessage: 'Overpayment Detected',
+          ariaLabel: 'Payment status: Overpayment Detected',
         };
       case 'pending':
       default:
@@ -45,6 +66,7 @@ export function PaymentStatus({ status, message }: PaymentStatusProps) {
           bgColor: 'bg-blue-50',
           borderColor: 'border-blue-200',
           defaultMessage: 'Waiting for payment...',
+          ariaLabel: 'Payment status: Waiting for payment',
         };
     }
   };
@@ -58,7 +80,7 @@ export function PaymentStatus({ status, message }: PaymentStatusProps) {
     <div
       role="status"
       aria-live="polite"
-      aria-label={`Payment status: ${statusMessage}`}
+      aria-label={config.ariaLabel}
       className={`flex flex-col items-center justify-center gap-3 px-6 py-4 rounded-lg border ${config.bgColor} ${config.borderColor}`}
     >
       <Icon

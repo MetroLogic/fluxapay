@@ -7,7 +7,9 @@ export interface Payment {
   memo?: string;
   memoRequired?: boolean;
   expiresAt: Date;
-  status: 'pending' | 'confirmed' | 'expired' | 'failed';
+  status: 'pending' | 'confirmed' | 'expired' | 'failed' | 'partially_paid' | 'overpaid';
+  paidAmount?: number;
+  merchantContact?: string;
   successUrl?: string;
   merchantName?: string;
   description?: string;
@@ -15,6 +17,7 @@ export interface Payment {
 
 export interface PaymentStatusUpdate {
   paymentId: string;
-  status: 'pending' | 'confirmed' | 'expired' | 'failed';
+  status: 'pending' | 'confirmed' | 'expired' | 'failed' | 'partially_paid' | 'overpaid';
+  paidAmount?: number;
   timestamp: Date;
 }

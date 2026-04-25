@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import { Loader2, XCircle, CheckCircle } from 'lucide-react';
+import { Loader2, XCircle, CheckCircle, AlertTriangle, AlertCircle } from 'lucide-react';
 import { usePaymentStatus } from '@/hooks/usePaymentStatus';
 import { PaymentQRCode } from '@/components/checkout/PaymentQRCode';
 import { PaymentTimer } from '@/components/checkout/PaymentTimer';
@@ -114,6 +114,130 @@ export default function CheckoutPage() {
           <p className="text-sm text-gray-500">
             Please try again or contact support if the problem persists.
           </p>
+        </div>
+      </div>
+    );
+  }
+
+  // PARTIALLY PAID STATE
+  if (payment.status === 'partially_paid') {
+    const shortfall = payment.amount - (payment.paidAmount ?? 0);
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+        <div
+          className="bg-white rounded-2xl shadow-xl p-8 max-w-2xl w-full text-center"
+          role="alert"
+          aria-live="polite"
+        >
+          <AlertTriangle aria-hidden="true" className="w-20 h-20 text-amber-500 mx-auto mb-6" />
+          <h1 className="text-3xl font-bold text-gray-900 mb-4">Partial Payment Received</h1>
+          <p className="text-lg text-gray-600 mb-6">
+            We received part of your payment. Please send the remaining amount to complete the transaction.
+          </p>
+
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6 text-left space-y-2">
+            <div className="flex justify-between">
+              <span className="text-gray-600">Expected:</span>
+              <span
+                className="font-semibold text-gray-900"
+                aria-label={`Expected amount: ${payment.amount} ${payment.currency}`}
+              >
+                {payment.amount} {payment.currency}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-600">Received:</span>
+              <span
+                className="font-semibold text-amber-700"
+                aria-label={`Received amount: ${payment.paidAmount ?? 0} ${payment.currency}`}
+              >
+                {payment.paidAmount ?? 0} {payment.currency}
+              </span>
+            </div>
+            <div className="flex justify-between border-t border-amber-200 pt-2">
+              <span className="text-gray-600">Still owed:</span>
+              <span
+                className="font-bold text-amber-800"
+                aria-label={`Still owed: ${shortfall} ${payment.currency}`}
+              >
+                {shortfall} {payment.currency}
+              </span>
+            </div>
+          </div>
+
+          <p className="text-gray-600 mb-4">
+            Please contact the merchant to resolve this payment.
+          </p>
+          {payment.merchantContact && (
+            <a
+              href={payment.merchantContact}
+              className="inline-block bg-amber-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-amber-700 transition-colors"
+            >
+              Contact Merchant
+            </a>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // OVERPAID STATE
+  if (payment.status === 'overpaid') {
+    const excess = (payment.paidAmount ?? 0) - payment.amount;
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+        <div
+          className="bg-white rounded-2xl shadow-xl p-8 max-w-2xl w-full text-center"
+          role="alert"
+          aria-live="polite"
+        >
+          <AlertCircle aria-hidden="true" className="w-20 h-20 text-orange-500 mx-auto mb-6" />
+          <h1 className="text-3xl font-bold text-gray-900 mb-4">Overpayment Detected</h1>
+          <p className="text-lg text-gray-600 mb-6">
+            We received more than the required amount. Please contact the merchant to arrange a refund of the excess.
+          </p>
+
+          <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-6 text-left space-y-2">
+            <div className="flex justify-between">
+              <span className="text-gray-600">Expected:</span>
+              <span
+                className="font-semibold text-gray-900"
+                aria-label={`Expected amount: ${payment.amount} ${payment.currency}`}
+              >
+                {payment.amount} {payment.currency}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-600">Received:</span>
+              <span
+                className="font-semibold text-orange-700"
+                aria-label={`Received amount: ${payment.paidAmount ?? 0} ${payment.currency}`}
+              >
+                {payment.paidAmount ?? 0} {payment.currency}
+              </span>
+            </div>
+            <div className="flex justify-between border-t border-orange-200 pt-2">
+              <span className="text-gray-600">Excess paid:</span>
+              <span
+                className="font-bold text-orange-800"
+                aria-label={`Excess paid: ${excess} ${payment.currency}`}
+              >
+                {excess} {payment.currency}
+              </span>
+            </div>
+          </div>
+
+          <p className="text-gray-600 mb-4">
+            Please contact the merchant to request a refund of the excess amount.
+          </p>
+          {payment.merchantContact && (
+            <a
+              href={payment.merchantContact}
+              className="inline-block bg-orange-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-orange-700 transition-colors"
+            >
+              Contact Merchant
+            </a>
+          )}
         </div>
       </div>
     );
