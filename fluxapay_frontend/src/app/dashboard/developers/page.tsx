@@ -22,7 +22,7 @@ export default function DevelopersPage() {
   const [testMode, setTestMode] = useState(true);
   const [activeTab, setActiveTab] = useState("rest");
   const [apiKey, setApiKey] = useState("Loading...");
-  const [activeEndpoint, setActiveEndpoint] = useState<"create" | "status">("create");
+  const [activeEndpoint, setActiveEndpoint] = useState<"create" | "status" | "webhook">("create");
 
   useEffect(() => {
     const fetchApiKey = async () => {
@@ -95,8 +95,8 @@ export default function DevelopersPage() {
       currency: "USDC",
       customer_email: "customer@example.com",
       order_id: "order_123",
-      success_url: "https://merchant.com/success",
-      cancel_url: "https://merchant.com/cancel",
+      success_url: "https://yourstore.com/order/success",
+      cancel_url: "https://yourstore.com/order/cancel",
       metadata: { cart_id: "987" }
     };
 
@@ -120,6 +120,7 @@ const response = await fetch('${baseUrl}/v1/payments', {
 });
 
 const data = await response.json();
+// data.checkout_url → redirect customer here
 console.log(data);`;
     }
 
@@ -134,6 +135,7 @@ headers = {
 payload = ${JSON.stringify(body, null, 4)}
 
 response = requests.post(url, headers=headers, data=json.dumps(payload))
+# response.json()["checkout_url"] → redirect customer here
 print(response.json())`;
   };
 
@@ -171,12 +173,154 @@ response = requests.get(url, headers=headers)
 print(response.json())`;
   };
 
+  const getWebhookVerifyLines = (lang: "curl" | "js" | "python") => {
+    if (lang === "curl") {
+      return `# FluxaPay sends these headers with every webhook:
+# X-FluxaPay-Signature: <hmac-sha256-hex>
+# X-FluxaPay-Timestamp: <iso8601>
+
+# Verify manually with openssl:
+TIMESTAMP="2026-03-25T14:30:00.000Z"
+PAYLOAD='{"event":"payment.confirmed","data":{"payment_id":"pay_123abc456"}}'
+SECRET="whsec_your_webhook_secret"
+
+SIGNING_STRING="\${TIMESTAMP}.\${PAYLOAD}"
+SIGNATURE=$(echo -n "$SIGNING_STRING" | \\
+  openssl dgst -sha256 -hmac "$SECRET" -hex | cut -d' ' -f2)
+
+echo "Signature: $SIGNATURE"`;
+    }
+
+    if (lang === "js") {
+      return `import crypto from 'crypto';
+import { Request, Response, NextFunction } from 'express';
+
+function verifyFluxaPayWebhook(
+  payload: string,
+  signature: string,
+  timestamp: string,
+  secret: string
+): boolean {
+  const signingString = \`\${timestamp}.\${payload}\`;
+  const expected = crypto
+    .createHmac('sha256', secret)
+    .update(signingString)
+    .digest('hex');
+
+  try {
+    return crypto.timingSafeEqual(
+      Buffer.from(signature),
+      Buffer.from(expected)
+    );
+  } catch {
+    return false;
+  }
+}
+
+// Express middleware
+export function fluxaPayWebhookMiddleware(
+  req: Request, res: Response, next: NextFunction
+) {
+  const signature = req.headers['x-fluxapay-signature'] as string;
+  const timestamp = req.headers['x-fluxapay-timestamp'] as string;
+  const secret = process.env.FLUXAPAY_WEBHOOK_SECRET!;
+  const payload = JSON.stringify(req.body);
+
+  if (!verifyFluxaPayWebhook(payload, signature, timestamp, secret)) {
+    return res.status(401).json({ error: 'Invalid signature' });
+  }
+  next();
+}
+
+// Handler
+app.post('/webhooks/fluxapay',
+  fluxaPayWebhookMiddleware,
+  (req, res) => {
+    const { event, data } = req.body;
+    switch (event) {
+      case 'payment.confirmed':
+        console.log('Payment confirmed:', data.payment_id);
+        break;
+      case 'payment.failed':
+        console.log('Payment failed:', data.payment_id);
+        break;
+    }
+    res.json({ received: true });
+  }
+);`;
+    }
+
+    return `import hmac, hashlib, json, os
+from flask import Flask, request, jsonify
+
+def verify_fluxapay_webhook(
+    payload: str,
+    signature: str,
+    timestamp: str,
+    secret: str
+) -> bool:
+    signing_string = f"{timestamp}.{payload}"
+    expected = hmac.new(
+        secret.encode('utf-8'),
+        signing_string.encode('utf-8'),
+        hashlib.sha256
+    ).hexdigest()
+    return hmac.compare_digest(signature, expected)
+
+app = Flask(__name__)
+
+@app.route('/webhooks/fluxapay', methods=['POST'])
+def handle_webhook():
+    signature = request.headers.get('X-FluxaPay-Signature', '')
+    timestamp = request.headers.get('X-FluxaPay-Timestamp', '')
+    secret = os.getenv('FLUXAPAY_WEBHOOK_SECRET', '')
+    payload = request.get_data(as_text=True)
+
+    if not verify_fluxapay_webhook(payload, signature, timestamp, secret):
+        return jsonify({'error': 'Invalid signature'}), 401
+
+    data = request.get_json()
+    event = data.get('event')
+
+    if event == 'payment.confirmed':
+        print('Payment confirmed:', data['data']['payment_id'])
+    elif event == 'payment.failed':
+        print('Payment failed:', data['data']['payment_id'])
+
+    return jsonify({'received': True}), 200`;
+  };
+
+  const getWebhookVerifyResponse = () => `{
+  "received": true
+}
+
+# Webhook payload structure:
+{
+  "event": "payment.confirmed",
+  "timestamp": "2026-03-25T14:30:00.000Z",
+  "data": {
+    "payment_id": "pay_123abc456",
+    "merchant_id": "merchant_456",
+    "amount": 100,
+    "currency": "USDC",
+    "status": "confirmed",
+    "order_id": "order_123",
+    "confirmed_at": "2026-03-25T14:30:00.000Z"
+  }
+}
+
+# Headers sent by FluxaPay:
+# X-FluxaPay-Signature: <hmac-sha256-hex>
+# X-FluxaPay-Timestamp: <iso8601>`;
+
   const getActiveRequest = () => {
     const lang = activeTab === "rest" ? "curl" : (activeTab as "js" | "python");
+    if (activeEndpoint === "webhook") return getWebhookVerifyLines(lang);
     return activeEndpoint === "create" ? getCreatePaymentLines(lang) : getStatusPaymentLines(lang);
   };
 
   const getActiveResponse = () => {
+    if (activeEndpoint === "webhook") return getWebhookVerifyResponse();
     if (activeEndpoint === "create") {
       return `{
   "id": "pay_123abc456",
@@ -897,6 +1041,22 @@ print(response.json())`;
               }}
             >
               Get Payment Status
+            </button>
+            <button
+              onClick={() => setActiveEndpoint("webhook")}
+              style={{
+                padding: "0.75rem 1.5rem",
+                borderRadius: "0.5rem",
+                fontWeight: "600",
+                fontSize: "0.875rem",
+                backgroundColor: activeEndpoint === "webhook" ? "#fbbf24" : "#f3f4f6",
+                color: "#1a1a3e",
+                border: "none",
+                cursor: "pointer",
+                transition: "all 0.2s"
+              }}
+            >
+              Verify Webhook
             </button>
           </div>
 
