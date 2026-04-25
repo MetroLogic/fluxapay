@@ -2,7 +2,8 @@
 
 import { Menu, Bell, User } from "lucide-react";
 import { Button } from "@/components/Button";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useDashboardNotifications } from "@/hooks/useDashboardNotifications";
 
 interface TopNavProps {
     onMenuClick: () => void;
@@ -10,6 +11,8 @@ interface TopNavProps {
 
 export function TopNav({ onMenuClick }: TopNavProps) {
     const pathname = usePathname();
+    const router = useRouter();
+    const { unreadCount } = useDashboardNotifications({ webhookLimit: 5, payoutLimit: 5 });
 
     const getTitle = () => {
         if (pathname === "/dashboard") return "Overview";
@@ -38,8 +41,18 @@ export function TopNav({ onMenuClick }: TopNavProps) {
 
             {/* Actions */}
             <div className="flex items-center gap-2">
-                <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className="relative text-muted-foreground hover:text-foreground"
+                    onClick={() => router.push("/dashboard/notifications")}
+                >
                     <Bell className="h-5 w-5" />
+                    {unreadCount > 0 && (
+                        <span className="absolute right-1 top-1 inline-flex min-h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold text-white">
+                            {unreadCount > 9 ? "9+" : unreadCount}
+                        </span>
+                    )}
                     <span className="sr-only">Notifications</span>
                 </Button>
                 <Button variant="ghost" size="icon" className="ml-2 rounded-full bg-secondary text-secondary-foreground hover:bg-secondary/80">
