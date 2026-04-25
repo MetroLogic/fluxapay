@@ -64,7 +64,7 @@ export const QuickActions = () => {
   };
 
   const handleCreatePaymentLink = () => {
-    router.push("/dashboard/payments?action=create-payment-link");
+    router.push("/dashboard/payments?action=create-payment");
   };
 
   const handleViewDocs = () => {
@@ -90,7 +90,7 @@ export const QuickActions = () => {
             onClick={handleCreatePaymentLink}
           >
             <Link className="mr-2 h-4 w-4" />
-            Create Payment Link
+            Create Payment
           </Button>
           <Button
             className="w-full justify-start h-12"

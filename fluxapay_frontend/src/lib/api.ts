@@ -462,6 +462,8 @@ export const api = {
     create: (data: {
       amount: number;
       currency: string;
+      customer_email: string;
+      order_id?: string;
       description?: string;
       success_url?: string;
       cancel_url?: string;
