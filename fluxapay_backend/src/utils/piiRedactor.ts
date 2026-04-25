@@ -131,6 +131,13 @@ export function sanitizeObject(obj: any, sensitiveFields: string[] = []): any {
     'credit_card',
     'cvv',
     'pin',
+    'account_number',
+    'accountNumber',
+    'account_name',
+    'accountName',
+    'email',
+    'phone_number',
+    'phone',
   ];
 
   const allSensitiveFields = [...defaultSensitiveFields, ...sensitiveFields];
