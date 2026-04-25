@@ -42,7 +42,7 @@ export default function CheckoutPage() {
     }
   }, [payment?.status, payment?.successUrl]);
 
-  const handleExpire = () => {};
+  const handleExpire = () => { };
 
   return (
     <CheckoutBrandingShell
@@ -351,9 +351,21 @@ export default function CheckoutPage() {
               />
             </div>
 
+            <div className="mb-8 space-y-4">
+              <CopyField label="Payment Address" value={payment.address} truncate />
+
+              {payment.memo && (
+                <CopyField
+                  label={`Memo (${payment.memoType?.replace('MEMO_', '') || 'TEXT'})`}
+                  value={payment.memo}
+                  required={payment.memoRequired}
+                />
+              )}
+            </div>
+
             {payment.memoRequired && (
               <div
-                className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-900"
+                className="mb-8 overflow-hidden rounded-xl border border-amber-200 bg-amber-50 shadow-sm"
                 role="alert"
                 aria-live="polite"
               >
