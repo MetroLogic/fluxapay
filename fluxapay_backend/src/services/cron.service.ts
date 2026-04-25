@@ -103,25 +103,35 @@ export function startCronJobs(): void {
     }
   }, { timezone: "UTC" });
 
-  // ── Payment Expiry Job ────────────────────────────────
-  paymentExpiryTask = schedule(PAYMENT_EXPIRY_CRON_EXPR, async () => {
-    try {
-      const result = await runPaymentExpiryJob();
-      if (result.processed > 0) {
-        console.log(`[Cron] ✅ Payment expiry — ${result.expired}/${result.processed} expired.`);
-      }
-    } catch (err: any) {
-      console.error(`[Cron] ❌ Payment expiry job failed: ${err.message}`);
+  // ── Payment Expiry Job (pending → expired) ────────────────────────────────
+  if (process.env.DISABLE_PAYMENT_EXPIRY_CRON !== "true") {
+    if (validate(PAYMENT_EXPIRY_CRON_EXPR)) {
+      paymentExpiryTask = schedule(
+        PAYMENT_EXPIRY_CRON_EXPR,
+        async () => {
+          console.log(`[Cron] ⏰ Payment expiry job triggered at ${new Date().toISOString()}`);
+          try {
+            const result = await runPaymentExpiryJob();
+            if (result.processed > 0) {
+              console.log(
+                `[Cron] ✅ Payment expiry — ${result.expired}/${result.processed} expired, ` +
+                `${result.webhookErrors.length} webhook error(s).`,
+              );
+            }
+          } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            console.error(`[Cron] ❌ Payment expiry job failed: ${msg}`);
+          }
+        },
+        { timezone: "UTC" },
+      );
+      console.log(`[Cron] ✅ Payment expiry job scheduled (${PAYMENT_EXPIRY_CRON_EXPR}) in UTC.`);
+    } else {
+      console.warn(`[Cron] Invalid PAYMENT_EXPIRY_CRON "${PAYMENT_EXPIRY_CRON_EXPR}" – payment expiry disabled.`);
     }
-  }, { timezone: "UTC" });
-
-  // ── Database Daily Backup ────────────────────────────────
-  dbBackupTask = schedule(DB_BACKUP_CRON_EXPR, async () => {
-    console.log(`[Cron] ⏰ Database backup triggered at ${new Date().toISOString()}`);
-    await performDatabaseBackup();
-  }, { timezone: "UTC" });
-
-  console.log("[Cron] All jobs scheduled successfully.");
+  } else {
+    console.log("[Cron] DISABLE_PAYMENT_EXPIRY_CRON=true – payment expiry job disabled.");
+  }
 }
 
 /**
