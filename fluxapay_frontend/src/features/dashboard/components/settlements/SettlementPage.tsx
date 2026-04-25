@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { DollarSign, TrendingUp, Clock, Calendar } from "lucide-react";
 
+import { DataTableCard } from "@/components/data-table";
+import { TablePaginationBar } from "@/components/data-table/TablePaginationBar";
 import { StatCard } from "./StatCard";
 import { SettlementFilters } from "./SettlementFilters";
 import { SettlementsTable } from "./SettlementsTable";
@@ -10,43 +12,40 @@ import { SettlementDetailsModal } from "./SettlementDetailsModal";
 import {
   useSettlements,
   useSettlementSummary,
-  type MerchantSettlement,
 } from "@/hooks/useSettlements";
-import { MOCK_SETTLEMENTS } from "./mockSettlements";
+
+const PAGE_SIZE = 10;
 
 export default function SettlementsPage() {
+  const [page, setPage] = useState(1);
   const [status, setStatus] = useState("all");
   const [currency, setCurrency] = useState("all");
   const [date, setDate] = useState({ from: "", to: "" });
-  const [selected, setSelected] = useState<MerchantSettlement | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const { isLoading } = useSettlements({
+  const { settlements, pagination, isLoading, error } = useSettlements({
+    page,
+    limit: PAGE_SIZE,
     status: status !== "all" ? status : undefined,
     currency: currency !== "all" ? currency : undefined,
     date_from: date.from || undefined,
     date_to: date.to || undefined,
-    limit: 100,
   });
-  const { summary } = useSettlementSummary();
+
+  const { summary, isLoading: summaryLoading } = useSettlementSummary();
 
   const avgDays = summary?.average_settlement_time_days ?? "—";
-  const nextDate = summary?.next_settlement_date ?? "—";
+  const nextDate = summary?.next_settlement_date
+    ? new Date(summary.next_settlement_date).toLocaleDateString()
+    : "—";
 
-  const filtered = MOCK_SETTLEMENTS.filter((s) => {
-    if (status !== "all" && s.status !== status) return false;
-    if (currency !== "all" && s.currency !== currency) return false;
-    if (date.from && s.date < date.from) return false;
-    if (date.to && s.date > date.to) return false;
-    return true;
-  });
+  const totalSettled = summary?.total_settled_this_month ?? 0;
+  const totalFees = summary?.total_fees_paid ?? 0;
 
-  const totalSettled = MOCK_SETTLEMENTS.filter(
-    (s) => s.status === "completed",
-  ).reduce((sum, s) => sum + s.fiatAmount, 0);
-
-  const totalFees = MOCK_SETTLEMENTS.filter(
-    (s) => s.status === "completed",
-  ).reduce((sum, s) => sum + s.fees, 0);
+  // Reset to page 1 when filters change
+  const handleStatusChange = (v: string) => { setStatus(v); setPage(1); };
+  const handleCurrencyChange = (v: string) => { setCurrency(v); setPage(1); };
+  const handleDateChange = (v: { from: string; to: string }) => { setDate(v); setPage(1); };
 
   return (
     <div className="space-y-6 p-6">
@@ -61,44 +60,61 @@ export default function SettlementsPage() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatCard
           title="Total Settled"
-          value={isLoading ? "…" : `$${Number(totalSettled).toLocaleString()}`}
+          value={summaryLoading ? "…" : `$${Number(totalSettled).toLocaleString()}`}
           icon={DollarSign}
         />
         <StatCard
           title="Total Fees"
-          value={isLoading ? "…" : `$${Number(totalFees).toLocaleString()}`}
+          value={summaryLoading ? "…" : `$${Number(totalFees).toLocaleString()}`}
           icon={TrendingUp}
         />
         <StatCard
           title="Avg. Settlement Time"
-          value={isLoading ? "…" : `${avgDays} days`}
+          value={summaryLoading ? "…" : `${avgDays} days`}
           icon={Clock}
         />
         <StatCard
           title="Next Settlement"
-          value={isLoading ? "…" : nextDate}
+          value={summaryLoading ? "…" : nextDate}
           icon={Calendar}
         />
       </div>
 
-      {/* Filters */}
-      <SettlementFilters
-        status={status}
-        currency={currency}
-        date={date}
-        onStatusChange={setStatus}
-        onCurrencyChange={setCurrency}
-        onDateChange={setDate}
-      />
+      <DataTableCard
+        toolbar={
+          <SettlementFilters
+            status={status}
+            currency={currency}
+            date={date}
+            onStatusChange={handleStatusChange}
+            onCurrencyChange={handleCurrencyChange}
+            onDateChange={handleDateChange}
+          />
+        }
+      >
+        <SettlementsTable
+          settlements={settlements}
+          onSelect={(s) => setSelectedId(s.id)}
+          isLoading={isLoading}
+          error={error ? String(error) : null}
+        />
 
-      {/* Table */}
-      <SettlementsTable settlements={filtered} onSelect={setSelected} />
+        {pagination && (
+          <TablePaginationBar
+            page={page}
+            pageSize={PAGE_SIZE}
+            total={pagination.total}
+            loading={isLoading}
+            onPageChange={setPage}
+          />
+        )}
+      </DataTableCard>
 
-      {/* Modal */}
-      {selected && (
+      {/* Detail Modal */}
+      {selectedId && (
         <SettlementDetailsModal
-          settlement={selected}
-          onClose={() => setSelected(null)}
+          settlementId={selectedId}
+          onClose={() => setSelectedId(null)}
         />
       )}
     </div>

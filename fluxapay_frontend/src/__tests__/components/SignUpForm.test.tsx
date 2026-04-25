@@ -27,31 +27,30 @@ describe('SignUpForm', () => {
 
   it('renders all required fields', () => {
     render(<SignUpForm />);
-    expect(screen.getByPlaceholderText(/your name/i)).toBeInTheDocument();
-    expect(screen.getByPlaceholderText(/business name/i)).toBeInTheDocument();
-    expect(screen.getByPlaceholderText(/you@example.com/i)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/fullNamePlaceholder/i)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/businessNamePlaceholder/i)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/emailSignupPlaceholder/i)).toBeInTheDocument();
     // password field
-    expect(screen.getByPlaceholderText(/password/i)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/passwordPlaceholder/i)).toBeInTheDocument();
   });
 
   it('shows error when name is empty on submit', async () => {
     render(<SignUpForm />);
-    fireEvent.click(screen.getByRole('button', { name: /create account/i }));
+    fireEvent.click(screen.getByRole('button', { name: /signup/i }));
     await waitFor(() => {
-      // "Name is required" matches first; use getAllByText to handle multiple matches
-      const matches = screen.getAllByText(/name is required/i);
+      const matches = screen.getAllByText(/validation.nameRequired/i);
       expect(matches.length).toBeGreaterThan(0);
     });
   });
 
   it('shows error for missing business name', async () => {
     render(<SignUpForm />);
-    fireEvent.change(screen.getByPlaceholderText(/your name/i), {
+    fireEvent.change(screen.getByPlaceholderText(/fullNamePlaceholder/i), {
       target: { value: 'John Doe' },
     });
-    fireEvent.click(screen.getByRole('button', { name: /create account/i }));
+    fireEvent.click(screen.getByRole('button', { name: /signup/i }));
     await waitFor(() => {
-      expect(screen.getByText(/business name is required/i)).toBeInTheDocument();
+      expect(screen.getByText(/validation.businessNameRequired/i)).toBeInTheDocument();
     });
   });
 });

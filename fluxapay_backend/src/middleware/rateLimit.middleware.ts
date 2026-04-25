@@ -48,16 +48,24 @@ function checkLimit(
 }
 
 /**
- * Global rate limit for public API routes (keyed by IP).
+ * Global rate limit for public API traffic (keyed by IP).
  *
  * Default: 100 requests per 60 seconds per IP.
  * Configurable via env vars:
- *   GLOBAL_RATE_LIMIT_MAX        (default: 100)
- *   GLOBAL_RATE_LIMIT_WINDOW_MS  (default: 60000)
+ *   PUBLIC_API_IP_RATE_MAX          (alias, preferred)
+ *   GLOBAL_RATE_LIMIT_MAX           (legacy)
+ *   PUBLIC_API_IP_WINDOW_MS         (alias)
+ *   GLOBAL_RATE_LIMIT_WINDOW_MS     (legacy)
  */
 export function globalRateLimit(): RequestHandler {
-  const max = parseInt(process.env.GLOBAL_RATE_LIMIT_MAX || "100", 10);
-  const windowMs = parseInt(process.env.GLOBAL_RATE_LIMIT_WINDOW_MS || "60000", 10);
+  const max = parseInt(
+    process.env.PUBLIC_API_IP_RATE_MAX || process.env.GLOBAL_RATE_LIMIT_MAX || "100",
+    10,
+  );
+  const windowMs = parseInt(
+    process.env.PUBLIC_API_IP_WINDOW_MS || process.env.GLOBAL_RATE_LIMIT_WINDOW_MS || "60000",
+    10,
+  );
 
   return (req: Request, res: Response, next: NextFunction) => {
     const key = `global:${getIp(req)}`;
@@ -143,6 +151,51 @@ export function authRateLimit(): RequestHandler {
         error: {
           code: "RATE_LIMIT_EXCEEDED",
           message: "Too many authentication attempts. Please try again later.",
+          retry_after_seconds: retryAfterSeconds,
+        },
+      });
+    }
+
+    next();
+  };
+}
+
+/**
+ * Per-merchant / per-API-key limit for routes that run *after* `authenticateApiKey`
+ * or JWT that sets `merchantId` / `user.id`.
+ *
+ * Default: 200 requests per 60 seconds per merchant.
+ *   MERCHANT_API_KEY_RATE_MAX
+ *   MERCHANT_API_KEY_RATE_WINDOW_MS
+ */
+function getMerchantIdForApiKeyLimit(req: Request): string | null {
+  const a = req as AuthRequest;
+  if (a.merchantId) return a.merchantId;
+  if (a.user?.id) return a.user.id;
+  return null;
+}
+
+export function merchantApiKeyRateLimit(): RequestHandler {
+  const max = parseInt(process.env.MERCHANT_API_KEY_RATE_MAX || "200", 10);
+  const windowMs = parseInt(process.env.MERCHANT_API_KEY_RATE_WINDOW_MS || "60000", 10);
+
+  return (req: Request, res: Response, next: NextFunction) => {
+    const id = getMerchantIdForApiKeyLimit(req);
+    if (!id) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+    const key = `mapikey:${id}`;
+    const { allowed, retryAfterSeconds } = checkLimit(key, max, windowMs);
+
+    if (!allowed) {
+      res.setHeader("Retry-After", String(retryAfterSeconds));
+      res.setHeader("X-RateLimit-Limit", String(max));
+      res.setHeader("X-RateLimit-Remaining", "0");
+      return res.status(429).json({
+        success: false,
+        error: {
+          code: "RATE_LIMIT_EXCEEDED",
+          message: "API rate limit for this key exceeded. Please slow down.",
           retry_after_seconds: retryAfterSeconds,
         },
       });

@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { authenticateApiKey } from "../middleware/apiKeyAuth.middleware";
+import { merchantApiKeyRateLimit } from "../middleware/rateLimit.middleware";
 import { authenticateToken } from "../middleware/auth.middleware";
 import { adminAuth } from "../middleware/adminAuth.middleware";
 import {
@@ -26,7 +27,11 @@ const router = Router();
  *       400:
  *         description: Invalid state
  */
-router.post("/me/deletion-request", authenticateApiKey, selfRequestDeletion);
+router.post(
+  "/me/deletion-request",
+  authenticateApiKey, merchantApiKeyRateLimit(),
+  selfRequestDeletion,
+);
 /**
  * @swagger
  * /api/v1/merchants/me/deletion-request:
@@ -41,7 +46,11 @@ router.post("/me/deletion-request", authenticateApiKey, selfRequestDeletion);
  *       404:
  *         description: No deletion request
  */
-router.get("/me/deletion-request", authenticateApiKey, selfGetDeletionRequest);
+router.get(
+  "/me/deletion-request",
+  authenticateApiKey, merchantApiKeyRateLimit(),
+  selfGetDeletionRequest,
+);
 
 // ── Admin ─────────────────────────────────────────────────────────────────────
 /**

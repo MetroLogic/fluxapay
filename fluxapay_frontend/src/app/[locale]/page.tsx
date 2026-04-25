@@ -1,4 +1,5 @@
 import { Metadata } from "next";
+import Hero from "@/features/landing/sections/Hero";
 import {
   WhyFluxapay,
   Bridges,
@@ -7,7 +8,6 @@ import {
   FAQ,
   Footer,
 } from "@/features/landing";
-import Hero from "@/features/landing/sections/Hero";
 import {
   organizationSchema,
   softwareApplicationSchema,

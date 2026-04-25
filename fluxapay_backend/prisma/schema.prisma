@@ -247,12 +247,15 @@ model WebhookLog {
   next_retry_at   DateTime?
   request_payload Json?
   response_body   String?
+  failed_at       DateTime?
+  failure_reason  String?
   created_at      DateTime              @default(now())
   updated_at      DateTime              @updatedAt
   retryAttempts   WebhookRetryAttempt[]
 
   @@index([merchantId, created_at(sort: Desc)])
   @@index([merchantId, status])
+  @@index([status, failed_at])
 }
 
 model WebhookRetryAttempt {
@@ -277,6 +280,8 @@ model Payment {
   metadata           Json
   expiration         DateTime
   status             PaymentStatus   @default(pending)
+  paid_amount        Decimal?        @default(0)
+  last_seen_at       DateTime?
   checkout_url       String
   success_url        String?
   cancel_url         String?
@@ -487,6 +492,8 @@ enum WebhookEventType {
   payment_failed
   payment_pending
   payment_expired
+  payment_partially_paid
+  payment_overpaid
   refund_completed
   refund_failed
   settlement_completed
@@ -494,6 +501,8 @@ enum WebhookEventType {
   subscription_created
   subscription_cancelled
   subscription_renewed
+  invoice_paid
+  invoice_overdue
 }
 
 enum WebhookStatus {

@@ -15,14 +15,15 @@ import {
   adminBulkUpdateMerchantStatus,
   updateSettlementSchedule,
   addBankAccount,
+  updateBankAccount,
 } from "../controllers/merchant.controller";
 import { validate } from "../middleware/validation.middleware";
 import * as merchantSchema from "../schemas/merchant.schema";
 import { authenticateApiKey } from "../middleware/apiKeyAuth.middleware";
 import { idempotencyMiddleware } from "../middleware/idempotency.middleware";
 import { adminAuth } from "../middleware/adminAuth.middleware";
-import { updateSettlementScheduleSchema, bankAccountSchema } from "../schemas/merchant.schema";
-import { authRateLimit, merchantRateLimit } from "../middleware/rateLimit.middleware";
+import { updateSettlementScheduleSchema, bankAccountSchema, updateBankAccountSchema } from "../schemas/merchant.schema";
+import { authRateLimit, merchantApiKeyRateLimit, merchantRateLimit } from "../middleware/rateLimit.middleware";
 
 const router = Router();
 
@@ -180,7 +181,7 @@ router.post("/resend-otp", idempotencyMiddleware, authRateLimit(), validate(merc
  *       404:
  *         description: Merchant not found
  */
-router.get("/me", authenticateApiKey, getLoggedInMerchant);
+router.get("/me", authenticateApiKey, merchantApiKeyRateLimit(), getLoggedInMerchant);
 
 /**
  * @swagger
@@ -209,7 +210,7 @@ router.get("/me", authenticateApiKey, getLoggedInMerchant);
  */
 router.patch(
   "/me",
-  authenticateApiKey,
+  authenticateApiKey, merchantApiKeyRateLimit(),
   validate(merchantSchema.updateMerchantProfileSchema),
   updateMerchantProfile,
 );
@@ -239,7 +240,7 @@ router.patch(
  *       401:
  *         description: Unauthorized
  */
-router.patch("/me/webhook", authenticateApiKey, updateMerchantWebhook);
+router.patch("/me/webhook", authenticateApiKey, merchantApiKeyRateLimit(), updateMerchantWebhook);
 
 
 /**
@@ -263,7 +264,7 @@ router.patch("/me/webhook", authenticateApiKey, updateMerchantWebhook);
  *                 apiKey:
  *                   type: string
  */
-router.post("/keys/rotate-api-key", authenticateApiKey, merchantRateLimit(), rotateApiKey);
+router.post("/keys/rotate-api-key", authenticateApiKey, merchantApiKeyRateLimit(), merchantRateLimit(), rotateApiKey);
 
 /**
  * @swagger
@@ -288,7 +289,7 @@ router.post("/keys/rotate-api-key", authenticateApiKey, merchantRateLimit(), rot
  */
 router.post(
   "/keys/rotate-webhook-secret",
-  authenticateApiKey,
+  authenticateApiKey, merchantApiKeyRateLimit(),
   merchantRateLimit(),
   rotateWebhookSecret,
 );
@@ -439,7 +440,7 @@ router.post("/admin/bulk-status", adminAuth, adminBulkUpdateMerchantStatus);
  */
 router.patch(
   "/me/settlement-schedule",
-  authenticateApiKey,
+  authenticateApiKey, merchantApiKeyRateLimit(),
   validate(updateSettlementScheduleSchema),
   updateSettlementSchedule,
 );
@@ -488,9 +489,53 @@ router.patch(
  */
 router.post(
   "/me/bank-account",
-  authenticateApiKey,
+  authenticateApiKey, merchantApiKeyRateLimit(),
   validate(bankAccountSchema),
   addBankAccount,
+);
+
+/**
+ * @swagger
+ * /api/v1/merchants/me/bank-account:
+ *   patch:
+ *     summary: Update existing bank account details
+ *     tags: [Merchants]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               account_name:
+ *                 type: string
+ *               account_number:
+ *                 type: string
+ *               bank_name:
+ *                 type: string
+ *               bank_code:
+ *                 type: string
+ *               currency:
+ *                 type: string
+ *               country:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Bank account updated
+ *       400:
+ *         description: Validation error (e.g. currency/country mismatch)
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: No bank account found (use POST to create)
+ */
+router.patch(
+  "/me/bank-account",
+  authenticateApiKey, merchantApiKeyRateLimit(),
+  validate(updateBankAccountSchema),
+  updateBankAccount,
 );
 
 export default router;

@@ -2,6 +2,7 @@ import { PrismaClient, WebhookEventType, WebhookStatus, Payment, Merchant } from
 import crypto from "crypto";
 import { webhookEventTypes } from "../schemas/webhook.schema";
 import { normalizeEventName, toLegacyEventName } from "../utils/webhook-event-mapping.util";
+import { trackWebhookDelivery } from "../middleware/metrics.middleware";
 
 export class WebhookDispatcher {
   private prisma: PrismaClient;
@@ -16,8 +17,16 @@ export class WebhookDispatcher {
       return;
     }
 
+    if (!merchant.webhook_secret) {
+      console.error(`[WebhookDispatcher] No webhook_secret configured for merchant ${merchant.id}. Skipping.`);
+      return;
+    }
+
+    const timestamp = new Date().toISOString();
     const payload = JSON.stringify({
       event: 'payment.confirmed',
+      event_id: crypto.randomUUID(),
+      timestamp,
       data: {
         payment_id: payment.id,
         amount: payment.amount.toString(),
@@ -27,8 +36,7 @@ export class WebhookDispatcher {
       }
     });
 
-    const secret = process.env.WEBHOOK_SECRET || merchant.webhook_secret || '';
-    const signature = crypto.createHmac('sha256', secret).update(payload).digest('hex');
+    const signature = generateWebhookSignature(JSON.parse(payload), merchant.webhook_secret, timestamp);
 
     let deliveryStatus: 'SUCCESS' | 'FAILED' = 'FAILED';
 
@@ -37,7 +45,8 @@ export class WebhookDispatcher {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-webhook-signature': signature
+          'X-FluxaPay-Signature': signature,
+          'X-FluxaPay-Timestamp': timestamp,
         },
         body: payload,
       });
@@ -51,6 +60,7 @@ export class WebhookDispatcher {
     } catch (error: any) {
       console.error(`[WebhookDispatcher] Webhook delivery error for payment ${payment.id}:`, error.message);
     } finally {
+      trackWebhookDelivery(deliveryStatus === 'SUCCESS' ? 'success' : 'fail');
       await this.prisma.payment.update({
         where: { id: payment.id },
         data: {
@@ -248,8 +258,9 @@ export async function retryWebhookService(params: RetryWebhookParams) {
   );
 
   const newRetryCount = log.retry_count + 1;
+  const isPermanentlyFailed = !result.success && newRetryCount >= log.max_retries;
   const newStatus: WebhookStatus = result.success ? "delivered" :
-    newRetryCount >= log.max_retries ? "failed" : "retrying";
+    isPermanentlyFailed ? "failed" : "retrying";
 
   // Create retry attempt record
   await prisma.webhookRetryAttempt.create({
@@ -267,7 +278,7 @@ export async function retryWebhookService(params: RetryWebhookParams) {
     ? new Date(Date.now() + Math.pow(2, newRetryCount) * 60 * 1000)
     : null;
 
-  // Update the webhook log
+  // Update the webhook log — persist DLQ metadata on permanent failure
   const updatedLog = await prisma.webhookLog.update({
     where: { id: log.id },
     data: {
@@ -276,6 +287,10 @@ export async function retryWebhookService(params: RetryWebhookParams) {
       http_status: result.httpStatus,
       response_body: result.responseBody,
       next_retry_at: nextRetryAt,
+      ...(isPermanentlyFailed && {
+        failed_at: new Date(),
+        failure_reason: result.error || `HTTP ${result.httpStatus || 0}`,
+      }),
     },
   });
 
@@ -288,6 +303,131 @@ export async function retryWebhookService(params: RetryWebhookParams) {
       status: updatedLog.status,
       http_status: updatedLog.http_status,
       retry_count: updatedLog.retry_count,
+      next_retry_at: updatedLog.next_retry_at,
+      failed_at: updatedLog.failed_at,
+      failure_reason: updatedLog.failure_reason,
+    },
+  };
+}
+
+interface GetDeadLetterQueueParams {
+  page: number;
+  limit: number;
+  date_from?: string;
+  date_to?: string;
+  merchant_id?: string;
+}
+
+interface RequeueWebhookParams {
+  log_id: string;
+}
+
+export async function getDeadLetterQueueService(params: GetDeadLetterQueueParams) {
+  const { page, limit, date_from, date_to, merchant_id } = params;
+  const skip = (page - 1) * limit;
+
+  const where: any = {
+    status: "failed",
+    failed_at: { not: null },
+  };
+
+  if (merchant_id) {
+    where.merchantId = merchant_id;
+  }
+
+  if (date_from || date_to) {
+    if (date_from) {
+      where.failed_at.gte = new Date(date_from);
+    }
+    if (date_to) {
+      where.failed_at.lte = new Date(date_to);
+    }
+  }
+
+  const [logs, total] = await Promise.all([
+    prisma.webhookLog.findMany({
+      where,
+      skip,
+      take: limit,
+      orderBy: { failed_at: "desc" },
+      include: {
+        merchant: {
+          select: {
+            business_name: true,
+            email: true,
+          },
+        },
+      },
+    }),
+    prisma.webhookLog.count({ where }),
+  ]);
+
+  return {
+    message: "Dead-letter queue retrieved successfully",
+    data: {
+      logs: logs.map((log: any) => ({
+        id: log.id,
+        merchant_id: log.merchantId,
+        merchant_name: log.merchant?.business_name,
+        merchant_email: log.merchant?.email,
+        event_type: log.event_type,
+        endpoint_url: log.endpoint_url,
+        http_status: log.http_status,
+        status: log.status,
+        event_id: log.event_id,
+        payment_id: log.payment_id,
+        retry_count: log.retry_count,
+        max_retries: log.max_retries,
+        failure_reason: log.failure_reason,
+        failed_at: log.failed_at,
+        request_payload: log.request_payload,
+        created_at: log.created_at,
+        updated_at: log.updated_at,
+      })),
+      pagination: {
+        page,
+        limit,
+        total,
+        total_pages: Math.ceil(total / limit),
+      },
+    },
+  };
+}
+
+export async function requeueWebhookService(params: RequeueWebhookParams) {
+  const { log_id } = params;
+
+  const log = await prisma.webhookLog.findUnique({
+    where: { id: log_id },
+  });
+
+  if (!log) {
+    throw { status: 404, message: "Webhook log not found" };
+  }
+
+  if (log.status !== "failed") {
+    throw { status: 400, message: "Only failed webhooks can be requeued" };
+  }
+
+  const updatedLog = await prisma.webhookLog.update({
+    where: { id: log.id },
+    data: {
+      status: "pending",
+      retry_count: 0,
+      max_retries: log.max_retries + 3,
+      failed_at: null,
+      failure_reason: null,
+      next_retry_at: new Date(),
+    },
+  });
+
+  return {
+    message: "Webhook requeued for delivery",
+    data: {
+      id: updatedLog.id,
+      status: updatedLog.status,
+      retry_count: updatedLog.retry_count,
+      max_retries: updatedLog.max_retries,
       next_retry_at: updatedLog.next_retry_at,
     },
   };
@@ -389,13 +529,16 @@ export async function deliverWebhook(
     clearTimeout(timeout);
 
     const responseBody = await response.text();
+    const success = response.ok;
+    trackWebhookDelivery(success ? 'success' : 'fail');
 
     return {
-      success: response.ok,
+      success,
       httpStatus: response.status,
       responseBody: responseBody.substring(0, 10000),
     };
   } catch (error: any) {
+    trackWebhookDelivery('fail');
     return {
       success: false,
       error: error.message || "Unknown error occurred",
@@ -411,6 +554,23 @@ export function generateWebhookSignature(
 ): string {
   const signingString = `${timestamp}.${JSON.stringify(payload)}`;
   return crypto.createHmac("sha256", merchantSecret).update(signingString).digest("hex");
+}
+
+/**
+ * Replay protection: returns true only if the webhook timestamp falls within
+ * the allowed window. Default window is 5 minutes (300 000 ms).
+ *
+ * Merchants should call this before processing any incoming webhook to prevent
+ * replay attacks. Combine with event_id deduplication for full protection.
+ */
+export function verifyWebhookTimestamp(
+  timestamp: string,
+  windowMs: number = 5 * 60 * 1000,
+): boolean {
+  const webhookTime = new Date(timestamp).getTime();
+  if (isNaN(webhookTime)) return false;
+  const diff = Date.now() - webhookTime;
+  return diff >= 0 && diff <= windowMs;
 }
 
 // Helper function to generate test payload based on event type
@@ -510,6 +670,16 @@ function generateTestPayload(
       renewed_at: new Date().toISOString(),
       next_billing_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
     },
+    'invoice.paid': {
+      invoice_id: `inv_test_${Date.now()}`,
+      invoice_number: `INV-TEST-001`,
+      status: "paid",
+    },
+    'invoice.overdue': {
+      invoice_id: `inv_test_${Date.now()}`,
+      invoice_number: `INV-TEST-001`,
+      status: "overdue",
+    },
     // Legacy event names (for backward compatibility)
     'payment_completed': {
       payment_id: `pay_test_${Date.now()}`,
@@ -577,6 +747,16 @@ function generateTestPayload(
       renewed_at: new Date().toISOString(),
       next_billing_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
     },
+    'invoice_paid': {
+      invoice_id: `inv_test_${Date.now()}`,
+      invoice_number: `INV-TEST-001`,
+      status: "paid",
+    },
+    'invoice_overdue': {
+      invoice_id: `inv_test_${Date.now()}`,
+      invoice_number: `INV-TEST-001`,
+      status: "overdue",
+    },
   };
 
   return {
@@ -620,8 +800,14 @@ export async function createAndDeliverWebhook(
     return existing;
   }
 
-  // Embed event_id in the outgoing payload so merchants can deduplicate on their side.
-  const enrichedPayload = { event_id: resolvedEventId, ...payload };
+  // Embed event_id and timestamp in the outgoing payload so merchants can
+  // deduplicate and apply replay-protection on their side.
+  const deliveryTimestamp = new Date().toISOString();
+  const enrichedPayload = {
+    event_id: resolvedEventId,
+    timestamp: deliveryTimestamp,
+    ...payload,
+  };
 
   const webhookLog = await prisma.webhookLog.create({
     data: {

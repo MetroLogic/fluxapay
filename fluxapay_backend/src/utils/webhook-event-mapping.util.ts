@@ -8,6 +8,8 @@ export type CanonicalEventName =
     | 'payment.created'
     | 'payment.pending'
     | 'payment.confirmed'
+    | 'payment.partially_paid'
+    | 'payment.overpaid'
     | 'payment.failed'
     | 'payment.settled'
     | 'refund.created'
@@ -15,18 +17,24 @@ export type CanonicalEventName =
     | 'refund.failed'
     | 'subscription.created'
     | 'subscription.cancelled'
-    | 'subscription.renewed';
+    | 'subscription.renewed'
+    | 'invoice.paid'
+    | 'invoice.overdue';
 
 export type LegacyEventName =
     | 'payment_completed'
     | 'payment_confirmed'
+    | 'payment_partially_paid'
+    | 'payment_overpaid'
     | 'payment_failed'
     | 'payment_pending'
     | 'refund_completed'
     | 'refund_failed'
     | 'subscription_created'
     | 'subscription_cancelled'
-    | 'subscription_renewed';
+    | 'subscription_renewed'
+    | 'invoice_paid'
+    | 'invoice_overdue';
 
 export type WebhookEventName = CanonicalEventName | LegacyEventName;
 
@@ -34,6 +42,8 @@ export type WebhookEventName = CanonicalEventName | LegacyEventName;
 const legacyToCanonical: Record<LegacyEventName, CanonicalEventName> = {
     'payment_completed': 'payment.settled',
     'payment_confirmed': 'payment.confirmed',
+    'payment_partially_paid': 'payment.partially_paid',
+    'payment_overpaid': 'payment.overpaid',
     'payment_failed': 'payment.failed',
     'payment_pending': 'payment.pending',
     'refund_completed': 'refund.completed',
@@ -41,6 +51,8 @@ const legacyToCanonical: Record<LegacyEventName, CanonicalEventName> = {
     'subscription_created': 'subscription.created',
     'subscription_cancelled': 'subscription.cancelled',
     'subscription_renewed': 'subscription.renewed',
+    'invoice_paid': 'invoice.paid',
+    'invoice_overdue': 'invoice.overdue',
 };
 
 // Mapping from canonical names to legacy names (for backward compat)
@@ -48,6 +60,8 @@ const canonicalToLegacy: Record<CanonicalEventName, LegacyEventName> = {
     'payment.created': 'payment_pending',
     'payment.pending': 'payment_pending',
     'payment.confirmed': 'payment_confirmed',
+    'payment.partially_paid': 'payment_partially_paid',
+    'payment.overpaid': 'payment_overpaid',
     'payment.failed': 'payment_failed',
     'payment.settled': 'payment_completed',
     'refund.created': 'refund_completed',
@@ -56,6 +70,8 @@ const canonicalToLegacy: Record<CanonicalEventName, LegacyEventName> = {
     'subscription.created': 'subscription_created',
     'subscription.cancelled': 'subscription_cancelled',
     'subscription.renewed': 'subscription_renewed',
+    'invoice.paid': 'invoice_paid',
+    'invoice.overdue': 'invoice_overdue',
 };
 
 /**
