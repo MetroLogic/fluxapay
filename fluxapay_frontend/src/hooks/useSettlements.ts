@@ -1,7 +1,9 @@
 "use client";
 
+import { useState, useCallback } from "react";
 import useSWR from "swr";
 import { api } from "@/lib/api";
+import toast from "react-hot-toast";
 
 /** Shape used by merchant dashboard SettlementsPage / SettlementsTable. */
 export interface MerchantSettlement {
@@ -109,4 +111,99 @@ export function useSettlementSummary() {
     isLoading,
     mutate,
   };
+}
+
+/* ------------------------------------------------------------------ */
+/*  Single settlement detail (fetched from GET /api/v1/settlements/:id) */
+/* ------------------------------------------------------------------ */
+
+export interface SettlementDetailPayment {
+  id: string;
+  amount: number;
+  currency: string;
+  customer_email: string;
+  status: string;
+  createdAt: string;
+}
+
+export interface SettlementDetail {
+  id: string;
+  merchantId: string;
+  usdc_amount: number;
+  amount: number;
+  fees: number;
+  net_amount: number;
+  currency: string;
+  status: "completed" | "pending" | "processing" | "failed";
+  exchange_partner: string | null;
+  exchange_rate: number | null;
+  exchange_ref: string | null;
+  bank_transfer_id: string | null;
+  payment_ids: string[] | null;
+  failure_reason: string | null;
+  scheduled_date: string;
+  processed_date: string | null;
+  created_at: string;
+  updated_at: string;
+  payments: SettlementDetailPayment[];
+  merchant?: { business_name: string };
+}
+
+export function useSettlementDetails(settlementId: string | null) {
+  const { data, error, isLoading, mutate } = useSWR<SettlementDetail>(
+    settlementId ? ["settlement-detail", settlementId] : null,
+    () => api.settlements.getById(settlementId!) as Promise<SettlementDetail>,
+  );
+  return { detail: data ?? null, error, isLoading, mutate };
+}
+
+/* ------------------------------------------------------------------ */
+/*  Download settlement report (CSV / PDF) via backend export endpoint */
+/* ------------------------------------------------------------------ */
+
+export function useSettlementExport() {
+  const [exporting, setExporting] = useState(false);
+
+  const download = useCallback(
+    async (settlementId: string, format: "csv" | "pdf") => {
+      setExporting(true);
+      try {
+        const result = await api.settlements.export(settlementId, format);
+
+        // Backend returns { filename, content, contentType }
+        const filename =
+          (result as { filename?: string }).filename ??
+          `settlement-${settlementId}.${format}`;
+        const content = (result as { content?: unknown }).content;
+
+        let blob: Blob;
+        if (format === "csv" && typeof content === "string") {
+          blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
+        } else {
+          // PDF data returned as JSON — stringify for download
+          const jsonStr =
+            typeof content === "string" ? content : JSON.stringify(content, null, 2);
+          blob = new Blob([jsonStr], { type: "application/json" });
+        }
+
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        toast.success(`${format.toUpperCase()} downloaded`);
+      } catch {
+        toast.error(`Failed to download ${format.toUpperCase()}`);
+      } finally {
+        setExporting(false);
+      }
+    },
+    [],
+  );
+
+  return { download, exporting };
 }
