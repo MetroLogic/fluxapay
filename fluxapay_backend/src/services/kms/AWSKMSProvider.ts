@@ -108,16 +108,62 @@ export class AWSKMSProvider implements IKMSProvider {
   }
 
   /**
-   * Rotates the KMS encryption key
-   * AWS KMS handles automatic key rotation when enabled
+   * Rotates the KMS encryption key by re-encrypting the master seed with a new KMS key
+   *
+   * AWS KMS supports automatic key rotation (yearly) which is transparent to the application.
+   * This method is for manual rotation when switching to a completely new key ID.
+   *
+   * @param newKeyId - The new AWS KMS key ID to use for encryption
+   * @returns The new encrypted seed (base64) to be stored in environment
    */
-  async rotateEncryptionKey(): Promise<void> {
-    console.log(
-      "AWS KMS automatic key rotation should be enabled in AWS Console",
-    );
-    console.log(
-      "Manual rotation requires re-encrypting the master seed with a new key",
-    );
+  async rotateEncryptionKey(newKeyId?: string): Promise<string> {
+    if (!newKeyId) {
+      console.log("ℹ️  AWS KMS automatic key rotation (recommended):");
+      console.log("   1. Enable automatic key rotation in AWS Console");
+      console.log("   2. AWS KMS rotates backing keys yearly (transparent to app)");
+      console.log("   3. Old ciphertext remains decryptable with rotated key");
+      console.log("");
+      console.log("Manual key rotation (switching to new key ID):");
+      console.log("   Call rotateEncryptionKey(newKeyId) with the new key ARN");
+      throw new Error("newKeyId is required for manual key rotation");
+    }
+
+    try {
+      // 1. Decrypt the master seed with the old key
+      const currentSeed = await this.getMasterSeed();
+
+      // 2. Create new KMS client with the new key
+      const { EncryptCommand } = require("@aws-sdk/client-kms");
+
+      const command = new EncryptCommand({
+        KeyId: newKeyId,
+        Plaintext: Buffer.from(currentSeed, "utf-8"),
+      });
+
+      const response = await this.kmsClient.send(command);
+      const newEncryptedSeed = Buffer.from(response.CiphertextBlob).toString("base64");
+
+      // 3. Update internal state
+      this.keyId = newKeyId;
+      this.encryptedSeed = newEncryptedSeed;
+      this.cachedSeed = null; // Invalidate cache
+      this.cacheExpiry = 0;
+
+      console.log("✅ AWS KMS key rotated successfully");
+      console.log("New Key ID:", newKeyId);
+      console.log("New KMS_ENCRYPTED_MASTER_SEED:", newEncryptedSeed);
+      console.log("");
+      console.log("Next steps:");
+      console.log("1. Update AWS_KMS_KEY_ID environment variable to:", newKeyId);
+      console.log("2. Update KMS_ENCRYPTED_MASTER_SEED environment variable");
+      console.log("3. Deploy the updated configuration");
+      console.log("4. (Optional) Disable the old KMS key after verification");
+
+      return newEncryptedSeed;
+    } catch (error) {
+      console.error("Failed to rotate AWS KMS key:", error);
+      throw new Error("Failed to rotate AWS KMS key");
+    }
   }
 
   /**

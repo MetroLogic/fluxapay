@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Sidebar } from "../components/Sidebar";
 import { TopNav } from "../components/TopNav";
+import { CommandPalette } from "@/components/CommandPalette";
 
 interface DashboardShellProps {
     children: React.ReactNode;
@@ -25,6 +26,11 @@ export function DashboardShell({ children }: DashboardShellProps) {
 
     return (
         <div className="flex h-screen overflow-hidden bg-background">
+            {/* Skip to main content */}
+            <a href="#main-content" className="skip-to-content">
+                Skip to main content
+            </a>
+
             {/* Overlay for mobile */}
             {isMobileMenuOpen && (
                 <div
@@ -33,6 +39,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
                     aria-hidden="true"
                 />
             )}
+            <CommandPalette />
             <Sidebar
                 isOpen={isMobileMenuOpen}
                 onClose={() => setIsMobileMenuOpen(false)}
@@ -41,7 +48,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
 
             <div className="flex flex-1 flex-col overflow-y-auto overflow-x-hidden">
                 <TopNav onMenuClick={() => setIsMobileMenuOpen(true)} />
-                <main className="flex-1 p-6 md:p-8" role="main">
+                <main id="main-content" className="flex-1 p-6 md:p-8" role="main" tabIndex={-1}>
                     {children}
                 </main>
             </div>

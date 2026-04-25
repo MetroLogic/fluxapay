@@ -1,120 +1,142 @@
-import { useState, useEffect } from 'react';
-import { ReconciliationRecord, ReconciliationPeriod, DiscrepancyAlert } from '../types/reconciliation';
-import { addHours } from 'date-fns';
+import { useState, useEffect, useCallback } from 'react';
+import {
+  ReconciliationRecord,
+  ReconciliationPeriod,
+  DiscrepancyAlert,
+  mapReconciliationRecordApiToUi,
+  mapDiscrepancyAlertApiToUi,
+  mapSummaryApiToUi,
+  type ReconciliationSummaryApiResponse,
+  type DiscrepancyAlertsApiResponse,
+} from '../types/reconciliation';
+import { api, ApiError } from '../lib/api';
 
-const generateMockData = (start: Date, end: Date) => {
-    const records: ReconciliationRecord[] = [];
-    const alerts: DiscrepancyAlert[] = [];
-    let currentDate = new Date(start);
-
-    let idCounter = 1;
-    while (currentDate <= end) {
-        const isDiscrepancy = Math.random() > 0.9; // 10% chance
-        const usdc = Math.random() * 5000 + 100;
-        const fees = usdc * 0.01;
-        let fiat = usdc - fees;
-        let discrepancy = 0;
-
-        if (isDiscrepancy) {
-            discrepancy = (Math.random() * 50) * (Math.random() > 0.5 ? 1 : -1);
-            fiat = fiat + discrepancy;
-
-            alerts.push({
-                id: `alt-${idCounter}`,
-                settlementId: `SET-${idCounter.toString().padStart(6, '0')}`,
-                type: discrepancy > 0 ? 'overpayment' : 'underpayment',
-                amount: Math.abs(discrepancy),
-                description: `Mismatch between USDC received and Fiat payout for settlement SET-${idCounter.toString().padStart(6, '0')}.`,
-                date: new Date(currentDate),
-                resolved: false,
-            });
-        }
-
-        const calculatedDiscrepancy = usdc - (fiat + fees);
-
-        records.push({
-            id: `rec-${idCounter}`,
-            settlementId: `SET-${idCounter.toString().padStart(6, '0')}`,
-            date: new Date(currentDate),
-            usdcReceived: usdc,
-            fiatPayout: fiat,
-            fees: fees,
-            discrepancy: calculatedDiscrepancy,
-        });
-
-        currentDate = addHours(currentDate, 14);
-        idCounter++;
-    }
-
-    return { records: records.reverse(), alerts: alerts.reverse() };
-};
+const ALERTS_PAGE_SIZE = 100;
 
 export function useReconciliation(dateRange: { start: Date; end: Date }) {
-    const [records, setRecords] = useState<ReconciliationRecord[]>([]);
-    const [summary, setSummary] = useState<ReconciliationPeriod | null>(null);
-    const [discrepancies, setDiscrepancies] = useState<DiscrepancyAlert[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<Error | null>(null);
+  const [records, setRecords] = useState<ReconciliationRecord[]>([]);
+  const [summary, setSummary] = useState<ReconciliationPeriod | null>(null);
+  const [discrepancies, setDiscrepancies] = useState<DiscrepancyAlert[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
 
-    // Extract primitive timestamps so the effect dep array can be statically analysed
-    const startTime = dateRange.start.getTime();
-    const endTime = dateRange.end.getTime();
+  const startTime = dateRange.start.getTime();
+  const endTime = dateRange.end.getTime();
 
-    useEffect(() => {
-        let isMounted = true;
+  const [merchantId, setMerchantId] = useState<string | null>(null);
+  const [authReady, setAuthReady] = useState(false);
 
-        const fetchData = async () => {
-            setLoading(true);
-            setError(null);
+  useEffect(() => {
+    let isMounted = true;
+    (async () => {
+      try {
+        const me = await api.merchant.getMe();
+        if (!isMounted) return;
+        const id = (me as { merchant?: { id?: string } }).merchant?.id;
+        if (!id) {
+          setError(new Error('Merchant profile not found'));
+          return;
+        }
+        setMerchantId(id);
+      } catch (e) {
+        if (!isMounted) return;
+        const msg =
+          e instanceof ApiError
+            ? e.message
+            : e instanceof Error
+              ? e.message
+              : 'Failed to load merchant';
+        setError(new Error(msg));
+      } finally {
+        if (isMounted) setAuthReady(true);
+      }
+    })();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
-            try {
-                await new Promise(resolve => setTimeout(resolve, 800));
+  useEffect(() => {
+    if (!authReady) return;
 
-                const { records: mockRecords, alerts: mockAlerts } = generateMockData(
-                    new Date(startTime),
-                    new Date(endTime)
-                );
+    if (!merchantId) {
+      setLoading(false);
+      return;
+    }
 
-                if (!isMounted) return;
+    let isMounted = true;
 
-                let totalUSDC = 0;
-                let totalFiat = 0;
-                let totalFees = 0;
-                let totalDiscrepancy = 0;
+    const fetchData = async () => {
+      setLoading(true);
+      setError(null);
 
-                mockRecords.forEach(r => {
-                    totalUSDC += r.usdcReceived;
-                    totalFiat += r.fiatPayout;
-                    totalFees += r.fees;
-                    totalDiscrepancy += r.discrepancy;
-                });
+      const periodStart = new Date(startTime).toISOString();
+      const periodEnd = new Date(endTime).toISOString();
 
-                const calcSummary: ReconciliationPeriod = {
-                    startDate: new Date(startTime),
-                    endDate: new Date(endTime),
-                    totalUSDCReceived: totalUSDC,
-                    totalFiatPayout: totalFiat,
-                    totalFees: totalFees,
-                    transactionCount: mockRecords.length,
-                    discrepancy: totalDiscrepancy,
-                    status: Math.abs(totalDiscrepancy) > 0.01 ? 'discrepancy' : 'balanced'
-                };
+      try {
+        const [summaryRes, alertsRes] = await Promise.all([
+          api.reconciliation.summary({
+            merchant_id: merchantId,
+            period_start: periodStart,
+            period_end: periodEnd,
+          }) as Promise<ReconciliationSummaryApiResponse>,
+          api.reconciliation.listAlerts({
+            merchant_id: merchantId,
+            is_resolved: false,
+            page: 1,
+            limit: ALERTS_PAGE_SIZE,
+          }) as Promise<DiscrepancyAlertsApiResponse>,
+        ]);
 
-                setRecords(mockRecords);
-                setSummary(calcSummary);
-                setDiscrepancies(mockAlerts);
+        if (!isMounted) return;
 
-            } catch (err) {
-                if (isMounted) setError(err as Error);
-            } finally {
-                if (isMounted) setLoading(false);
-            }
-        };
+        const data = summaryRes.data;
+        setSummary(mapSummaryApiToUi(data));
+        setRecords(
+          (data.records ?? []).map((r) => mapReconciliationRecordApiToUi(r)),
+        );
+        setDiscrepancies(
+          (alertsRes.data?.alerts ?? []).map((a) =>
+            mapDiscrepancyAlertApiToUi(a),
+          ),
+        );
+      } catch (err) {
+        if (!isMounted) return;
+        const msg =
+          err instanceof ApiError
+            ? err.message
+            : err instanceof Error
+              ? err.message
+              : 'Failed to load reconciliation data';
+        setError(new Error(msg));
+        setRecords([]);
+        setSummary(null);
+        setDiscrepancies([]);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
 
-        fetchData();
+    void fetchData();
 
-        return () => { isMounted = false; };
-    }, [startTime, endTime]);
+    return () => {
+      isMounted = false;
+    };
+  }, [authReady, merchantId, startTime, endTime]);
 
-    return { records, summary, discrepancies, loading, error, setDiscrepancies };
+  const resolveDiscrepancy = useCallback(async (alertId: string) => {
+    await api.reconciliation.resolveAlert(alertId, true);
+    setDiscrepancies((prev) =>
+      prev.map((a) => (a.id === alertId ? { ...a, resolved: true } : a)),
+    );
+  }, []);
+
+  return {
+    records,
+    summary,
+    discrepancies,
+    loading,
+    error,
+    resolveDiscrepancy,
+  };
 }

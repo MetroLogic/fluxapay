@@ -1,57 +1,135 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { MOCK_INVOICES, Invoice } from "@/features/dashboard/invoices/invoices-mock";
+import { useState, useEffect, useCallback, useRef, Suspense } from "react";
+import { Invoice, InvoiceStatus } from "@/features/dashboard/invoices/invoices-mock";
 import { InvoicesTable } from "@/features/dashboard/invoices/InvoicesTable";
 import { InvoiceDetails } from "@/features/dashboard/invoices/InvoiceDetails";
 import { InvoiceForm } from "@/features/dashboard/invoices/InvoiceForm";
 import { Modal } from "@/components/Modal";
 import { Button } from "@/components/Button";
 import { Plus } from "lucide-react";
-import { Suspense } from "react";
+import { api, ApiError } from "@/lib/api";
+import toast from "react-hot-toast";
+import { DataTableCard, ListPageFilterBar, TablePaginationBar } from "@/components/data-table";
+import Input from "@/components/Input";
 
-const ALL_STATUSES = ["all", "unpaid", "pending", "paid", "overdue"];
+const PAGE_SIZE = 20;
+const ALL_STATUSES = ["all", "pending", "paid", "cancelled", "overdue"] as const;
+
+function mapBackendInvoice(row: Record<string, unknown>): Invoice {
+  const st = String(row.status ?? "");
+  const status: InvoiceStatus =
+    st === "cancelled"
+      ? "cancelled"
+      : st === "overdue"
+        ? "overdue"
+        : st === "paid"
+          ? "paid"
+          : st === "pending"
+            ? "pending"
+            : "unpaid";
+  return {
+    id: String(row.id),
+    invoice_number: String(row.invoice_number),
+    customer_name: "",
+    customer_email: String(row.customer_email),
+    line_items: [],
+    total_amount: Number(row.amount),
+    currency: String(row.currency),
+    due_date: row.due_date
+      ? new Date(String(row.due_date)).toISOString()
+      : new Date(0).toISOString(),
+    status,
+    payment_link: String(row.payment_link ?? ""),
+    created_at: new Date(String(row.created_at)).toISOString(),
+  };
+}
 
 function InvoicesContent() {
-  const [invoices, setInvoices] = useState<Invoice[]>(MOCK_INVOICES);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [statusFilter, setStatusFilter] = useState("all");
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
 
-  const filteredInvoices = useMemo(() => {
-    return invoices.filter((invoice) => {
-      const matchesSearch =
-        invoice.invoice_number.toLowerCase().includes(search.toLowerCase()) ||
-        invoice.customer_name.toLowerCase().includes(search.toLowerCase()) ||
-        invoice.customer_email.toLowerCase().includes(search.toLowerCase());
-      const matchesStatus =
-        statusFilter === "all" || invoice.status === statusFilter;
-      return matchesSearch && matchesStatus;
-    });
-  }, [invoices, search, statusFilter]);
-
-  const handleCreateInvoice = (
-    data: Omit<Invoice, "id" | "invoice_number" | "payment_link" | "created_at">
-  ) => {
-    const now = new Date();
-    const yyyymmdd = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
-    const random = Math.floor(1000 + Math.random() * 9000);
-    const invoice_number = `INV-${yyyymmdd}-${random}`;
-    const newInvoice: Invoice = {
-      ...data,
-      id: `inv_${Date.now()}`,
-      invoice_number,
-      payment_link: `${window.location.origin}/pay/invoice/${invoice_number}`,
-      created_at: now.toISOString(),
+  useEffect(() => {
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = setTimeout(() => setDebouncedSearch(search), 400);
+    return () => {
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
     };
-    setInvoices((prev) => [newInvoice, ...prev]);
-    setShowCreateModal(false);
+  }, [search]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter, debouncedSearch]);
+
+  const fetchInvoices = useCallback(async () => {
+    setIsLoading(true);
+    setLoadError(null);
+    try {
+      const { invoices: rows, meta } = await api.invoices.list({
+        page,
+        limit: PAGE_SIZE,
+        status: statusFilter !== "all" ? statusFilter : undefined,
+        search: debouncedSearch.trim() || undefined,
+      });
+      setTotal(meta.total);
+      setInvoices(
+        (rows as Record<string, unknown>[]).map((r) => mapBackendInvoice(r)),
+      );
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setLoadError(err.message);
+        toast.error(err.message);
+      } else {
+        const msg = "Failed to load invoices";
+        setLoadError(msg);
+        toast.error(msg);
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }, [page, statusFilter, debouncedSearch]);
+
+  useEffect(() => {
+    fetchInvoices();
+  }, [fetchInvoices]);
+
+  const handleCreateInvoice = async (
+    data: Omit<Invoice, "id" | "invoice_number" | "payment_link" | "created_at">,
+  ) => {
+    try {
+      await api.invoices.create({
+        customer_name: data.customer_name,
+        customer_email: data.customer_email,
+        line_items: data.line_items,
+        currency: data.currency,
+        due_date: data.due_date,
+        notes: data.notes,
+      });
+
+      toast.success("Invoice created successfully!");
+      setShowCreateModal(false);
+      setPage(1);
+      fetchInvoices();
+    } catch (err) {
+      if (err instanceof ApiError) {
+        toast.error(err.message);
+      } else {
+        toast.error("Failed to create invoice");
+      }
+    }
   };
 
   return (
     <div className="space-y-6">
-      {/* Page Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Invoices</h2>
@@ -65,41 +143,48 @@ function InvoicesContent() {
         </Button>
       </div>
 
-      {/* Filters */}
-      <div className="bg-card rounded-2xl border p-6 shadow-sm space-y-4">
-        <div className="flex flex-col sm:flex-row gap-3">
-          <input
-            type="text"
-            placeholder="Search by invoice #, customer name or email…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="h-10 flex-1 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+      <DataTableCard
+        toolbar={
+          <ListPageFilterBar>
+            <div className="relative flex-1 min-w-[200px]">
+              <Input
+                placeholder="Search by invoice # or email…"
+                className="w-full"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              {ALL_STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {s === "all" ? "All statuses" : s.charAt(0).toUpperCase() + s.slice(1)}
+                </option>
+              ))}
+            </select>
+          </ListPageFilterBar>
+        }
+        footer={
+          <TablePaginationBar
+            page={page}
+            pageSize={PAGE_SIZE}
+            total={total}
+            loading={isLoading}
+            onPageChange={setPage}
           />
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-          >
-            {ALL_STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {s === "all" ? "All Statuses" : s.charAt(0).toUpperCase() + s.slice(1)}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Table */}
+        }
+      >
         <InvoicesTable
-          invoices={filteredInvoices}
+          isLoading={isLoading}
+          error={loadError}
+          invoices={invoices}
           onRowClick={(invoice) => setSelectedInvoice(invoice)}
         />
+      </DataTableCard>
 
-        <div className="mt-4 text-sm text-muted-foreground">
-          Showing {filteredInvoices.length} of {invoices.length} invoices
-        </div>
-      </div>
-
-      {/* Detail Modal */}
       <Modal
         isOpen={!!selectedInvoice}
         onClose={() => setSelectedInvoice(null)}
@@ -108,7 +193,6 @@ function InvoicesContent() {
         {selectedInvoice && <InvoiceDetails invoice={selectedInvoice} />}
       </Modal>
 
-      {/* Create Modal */}
       <Modal
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}

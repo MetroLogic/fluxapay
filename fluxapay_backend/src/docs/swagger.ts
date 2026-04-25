@@ -10,7 +10,7 @@ const options: swaggerJsdoc.Options = {
         },
         servers: [
             {
-                url: 'http://localhost:3000',
+                url: 'http://localhost:3000/api/v1',
                 description: 'Local server',
             },
         ],
@@ -54,12 +54,40 @@ const options: swaggerJsdoc.Options = {
                         amount: { type: 'number', example: 120.5 },
                         currency: { type: 'string', example: 'USDC' },
                         customer_email: { type: 'string', example: 'buyer@example.com' },
+                        customer_id: {
+                            type: 'string',
+                            description: 'Optional Customer id (must belong to the authenticated merchant)',
+                            example: 'clxyz123customer',
+                        },
                         metadata: {
                             type: 'object',
                             additionalProperties: true,
                             example: { order_id: 'ord_001', webhook_url: 'https://merchant.tld/webhooks' },
                         },
                     },
+                },
+                CreateCustomerRequest: {
+                    type: 'object',
+                    required: ['email'],
+                    properties: {
+                        email: { type: 'string', format: 'email', example: 'buyer@example.com' },
+                        metadata: {
+                            type: 'object',
+                            additionalProperties: true,
+                            example: { plan: 'pro' },
+                        },
+                    },
+                },
+                UpdateCustomerRequest: {
+                    type: 'object',
+                    properties: {
+                        email: { type: 'string', format: 'email' },
+                        metadata: {
+                            type: 'object',
+                            additionalProperties: true,
+                        },
+                    },
+                    description: 'At least one of email or metadata should be provided',
                 },
                 CreateInvoiceRequest: {
                     type: 'object',
@@ -107,6 +135,40 @@ const options: swaggerJsdoc.Options = {
                         is_active: { type: 'boolean', example: true },
                     },
                 },
+                WebhookEventType: {
+                    type: 'string',
+                    enum: [
+                        'payment.created',
+                        'payment.pending',
+                        'payment.confirmed',
+                        'payment.failed',
+                        'payment.settled',
+                        'refund.created',
+                        'refund.completed',
+                        'refund.failed',
+                        'subscription.created',
+                        'subscription.cancelled',
+                        'subscription.renewed',
+                    ],
+                    description: 'Canonical webhook event names. Legacy names (payment_completed, etc.) are supported for backward compatibility.',
+                    example: 'payment.confirmed',
+                },
+                Merchant: {
+                    type: 'object',
+                    description: 'Merchant account (subset for documentation / contract tests)',
+                    properties: {
+                        id: { type: 'string' },
+                        business_name: { type: 'string' },
+                        email: { type: 'string', format: 'email' },
+                        phone_number: { type: 'string' },
+                        country: { type: 'string' },
+                        settlement_currency: { type: 'string' },
+                        status: { type: 'string' },
+                        webhook_url: { type: 'string', nullable: true },
+                        created_at: { type: 'string', format: 'date-time' },
+                        updated_at: { type: 'string', format: 'date-time' },
+                    },
+                },
             },
         },
         tags: [
@@ -131,12 +193,16 @@ const options: swaggerJsdoc.Options = {
                 description: 'Invoice APIs with linked payment intents',
             },
             {
+                name: 'Customers',
+                description: 'Merchant-scoped customer records linked to payments',
+            },
+            {
                 name: 'Refunds',
                 description: 'Refund lifecycle APIs and webhook events',
             },
             {
                 name: 'Webhooks',
-                description: 'Webhook delivery logs and retry operations',
+                description: 'Webhook delivery logs and retry operations. Event names follow canonical format (e.g., payment.created, payment.confirmed). Legacy names (payment_completed, etc.) are supported for backward compatibility.',
             },
             {
                 name: 'Settlements',

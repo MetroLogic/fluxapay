@@ -14,6 +14,7 @@ import {
   Webhook,
   FileText,
   RefreshCcw,
+  Link2,
 } from "lucide-react";
 import Image from "next/image";
 import FluxapayLogo from "@/assets/fluxapaylogo.png";
@@ -30,6 +31,7 @@ const navItems = [
   { name: "Invoices", href: "/dashboard/invoices", icon: FileText },
   { name: "Refunds", href: "/dashboard/refunds", icon: RefreshCcw },
   { name: "Settlements", href: "/dashboard/settlements", icon: Landmark },
+  { name: "Payment Links", href: "/dashboard/payment-links", icon: Link2 },
   { name: "Webhooks", href: "/dashboard/webhooks", icon: Webhook },
   { name: "Analytics", href: "/dashboard/analytics", icon: BarChart3 },
   { name: "Settings", href: "/dashboard/settings", icon: Settings },
@@ -38,11 +40,14 @@ const navItems = [
 
 export function Sidebar({ className, isOpen, onClose }: SidebarProps) {
   const pathname = usePathname();
+  // On mobile (isOpen is defined), hide from AT when closed.
+  // On desktop (md+), the sidebar is always visible via CSS, so never aria-hidden.
+  const ariaHidden = isOpen === false ? true : undefined;
 
   return (
     <aside
       aria-label="Main sidebar"
-      aria-hidden={!isOpen ? undefined : undefined}
+      aria-hidden={ariaHidden}
       className={cn(
         "flex h-full w-64 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-transform duration-300 ease-in-out md:translate-x-0",
         isOpen ? "translate-x-0" : "-translate-x-full",

@@ -1,9 +1,12 @@
 import { PrismaClient } from "../generated/client/client";
-import { v4 as uuidv4 } from "uuid";
+import crypto from "crypto";
 import { HDWalletService } from "./HDWalletService";
 import { StellarService } from "./StellarService";
-import { sorobanService } from "./SorobanService";
+import { sorobanQueue } from "./sorobanQueue.service";
 import { eventBus, AppEvents } from "./EventService";
+import { validateAndSanitizeMetadata } from "../utils/metadata.util";
+import { PaymentStatus } from "../types/payment";
+import { trackPaymentCreated } from "../middleware/metrics.middleware";
 
 const prisma = new PrismaClient();
 
@@ -45,20 +48,27 @@ export class PaymentService {
     currency,
     customer_email,
     merchantId,
+    description,
     metadata,
     success_url,
     cancel_url,
+    customerId,
   }: {
     amount: number;
     currency: string;
     customer_email: string;
     merchantId: string;
+    description?: string;
     metadata?: Record<string, unknown>;
     success_url?: string;
     cancel_url?: string;
+    customerId?: string;
   }) {
-    const paymentId = uuidv4();
+    const paymentId = crypto.randomUUID();
     const expiration = new Date(Date.now() + 15 * 60 * 1000); // 15 min expiry
+    const sanitizedMetadata = validateAndSanitizeMetadata(metadata);
+
+    // Build absolute checkout URL using PAY_CHECKOUT_BASE env var
     const checkoutBase = PaymentService.getCheckoutBaseUrl();
     const checkout_url = `${checkoutBase}/pay/${paymentId}`;
 
@@ -84,13 +94,15 @@ export class PaymentService {
         amount,
         currency,
         customer_email,
+        description: description ?? null,
         merchantId,
-        metadata: (metadata ?? {}) as any,
+        metadata: sanitizedMetadata as any,
         expiration,
-        status: "pending",
+        status: PaymentStatus.PENDING,
         checkout_url,
         success_url: success_url ?? null,
         cancel_url: cancel_url ?? null,
+        ...(customerId ? { customerId } : {}),
         stellar_address: derived.publicKey,
         // HD wallet derivation fields — stored for sweep key recovery
         payment_index: derived.paymentIndex,
@@ -99,21 +111,30 @@ export class PaymentService {
       },
     });
 
+    trackPaymentCreated();
+
     // Prepare the Stellar account asynchronously (fund and add trustline)
-    // This runs in the background to avoid blocking payment creation
-    const stellarService = new StellarService();
-    stellarService.prepareAccount(merchantId, paymentId).catch((error) => {
-      console.error(
-        `Failed to prepare Stellar account for payment ${paymentId}:`,
-        error,
-      );
-    });
+    // This runs in the background to avoid blocking payment creation.
+    // Contract tests can disable this side effect to avoid post-test async logs.
+    if (process.env.DISABLE_STELLAR_PREPARE !== "true") {
+      const stellarService = new StellarService();
+      stellarService.prepareAccount(merchantId, paymentId).catch((error) => {
+        console.error(
+          `Failed to prepare Stellar account for payment ${paymentId}:`,
+          error,
+        );
+      });
+    }
 
     return payment;
   }
 
   /**
-   * Verifies a payment on-chain, updates the database, and emits an internal event.
+   * Verifies a payment on-chain via the Soroban queue, updates the database,
+   * and emits an internal event.
+   *
+   * The on-chain submission is enqueued asynchronously; the DB is updated
+   * optimistically so the rest of the payment flow is not blocked.
    */
   static async verifyPayment(
     paymentId: string,
@@ -121,32 +142,23 @@ export class PaymentService {
     payerAddress: string,
     amountReceived: number,
   ): Promise<any> {
-    // 1. Verify on Soroban
-    const onChainVerified = await sorobanService.verifyPaymentOnChain(
-      paymentId,
-      transactionHash,
-      payerAddress,
-      amountReceived,
-    );
-
-    if (!onChainVerified) {
-      throw new Error("Payment verification failed on-chain");
-    }
-
-    // 2. Update local PostgreSQL database
+    // 1. Update local PostgreSQL database optimistically
     const payment = await prisma.payment.update({
       where: { id: paymentId },
       data: {
-        status: "confirmed",
+        status: PaymentStatus.CONFIRMED,
         transaction_hash: transactionHash,
         payer_address: payerAddress,
         confirmed_at: new Date(),
-        onchain_verified: true,
       },
     });
 
+    // 2. Enqueue the Soroban contract submission (non-blocking)
+    sorobanQueue.enqueue(paymentId, transactionHash, String(amountReceived));
+
     // 3. Emit internal event for Webhook Service to pick up
     eventBus.emit(AppEvents.PAYMENT_CONFIRMED, payment);
+    eventBus.emit(AppEvents.PAYMENT_UPDATED, payment);
 
     return payment;
   }

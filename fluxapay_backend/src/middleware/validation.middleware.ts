@@ -26,7 +26,12 @@ export function validate<T extends ZodType>(schema: T) {
       req.params = parsed.params;
     }
     if (parsed?.query) {
-      req.query = parsed.query;
+      Object.defineProperty(req, "query", {
+        value: parsed.query,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
     }
     next();
   };
@@ -45,7 +50,13 @@ export function validateQuery<T extends ZodType>(schema: T) {
       return res.status(400).json({ message: "Validation failed", errors });
     }
 
-    req.query = result.data as any; // parsed and safe data
+    // Express 5 exposes `req.query` with a getter-only descriptor; replace it safely.
+    Object.defineProperty(req, "query", {
+      value: result.data,
+      writable: true,
+      enumerable: true,
+      configurable: true,
+    });
     next();
   };
 }

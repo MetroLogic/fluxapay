@@ -199,14 +199,31 @@ export const STATIC_PAGES: Record<string, StaticInfoPageProps> = {
     eyebrow: "Legal",
     title: "Privacy Policy",
     description: "How FluxaPay collects, uses, and safeguards merchant and user data.",
+    lastUpdated: "March 20, 2026",
     sections: [
       {
+        title: "Introduction",
+        body: "FluxaPay ('we', 'us', or 'our') is committed to protecting your privacy. This Privacy Policy explains how we collect, use, and protect your personal data when you use our platform and services.",
+      },
+      {
+        title: "Data Collection",
+        body: "We collect information you provide directly to us (such as your name, email, and business details) and information automatically collected during your use of our services (including IP addresses, transaction metadata, and browser information).",
+      },
+      {
         title: "Information We Process",
-        body: "We process account details, transaction metadata, and support interactions to operate and secure the platform.",
+        body: "We process account details, transaction metadata, and support interactions to operate and secure the platform. This is necessary for fulfilling our contract with you and meeting our legal obligations as a payment processor.",
+      },
+      {
+        title: "Data Sharing",
+        body: "We do not sell your personal data. We may share your information with trusted third-party service providers (such as hosting and KYC verification partners) who perform tasks on our behalf under strict confidentiality agreements.",
       },
       {
         title: "Data Protection",
-        body: "We apply technical and organizational safeguards for confidentiality, integrity, and availability.",
+        body: "We apply industry-standard technical and organizational safeguards, including encryption and access controls, to maintain the confidentiality, integrity, and availability of your data.",
+      },
+      {
+        title: "Your Rights",
+        body: "Depending on your location, you may have rights to access, correct, or delete your personal data. Please contact our support team for any data-related requests.",
       },
     ],
   },
@@ -214,14 +231,31 @@ export const STATIC_PAGES: Record<string, StaticInfoPageProps> = {
     eyebrow: "Legal",
     title: "Terms of Service",
     description: "The rules and responsibilities for using FluxaPay products and APIs.",
+    lastUpdated: "March 20, 2026",
     sections: [
       {
+        title: "Agreement to Terms",
+        body: "By accessing or using the FluxaPay platform, you agree to comply with and be bound by these Terms of Service. If you do not agree, you must not use our services.",
+      },
+      {
         title: "Service Usage",
-        body: "You agree to use the platform lawfully and in compliance with applicable payment regulations.",
+        body: "You agree to use the platform lawfully and in compliance with all applicable payment regulations, financial laws, and anti-money laundering requirements.",
       },
       {
         title: "Accounts and Access",
-        body: "You are responsible for maintaining account security and protecting credentials.",
+        body: "You are responsible for maintaining the security of your account and credentials. Any activity occurring under your account is your sole responsibility.",
+      },
+      {
+        title: "Fees and Payments",
+        body: "The fees for using FluxaPay are as specified in our pricing schedule or your specific merchant agreement. Fees are deducted from settlements or billed according to your account configuration.",
+      },
+      {
+        title: "Limitation of Liability",
+        body: "FluxaPay is provided 'as is' without warranties. We are not liable for any indirect, incidental, or consequential damages arising from your use of the service.",
+      },
+      {
+        title: "Termination",
+        body: "We reserve the right to suspend or terminate your access to the platform at any time for violations of these terms or for regulatory compliance reasons.",
       },
     ],
   },

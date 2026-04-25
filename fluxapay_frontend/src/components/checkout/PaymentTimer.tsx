@@ -1,7 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Clock } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 
 interface PaymentTimerProps {
   expiresAt: Date;
@@ -13,6 +12,7 @@ interface PaymentTimerProps {
  * Shows MM:SS format and calls onExpire callback when time runs out
  */
 export function PaymentTimer({ expiresAt, onExpire }: PaymentTimerProps) {
+  const t = useTranslations('payment.checkout');
   const [timeLeft, setTimeLeft] = useState<number>(0);
   const [isExpired, setIsExpired] = useState<boolean>(false);
 
@@ -49,20 +49,29 @@ export function PaymentTimer({ expiresAt, onExpire }: PaymentTimerProps) {
     return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   };
 
-  const displayText = isExpired ? 'Expired' : formatTime(timeLeft);
+  const displayText = isExpired ? t('timerExpired') : formatTime(timeLeft);
   const ariaLabel = isExpired
-    ? 'Payment timer expired'
-    : `Time remaining: ${Math.floor(timeLeft / 60000)} minutes and ${Math.floor((timeLeft % 60000) / 1000)} seconds`;
+    ? t('timerExpiredAria')
+    : t('timeRemainingAria', {
+        minutes: Math.floor(timeLeft / 60000),
+        seconds: Math.floor((timeLeft % 60000) / 1000),
+      });
+
+  const activeStyle = !isExpired
+    ? ({
+        color: `color-mix(in srgb, var(--checkout-accent) 92%, black)`,
+        borderColor: `color-mix(in srgb, var(--checkout-accent) 45%, transparent)`,
+        backgroundColor: `color-mix(in srgb, var(--checkout-accent) 18%, white)`,
+      } as React.CSSProperties)
+    : undefined;
 
   return (
     <div
       role="timer"
       aria-live="off"
       aria-label={ariaLabel}
-      className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-semibold transition-colors min-h-[44px] ${isExpired
-          ? 'bg-red-100 text-red-700 border border-red-300'
-          : 'bg-blue-100 text-blue-700 border border-blue-300'
-        }`}
+      className={`flex min-h-[44px] items-center justify-center gap-2 rounded-lg border px-4 py-2 font-semibold transition-colors ${isExpired ? 'border-red-300 bg-red-100 text-red-700' : ''}`}
+      style={activeStyle}
     >
       <Clock aria-hidden="true" className="w-4 h-4" />
       <span className="text-lg">

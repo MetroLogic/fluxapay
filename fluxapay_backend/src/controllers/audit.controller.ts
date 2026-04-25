@@ -1,7 +1,10 @@
-import { Response } from 'express';
-import { AuthRequest } from '../types/express';
-import { queryAuditLogs, getAuditLogById } from '../services/audit.service';
-import { AuditActionType } from '../generated/client';
+import { Response } from "express";
+import { AuthRequest } from "../types/express";
+import { queryAuditLogs, getAuditLogById } from "../services/audit.service";
+import { AuditActionType } from "../types/audit.types";
+import { PrismaClient } from "../generated/client/client";
+
+const prisma = new PrismaClient();
 
 /**
  * GET /api/admin/audit-logs
@@ -29,8 +32,8 @@ export async function getAuditLogs(req: AuthRequest, res: Response) {
         return res.status(400).json({
           success: false,
           error: {
-            code: 'VALIDATION_ERROR',
-            message: 'Invalid date_from format',
+            code: "VALIDATION_ERROR",
+            message: "Invalid date_from format",
           },
         });
       }
@@ -42,8 +45,8 @@ export async function getAuditLogs(req: AuthRequest, res: Response) {
         return res.status(400).json({
           success: false,
           error: {
-            code: 'VALIDATION_ERROR',
-            message: 'Invalid date_to format',
+            code: "VALIDATION_ERROR",
+            message: "Invalid date_to format",
           },
         });
       }
@@ -54,8 +57,8 @@ export async function getAuditLogs(req: AuthRequest, res: Response) {
       return res.status(400).json({
         success: false,
         error: {
-          code: 'VALIDATION_ERROR',
-          message: 'date_from must be before date_to',
+          code: "VALIDATION_ERROR",
+          message: "date_from must be before date_to",
         },
       });
     }
@@ -68,8 +71,8 @@ export async function getAuditLogs(req: AuthRequest, res: Response) {
       return res.status(400).json({
         success: false,
         error: {
-          code: 'VALIDATION_ERROR',
-          message: 'page must be a positive integer',
+          code: "VALIDATION_ERROR",
+          message: "page must be a positive integer",
         },
       });
     }
@@ -78,8 +81,8 @@ export async function getAuditLogs(req: AuthRequest, res: Response) {
       return res.status(400).json({
         success: false,
         error: {
-          code: 'VALIDATION_ERROR',
-          message: 'limit must be between 1 and 100',
+          code: "VALIDATION_ERROR",
+          message: "limit must be between 1 and 100",
         },
       });
     }
@@ -87,12 +90,14 @@ export async function getAuditLogs(req: AuthRequest, res: Response) {
     // Validate action_type if provided
     let actionType: AuditActionType | undefined;
     if (action_type) {
-      if (!Object.values(AuditActionType).includes(action_type as AuditActionType)) {
+      if (
+        !Object.values(AuditActionType).includes(action_type as AuditActionType)
+      ) {
         return res.status(400).json({
           success: false,
           error: {
-            code: 'VALIDATION_ERROR',
-            message: 'Invalid action_type',
+            code: "VALIDATION_ERROR",
+            message: "Invalid action_type",
           },
         });
       }
@@ -116,12 +121,12 @@ export async function getAuditLogs(req: AuthRequest, res: Response) {
       pagination: result.pagination,
     });
   } catch (error: any) {
-    console.error('Error querying audit logs:', error);
+    console.error("Error querying audit logs:", error);
     return res.status(500).json({
       success: false,
       error: {
-        code: 'INTERNAL_ERROR',
-        message: 'Failed to query audit logs',
+        code: "INTERNAL_ERROR",
+        message: "Failed to query audit logs",
       },
     });
   }
@@ -135,12 +140,12 @@ export async function getAuditLogByIdHandler(req: AuthRequest, res: Response) {
   try {
     const { id } = req.params;
 
-    if (!id || typeof id !== 'string') {
+    if (!id || typeof id !== "string") {
       return res.status(400).json({
         success: false,
         error: {
-          code: 'VALIDATION_ERROR',
-          message: 'Audit log ID is required',
+          code: "VALIDATION_ERROR",
+          message: "Audit log ID is required",
         },
       });
     }
@@ -151,8 +156,8 @@ export async function getAuditLogByIdHandler(req: AuthRequest, res: Response) {
       return res.status(404).json({
         success: false,
         error: {
-          code: 'NOT_FOUND',
-          message: 'Audit log not found',
+          code: "NOT_FOUND",
+          message: "Audit log not found",
         },
       });
     }
@@ -162,12 +167,85 @@ export async function getAuditLogByIdHandler(req: AuthRequest, res: Response) {
       data: auditLog,
     });
   } catch (error: any) {
-    console.error('Error fetching audit log:', error);
+    console.error("Error fetching audit log:", error);
     return res.status(500).json({
       success: false,
       error: {
-        code: 'INTERNAL_ERROR',
-        message: 'Failed to fetch audit log',
+        code: "INTERNAL_ERROR",
+        message: "Failed to fetch audit log",
+      },
+    });
+  }
+}
+
+/**
+ * GET /api/admin/settlements/:settlement_id/payout-payload
+ * Get raw payout partner payload for a settlement (Admin only)
+ */
+export async function getSettlementPayoutPayload(req: AuthRequest, res: Response) {
+  try {
+    const { settlement_id } = req.params;
+
+    if (!settlement_id || typeof settlement_id !== "string") {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "Settlement ID is required",
+        },
+      });
+    }
+
+    const settlement = await prisma.settlement.findUnique({
+      where: { id: settlement_id },
+      select: {
+        id: true,
+        merchantId: true,
+        exchange_partner: true,
+        payout_partner_payload: true,
+        created_at: true,
+        processed_date: true,
+      },
+    });
+
+    if (!settlement) {
+      return res.status(404).json({
+        success: false,
+        error: {
+          code: "NOT_FOUND",
+          message: "Settlement not found",
+        },
+      });
+    }
+
+    if (!settlement.payout_partner_payload) {
+      return res.status(404).json({
+        success: false,
+        error: {
+          code: "NOT_FOUND",
+          message: "No payout payload available for this settlement",
+        },
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        settlement_id: settlement.id,
+        merchant_id: settlement.merchantId,
+        exchange_partner: settlement.exchange_partner,
+        payout_partner_payload: settlement.payout_partner_payload,
+        created_at: settlement.created_at,
+        processed_date: settlement.processed_date,
+      },
+    });
+  } catch (error: any) {
+    console.error("Error fetching settlement payout payload:", error);
+    return res.status(500).json({
+      success: false,
+      error: {
+        code: "INTERNAL_ERROR",
+        message: "Failed to fetch payout payload",
       },
     });
   }

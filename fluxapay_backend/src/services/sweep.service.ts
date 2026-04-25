@@ -10,6 +10,8 @@ import { PrismaClient } from "../generated/client/client";
 import { Decimal } from "@prisma/client/runtime/library";
 import { HDWalletService } from "./HDWalletService";
 import { logSweepTrigger, updateSweepCompletion } from "./audit.service";
+import { getLogger, getMetricsCollector } from "../utils/logger";
+import { sweepQueue } from "./sweepQueue.service";
 
 const prisma = new PrismaClient();
 
@@ -27,6 +29,15 @@ export interface SweepOptions {
   enableAccountMerge?: boolean;
 }
 
+export interface SweepDecision {
+  paymentId: string;
+  action: "sweep" | "skip";
+  /** Populated for action=sweep: USDC amount that would be / was moved. */
+  amount?: string;
+  /** Populated for action=skip: human-readable reason the payment was skipped. */
+  reason?: string;
+}
+
 export interface SweepResult {
   sweepId: string;
   startedAt: Date;
@@ -36,6 +47,8 @@ export interface SweepResult {
   masterVaultPublicKey: string;
   txHashes: string[];
   skipped: Array<{ paymentId: string; reason: string }>;
+  /** Per-payment decisions; only populated when dryRun=true. */
+  decisions?: SweepDecision[];
 }
 
 function requiredEnv(name: string): string {
@@ -57,6 +70,12 @@ export class SweepService {
   private usdcAsset: Asset;
   private vaultKeypair: Keypair;
   private hdWalletService: HDWalletService;
+  private readonly logger = getLogger("SweepService");
+  private readonly metrics = getMetricsCollector();
+  private readonly baseFee: number;
+  private readonly maxFee: number;
+  private readonly feeBumpMultiplier: number;
+  private readonly maxRetries: number;
 
   constructor() {
     const horizonUrl =
@@ -64,6 +83,12 @@ export class SweepService {
     this.server = new Horizon.Server(horizonUrl);
     this.networkPassphrase =
       process.env.STELLAR_NETWORK_PASSPHRASE || Networks.TESTNET;
+    this.baseFee = Number(process.env.STELLAR_BASE_FEE || "100");
+    this.maxFee = Number(process.env.STELLAR_MAX_FEE || "2000");
+    this.feeBumpMultiplier = Number(
+      process.env.STELLAR_FEE_BUMP_MULTIPLIER || "2",
+    );
+    this.maxRetries = Number(process.env.STELLAR_TX_MAX_RETRIES || "3");
 
     const issuer =
       process.env.USDC_ISSUER_PUBLIC_KEY ||
@@ -98,36 +123,83 @@ export class SweepService {
     /** Optional destination to merge remaining XLM into after payment succeeds. */
     mergeDestination?: string;
   }): Promise<string> {
-    const sourceKeypair = Keypair.fromSecret(params.sourceSecret);
-    const sourceAccount = await this.server.loadAccount(
-      sourceKeypair.publicKey(),
-    );
+    let lastError: unknown;
 
-    const builder = new TransactionBuilder(sourceAccount, {
-      fee: "100",
-      networkPassphrase: this.networkPassphrase,
-    }).addOperation(
-      Operation.payment({
-        destination: params.destination,
-        asset: this.usdcAsset,
-        amount: params.amount,
-      }),
-    );
+    for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
+      try {
+        const sourceKeypair = Keypair.fromSecret(params.sourceSecret);
+        const sourceAccount = await this.server.loadAccount(
+          sourceKeypair.publicKey(),
+        );
 
-    if (params.mergeDestination) {
-      builder.addOperation(
-        Operation.accountMerge({
-          destination: params.mergeDestination,
-        }),
-      );
+        const builder = new TransactionBuilder(sourceAccount, {
+          fee: this.calculateFeeForAttempt(attempt),
+          networkPassphrase: this.networkPassphrase,
+        }).addOperation(
+          Operation.payment({
+            destination: params.destination,
+            asset: this.usdcAsset,
+            amount: params.amount,
+          }),
+        );
+
+        if (params.mergeDestination) {
+          builder.addOperation(
+            Operation.accountMerge({
+              destination: params.mergeDestination,
+            }),
+          );
+        }
+
+        const tx = builder.setTimeout(30).build();
+
+        tx.sign(sourceKeypair);
+
+        const res = await this.server.submitTransaction(tx);
+        return res.hash;
+      } catch (error) {
+        lastError = error;
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+
+        this.logger.warn("Sweep transaction submission failed", {
+          attempt,
+          maxRetries: this.maxRetries,
+          fee: this.calculateFeeForAttempt(attempt),
+          errorMessage,
+        });
+
+        this.metrics.increment("stellar.sweep.submit.failure", {
+          attempt: attempt.toString(),
+          fee: this.calculateFeeForAttempt(attempt),
+        });
+
+        if (attempt >= this.maxRetries) {
+          this.logger.error(
+            "ALERT: repeated Stellar sweep transaction failures",
+            {
+              attempts: attempt,
+              feeBudget: {
+                baseFee: this.baseFee,
+                maxFee: this.maxFee,
+                multiplier: this.feeBumpMultiplier,
+              },
+            },
+          );
+          this.metrics.increment("stellar.sweep.repeated_failures");
+        }
+      }
     }
 
-    const tx = builder.setTimeout(30).build();
+    throw lastError instanceof Error
+      ? lastError
+      : new Error("Failed to submit sweep transaction");
+  }
 
-    tx.sign(sourceKeypair);
-
-    const res = await this.server.submitTransaction(tx);
-    return res.hash;
+  private calculateFeeForAttempt(attempt: number): string {
+    const bump = Math.pow(this.feeBumpMultiplier, Math.max(0, attempt - 1));
+    const candidateFee = Math.floor(this.baseFee * bump);
+    return Math.min(candidateFee, this.maxFee).toString();
   }
 
   /**
@@ -159,6 +231,7 @@ export class SweepService {
 
     const txHashes: string[] = [];
     const skipped: Array<{ paymentId: string; reason: string }> = [];
+    const decisions: SweepDecision[] = [];
     let total = 0;
     let addressesSwept = 0;
 
@@ -180,7 +253,9 @@ export class SweepService {
       try {
         const expected = Number(p.amount as any as Decimal);
         if (!Number.isFinite(expected) || expected <= 0) {
-          skipped.push({ paymentId: p.id, reason: "Invalid amount" });
+          const skipEntry = { paymentId: p.id, reason: "Invalid amount" };
+          skipped.push(skipEntry);
+          if (dryRun) decisions.push({ ...skipEntry, action: "skip" });
           continue;
         }
 
@@ -211,25 +286,41 @@ export class SweepService {
 
         // Ensure address matches DB (defense in depth)
         if (p.stellar_address && kp.publicKey !== p.stellar_address) {
-          skipped.push({ paymentId: p.id, reason: "Derived address mismatch" });
+          const skipEntry = {
+            paymentId: p.id,
+            reason: "Derived address mismatch",
+          };
+          skipped.push(skipEntry);
+          if (dryRun) decisions.push({ ...skipEntry, action: "skip" });
           continue;
         }
 
         // Load current on-chain account state and use actual USDC balance.
         const account = await this.server.loadAccount(kp.publicKey);
-        const usdcBalanceEntry = account.balances.find((b) =>
-          b.asset_type === "credit_alphanum4" &&
-          b.asset_code === "USDC" &&
-          b.asset_issuer === this.usdcAsset.issuer,
+        const usdcBalanceEntry = account.balances.find(
+          (b) =>
+            b.asset_type === "credit_alphanum4" &&
+            b.asset_code === "USDC" &&
+            b.asset_issuer === this.usdcAsset.issuer,
         );
 
         const accountUsdcAmount = Number(usdcBalanceEntry?.balance ?? "0");
         if (!Number.isFinite(accountUsdcAmount) || accountUsdcAmount <= 0) {
-          skipped.push({ paymentId: p.id, reason: "No USDC balance to sweep" });
+          const skipEntry = {
+            paymentId: p.id,
+            reason: "No USDC balance to sweep",
+          };
+          skipped.push(skipEntry);
+          if (dryRun) decisions.push({ ...skipEntry, action: "skip" });
           continue;
         }
 
         if (dryRun) {
+          decisions.push({
+            paymentId: p.id,
+            action: "sweep",
+            amount: accountUsdcAmount.toFixed(7),
+          });
           addressesSwept += 1;
           total += accountUsdcAmount;
           continue;
@@ -258,6 +349,8 @@ export class SweepService {
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
         skipped.push({ paymentId: p.id, reason: msg });
+        if (dryRun)
+          decisions.push({ paymentId: p.id, action: "skip", reason: msg });
       }
     }
 
@@ -292,8 +385,18 @@ export class SweepService {
       masterVaultPublicKey: this.vaultKeypair.publicKey(),
       txHashes,
       skipped,
+      ...(dryRun && { decisions }),
     };
   }
 }
 
-export const sweepService = new SweepService();
+let _sweepService: SweepService | undefined;
+try {
+  _sweepService = new SweepService();
+} catch (err) {
+  console.warn(
+    "SweepService failed to initialize (missing Stellar env vars?):",
+    err instanceof Error ? err.message : err,
+  );
+}
+export const sweepService = _sweepService as SweepService;

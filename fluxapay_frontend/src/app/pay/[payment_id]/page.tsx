@@ -1,12 +1,19 @@
 'use client';
 
 import { useEffect } from 'react';
+import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { Loader2, XCircle, CheckCircle, AlertTriangle, AlertCircle } from 'lucide-react';
+import { useTranslations } from 'next-intl';
+import { Loader2, XCircle, CheckCircle, AlertCircle } from 'lucide-react';
 import { usePaymentStatus } from '@/hooks/usePaymentStatus';
 import { PaymentQRCode } from '@/components/checkout/PaymentQRCode';
 import { PaymentTimer } from '@/components/checkout/PaymentTimer';
 import { PaymentStatus } from '@/components/checkout/PaymentStatus';
+import { LanguageSwitcher } from '@/components/LanguageSwitcher';
+import {
+  CheckoutBrandingShell,
+  DEFAULT_ACCENT,
+} from '@/components/checkout/CheckoutBrandingShell';
 
 /**
  * Main checkout page for FluxaPay payment gateway
@@ -14,9 +21,15 @@ import { PaymentStatus } from '@/components/checkout/PaymentStatus';
  * Implements real-time status updates (SSE with polling fallback) and auto-redirect on confirmation
  */
 export default function CheckoutPage() {
+  const t = useTranslations('payment');
+  const tAuth = useTranslations('auth');
   const params = useParams();
   const paymentId = params.payment_id as string;
-  const { payment, loading, error } = usePaymentStatus(paymentId);
+  const { payment, loading, error, isOffline, retryConnection } =
+    usePaymentStatus(paymentId);
+
+  const accentHex = payment?.checkoutAccentColor ?? DEFAULT_ACCENT;
+  const showBrandHeader = Boolean(payment && !error);
 
   // Auto-redirect when payment is confirmed
   useEffect(() => {
@@ -29,318 +42,414 @@ export default function CheckoutPage() {
     }
   }, [payment?.status, payment?.successUrl]);
 
-  // Handle timer expiration
-  const handleExpire = () => {
-    // The status updates will change the status to 'expired' automatically
-    // This callback is mainly for any additional logic if needed
-  };
+  const handleExpire = () => {};
 
-  // LOADING STATE
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center" role="status" aria-live="polite">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 aria-hidden="true" className="w-12 h-12 text-blue-600 animate-spin" />
-          <p className="text-gray-600 text-lg">Loading payment details...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // ERROR STATE
-  if (error || !payment) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4" role="alert">
-        <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
-          <XCircle aria-hidden="true" className="w-16 h-16 text-red-500 mx-auto mb-4" />
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Payment Not Found</h1>
-          <p className="text-gray-600 mb-4">
-            {error || 'The payment you are looking for does not exist or has been removed.'}
-          </p>
-          <p className="text-sm text-gray-500">
-            Please check the payment link and try again.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  // CONFIRMED STATE
-  if (payment.status === 'confirmed') {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4" role="status" aria-live="polite">
-        <div className="bg-white rounded-2xl shadow-xl p-8 max-w-2xl w-full text-center">
-          <CheckCircle aria-hidden="true" className="w-20 h-20 text-green-500 mx-auto mb-6 animate-pulse" />
-          <h1 className="text-3xl font-bold text-gray-900 mb-4">Payment Confirmed!</h1>
-          <p className="text-lg text-gray-600 mb-2">
-            Your payment has been successfully processed.
-          </p>
-          <p className="text-sm text-gray-500">
-            Redirecting you back...
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  // EXPIRED STATE
-  if (payment.status === 'expired') {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4" role="alert">
-        <div className="bg-white rounded-2xl shadow-xl p-8 max-w-2xl w-full text-center">
-          <XCircle aria-hidden="true" className="w-20 h-20 text-red-500 mx-auto mb-6" />
-          <h1 className="text-3xl font-bold text-gray-900 mb-4">Payment Expired</h1>
-          <p className="text-lg text-gray-600 mb-2">
-            This payment link has expired.
-          </p>
-          <p className="text-sm text-gray-500">
-            Please request a new payment link from the merchant.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  // FAILED STATE
-  if (payment.status === 'failed') {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4" role="alert">
-        <div className="bg-white rounded-2xl shadow-xl p-8 max-w-2xl w-full text-center">
-          <XCircle aria-hidden="true" className="w-20 h-20 text-red-500 mx-auto mb-6" />
-          <h1 className="text-3xl font-bold text-gray-900 mb-4">Payment Failed</h1>
-          <p className="text-lg text-gray-600 mb-2">
-            The payment could not be processed.
-          </p>
-          <p className="text-sm text-gray-500">
-            Please try again or contact support if the problem persists.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  // PARTIALLY PAID STATE
-  if (payment.status === 'partially_paid') {
-    const shortfall = payment.amount - (payment.paidAmount ?? 0);
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-        <div
-          className="bg-white rounded-2xl shadow-xl p-8 max-w-2xl w-full text-center"
-          role="alert"
-          aria-live="polite"
-        >
-          <AlertTriangle aria-hidden="true" className="w-20 h-20 text-amber-500 mx-auto mb-6" />
-          <h1 className="text-3xl font-bold text-gray-900 mb-4">Partial Payment Received</h1>
-          <p className="text-lg text-gray-600 mb-6">
-            We received part of your payment. Please send the remaining amount to complete the transaction.
-          </p>
-
-          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6 text-left space-y-2">
-            <div className="flex justify-between">
-              <span className="text-gray-600">Expected:</span>
-              <span
-                className="font-semibold text-gray-900"
-                aria-label={`Expected amount: ${payment.amount} ${payment.currency}`}
-              >
-                {payment.amount} {payment.currency}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">Received:</span>
-              <span
-                className="font-semibold text-amber-700"
-                aria-label={`Received amount: ${payment.paidAmount ?? 0} ${payment.currency}`}
-              >
-                {payment.paidAmount ?? 0} {payment.currency}
-              </span>
-            </div>
-            <div className="flex justify-between border-t border-amber-200 pt-2">
-              <span className="text-gray-600">Still owed:</span>
-              <span
-                className="font-bold text-amber-800"
-                aria-label={`Still owed: ${shortfall} ${payment.currency}`}
-              >
-                {shortfall} {payment.currency}
-              </span>
-            </div>
-          </div>
-
-          <p className="text-gray-600 mb-4">
-            Please contact the merchant to resolve this payment.
-          </p>
-          {payment.merchantContact && (
-            <a
-              href={payment.merchantContact}
-              className="inline-block bg-amber-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-amber-700 transition-colors"
-            >
-              Contact Merchant
-            </a>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  // OVERPAID STATE
-  if (payment.status === 'overpaid') {
-    const excess = (payment.paidAmount ?? 0) - payment.amount;
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-        <div
-          className="bg-white rounded-2xl shadow-xl p-8 max-w-2xl w-full text-center"
-          role="alert"
-          aria-live="polite"
-        >
-          <AlertCircle aria-hidden="true" className="w-20 h-20 text-orange-500 mx-auto mb-6" />
-          <h1 className="text-3xl font-bold text-gray-900 mb-4">Overpayment Detected</h1>
-          <p className="text-lg text-gray-600 mb-6">
-            We received more than the required amount. Please contact the merchant to arrange a refund of the excess.
-          </p>
-
-          <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-6 text-left space-y-2">
-            <div className="flex justify-between">
-              <span className="text-gray-600">Expected:</span>
-              <span
-                className="font-semibold text-gray-900"
-                aria-label={`Expected amount: ${payment.amount} ${payment.currency}`}
-              >
-                {payment.amount} {payment.currency}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">Received:</span>
-              <span
-                className="font-semibold text-orange-700"
-                aria-label={`Received amount: ${payment.paidAmount ?? 0} ${payment.currency}`}
-              >
-                {payment.paidAmount ?? 0} {payment.currency}
-              </span>
-            </div>
-            <div className="flex justify-between border-t border-orange-200 pt-2">
-              <span className="text-gray-600">Excess paid:</span>
-              <span
-                className="font-bold text-orange-800"
-                aria-label={`Excess paid: ${excess} ${payment.currency}`}
-              >
-                {excess} {payment.currency}
-              </span>
-            </div>
-          </div>
-
-          <p className="text-gray-600 mb-4">
-            Please contact the merchant to request a refund of the excess amount.
-          </p>
-          {payment.merchantContact && (
-            <a
-              href={payment.merchantContact}
-              className="inline-block bg-orange-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-orange-700 transition-colors"
-            >
-              Contact Merchant
-            </a>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  // PENDING STATE (Waiting for payment)
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl p-6 sm:p-8 max-w-2xl w-full">
-        {/* Header */}
-        <div className="text-center mb-6">
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
-            Complete Your Payment
-          </h1>
-          {payment.merchantName && (
-            <p className="text-gray-600">to {payment.merchantName}</p>
-          )}
-        </div>
+    <CheckoutBrandingShell
+      accentHex={accentHex}
+      logoUrl={payment?.checkoutLogoUrl}
+      merchantName={payment?.merchantName}
+      showBrandHeader={showBrandHeader}
+    >
+      <div className="absolute right-4 top-4 z-10">
+        <LanguageSwitcher />
+      </div>
 
-        {/* Timer */}
-        <div className="flex justify-center mb-6">
-          <PaymentTimer expiresAt={payment.expiresAt} onExpire={handleExpire} />
+      {isOffline && (
+        <div
+          className="mx-auto mt-4 w-full max-w-2xl rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-amber-900"
+          role="status"
+          aria-live="polite"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm font-medium">
+              {t('checkout.offlineMessage')}
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                void retryConnection();
+              }}
+              className="rounded-md border border-amber-400 bg-white px-3 py-1 text-sm font-semibold text-amber-900 hover:bg-amber-100"
+            >
+              {t('checkout.retryNow')}
+            </button>
+          </div>
         </div>
+      )}
 
-        {/* Amount Display */}
-        <div className="text-center mb-8" aria-label={`Amount to pay: ${payment.amount} ${payment.currency}`}>
-          <p className="text-sm text-gray-500 mb-2">Amount to Pay</p>
-          <p className="text-3xl sm:text-4xl font-bold text-gray-900">
-            {payment.amount} {payment.currency}
-          </p>
-          {payment.description && (
-            <p className="text-sm text-gray-500 mt-2">{payment.description}</p>
-          )}
+      {loading && (
+        <div
+          className="flex flex-1 items-center justify-center p-4"
+          role="status"
+          aria-live="polite"
+        >
+          <div className="flex flex-col items-center gap-4">
+            <Loader2
+              aria-hidden="true"
+              className="h-12 w-12 animate-spin"
+              style={{ color: 'var(--checkout-accent)' }}
+            />
+            <p className="text-lg text-gray-600">{t('checkout.loadingDetails')}</p>
+          </div>
         </div>
+      )}
 
-        {/* QR Code */}
-        <div className="flex justify-center mb-8">
-          <PaymentQRCode
-            address={payment.address}
-            amount={payment.amount}
-            memoType={payment.memoType}
-            memo={payment.memo}
-            size={256}
-          />
-        </div>
-
-        {/* Memo required warning */}
-        {payment.memoRequired && (
-          <div
-            className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-900"
-            role="alert"
-            aria-live="polite"
-          >
-            <p className="font-semibold">Memo required</p>
-            <p className="text-sm mt-1">
-              This payment destination requires a memo/tag. Please include the memo exactly as shown, or your payment may not be credited.
+      {!loading && (error || !payment) && (
+        <div
+          className="flex flex-1 items-center justify-center p-4"
+          role="alert"
+        >
+          <div className="w-full max-w-md rounded-2xl bg-white p-8 text-center shadow-xl">
+            <XCircle
+              aria-hidden="true"
+              className="mx-auto mb-4 h-16 w-16 text-red-500"
+            />
+            <h1 className="mb-2 text-2xl font-bold text-gray-900">
+              {t('checkout.notFound')}
+            </h1>
+            <p className="mb-4 text-gray-600">
+              {error || t('checkout.notFoundDescription')}
+            </p>
+            <p className="text-sm text-gray-500">
+              {t('checkout.checkLink')}
             </p>
           </div>
-        )}
-
-        {/* Instructions */}
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 sm:p-6 mb-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">
-            How to Pay:
-          </h2>
-          <ol className="space-y-3 text-gray-700" aria-label="Payment instructions">
-            <li className="flex items-start gap-3">
-              <span aria-hidden="true" className="flex-shrink-0 w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-semibold">
-                1
-              </span>
-              <span>Scan the QR code above with your Stellar wallet app</span>
-            </li>
-            <li className="flex items-start gap-3">
-              <span aria-hidden="true" className="flex-shrink-0 w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-semibold">
-                2
-              </span>
-              <span>
-                Confirm the amount and payment address match
-                {payment.memoRequired && payment.memo && (
-                  <> (and include the required memo)</>
-                )}
-              </span>
-            </li>
-            <li className="flex items-start gap-3">
-              <span aria-hidden="true" className="flex-shrink-0 w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-semibold">
-                3
-              </span>
-              <span>Complete the transaction in your wallet</span>
-            </li>
-            <li className="flex items-start gap-3">
-              <span aria-hidden="true" className="flex-shrink-0 w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-semibold">
-                4
-              </span>
-              <span>You will be automatically redirected after confirmation</span>
-            </li>
-          </ol>
         </div>
+      )}
 
-        {/* Status Indicator */}
-        <div className="flex justify-center">
-          <PaymentStatus status="pending" />
+      {!loading && payment && payment.status === 'confirmed' && (
+        <div
+          className="flex flex-1 items-center justify-center p-4"
+          role="status"
+          aria-live="polite"
+        >
+          <div className="w-full max-w-2xl rounded-2xl bg-white p-8 text-center shadow-xl">
+            <CheckCircle
+              aria-hidden="true"
+              className="mx-auto mb-6 h-20 w-20 animate-pulse text-green-500"
+            />
+            <h1 className="mb-4 text-3xl font-bold text-gray-900">
+              {t('checkout.confirmed')}
+            </h1>
+            <p className="mb-2 text-lg text-gray-600">
+              {t('checkout.confirmedDescription')}
+            </p>
+            <p className="text-sm text-gray-500">{t('checkout.redirecting')}</p>
+          </div>
         </div>
-      </div>
-    </div>
+      )}
+
+      {!loading && payment && payment.status === 'expired' && (
+        <div
+          className="flex flex-1 items-center justify-center p-4"
+          role="alert"
+        >
+          <div className="w-full max-w-2xl rounded-2xl bg-white p-8 text-center shadow-xl">
+            <XCircle
+              aria-hidden="true"
+              className="mx-auto mb-6 h-20 w-20 text-red-500"
+            />
+            <h1 className="mb-4 text-3xl font-bold text-gray-900">
+              {t('checkout.expired')}
+            </h1>
+            <p className="mb-2 text-lg text-gray-600">
+              {t('checkout.expiredDescription')}
+            </p>
+            <p className="text-sm text-gray-500">
+              {t('checkout.requestNew')}
+            </p>
+            {payment.supportUrl && (
+              <div className="mt-8">
+                <a
+                  href={payment.supportUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 text-sm font-medium text-[color:var(--checkout-accent)] hover:underline"
+                >
+                  <AlertCircle className="h-4 w-4" />
+                  {t('checkout.contactSupport')}
+                </a>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {!loading && payment && payment.status === 'failed' && (
+        <div
+          className="flex flex-1 items-center justify-center p-4"
+          role="alert"
+        >
+          <div className="w-full max-w-2xl rounded-2xl bg-white p-8 text-center shadow-xl">
+            <XCircle
+              aria-hidden="true"
+              className="mx-auto mb-6 h-20 w-20 text-red-500"
+            />
+            <h1 className="mb-4 text-3xl font-bold text-gray-900">
+              {t('failed')}
+            </h1>
+            <p className="mb-2 text-lg text-gray-600">
+              {t('checkout.failedDescription')}
+            </p>
+            <p className="text-sm text-gray-500">
+              {t('checkout.tryAgainOrSupport')}
+            </p>
+            {payment.supportUrl && (
+              <div className="mt-8">
+                <a
+                  href={payment.supportUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 text-sm font-medium text-[color:var(--checkout-accent)] hover:underline"
+                >
+                  <AlertCircle className="h-4 w-4" />
+                  {t('checkout.contactSupport')}
+                </a>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {!loading && payment && payment.status === 'partially_paid' && (
+        <div
+          className="flex flex-1 items-center justify-center p-4"
+          role="alert"
+        >
+          <div className="w-full max-w-2xl rounded-2xl bg-white p-8 text-center shadow-xl">
+            <AlertCircle
+              aria-hidden="true"
+              className="mx-auto mb-6 h-20 w-20 text-amber-500"
+            />
+            <h1 className="mb-4 text-3xl font-bold text-gray-900">
+              {t('checkout.partialReceived')}
+            </h1>
+            <p className="mb-2 text-lg text-gray-600">
+              {t('checkout.partialDescription', {
+                paidAmount: payment.paidAmount ?? 0,
+                currency: payment.currency,
+                amount: payment.amount
+              })}
+            </p>
+            <p className="mb-6 text-sm text-gray-500">
+              {t('checkout.contactMerchantResolve')}
+            </p>
+            <div className="flex flex-col gap-4">
+              {payment.successUrl && (
+                <a
+                  href={payment.successUrl}
+                  className="inline-block rounded-lg px-6 py-3 font-semibold text-white transition-opacity hover:opacity-90"
+                  style={{ backgroundColor: 'var(--checkout-accent)' }}
+                >
+                  {t('checkout.returnToMerchant')}
+                </a>
+              )}
+              {payment.supportUrl && (
+                <a
+                  href={payment.supportUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-2 text-sm font-medium text-[color:var(--checkout-accent)] hover:underline"
+                >
+                  <AlertCircle className="h-4 w-4" />
+                  {t('checkout.contactSupport')}
+                </a>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!loading && payment && payment.status === 'overpaid' && (
+        <div
+          className="flex flex-1 items-center justify-center p-4"
+          role="alert"
+        >
+          <div className="w-full max-w-2xl rounded-2xl bg-white p-8 text-center shadow-xl">
+            <AlertCircle
+              aria-hidden="true"
+              className="mx-auto mb-6 h-20 w-20 text-blue-500"
+            />
+            <h1 className="mb-4 text-3xl font-bold text-gray-900">
+              {t('checkout.overpaymentReceived')}
+            </h1>
+            <p className="mb-2 text-lg text-gray-600">
+              {t('checkout.overpaymentDescription', {
+                paidAmount: payment.paidAmount ?? 0,
+                currency: payment.currency,
+                amount: payment.amount
+              })}
+            </p>
+            <p className="mb-6 text-sm text-gray-500">
+              {t('checkout.contactMerchantExcess')}
+            </p>
+            <div className="flex flex-col gap-4">
+              {payment.successUrl && (
+                <a
+                  href={payment.successUrl}
+                  className="inline-block rounded-lg px-6 py-3 font-semibold text-white transition-opacity hover:opacity-90"
+                  style={{ backgroundColor: 'var(--checkout-accent)' }}
+                >
+                  {t('checkout.returnToMerchant')}
+                </a>
+              )}
+              {payment.supportUrl && (
+                <a
+                  href={payment.supportUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-2 text-sm font-medium text-[color:var(--checkout-accent)] hover:underline"
+                >
+                  <AlertCircle className="h-4 w-4" />
+                  {t('checkout.contactSupport')}
+                </a>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!loading && payment && payment.status === 'pending' && (
+        <div className="flex flex-1 items-center justify-center p-4">
+          <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-xl sm:p-8">
+            <div className="mb-6 text-center">
+              <h1 className="mb-2 text-2xl font-bold text-gray-900 sm:text-3xl">
+                {t('checkout.completePayment')}
+              </h1>
+              {payment.merchantName && (
+                <p className="text-gray-600">
+                  {t('checkout.toMerchant', { merchantName: payment.merchantName })}
+                </p>
+              )}
+            </div>
+
+            <div className="mb-6 flex justify-center">
+              <PaymentTimer expiresAt={payment.expiresAt} onExpire={handleExpire} />
+            </div>
+
+            <div
+              className="mb-8 text-center"
+              aria-label={`${t('checkout.amountToPay')}: ${payment.amount} ${payment.currency}`}
+            >
+              <p className="mb-2 text-sm text-gray-500">{t('checkout.amountToPay')}</p>
+              <p className="text-3xl font-bold text-gray-900 sm:text-4xl">
+                {payment.amount} {payment.currency}
+              </p>
+              {payment.description && (
+                <p className="mt-2 text-sm text-gray-500">{payment.description}</p>
+              )}
+            </div>
+
+            <div className="mb-8 flex justify-center">
+              <PaymentQRCode
+                address={payment.address}
+                amount={payment.amount}
+                memoType={payment.memoType}
+                memo={payment.memo}
+                size={256}
+              />
+            </div>
+
+            {payment.memoRequired && (
+              <div
+                className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-900"
+                role="alert"
+                aria-live="polite"
+              >
+                <p className="font-semibold">{t('checkout.memoRequired')}</p>
+                <p className="mt-1 text-sm">
+                  {t('checkout.memoDescription')}
+                </p>
+              </div>
+            )}
+
+            <div
+              className="mb-6 rounded-lg border p-4 sm:p-6"
+              style={{
+                borderColor: `color-mix(in srgb, var(--checkout-accent) 40%, transparent)`,
+                backgroundColor: `color-mix(in srgb, var(--checkout-accent) 12%, white)`,
+              }}
+            >
+              <h2 className="mb-4 text-lg font-semibold text-gray-900">
+                {t('checkout.howToPay')}
+              </h2>
+              <ol
+                className="space-y-3 text-gray-700"
+                aria-label="Payment instructions"
+              >
+                <li className="flex items-start gap-3">
+                  <span
+                    aria-hidden="true"
+                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white"
+                    style={{ backgroundColor: 'var(--checkout-accent)' }}
+                  >
+                    1
+                  </span>
+                  <span>{t('checkout.step1')}</span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <span
+                    aria-hidden="true"
+                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white"
+                    style={{ backgroundColor: 'var(--checkout-accent)' }}
+                  >
+                    2
+                  </span>
+                  <span>
+                    {t('checkout.step2')}
+                    {payment.memoRequired && payment.memo && (
+                      <>{t('checkout.step2Memo')}</>
+                    )}
+                  </span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <span
+                    aria-hidden="true"
+                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white"
+                    style={{ backgroundColor: 'var(--checkout-accent)' }}
+                  >
+                    3
+                  </span>
+                  <span>{t('checkout.step3')}</span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <span
+                    aria-hidden="true"
+                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white"
+                    style={{ backgroundColor: 'var(--checkout-accent)' }}
+                  >
+                    4
+                  </span>
+                  <span>
+                    {t('checkout.step4')}
+                  </span>
+                </li>
+              </ol>
+            </div>
+
+            <div className="flex justify-center">
+              <PaymentStatus status="pending" />
+            </div>
+
+            {/* Footer links (merged from upstream/main) */}
+            <div className="mt-8 flex justify-center gap-6 border-t border-gray-100 pt-6 text-xs text-gray-500">
+              <Link
+                href="/terms"
+                className="transition-colors hover:text-[color:var(--checkout-accent)]"
+              >
+                {tAuth('terms')}
+              </Link>
+              <Link
+                href="/privacy"
+                className="transition-colors hover:text-[color:var(--checkout-accent)]"
+              >
+                {tAuth('privacy')}
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
+    </CheckoutBrandingShell>
   );
 }

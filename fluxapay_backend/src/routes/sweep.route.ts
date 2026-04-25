@@ -13,7 +13,7 @@ const router = Router();
 
 /**
  * @swagger
- * /api/admin/sweep/run:
+ * /api/v1/admin/sweep/run:
  *   post:
  *     summary: Manually trigger a sweep of paid payments
  *     tags: [Admin - Sweep]

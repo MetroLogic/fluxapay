@@ -1,3 +1,5 @@
+import crypto from 'crypto';
+
 // ── Types ────────────────────────────────────────────────────────────────────
 
 export interface FluxaPayConfig {
@@ -56,6 +58,125 @@ export interface WebhookEvent {
   merchant_id: string;
   timestamp: string;
   data: Record<string, unknown>;
+}
+
+export interface CreateInvoiceParams {
+  /** Customer name for the invoice. */
+  customer_name: string;
+  /** Customer email for the invoice. */
+  customer_email: string;
+  /** Line items for the invoice. */
+  line_items: Array<{
+    description: string;
+    quantity: number;
+    unit_price: number;
+  }>;
+  /** ISO 4217 currency code. */
+  currency: string;
+  /** Due date in ISO 8601 format. */
+  due_date: string;
+  /** Optional notes. */
+  notes?: string;
+}
+
+export interface Invoice {
+  id: string;
+  customer_name: string;
+  customer_email: string;
+  line_items: Array<{
+    description: string;
+    quantity: number;
+    unit_price: number;
+  }>;
+  currency: string;
+  amount: number;
+  status: 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled';
+  due_date: string;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// ── Webhook Verification Helper ──────────────────────────────────────────────
+
+export interface VerifyWebhookSignatureOptions {
+  /** Max age of the webhook in seconds before it is rejected. Default: 300 (5 min). */
+  toleranceSeconds?: number;
+}
+
+export interface WebhookVerificationResult {
+  valid: boolean;
+  error?: string;
+}
+
+/**
+ * Verify a FluxaPay webhook signature without instantiating the SDK client.
+ *
+ * The backend signs webhooks using HMAC-SHA256 over `"${timestamp}.${rawBody}"`.
+ * Both `X-FluxaPay-Signature` and `X-FluxaPay-Timestamp` headers must be forwarded.
+ *
+ * @param rawBody   - Raw JSON string received in the request body (do NOT parse first).
+ * @param signature - Value of the `X-FluxaPay-Signature` header.
+ * @param timestamp - Value of the `X-FluxaPay-Timestamp` header (ISO 8601).
+ * @param secret    - Your webhook secret (`whsec_...`).
+ * @param options   - Optional replay-protection window.
+ *
+ * @example
+ * ```ts
+ * import { verifyWebhookSignature } from '@fluxapay/sdk';
+ *
+ * const result = verifyWebhookSignature(rawBody, sig, ts, process.env.WEBHOOK_SECRET!);
+ * if (!result.valid) throw new Error(result.error);
+ * ```
+ */
+export function verifyWebhookSignature(
+  rawBody: string,
+  signature: string,
+  timestamp: string,
+  secret: string,
+  options: VerifyWebhookSignatureOptions = {},
+): WebhookVerificationResult {
+  const { toleranceSeconds = 300 } = options;
+
+  if (!rawBody || !signature || !timestamp || !secret) {
+    return { valid: false, error: 'Missing required parameter' };
+  }
+
+  // Replay-protection: reject webhooks outside the tolerance window
+  const webhookMs = new Date(timestamp).getTime();
+  if (isNaN(webhookMs)) {
+    return { valid: false, error: 'Invalid timestamp format' };
+  }
+  const diffSeconds = (Date.now() - webhookMs) / 1000;
+  if (diffSeconds < 0) {
+    return { valid: false, error: 'Webhook timestamp is in the future' };
+  }
+  if (diffSeconds > toleranceSeconds) {
+    return {
+      valid: false,
+      error: `Webhook timestamp is older than ${toleranceSeconds} seconds`,
+    };
+  }
+
+  // Compute expected HMAC-SHA256 over "${timestamp}.${rawBody}"
+  const signingString = `${timestamp}.${rawBody}`;
+  const expected = crypto
+    .createHmac('sha256', secret)
+    .update(signingString)
+    .digest('hex');
+
+  // Constant-time comparison to prevent timing attacks
+  try {
+    const sigBuf = Buffer.from(signature);
+    const expBuf = Buffer.from(expected);
+    if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
+      return { valid: false, error: 'Signature mismatch' };
+    }
+  } catch {
+    return { valid: false, error: 'Signature verification failed' };
+  }
+
+  return { valid: true };
 }
 
 // ── Errors ───────────────────────────────────────────────────────────────────
@@ -307,30 +428,13 @@ export class FluxaPay {
      * ```
      */
     verify: (rawBody: string, signature: string, webhookSecret: string, timestamp?: string): boolean => {
-      // Node.js crypto – works in Node 18+. Browser usage is not recommended
-      // (never expose your webhook secret client-side).
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const crypto = require('crypto') as typeof import('crypto');
-        // include timestamp if provided
-        let data = rawBody;
-        if (timestamp) {
-          data = `${timestamp}.${rawBody}`;
-        }
-        const expected = crypto
-          .createHmac('sha256', webhookSecret)
-          .update(data)
-          .digest('hex');
-        // Timing-safe comparison
-        const sigBuffer = Buffer.from(signature);
-        const expBuffer = Buffer.from(expected);
-        return (
-          sigBuffer.length === expBuffer.length &&
-          crypto.timingSafeEqual(sigBuffer, expBuffer)
-        );
-      } catch {
-        return false;
-      }
+      // Delegates to the standalone verifyWebhookSignature helper.
+      // Node.js 18+ only – never expose your webhook secret client-side.
+      const ts = timestamp ?? new Date().toISOString();
+      return verifyWebhookSignature(rawBody, signature, ts, webhookSecret, {
+        // When no timestamp is provided we skip replay-protection by using a large window.
+        toleranceSeconds: timestamp ? 300 : Number.MAX_SAFE_INTEGER,
+      }).valid;
     },
 
     /**
@@ -341,6 +445,83 @@ export class FluxaPay {
       return JSON.parse(rawBody) as WebhookEvent;
     },
   };
+
+  // ── invoices ─────────────────────────────────────────────────────────────────
+
+  readonly invoices = {
+    /**
+     * Create a new invoice.
+     * 
+     * Canonical route: POST /api/invoices
+     */
+    create: (params: CreateInvoiceParams): Promise<Invoice> =>
+      request<Invoice>(this.baseUrl, this.apiKey, 'POST', '/api/invoices', params),
+
+    /**
+     * Retrieve an invoice by its ID.
+     * 
+     * Canonical route: GET /api/invoices/:invoice_id
+     */
+    get: (invoiceId: string): Promise<Invoice> =>
+      request<Invoice>(this.baseUrl, this.apiKey, 'GET', `/api/invoices/${invoiceId}`),
+
+    /**
+     * List invoices.
+     * 
+     * Canonical route: GET /api/invoices
+     */
+    list: (params?: { page?: number; limit?: number; status?: string }): Promise<{ invoices: Invoice[]; total: number }> => {
+      const qs = new URLSearchParams();
+      if (params?.page) qs.set('page', String(params.page));
+      if (params?.limit) qs.set('limit', String(params.limit));
+      if (params?.status) qs.set('status', params.status);
+      const query = qs.toString();
+      return request(this.baseUrl, this.apiKey, 'GET', `/api/invoices${query ? `?${query}` : ''}`);
+    },
+
+    /**
+     * Update invoice status.
+     * 
+     * Canonical route: PATCH /api/invoices/:invoice_id/status
+     */
+    updateStatus: (invoiceId: string, status: Invoice['status']): Promise<Invoice> =>
+      request<Invoice>(this.baseUrl, this.apiKey, 'PATCH', `/api/invoices/${invoiceId}/status`, { status }),
+  };
 }
 
 export default FluxaPay;
+
+/**
+ * Auto-paging iterator for list methods that support pagination.
+ * Automatically fetches subsequent pages as you iterate.
+ * 
+ * @example
+ * ```ts
+ * for await (const payment of autoPagingIterator(client.payments.list, { limit: 10 })) {
+ *   console.log(payment);
+ * }
+ * ```
+ */
+export async function* autoPagingIterator<T extends { id: string }>(
+  listFn: (params: { page: number; limit: number }) => Promise<{ [key: string]: T[]; total: number }>,
+  options: { limit?: number; maxItems?: number } = {}
+): AsyncGenerator<T, void, unknown> {
+  const { limit = 50, maxItems } = options;
+  let page = 1;
+  let yielded = 0;
+
+  while (true) {
+    const response = await listFn({ page, limit });
+    const items = Object.values(response).find(Array.isArray) as T[] | undefined;
+    if (!items) break;
+
+    for (const item of items) {
+      if (maxItems && yielded >= maxItems) return;
+      yield item;
+      yielded++;
+    }
+
+    if (items.length < limit) break; // Last page
+    page++;
+  }
+}

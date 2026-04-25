@@ -223,7 +223,7 @@ async function settleMerchant(
     try {
         // 4. Build a unique reference for idempotency
         const batchDate = now.toISOString().split("T")[0]; // YYYY-MM-DD
-        const settlementRef = `SETTLE_${merchantId.slice(-6).toUpperCase()}_${batchDate}_${Date.now()}`;
+        const settlementRef = `SETTLE_${merchantId.slice(-6).toUpperCase()}_${batchDate}`;
 
         // 5. Convert USDC → fiat + initiate bank transfer
         const partner = getExchangePartner();
@@ -267,6 +267,7 @@ async function settleMerchant(
                     exchange_ref: payout.exchange_ref,
                     bank_transfer_id: payout.transfer_ref,
                     payment_ids: paymentIds,
+                    payout_partner_payload: payout.raw_partner_payload || null,
                     status: "completed",
                     scheduled_date: now,
                     processed_date: now,

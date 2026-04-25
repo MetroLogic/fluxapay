@@ -1,25 +1,60 @@
-import { PrismaClient, KYCStatus, BusinessType, GovernmentIdType } from '../../generated/client';
+import { PrismaClient, KYCStatus, BusinessType, GovernmentIdType } from '../../generated/client/client';
 import { updateKycStatusService } from '../kyc.service';
 
 const prisma = new PrismaClient();
+const describeWithDatabase = process.env.DATABASE_URL ? describe : describe.skip;
 
-describe('Audit Logging - KYC Integration', () => {
-  let testMerchantId: string;
+/**
+ * Remove one merchant and dependent rows. Scoped so parallel Jest workers do not
+ * wipe shared fixtures (e.g. OpenAPI contract tests use a stable merchant email).
+ */
+async function purgeMerchant(merchantId: string): Promise<void> {
+  await prisma.webhookRetryAttempt.deleteMany({
+    where: { webhookLog: { merchantId } },
+  });
+  await prisma.webhookLog.deleteMany({ where: { merchantId } });
+  await prisma.refund.deleteMany({ where: { merchantId } });
+  await prisma.invoice.deleteMany({ where: { merchantId } });
+  await prisma.payment.deleteMany({ where: { merchantId } });
+  await prisma.settlement.deleteMany({ where: { merchantId } });
+  await prisma.discrepancyAlert.deleteMany({
+    where: {
+      OR: [{ merchantId }, { reconciliationRecord: { merchantId } }],
+    },
+  });
+  await prisma.reconciliationRecord.deleteMany({ where: { merchantId } });
+  await prisma.discrepancyThreshold.deleteMany({ where: { merchantId } });
+  await prisma.auditLog.deleteMany({ where: { entity_id: merchantId } });
+  await prisma.kYCDocument.deleteMany({ where: { kyc: { merchantId } } });
+  await prisma.merchantKYC.deleteMany({ where: { merchantId } });
+  await prisma.merchantHDIndex.deleteMany({ where: { merchantId } });
+  await prisma.bankAccount.deleteMany({ where: { merchantId } });
+  await prisma.merchantSubscription.deleteMany({ where: { merchantId } });
+  await prisma.oTP.deleteMany({ where: { merchantId } });
+  await prisma.customer.deleteMany({ where: { merchantId } });
+  await prisma.dataExportJob.deleteMany({ where: { merchantId } });
+  await prisma.merchantDeletionRequest.deleteMany({ where: { merchantId } });
+  await prisma.merchant.delete({ where: { id: merchantId } }).catch(() => undefined);
+}
+
+describeWithDatabase('Audit Logging - KYC Integration', () => {
+  /** Empty until first `beforeEach` run; then the current suite merchant id. */
+  let testMerchantId = '';
 
   beforeEach(async () => {
-    // Clean up
-    await prisma.auditLog.deleteMany({});
-    await prisma.merchantKYC.deleteMany({});
-    await prisma.merchant.deleteMany({});
+    if (testMerchantId) {
+      await purgeMerchant(testMerchantId);
+    }
 
     // Create test merchant
     const merchant = await prisma.merchant.create({
       data: {
         business_name: 'Test Business',
-        email: `test-${Date.now()}@example.com`,
+        email: `audit-kyc-${Date.now()}@example.com`,
         phone_number: `+1234567${Date.now()}`,
         country: 'US',
         settlement_currency: 'USD',
+        webhook_secret: 'test-webhook-secret',
         password: 'hashed_password',
       },
     });
@@ -45,6 +80,7 @@ describe('Audit Logging - KYC Integration', () => {
   });
 
   afterAll(async () => {
+    if (testMerchantId) await purgeMerchant(testMerchantId);
     await prisma.$disconnect();
   });
 
@@ -116,13 +152,14 @@ describe('Audit Logging - KYC Integration', () => {
 
   it('should rollback audit entry if KYC update fails', async () => {
     // Simulate failure by trying to update non-existent merchant
+    // kyc.service throws plain objects (not Error instances), use toMatchObject
     await expect(
       updateKycStatusService(
         'non-existent-merchant',
         { status: 'approved' },
         'admin-123'
       )
-    ).rejects.toThrow();
+    ).rejects.toMatchObject({ message: expect.any(String) });
 
     // Verify no audit entry was created
     const auditLogs = await prisma.auditLog.findMany({
@@ -140,14 +177,15 @@ describe('Audit Logging - KYC Integration', () => {
       'admin-123'
     );
 
-    // Try to update again
+    // Try to update again — approved → rejected is not an allowed transition
+    // kyc.service throws plain objects (not Error instances), use toMatchObject
     await expect(
       updateKycStatusService(
         testMerchantId,
-        { status: 'rejected' },
+        { status: 'rejected', rejection_reason: 'Documents missing' },
         'admin-456'
       )
-    ).rejects.toThrow('KYC is not in pending review status');
+    ).rejects.toMatchObject({ message: expect.stringContaining('Invalid status transition') });
 
     // Verify only one audit entry exists (from first update)
     const auditLogs = await prisma.auditLog.findMany({
