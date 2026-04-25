@@ -11,6 +11,14 @@ import { getLogger } from '../utils/logger';
  */
 export function metricsMiddleware(req: Request, res: Response, next: NextFunction): void {
   if (req.path === '/metrics' && req.method === 'GET') {
+    if (process.env.NODE_ENV === 'production') {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || authHeader !== `Bearer ${process.env.METRICS_SECRET}`) {
+        res.status(401).send('Unauthorized');
+        return;
+      }
+    }
+    
     const metricsCollector = getMetricsCollector();
     const logger = getLogger();
     
@@ -78,6 +86,26 @@ export function trackPaymentInitiated(amount: number, currency: string, method?:
   const metrics = getMetricsCollector();
   metrics.increment('payments_initiated_total', { currency, method: method || 'unknown' });
   metrics.histogram('payment_amount', amount, { currency });
+}
+
+export function trackPaymentCreated(): void {
+  const metrics = getMetricsCollector();
+  metrics.increment('payments_created_total');
+}
+
+export function trackPaymentConfirmed(): void {
+  const metrics = getMetricsCollector();
+  metrics.increment('payments_confirmed_total');
+}
+
+export function trackPaymentExpired(count: number = 1): void {
+  const metrics = getMetricsCollector();
+  metrics.increment('payments_expired_total', undefined, count);
+}
+
+export function trackWebhookDelivery(status: 'success' | 'fail'): void {
+  const metrics = getMetricsCollector();
+  metrics.increment('webhook_deliveries_total', { status });
 }
 
 export function trackPaymentCompleted(

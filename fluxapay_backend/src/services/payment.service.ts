@@ -6,6 +6,7 @@ import { sorobanQueue } from "./sorobanQueue.service";
 import { eventBus, AppEvents } from "./EventService";
 import { validateAndSanitizeMetadata } from "../utils/metadata.util";
 import { PaymentStatus } from "../types/payment";
+import { trackPaymentCreated } from "../middleware/metrics.middleware";
 
 const prisma = new PrismaClient();
 
@@ -109,6 +110,8 @@ export class PaymentService {
         encrypted_key_data: encryptedKeyData,
       },
     });
+
+    trackPaymentCreated();
 
     // Prepare the Stellar account asynchronously (fund and add trustline)
     // This runs in the background to avoid blocking payment creation.

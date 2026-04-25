@@ -170,6 +170,7 @@ export async function getMerchantUserService(data: {
     merchant: {
       ...merchantData,
       api_key_masked: apiKeyMasked,
+      api_key_last_four: merchant.api_key_last_four,
     }
   };
 }

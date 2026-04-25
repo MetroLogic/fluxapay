@@ -501,6 +501,8 @@ enum WebhookEventType {
   subscription_created
   subscription_cancelled
   subscription_renewed
+  invoice_paid
+  invoice_overdue
 }
 
 enum WebhookStatus {

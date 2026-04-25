@@ -2,6 +2,7 @@ import { PrismaClient, WebhookEventType, WebhookStatus, Payment, Merchant } from
 import crypto from "crypto";
 import { webhookEventTypes } from "../schemas/webhook.schema";
 import { normalizeEventName, toLegacyEventName } from "../utils/webhook-event-mapping.util";
+import { trackWebhookDelivery } from "../middleware/metrics.middleware";
 
 export class WebhookDispatcher {
   private prisma: PrismaClient;
@@ -59,6 +60,7 @@ export class WebhookDispatcher {
     } catch (error: any) {
       console.error(`[WebhookDispatcher] Webhook delivery error for payment ${payment.id}:`, error.message);
     } finally {
+      trackWebhookDelivery(deliveryStatus === 'SUCCESS' ? 'success' : 'fail');
       await this.prisma.payment.update({
         where: { id: payment.id },
         data: {
@@ -527,13 +529,16 @@ export async function deliverWebhook(
     clearTimeout(timeout);
 
     const responseBody = await response.text();
+    const success = response.ok;
+    trackWebhookDelivery(success ? 'success' : 'fail');
 
     return {
-      success: response.ok,
+      success,
       httpStatus: response.status,
       responseBody: responseBody.substring(0, 10000),
     };
   } catch (error: any) {
+    trackWebhookDelivery('fail');
     return {
       success: false,
       error: error.message || "Unknown error occurred",
@@ -648,6 +653,16 @@ function generateTestPayload(
       renewed_at: new Date().toISOString(),
       next_billing_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
     },
+    'invoice.paid': {
+      invoice_id: `inv_test_${Date.now()}`,
+      invoice_number: `INV-TEST-001`,
+      status: "paid",
+    },
+    'invoice.overdue': {
+      invoice_id: `inv_test_${Date.now()}`,
+      invoice_number: `INV-TEST-001`,
+      status: "overdue",
+    },
     // Legacy event names (for backward compatibility)
     'payment_completed': {
       payment_id: `pay_test_${Date.now()}`,
@@ -714,6 +729,16 @@ function generateTestPayload(
       status: "active",
       renewed_at: new Date().toISOString(),
       next_billing_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+    },
+    'invoice_paid': {
+      invoice_id: `inv_test_${Date.now()}`,
+      invoice_number: `INV-TEST-001`,
+      status: "paid",
+    },
+    'invoice_overdue': {
+      invoice_id: `inv_test_${Date.now()}`,
+      invoice_number: `INV-TEST-001`,
+      status: "overdue",
     },
   };
 
