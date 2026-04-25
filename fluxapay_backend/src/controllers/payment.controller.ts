@@ -119,73 +119,65 @@ export const createPayment = async (req: Request, res: Response) => {
 };
 
 export const getPayments = async (req: Request, res: Response) => {
-    try {
-        const merchantId = await validateUserId(req as AuthRequest);
-        if (!merchantId) {
-            return res.status(401).json({ error: "Unauthorized" });
-        }
-
-        // 1. Destructure with explicit type casting immediately
-        const query = req.query as Record<string, unknown>;
-
-        const page = Number(query.page) || 1;
-        const limit = Number(query.limit) || 10;
-
-        // Force these to be strings or undefined (No arrays allowed!)
-        const status = query.status ? String(query.status) : undefined;
-        const currency = query.currency ? String(query.currency) : undefined;
-        const search = query.search ? String(query.search) : undefined;
-        const date_from = query.date_from ? String(query.date_from) : undefined;
-        const date_to = query.date_to ? String(query.date_to) : undefined;
-
-        // 2. We use a constant for Sort/Order to satisfy the Prisma type engine
-        const sortBy = typeof query.sort_by === 'string' ? query.sort_by : 'createdAt';
-        const sortOrder: 'asc' | 'desc' = query.order === 'asc' ? 'asc' : 'desc';
-
-        const where: Record<string, unknown> = {
-            merchantId: merchantId,
-            ...(status && { status }),
-            ...(currency && { currency }),
-            ...((date_from || date_to) && {
-                createdAt: {
-                    ...(date_from && { gte: new Date(date_from) }),
-                    ...(date_to && { lte: new Date(date_to) }),
-                }
-            }),
-            ...(search && {
-                OR: [
-                    { id: { contains: search } },
-                    { order_id: { contains: search } },
-                    { customer_email: { contains: search, mode: 'insensitive' } }
-                ]
-            })
-        };
-
-        // List Logic
-        const [data, total] = await Promise.all([
-            prisma.payment.findMany({
-                where,
-                skip: (page - 1) * limit,
-                take: limit,
-                orderBy: { [sortBy]: sortOrder } // This is line 106/107 - now using strictly typed sortOrder
-            }),
-            prisma.payment.count({ where })
-        ]);
-
-        res.json({ data, meta: { total, page, limit } });
-    } catch (error: unknown) {
-        if (
-            error &&
-            typeof error === "object" &&
-            "status" in error &&
-            typeof (error as { status?: unknown }).status === "number"
-        ) {
-            const e = error as { status: number; message?: string };
-            return res.status(e.status).json({ error: e.message || "Unauthorized" });
-        }
-        res.status(500).json({ error: "Internal Server Error" });
+  try {
+    const merchantId = await validateUserId(req as AuthRequest);
+    if (!merchantId) {
+      return res.status(401).json({ error: "Unauthorized" });
     }
-    res.status(500).json({ error: "Internal Server Error" });
+
+    const query = req.query as Record<string, unknown>;
+    const page = Number(query.page) || 1;
+    const limit = Number(query.limit) || 10;
+    const status = query.status ? String(query.status) : undefined;
+    const currency = query.currency ? String(query.currency) : undefined;
+    const search = query.search ? String(query.search) : undefined;
+    const date_from = query.date_from ? String(query.date_from) : undefined;
+    const date_to = query.date_to ? String(query.date_to) : undefined;
+    const sortBy =
+      typeof query.sort_by === "string" ? query.sort_by : "createdAt";
+    const sortOrder: "asc" | "desc" = query.order === "asc" ? "asc" : "desc";
+
+    const where: Record<string, unknown> = {
+      merchantId,
+      ...(status && { status }),
+      ...(currency && { currency }),
+      ...((date_from || date_to) && {
+        createdAt: {
+          ...(date_from && { gte: new Date(date_from) }),
+          ...(date_to && { lte: new Date(date_to) }),
+        },
+      }),
+      ...(search && {
+        OR: [
+          { id: { contains: search } },
+          { order_id: { contains: search } },
+          { customer_email: { contains: search, mode: "insensitive" } },
+        ],
+      }),
+    };
+
+    const [data, total] = await Promise.all([
+      prisma.payment.findMany({
+        where,
+        skip: (page - 1) * limit,
+        take: limit,
+        orderBy: { [sortBy]: sortOrder },
+      }),
+      prisma.payment.count({ where }),
+    ]);
+
+    return res.json({ data, meta: { total, page, limit } });
+  } catch (error: unknown) {
+    if (
+      error &&
+      typeof error === "object" &&
+      "status" in error &&
+      typeof (error as { status?: unknown }).status === "number"
+    ) {
+      const e = error as { status: number; message?: string };
+      return res.status(e.status).json({ error: e.message || "Unauthorized" });
+    }
+    return res.status(500).json({ error: "Internal Server Error" });
   }
 };
 

@@ -18,10 +18,14 @@ jest.mock("../../services/paymentContract.service");
 jest.mock("../../services/webhook.service");
 
 const mockPrisma = new PrismaClient() as jest.Mocked<PrismaClient>;
+const mockFindUnique = jest.fn();
 
 describe("PaymentOracleService", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    (mockPrisma as unknown as { payment: { findUnique: jest.Mock } }).payment = {
+      findUnique: mockFindUnique,
+    };
     stopPaymentOracle(); // Ensure clean state
   });
 
@@ -84,7 +88,7 @@ describe("PaymentOracleService", () => {
 
   describe("manualVerifyPayment", () => {
     it("should throw error for non-existent payment", async () => {
-      (mockPrisma.payment.findUnique as jest.Mock).mockResolvedValue(null);
+      mockFindUnique.mockResolvedValue(null);
 
       await expect(manualVerifyPayment("non-existent-id")).rejects.toThrow(
         "Payment non-existent-id not found"

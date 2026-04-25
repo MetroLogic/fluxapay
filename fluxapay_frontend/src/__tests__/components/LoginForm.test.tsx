@@ -51,40 +51,40 @@ describe('LoginForm', () => {
 
   it('renders email and password inputs', () => {
     render(<LoginForm />);
-    expect(screen.getByPlaceholderText(/test@gmail.com/i)).toBeInTheDocument();
-    expect(screen.getByPlaceholderText(/^password$/i)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/emailPlaceholder/i)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/passwordPlaceholder/i)).toBeInTheDocument();
   });
 
   it('shows validation error for empty email', async () => {
     render(<LoginForm />);
-    fireEvent.click(screen.getByRole('button', { name: /sign in/i }));
+    fireEvent.click(screen.getByRole('button', { name: /login/i }));
     await waitFor(() => {
-      expect(screen.getByText(/email is required/i)).toBeInTheDocument();
+      expect(screen.getByText(/validation.emailRequired/i)).toBeInTheDocument();
     });
   });
 
   it('shows validation error for invalid email', async () => {
     render(<LoginForm />);
-    fireEvent.change(screen.getByPlaceholderText(/test@gmail.com/i), {
+    fireEvent.change(screen.getByPlaceholderText(/emailPlaceholder/i), {
       target: { value: 'not-an-email' },
     });
-    fireEvent.submit(screen.getByRole('button', { name: /sign in/i }).closest('form')!);
+    fireEvent.submit(screen.getByRole('button', { name: /login/i }).closest('form')!);
     await waitFor(() => {
-      expect(screen.getByText(/valid email/i)).toBeInTheDocument();
+      expect(screen.getByText(/validation.emailInvalid/i)).toBeInTheDocument();
     });
   });
 
   it('shows validation error for short password', async () => {
     render(<LoginForm />);
-    fireEvent.change(screen.getByPlaceholderText(/test@gmail.com/i), {
+    fireEvent.change(screen.getByPlaceholderText(/emailPlaceholder/i), {
       target: { value: 'test@test.com' },
     });
-    fireEvent.change(screen.getByPlaceholderText(/^password$/i), {
+    fireEvent.change(screen.getByPlaceholderText(/passwordPlaceholder/i), {
       target: { value: '123' },
     });
-    fireEvent.click(screen.getByRole('button', { name: /sign in/i }));
+    fireEvent.click(screen.getByRole('button', { name: /login/i }));
     await waitFor(() => {
-      expect(screen.getByText(/at least 6 characters/i)).toBeInTheDocument();
+      expect(screen.getByText(/validation.passwordMin/i)).toBeInTheDocument();
     });
   });
 });
