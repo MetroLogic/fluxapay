@@ -285,7 +285,7 @@ router.post(
  *     summary: List permanently failed webhooks (DLQ)
  *     tags: [Webhooks — Admin]
  *     security:
- *       - adminAuth: []
+ *       - adminSecret: []
  *     parameters:
  *       - in: query
  *         name: merchant_id
@@ -337,7 +337,7 @@ router.get(
  *     summary: Requeue a permanently failed webhook for redelivery
  *     tags: [Webhooks — Admin]
  *     security:
- *       - adminAuth: []
+ *       - adminSecret: []
  *     parameters:
  *       - in: path
  *         name: log_id
