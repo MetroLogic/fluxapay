@@ -29,6 +29,10 @@ export async function signupMerchantService(data: {
   country: string;
   settlement_currency: string;
   password: string;
+  account_name?: string;
+  account_number?: string;
+  bank_name?: string;
+  bank_code?: string;
 }) {
   const {
     email,
@@ -37,6 +41,10 @@ export async function signupMerchantService(data: {
     business_name,
     country,
     settlement_currency,
+    account_name,
+    account_number,
+    bank_name,
+    bank_code,
   } = data;
 
   // Check duplicates
@@ -54,20 +62,40 @@ export async function signupMerchantService(data: {
   const apiKeyHashed = await hashKey(apiKey);
   const apiKeyLastFour = getLastFour(apiKey);
 
-  // Create merchant
-  const merchant = await prisma.merchant.create({
-    data: {
-      business_name,
-      email,
-      phone_number,
-      country,
-      settlement_currency,
-      webhook_secret: crypto.randomBytes(32).toString("hex"),
-      password: hashedPassword,
-      api_key_hashed: apiKeyHashed,
-      api_key_last_four: apiKeyLastFour,
-    },
+  // Create merchant and bank account in a transaction
+  const result = await prisma.$transaction(async (tx) => {
+    const merchant = await tx.merchant.create({
+      data: {
+        business_name,
+        email,
+        phone_number,
+        country,
+        settlement_currency,
+        webhook_secret: crypto.randomBytes(32).toString("hex"),
+        password: hashedPassword,
+        api_key_hashed: apiKeyHashed,
+        api_key_last_four: apiKeyLastFour,
+      },
+    });
+
+    if (account_name && account_number && bank_name) {
+      await tx.bankAccount.create({
+        data: {
+          merchantId: merchant.id,
+          account_name,
+          account_number,
+          bank_name,
+          bank_code,
+          currency: settlement_currency,
+          country,
+        },
+      });
+    }
+
+    return merchant;
   });
+
+  const merchant = result;
 
   // On-chain registration (non-blocking)
   merchantRegistryService.register_merchant(merchant.id, business_name, settlement_currency).catch(err => {
@@ -159,6 +187,7 @@ export async function getMerchantUserService(data: {
   const { merchantId } = data;
   const merchant = await prisma.merchant.findUnique({
     where: { id: merchantId },
+    include: { bankAccount: true },
   });
 
   if (!merchant) throw { status: 404, message: "Merchant not found" };

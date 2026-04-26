@@ -17,6 +17,11 @@ export const signupSchema = z.object({
     .min(0, 'settlement_day must be 0–6 (Sun–Sat)')
     .max(6, 'settlement_day must be 0–6 (Sun–Sat)')
     .optional(),
+  // Optional bank details during signup
+  account_name: z.string().min(2, 'Account name is required').optional(),
+  account_number: z.string().min(5, 'Account number is required').optional(),
+  bank_name: z.string().min(2, 'Bank name is required').optional(),
+  bank_code: z.string().optional(),
 })
   .refine(
     (data) =>
