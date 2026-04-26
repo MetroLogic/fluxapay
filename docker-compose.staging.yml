@@ -1,0 +1,62 @@
+# Staging environment — mirrors production topology.
+# Usage: docker-compose -f docker-compose.staging.yml up -d
+
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-fluxapay_staging}
+    volumes:
+      - postgres_staging_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./fluxapay_backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: staging
+      PORT: 3000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-fluxapay_staging}?schema=public
+      JWT_SECRET: ${JWT_SECRET}
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET}
+      KMS_PROVIDER: ${KMS_PROVIDER:-local}
+      KMS_ENCRYPTION_PASSPHRASE: ${KMS_ENCRYPTION_PASSPHRASE}
+      KMS_ENCRYPTED_MASTER_SEED: ${KMS_ENCRYPTED_MASTER_SEED}
+      STELLAR_HORIZON_URL: ${STELLAR_HORIZON_URL:-https://horizon-testnet.stellar.org}
+      STELLAR_NETWORK_PASSPHRASE: ${STELLAR_NETWORK_PASSPHRASE:-Test SDF Network ; September 2015}
+      FUNDER_SECRET_KEY: ${FUNDER_SECRET_KEY}
+      MASTER_VAULT_SECRET_KEY: ${MASTER_VAULT_SECRET_KEY}
+      USDC_ISSUER_PUBLIC_KEY: ${USDC_ISSUER_PUBLIC_KEY:-GBBD47IF6LWK7P7MDEVSCWT73IQIGCEZHR7OMXMBZQ3ZONN2T4U6W23Y}
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET}
+      RESEND_API_KEY: ${RESEND_API_KEY}
+      SMS_PROVIDER: ${SMS_PROVIDER:-none}
+      DISABLE_CRON: ${DISABLE_CRON:-false}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["sh", "-c", "npx prisma migrate deploy && npm start"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  postgres_staging_data:
