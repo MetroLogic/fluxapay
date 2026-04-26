@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { api, ApiError } from "@/lib/api";
 import { PaymentDetails } from "@/features/dashboard/payments/PaymentDetails";
-import { type Payment } from "@/features/dashboard/payments/payments-mock";
+import { type Payment } from "@/features/dashboard/payments/payments.types";
 import { type RefundRecord, type RefundReason } from "@/features/dashboard/refunds/refunds-mock";
 import { Button } from "@/components/Button";
 import { ChevronLeft, Loader2, RefreshCw } from "lucide-react";

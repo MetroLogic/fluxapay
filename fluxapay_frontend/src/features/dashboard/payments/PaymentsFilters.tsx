@@ -3,16 +3,20 @@ import { Input } from "@/components/Input";
 import { Select } from "@/components/Select";
 import { Button } from "@/components/Button";
 import { Search, Save, XCircle } from "lucide-react";
-import { memo, useCallback, useEffect, useState } from "react";
+import { memo, useCallback, useEffect, useState, type ChangeEvent } from "react";
 import toast from "react-hot-toast";
 
 interface PaymentsFiltersProps {
     searchValue: string;
     statusValue: string;
     currencyValue: string;
+    dateFromValue: string;
+    dateToValue: string;
     onSearchChange: (value: string) => void;
     onStatusChange: (value: string) => void;
     onCurrencyChange: (value: string) => void;
+    onDateFromChange: (value: string) => void;
+    onDateToChange: (value: string) => void;
 }
 
 interface SavedPreset {
@@ -21,15 +25,21 @@ interface SavedPreset {
     search: string;
     status: string;
     currency: string;
+    dateFrom: string;
+    dateTo: string;
 }
 
 export const PaymentsFilters = memo(({
     searchValue,
     statusValue,
     currencyValue,
+    dateFromValue,
+    dateToValue,
     onSearchChange,
     onStatusChange,
     onCurrencyChange,
+    onDateFromChange,
+    onDateToChange,
 }: PaymentsFiltersProps) => {
     const [presets, setPresets] = useState<SavedPreset[]>([]);
     const [selectedPresetId, setSelectedPresetId] = useState<string>("default");
@@ -53,17 +63,17 @@ export const PaymentsFilters = memo(({
         localStorage.setItem("fluxapay_payment_presets", JSON.stringify(newPresets));
     };
 
-    const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleSearchChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
         onSearchChange(e.target.value);
         setSelectedPresetId("custom");
     }, [onSearchChange]);
 
-    const handleStatusChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
+    const handleStatusChange = useCallback((e: ChangeEvent<HTMLSelectElement>) => {
         onStatusChange(e.target.value);
         setSelectedPresetId("custom");
     }, [onStatusChange]);
 
-    const handleCurrencyChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
+    const handleCurrencyChange = useCallback((e: ChangeEvent<HTMLSelectElement>) => {
         onCurrencyChange(e.target.value);
         setSelectedPresetId("custom");
     }, [onCurrencyChange]);
@@ -78,6 +88,8 @@ export const PaymentsFilters = memo(({
             search: searchValue,
             status: statusValue,
             currency: currencyValue,
+            dateFrom: dateFromValue,
+            dateTo: dateToValue,
         };
 
         savePresets([...presets, newPreset]);
@@ -85,7 +97,7 @@ export const PaymentsFilters = memo(({
         toast.success(`Preset "${name}" saved!`);
     };
 
-    const handleLoadPreset = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const handleLoadPreset = (e: ChangeEvent<HTMLSelectElement>) => {
         const id = e.target.value;
         setSelectedPresetId(id);
         
@@ -93,6 +105,8 @@ export const PaymentsFilters = memo(({
             onSearchChange("");
             onStatusChange("all");
             onCurrencyChange("all");
+            onDateFromChange("");
+            onDateToChange("");
             return;
         }
 
@@ -101,6 +115,8 @@ export const PaymentsFilters = memo(({
             onSearchChange(preset.search);
             onStatusChange(preset.status);
             onCurrencyChange(preset.currency);
+            onDateFromChange(preset.dateFrom || "");
+            onDateToChange(preset.dateTo || "");
         }
     };
 
@@ -108,6 +124,8 @@ export const PaymentsFilters = memo(({
         onSearchChange("");
         onStatusChange("all");
         onCurrencyChange("all");
+        onDateFromChange("");
+        onDateToChange("");
         setSelectedPresetId("default");
     };
 
@@ -183,6 +201,30 @@ export const PaymentsFilters = memo(({
                         <option value="XLM">XLM</option>
                         <option value="EURC">EURC</option>
                     </Select>
+                </div>
+            </div>
+            <div className="flex flex-col md:flex-row gap-4">
+                <div className="flex items-center gap-2">
+                    <label className="text-sm text-slate-600 whitespace-nowrap">From</label>
+                    <Input
+                        type="date"
+                        value={dateFromValue}
+                        onChange={(e) => {
+                            onDateFromChange(e.target.value);
+                            setSelectedPresetId("custom");
+                        }}
+                    />
+                </div>
+                <div className="flex items-center gap-2">
+                    <label className="text-sm text-slate-600 whitespace-nowrap">To</label>
+                    <Input
+                        type="date"
+                        value={dateToValue}
+                        onChange={(e) => {
+                            onDateToChange(e.target.value);
+                            setSelectedPresetId("custom");
+                        }}
+                    />
                 </div>
             </div>
         </ListPageFilterBar>

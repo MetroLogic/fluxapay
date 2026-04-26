@@ -4,8 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PaymentsTable } from "@/features/dashboard/payments/PaymentsTable";
 import { PaymentsFilters } from "@/features/dashboard/payments/PaymentsFilters";
-import { PaymentDetails } from "@/features/dashboard/payments/PaymentDetails";
-import { type Payment } from "@/features/dashboard/payments/payments-mock";
+import { type Payment } from "@/features/dashboard/payments/payments.types";
 import {
   MOCK_REFUNDS,
   type RefundRecord,
@@ -108,6 +107,8 @@ function PaymentsContent() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [currencyFilter, setCurrencyFilter] = useState("all");
+  const [dateFromFilter, setDateFromFilter] = useState("");
+  const [dateToFilter, setDateToFilter] = useState("");
 
   const [selectedPaymentId, setSelectedPaymentId] = useState<string | null>(paymentIdFromQuery || null);
   const [detailedPayment, setDetailedPayment] = useState<Payment | null>(null);
@@ -137,6 +138,15 @@ function PaymentsContent() {
     searchDebounceRef.current = setTimeout(() => setDebouncedSearch(value), 400);
   }, []);
 
+  const dateFromIso = useMemo(
+    () => (dateFromFilter ? new Date(`${dateFromFilter}T00:00:00.000Z`).toISOString() : undefined),
+    [dateFromFilter],
+  );
+  const dateToIso = useMemo(
+    () => (dateToFilter ? new Date(`${dateToFilter}T23:59:59.999Z`).toISOString() : undefined),
+    [dateToFilter],
+  );
+
   const fetchPayments = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
@@ -147,6 +157,8 @@ function PaymentsContent() {
         status: statusFilter,
         currency: currencyFilter,
         search: debouncedSearch || undefined,
+        date_from: dateFromIso,
+        date_to: dateToIso,
       })) as { data: BackendPayment[]; meta: { total: number } };
       setPayments(result.data.map(mapBackendPayment));
       setTotal(result.meta.total);
@@ -157,11 +169,11 @@ function PaymentsContent() {
     } finally {
       setLoading(false);
     }
-  }, [page, statusFilter, currencyFilter, debouncedSearch]);
+  }, [page, statusFilter, currencyFilter, debouncedSearch, dateFromIso, dateToIso]);
 
   useEffect(() => {
     setPage(1);
-  }, [statusFilter, currencyFilter, debouncedSearch]);
+  }, [statusFilter, currencyFilter, debouncedSearch, dateFromFilter, dateToFilter]);
 
   useEffect(() => {
     fetchPayments();
@@ -198,6 +210,8 @@ function PaymentsContent() {
         status: statusFilter,
         currency: currencyFilter,
         search: debouncedSearch || undefined,
+        date_from: dateFromIso,
+        date_to: dateToIso,
       });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -382,9 +396,13 @@ function PaymentsContent() {
             searchValue={search}
             statusValue={statusFilter}
             currencyValue={currencyFilter}
+            dateFromValue={dateFromFilter}
+            dateToValue={dateToFilter}
             onSearchChange={handleSearchChange}
             onStatusChange={(v) => setStatusFilter(v)}
             onCurrencyChange={(v) => setCurrencyFilter(v)}
+            onDateFromChange={(v) => setDateFromFilter(v)}
+            onDateToChange={(v) => setDateToFilter(v)}
           />
         }
         footer={
@@ -404,8 +422,6 @@ function PaymentsContent() {
           onRowClick={(payment) => router.push(`/dashboard/payments/${payment.id}`)}
         />
       </DataTableCard>
-
-      <Modal
 
       <Modal
         isOpen={showCreateLinkModal}
@@ -533,4 +549,3 @@ export default function PaymentsPage() {
     </Suspense>
   );
 }
-
