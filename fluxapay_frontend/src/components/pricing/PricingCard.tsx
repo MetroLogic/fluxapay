@@ -26,6 +26,8 @@ export default function PricingCard({
   featured = false,
   badge,
 }: PricingCardProps) {
+  const isExternal = cta.href.startsWith("http");
+
   return (
     <div
       className={cn(
@@ -57,17 +59,33 @@ export default function PricingCard({
         </div>
       </div>
 
-      <Link
-        href={cta.href}
-        className={cn(
-          "mb-8 block w-full rounded-lg px-4 py-3 text-center font-medium transition",
-          featured
-            ? "bg-gradient-to-r from-indigo-500 to-violet-500 text-white hover:shadow-lg"
-            : "border border-slate-900 bg-white text-slate-900 hover:bg-slate-50"
-        )}
-      >
-        {cta.label}
-      </Link>
+      {isExternal ? (
+        <a
+          href={cta.href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={cn(
+            "mb-8 block w-full rounded-lg px-4 py-3 text-center font-medium transition",
+            featured
+              ? "bg-gradient-to-r from-indigo-500 to-violet-500 text-white hover:shadow-lg"
+              : "border border-slate-900 bg-white text-slate-900 hover:bg-slate-50"
+          )}
+        >
+          {cta.label}
+        </a>
+      ) : (
+        <Link
+          href={cta.href}
+          className={cn(
+            "mb-8 block w-full rounded-lg px-4 py-3 text-center font-medium transition",
+            featured
+              ? "bg-gradient-to-r from-indigo-500 to-violet-500 text-white hover:shadow-lg"
+              : "border border-slate-900 bg-white text-slate-900 hover:bg-slate-50"
+          )}
+        >
+          {cta.label}
+        </Link>
+      )}
 
       <div className="space-y-3 border-t border-slate-200 pt-6">
         {features.map((feature) => (
