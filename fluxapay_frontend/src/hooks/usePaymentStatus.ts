@@ -87,6 +87,9 @@ export function usePaymentStatus(paymentId: string): UsePaymentStatusReturn {
         paidAmount:
           (raw.paidAmount as number | undefined) ??
           (raw.paid_amount as number | undefined),
+        supportUrl:
+          (raw.supportUrl as string | undefined) ??
+          (raw.support_url as string | undefined),
       };
 
       pollingBackoffRef.current = 3000;

@@ -25,26 +25,27 @@ const COUNTRIES = [
   { code: "KE", name: "Kenya", currency: "KES", Icon: KE },
 ];
 
-const signupSchema = yup.object({
-  business_name: yup.string().required("Business name is required"),
+type AuthTranslator = (key: string) => string;
+
+const signupSchema = (t: AuthTranslator) => yup.object({
+  name: yup.string().required(t("validation.nameRequired")),
+  businessName: yup.string().required(t("validation.businessNameRequired")),
   email: yup
     .string()
-    .email("Please enter a valid email address")
-    .required("Email is required"),
-  phone_number: yup.string().required("Phone number is required"),
+    .email(t("validation.emailInvalid"))
+    .required(t("validation.emailRequired")),
   password: yup
     .string()
-    .min(6, "Password must be at least 6 characters")
-    .required("Password is required"),
-  country: yup.string().required("Country is required"),
-  settlement_currency: yup.string().required("Settlement currency is required"),
-  account_name: yup.string().optional(),
-  account_number: yup.string().optional(),
-  bank_name: yup.string().optional(),
-  bank_code: yup.string().optional(),
+    .min(6, t("validation.passwordMin"))
+    .required(t("validation.passwordRequired")),
+  country: yup.string().required(t("validation.countryRequired")),
+  settlementCurrency: yup.string().required(t("validation.currencyRequired")),
+  accountNumber: yup.string().required(t("validation.accountNumberRequired")),
+  bankName: yup.string().required(t("validation.bankNameRequired")),
+  bankCode: yup.string().required(t("validation.bankCodeRequired")),
 });
 
-type SignUpFormData = yup.InferType<typeof signupSchema>;
+type SignUpFormData = yup.InferType<ReturnType<typeof signupSchema>>;
 
 const SignUpForm = () => {
   const router = useRouter();
@@ -100,14 +101,14 @@ const SignUpForm = () => {
     e.preventDefault();
 
     try {
-      const validData = await signupSchema.validate(formData, { abortEarly: false });
+      const validData = await signupSchema(tAuth).validate(formData, { abortEarly: false });
 
       setErrors({});
       setIsSubmitting(true);
 
       const response = await api.auth.signup(validData as any);
 
-      toast.success("Signup successful! Please verify your account.");
+      toast.success(tAuth("signupSuccess"));
       
       if (response.merchantId) {
         router.push(
@@ -153,7 +154,7 @@ const SignUpForm = () => {
                 {tAuth("signup")}
               </h1>
               <p className="text-sm md:text-[18px] font-normal text-muted-foreground">
-                Please signup to get started.
+                {tAuth("signupPrompt")}
               </p>
             </div>
 
@@ -164,6 +165,19 @@ const SignUpForm = () => {
               noValidate
               className="space-y-5 animate-fade-in [animation-delay:200ms]"
             >
+              {/* Name */}
+              <div>
+                <Input
+                  type="text"
+                  name="name"
+                  label={tAuth("fullName")}
+                  value={formData.name}
+                  onChange={handleChange}
+                  placeholder={tAuth("fullNamePlaceholder")}
+                  error={errors.name}
+                />
+              </div>
+
               {/* Business Name */}
               <div>
                 <Input
@@ -172,8 +186,8 @@ const SignUpForm = () => {
                   label={tAuth("businessName")}
                   value={formData.business_name}
                   onChange={handleChange}
-                  placeholder="Business name"
-                  error={errors.business_name}
+                  placeholder={tAuth("businessNamePlaceholder")}
+                  error={errors.businessName}
                 />
               </div>
 
@@ -185,7 +199,7 @@ const SignUpForm = () => {
                   label={tAuth("email")}
                   value={formData.email}
                   onChange={handleChange}
-                  placeholder="you@example.com"
+                  placeholder={tAuth("emailSignupPlaceholder")}
                   error={errors.email}
                 />
               </div>
@@ -219,7 +233,7 @@ const SignUpForm = () => {
                         errors.country ? "border-red-500" : "border-[#D9D9D9]",
                       )}
                     >
-                      <SelectValue placeholder="Select Country" />
+                      <SelectValue placeholder={tAuth("selectCountry")} />
                     </SelectTrigger>
                     <SelectContent>
                       {COUNTRIES.map((country) => (
@@ -240,27 +254,45 @@ const SignUpForm = () => {
                 <div className="space-y-2">
                   <Input
                     type="text"
-                    name="settlement_currency"
-                    label="Currency"
-                    value={formData.settlement_currency}
+                    name="settlementCurrency"
+                    label={tAuth("currencyLabel")}
+                    value={formData.settlementCurrency}
                     readOnly
-                    placeholder="Currency"
-                    error={errors.settlement_currency}
+                    placeholder={tAuth("currencyLabel")}
+                    error={errors.settlementCurrency}
                     className="bg-slate-50 cursor-not-allowed"
                   />
                 </div>
               </div>
 
               {/* Bank Details */}
-              <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <Input
                   type="text"
-                  name="account_name"
-                  label="Account Holder Name"
-                  value={formData.account_name}
+                  name="bankName"
+                  label={tAuth("bankLabel")}
+                  value={formData.bankName}
                   onChange={handleChange}
-                  placeholder="Full name on bank account"
-                  error={errors.account_name}
+                  placeholder={tAuth("bankNamePlaceholder")}
+                  error={errors.bankName}
+                />
+                <Input
+                  type="text"
+                  name="bankCode"
+                  label={tAuth("codeLabel")}
+                  value={formData.bankCode}
+                  onChange={handleChange}
+                  placeholder={tAuth("bankCodePlaceholder")}
+                  error={errors.bankCode}
+                />
+                <Input
+                  type="text"
+                  name="accountNumber"
+                  label={tAuth("accountLabel")}
+                  value={formData.accountNumber}
+                  onChange={handleChange}
+                  placeholder={tAuth("accountNumberPlaceholder")}
+                  error={errors.accountNumber}
                 />
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <Input
@@ -302,7 +334,7 @@ const SignUpForm = () => {
                     label={tAuth("password")}
                     value={formData.password}
                     onChange={handleChange}
-                    placeholder="Password"
+                    placeholder={tAuth("passwordPlaceholder")}
                     error={errors.password}
                     className="pr-10 focus:ring-indigo-500 focus:border-indigo-500"
                   />
@@ -360,34 +392,34 @@ const SignUpForm = () => {
                     <path d="M22 12a10 10 0 0 1-10 10" />
                   </svg>
                 )}
-                <span>{isSubmitting ? "Creating account..." : "Create account"}</span>
+                <span>{isSubmitting ? tAuth("creatingAccount") : tAuth("signup")}</span>
               </Button>
               <p className="mt-4 text-center text-xs text-slate-500">
-                By creating an account, you agree to our{" "}
+                {tAuth("agreeToTermsSignup")}{" "}
                 <Link
                   href="/terms"
                   className="font-medium text-slate-700 hover:text-indigo-600 underline underline-offset-4"
                 >
-                  Terms of Service
+                  {tAuth("terms")}
                 </Link>{" "}
-                and{" "}
+                {tAuth("and")}{" "}
                 <Link
                   href="/privacy"
                   className="font-medium text-slate-700 hover:text-indigo-600 underline underline-offset-4"
                 >
-                  Privacy Policy
+                  {tAuth("privacy")}
                 </Link>
                 .
               </p>
 
               {/* Have account */}
               <div className="pt-2 text-center text-xs md:text-[18px] text-muted-foreground font-semibold">
-                Already have an account?{" "}
+                {tAuth("hasAccount")}{" "}
                 <Link
                   href="/login"
                   className="font-semibold text-indigo-500 hover:text-indigo-600 underline underline-offset-4 hover:underline"
                 >
-                  Sign in
+                  {tAuth("login")}
                 </Link>
               </div>
             </form>

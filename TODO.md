@@ -1,5 +1,61 @@
 # Active Tasks
 
+## ✅ [Backend] Implement Oracle Service for Payment Monitoring
+
+**Status**: COMPLETED  
+**Date**: April 24, 2026
+
+### Implementation Summary
+
+Implemented a comprehensive Payment Oracle Service that polls the Stellar Horizon API to verify incoming payments with the following features:
+
+#### Core Features
+- ✅ Configurable polling service (default: 30 seconds)
+- ✅ Batch processing of active payments (default: 50 per batch)
+- ✅ Amount and asset code verification (USDC)
+- ✅ Smart contract integration (verify_payment) with enable/disable flag
+- ✅ Comprehensive error logging and alerting
+- ✅ Missed poll detection and tracking
+- ✅ Timeout handling for Horizon requests
+- ✅ Health monitoring with consecutive failure tracking
+- ✅ Detailed metrics collection
+
+#### Files Created
+- `src/services/paymentOracle.service.ts` - Main oracle service
+- `src/controllers/oracle.controller.ts` - Admin API endpoints
+- `src/routes/oracle.route.ts` - RESTful routes
+- `src/__tests__/services/paymentOracle.service.test.ts` - Unit tests
+- `docs/ORACLE_SERVICE_IMPLEMENTATION.md` - Technical documentation
+- `docs/ORACLE_SERVICE_README.md` - Quick start guide
+
+#### Files Modified
+- `src/index.ts` - Added oracle startup/shutdown
+- `src/app.ts` - Added oracle routes
+- `src/config/env.config.ts` - Added oracle configuration
+- `.env.example` - Added oracle environment variables
+
+#### API Endpoints
+- `GET /api/v1/admin/oracle/metrics` - Get performance metrics
+- `GET /api/v1/admin/oracle/health` - Get health status
+- `POST /api/v1/admin/oracle/verify/:paymentId` - Manual verification
+
+#### Configuration
+```bash
+ORACLE_POLLING_INTERVAL_MS=30000
+ORACLE_MAX_MISSED_POLLS=5
+ORACLE_BATCH_SIZE=50
+ORACLE_HORIZON_TIMEOUT_MS=10000
+ENABLE_SOROBAN_VERIFICATION=false
+```
+
+### Acceptance Criteria Met
+✅ Polling service checking Horizon API every X seconds  
+✅ Verification of amount and asset code for detected payments  
+✅ Smart contract call (verify_payment) on successful detection  
+✅ Error logging and alerting for missed blocks/timeouts
+
+---
+
 ## #213 [DONE - pending migration]
 ... (previous content)
 

@@ -2,6 +2,7 @@ import { PrismaClient, WebhookEventType, WebhookStatus, Payment, Merchant } from
 import crypto from "crypto";
 import { webhookEventTypes } from "../schemas/webhook.schema";
 import { normalizeEventName, toLegacyEventName } from "../utils/webhook-event-mapping.util";
+import { trackWebhookDelivery } from "../middleware/metrics.middleware";
 
 export class WebhookDispatcher {
   private prisma: PrismaClient;
@@ -59,6 +60,7 @@ export class WebhookDispatcher {
     } catch (error: any) {
       console.error(`[WebhookDispatcher] Webhook delivery error for payment ${payment.id}:`, error.message);
     } finally {
+      trackWebhookDelivery(deliveryStatus === 'SUCCESS' ? 'success' : 'fail');
       await this.prisma.payment.update({
         where: { id: payment.id },
         data: {
@@ -527,13 +529,16 @@ export async function deliverWebhook(
     clearTimeout(timeout);
 
     const responseBody = await response.text();
+    const success = response.ok;
+    trackWebhookDelivery(success ? 'success' : 'fail');
 
     return {
-      success: response.ok,
+      success,
       httpStatus: response.status,
       responseBody: responseBody.substring(0, 10000),
     };
   } catch (error: any) {
+    trackWebhookDelivery('fail');
     return {
       success: false,
       error: error.message || "Unknown error occurred",
@@ -549,6 +554,23 @@ export function generateWebhookSignature(
 ): string {
   const signingString = `${timestamp}.${JSON.stringify(payload)}`;
   return crypto.createHmac("sha256", merchantSecret).update(signingString).digest("hex");
+}
+
+/**
+ * Replay protection: returns true only if the webhook timestamp falls within
+ * the allowed window. Default window is 5 minutes (300 000 ms).
+ *
+ * Merchants should call this before processing any incoming webhook to prevent
+ * replay attacks. Combine with event_id deduplication for full protection.
+ */
+export function verifyWebhookTimestamp(
+  timestamp: string,
+  windowMs: number = 5 * 60 * 1000,
+): boolean {
+  const webhookTime = new Date(timestamp).getTime();
+  if (isNaN(webhookTime)) return false;
+  const diff = Date.now() - webhookTime;
+  return diff >= 0 && diff <= windowMs;
 }
 
 // Helper function to generate test payload based on event type
@@ -648,6 +670,16 @@ function generateTestPayload(
       renewed_at: new Date().toISOString(),
       next_billing_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
     },
+    'invoice.paid': {
+      invoice_id: `inv_test_${Date.now()}`,
+      invoice_number: `INV-TEST-001`,
+      status: "paid",
+    },
+    'invoice.overdue': {
+      invoice_id: `inv_test_${Date.now()}`,
+      invoice_number: `INV-TEST-001`,
+      status: "overdue",
+    },
     // Legacy event names (for backward compatibility)
     'payment_completed': {
       payment_id: `pay_test_${Date.now()}`,
@@ -715,6 +747,16 @@ function generateTestPayload(
       renewed_at: new Date().toISOString(),
       next_billing_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
     },
+    'invoice_paid': {
+      invoice_id: `inv_test_${Date.now()}`,
+      invoice_number: `INV-TEST-001`,
+      status: "paid",
+    },
+    'invoice_overdue': {
+      invoice_id: `inv_test_${Date.now()}`,
+      invoice_number: `INV-TEST-001`,
+      status: "overdue",
+    },
   };
 
   return {
@@ -758,8 +800,14 @@ export async function createAndDeliverWebhook(
     return existing;
   }
 
-  // Embed event_id in the outgoing payload so merchants can deduplicate on their side.
-  const enrichedPayload = { event_id: resolvedEventId, ...payload };
+  // Embed event_id and timestamp in the outgoing payload so merchants can
+  // deduplicate and apply replay-protection on their side.
+  const deliveryTimestamp = new Date().toISOString();
+  const enrichedPayload = {
+    event_id: resolvedEventId,
+    timestamp: deliveryTimestamp,
+    ...payload,
+  };
 
   const webhookLog = await prisma.webhookLog.create({
     data: {

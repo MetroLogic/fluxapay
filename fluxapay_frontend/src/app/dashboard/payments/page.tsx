@@ -27,6 +27,8 @@ interface BackendPayment {
   amount: number;
   currency: string;
   status: Payment["status"];
+  checkoutUrl?: string;
+  checkout_url?: string;
   merchantId: string;
   customer_email: string;
   order_id?: string;
@@ -58,6 +60,7 @@ function mapBackendPayment(p: BackendPayment): Payment {
     amount: p.amount,
     currency: p.currency,
     status: p.status,
+    checkoutUrl: p.checkoutUrl ?? p.checkout_url,
     merchantId: p.merchantId,
     customerName: "",
     customerEmail: p.customer_email ?? "",
@@ -91,7 +94,9 @@ function mapBackendRefund(refund: BackendRefund): RefundRecord {
 function PaymentsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const shouldOpenCreateLink = searchParams.get("action") === "create-payment-link";
+  const shouldOpenCreateLink =
+    searchParams.get("action") === "create-payment" ||
+    searchParams.get("action") === "create-payment-link";
   const paymentIdFromQuery = searchParams.get("paymentId");
 
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -110,7 +115,9 @@ function PaymentsContent() {
 
   const [showCreateLinkModal, setShowCreateLinkModal] = useState(shouldOpenCreateLink);
   const [linkAmount, setLinkAmount] = useState("100");
-  const [linkCurrency, setLinkCurrency] = useState("USD");
+  const [linkCurrency, setLinkCurrency] = useState("USDC");
+  const [linkCustomerEmail, setLinkCustomerEmail] = useState("");
+  const [linkOrderId, setLinkOrderId] = useState("");
   const [linkDescription, setLinkDescription] = useState("Invoice payment");
   const [linkSuccessUrl, setLinkSuccessUrl] = useState("");
   const [linkCancelUrl, setLinkCancelUrl] = useState("");
@@ -209,22 +216,52 @@ function PaymentsContent() {
   };
 
   const handleGenerateLink = async () => {
+    const email = linkCustomerEmail.trim();
     const amountNumber = Number(linkAmount);
     if (!amountNumber || amountNumber <= 0) {
       toast.error("Please enter a valid amount.");
       return;
     }
+
+    const simpleEmailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!simpleEmailPattern.test(email)) {
+      toast.error("Please enter a valid customer email.");
+      return;
+    }
+
+    const validateHttpsUrl = (value: string, label: string) => {
+      if (!value.trim()) return true;
+      try {
+        const parsed = new URL(value);
+        if (parsed.protocol !== "https:") throw new Error("invalid");
+        return true;
+      } catch {
+        toast.error(`${label} must be a valid https URL.`);
+        return false;
+      }
+    };
+
+    if (!validateHttpsUrl(linkSuccessUrl, "Success URL")) return;
+    if (!validateHttpsUrl(linkCancelUrl, "Cancel URL")) return;
+
     setIsGeneratingLink(true);
     try {
       const response = (await api.payments.create({
         amount: amountNumber,
         currency: linkCurrency,
+        customer_email: email,
+        order_id: linkOrderId.trim() || undefined,
         description: linkDescription || undefined,
         success_url: linkSuccessUrl || undefined,
         cancel_url: linkCancelUrl || undefined,
-      })) as { payment?: { id: string; checkoutUrl?: string; checkout_url?: string } };
+      })) as {
+        id?: string;
+        checkoutUrl?: string;
+        checkout_url?: string;
+        payment?: { id?: string; checkoutUrl?: string; checkout_url?: string };
+      };
 
-      const payment = response?.payment;
+      const payment = response?.payment ?? response;
       if (!payment?.id) throw new Error("Payment link could not be created.");
 
       const url =
@@ -236,10 +273,10 @@ function PaymentsContent() {
       setRecentLinks((prev) =>
         [{ id: payment.id, url, amount: amountNumber, currency: linkCurrency, description: linkDescription || undefined, createdAt: new Date().toISOString() }, ...prev].slice(0, 5),
       );
-      toast.success("Payment link created successfully.");
+      toast.success("Payment created successfully.");
       fetchPayments();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Unable to create payment link.");
+      toast.error(error instanceof Error ? error.message : "Unable to create payment.");
     } finally {
       setIsGeneratingLink(false);
     }
@@ -305,8 +342,8 @@ function PaymentsContent() {
       {recentLinks.length > 0 && (
         <div className="bg-card rounded-2xl border p-6 shadow-sm space-y-3">
           <div>
-            <h3 className="text-sm font-semibold">Recent payment links</h3>
-            <p className="text-xs text-muted-foreground">Links you&apos;ve generated in this session.</p>
+            <h3 className="text-sm font-semibold">Recent payments</h3>
+            <p className="text-xs text-muted-foreground">Checkout links generated in this session.</p>
           </div>
           <div className="space-y-2">
             {recentLinks.map((link) => (
@@ -328,7 +365,7 @@ function PaymentsContent() {
                   className="shrink-0 mt-1 sm:mt-0"
                   onClick={async () => {
                     await navigator.clipboard.writeText(link.url);
-                    toast.success("Payment link copied to clipboard.");
+                    toast.success("Checkout URL copied to clipboard.");
                   }}
                 >
                   Copy
@@ -391,7 +428,7 @@ function PaymentsContent() {
       <Modal
         isOpen={showCreateLinkModal}
         onClose={() => setShowCreateLinkModal(false)}
-        title="Create Payment Link"
+        title="Create Payment"
       >
         <div className="space-y-4">
           <div>
@@ -410,10 +447,28 @@ function PaymentsContent() {
               onChange={(e) => setLinkCurrency(e.target.value)}
               className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
             >
-              <option value="USD">USD</option>
-              <option value="EUR">EUR</option>
-              <option value="GBP">GBP</option>
+              <option value="USDC">USDC</option>
             </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium">Customer email</label>
+            <input
+              type="email"
+              value={linkCustomerEmail}
+              onChange={(e) => setLinkCustomerEmail(e.target.value)}
+              placeholder="customer@example.com"
+              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium">Order ID (optional)</label>
+            <input
+              type="text"
+              value={linkOrderId}
+              onChange={(e) => setLinkOrderId(e.target.value)}
+              placeholder="ORD-1024"
+              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+            />
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium">Description</label>
@@ -446,7 +501,7 @@ function PaymentsContent() {
           </div>
           <div className="flex gap-2">
             <Button className="flex-1" onClick={handleGenerateLink} disabled={isGeneratingLink}>
-              {isGeneratingLink ? "Generating..." : "Generate Link"}
+              {isGeneratingLink ? "Creating..." : "Create Payment"}
             </Button>
             <Button
               className="flex-1"
@@ -454,11 +509,11 @@ function PaymentsContent() {
               onClick={async () => {
                 if (!generatedLink) return;
                 await navigator.clipboard.writeText(generatedLink);
-                toast.success("Payment link copied to clipboard.");
+                toast.success("Checkout URL copied to clipboard.");
               }}
               disabled={!generatedLink}
             >
-              Copy Link
+              Copy Checkout URL
             </Button>
           </div>
           {generatedLink && (
@@ -474,7 +529,7 @@ function PaymentsContent() {
             </div>
           )}
           <p className="text-xs text-muted-foreground">
-            Draft link for {linkAmount || "0"} {linkCurrency}
+            New payment for {linkAmount || "0"} {linkCurrency}
             {linkDescription ? ` - ${linkDescription}` : ""}.
           </p>
         </div>

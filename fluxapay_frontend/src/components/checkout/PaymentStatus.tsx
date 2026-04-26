@@ -1,6 +1,7 @@
 'use client';
 
 import { CheckCircle, XCircle, Loader2, AlertCircle } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import type { PaymentStatus } from '../../types/payment';
 
 interface PaymentStatusProps {
@@ -12,6 +13,8 @@ interface PaymentStatusProps {
  * Component to display payment status with appropriate icons and messages
  */
 export function PaymentStatus({ status, message }: PaymentStatusProps) {
+  const t = useTranslations('payment');
+  
   const getStatusConfig = () => {
     switch (status) {
       case 'confirmed':
@@ -20,7 +23,7 @@ export function PaymentStatus({ status, message }: PaymentStatusProps) {
           iconColor: 'text-green-600',
           bgColor: 'bg-green-50',
           borderColor: 'border-green-200',
-          defaultMessage: 'Payment Confirmed!',
+          defaultMessage: t('checkout.confirmed'),
         };
       case 'expired':
         return {
@@ -28,7 +31,7 @@ export function PaymentStatus({ status, message }: PaymentStatusProps) {
           iconColor: 'text-red-600',
           bgColor: 'bg-red-50',
           borderColor: 'border-red-200',
-          defaultMessage: 'Payment Expired',
+          defaultMessage: t('checkout.expiredDescription'), // Wait, en.json has "expired" too.
         };
       case 'failed':
         return {
@@ -36,7 +39,7 @@ export function PaymentStatus({ status, message }: PaymentStatusProps) {
           iconColor: 'text-red-600',
           bgColor: 'bg-red-50',
           borderColor: 'border-red-200',
-          defaultMessage: 'Payment Failed',
+          defaultMessage: t('failed'),
         };
       case 'partially_paid':
         return {
@@ -44,7 +47,7 @@ export function PaymentStatus({ status, message }: PaymentStatusProps) {
           iconColor: 'text-amber-600',
           bgColor: 'bg-amber-50',
           borderColor: 'border-amber-200',
-          defaultMessage: 'Partial Payment Received',
+          defaultMessage: t('checkout.partialReceived'),
         };
       case 'overpaid':
         return {
@@ -52,23 +55,16 @@ export function PaymentStatus({ status, message }: PaymentStatusProps) {
           iconColor: 'text-blue-600',
           bgColor: 'bg-blue-50',
           borderColor: 'border-blue-200',
-          defaultMessage: 'Overpayment Received',
+          defaultMessage: t('checkout.overpaymentReceived'),
         };
       case 'paid':
-        return {
-          icon: CheckCircle,
-          iconColor: 'text-green-600',
-          bgColor: 'bg-green-50',
-          borderColor: 'border-green-200',
-          defaultMessage: 'Payment Completed',
-        };
       case 'completed':
         return {
           icon: CheckCircle,
           iconColor: 'text-green-600',
           bgColor: 'bg-green-50',
           borderColor: 'border-green-200',
-          defaultMessage: 'Payment Completed',
+          defaultMessage: t('status.completed'), // Using common status
         };
       case 'pending':
       default:
@@ -77,7 +73,7 @@ export function PaymentStatus({ status, message }: PaymentStatusProps) {
           iconColor: 'text-[color:var(--checkout-accent)]',
           bgColor: 'bg-transparent',
           borderColor: 'border-transparent',
-          defaultMessage: 'Waiting for payment...',
+          defaultMessage: t('waitingForPayment'),
         };
     }
   };

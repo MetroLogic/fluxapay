@@ -10,8 +10,12 @@ const options: swaggerJsdoc.Options = {
         },
         servers: [
             {
-                url: 'http://localhost:3000/api/v1',
-                description: 'Local server',
+                url: 'http://localhost:3000',
+                description: 'Local development server',
+            },
+            {
+                url: 'https://api.fluxapay.com',
+                description: 'Production server',
             },
         ],
         components: {

@@ -17,6 +17,8 @@ const envSchema = z.object({
     PAYMENT_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(5),
     PAYMENT_METADATA_MAX_BYTES: z.coerce.number().int().positive().default(16384),
     PAYMENT_METADATA_MAX_DEPTH: z.coerce.number().int().positive().default(5),
+    /** Maximum JSON request body size accepted by express.json(). Default: "1mb". */
+    REQUEST_BODY_SIZE_LIMIT: z.string().default("1mb"),
     CORS_ORIGINS: z.string().optional(),
 
     // Database (CRITICAL)
@@ -35,8 +37,8 @@ const envSchema = z.object({
 
     // SMS OTP (optional) — SMS_PROVIDER: none | mock | twilio | messagebird
     SMS_PROVIDER: z
-      .enum(['none', 'mock', 'twilio', 'messagebird'])
-      .default('none'),
+        .enum(['none', 'mock', 'twilio', 'messagebird'])
+        .default('none'),
     TWILIO_ACCOUNT_SID: z.string().optional(),
     TWILIO_AUTH_TOKEN: z.string().optional(),
     TWILIO_FROM_NUMBER: z.string().optional(),
@@ -44,10 +46,10 @@ const envSchema = z.object({
     MESSAGEBIRD_ORIGINATOR: z.string().optional(),
     OTP_SMS_MAX_PER_MERCHANT_HOUR: z.coerce.number().int().positive().default(10),
     OTP_SMS_COST_ALERT_DAILY_THRESHOLD: z.coerce
-      .number()
-      .int()
-      .positive()
-      .default(1000),
+        .number()
+        .int()
+        .positive()
+        .default(1000),
 
     // Webhook
     WEBHOOK_SECRET: z.string().optional(),
@@ -97,6 +99,13 @@ const envSchema = z.object({
     // Exchange Partner Feature Flags
     ENABLE_YELLOWCARD_VALIDATION: z.enum(['true', 'false']).default('false'),
     ENABLE_ANCHOR_VALIDATION: z.enum(['true', 'false']).default('false'),
+
+    // Payment Oracle Configuration
+    ORACLE_POLLING_INTERVAL_MS: z.coerce.number().int().positive().default(30000),
+    ORACLE_MAX_MISSED_POLLS: z.coerce.number().int().positive().default(5),
+    ORACLE_BATCH_SIZE: z.coerce.number().int().positive().default(50),
+    ORACLE_HORIZON_TIMEOUT_MS: z.coerce.number().int().positive().default(10000),
+    ENABLE_SOROBAN_VERIFICATION: z.enum(['true', 'false']).default('false'),
 
     // Cron Jobs
     PAYMENT_MONITOR_CRON: z.string().default('*/2 * * * *'),
