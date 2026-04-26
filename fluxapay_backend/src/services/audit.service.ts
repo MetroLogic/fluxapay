@@ -1,4 +1,4 @@
-import { PrismaClient, Prisma } from '../generated/client/client';
+import { PrismaClient, Prisma, AuditActionType, AuditEntityType, KYCStatus } from '../generated/client/client';
 import {
   CreateAuditLogParams,
   QueryAuditLogsParams,
