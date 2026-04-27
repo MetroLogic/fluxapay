@@ -274,11 +274,42 @@ export async function updateSettlementScheduleService(data: {
   settlement_day?: number;
 }) {
   const { merchantId, settlement_schedule, settlement_day } = data;
+
+  // Enforce data consistency: clear the day if schedule is daily
+  const finalSettlementDay = settlement_schedule === "daily" ? null : settlement_day;
+
+  // Fetch old values for audit log
+  const existing = await prisma.merchant.findUnique({
+    where: { id: merchantId },
+    select: { settlement_schedule: true, settlement_day: true },
+  });
+
   await prisma.merchant.update({
     where: { id: merchantId },
-    data: { settlement_schedule, settlement_day },
+    data: { 
+      settlement_schedule, 
+      settlement_day: finalSettlementDay 
+    },
   });
-  return { message: "Settlement schedule updated", settlement_schedule, settlement_day };
+
+  // Audit log: schedule change
+  if (existing) {
+    const updateData = { settlement_schedule, settlement_day: finalSettlementDay };
+    const changedFields = Object.keys(updateData).filter(
+      (k) => (updateData as any)[k] !== (existing as any)[k],
+    );
+    if (changedFields.length > 0) {
+      const oldValues: Record<string, any> = {};
+      const newValues: Record<string, any> = {};
+      for (const field of changedFields) {
+        oldValues[field] = (existing as any)[field];
+        newValues[field] = (updateData as any)[field];
+      }
+      logMerchantProfileUpdate({ merchantId, changedFields, oldValues, newValues }).catch(() => {});
+    }
+  }
+
+  return { message: "Settlement schedule updated", settlement_schedule, settlement_day: finalSettlementDay };
 }
 
 export async function addBankAccountService(data: {
