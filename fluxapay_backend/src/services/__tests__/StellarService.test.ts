@@ -100,6 +100,33 @@ describe('StellarService', () => {
         });
     });
 
+    describe('getAccountBalance', () => {
+        it('should return USDC balance when trustline exists', async () => {
+            mockServer.loadAccount.mockResolvedValueOnce({
+                balances: [
+                    { asset_type: 'native', balance: '1.5' },
+                    { asset_code: 'USDC', asset_issuer: process.env.USDC_ISSUER_PUBLIC_KEY ?? 'GBBD47IF6LWK7P7MDEVSCWT73IQIGCEZHR7OMXMBZQ3ZONN2T4U6W23Y', balance: '42.50' },
+                ]
+            });
+            const balance = await stellarService.getAccountBalance('G_MOCK');
+            expect(balance).toBe(42.5);
+        });
+
+        it('should return 0 when no USDC trustline', async () => {
+            mockServer.loadAccount.mockResolvedValueOnce({ balances: [{ asset_type: 'native', balance: '1.0' }] });
+            const balance = await stellarService.getAccountBalance('G_MOCK');
+            expect(balance).toBe(0);
+        });
+
+        it('should return 0 when account does not exist (404)', async () => {
+            const err: any = new Error('Not found');
+            err.response = { status: 404 };
+            mockServer.loadAccount.mockRejectedValueOnce(err);
+            const balance = await stellarService.getAccountBalance('G_MISSING');
+            expect(balance).toBe(0);
+        });
+    });
+
     describe('prepareAccount flow logic', () => {
         it('should only add trustline if account exists but lacks trustline', async () => {
             // Mock account exists

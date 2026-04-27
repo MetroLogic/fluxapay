@@ -9,9 +9,10 @@ const prisma = new PrismaClient();
 /**
  * Middleware to authenticate requests using an API key or JWT.
  * Supports:
- * - Authorization: Bearer <sk_live_...>
- * - x-api-key: <sk_live_...>
- * - Authorization: Bearer <jwt_token>
+ * - Authorization: Bearer <sk_live_...>   (production API key)
+ * - Authorization: Bearer <fpk_test_...>  (local dev / seed API key)
+ * - x-api-key: <sk_live_...> or <fpk_test_...>
+ * - Authorization: Bearer <jwt_token>     (dashboard / internal)
  */
 export async function authenticateApiKey(
     req: AuthRequest,
@@ -37,8 +38,13 @@ export async function authenticateApiKey(
         return res.status(401).json({ message: "Authentication required" });
     }
 
-    // 3. Try interpreting as API Key first (usually starts with sk_live_)
-    if (key.startsWith("sk_live_")) {
+    // 3. Try interpreting as API Key first.
+    //    FluxaPay keys use the format <prefix>_<32 hex chars>.
+    //    Supported prefixes: sk_live_ (production), fpk_test_ (local dev/seed).
+    //    The real validation is the bcrypt hash comparison — the prefix is only
+    //    used to distinguish API keys from JWT tokens.
+    const isApiKey = key.startsWith("sk_live_") || key.startsWith("fpk_test_");
+    if (isApiKey) {
         try {
             const lastFour = key.slice(-4);
 

@@ -60,6 +60,43 @@ export interface WebhookEvent {
   data: Record<string, unknown>;
 }
 
+export interface CreateInvoiceParams {
+  /** Customer name for the invoice. */
+  customer_name: string;
+  /** Customer email for the invoice. */
+  customer_email: string;
+  /** Line items for the invoice. */
+  line_items: Array<{
+    description: string;
+    quantity: number;
+    unit_price: number;
+  }>;
+  /** ISO 4217 currency code. */
+  currency: string;
+  /** Due date in ISO 8601 format. */
+  due_date: string;
+  /** Optional notes. */
+  notes?: string;
+}
+
+export interface Invoice {
+  id: string;
+  customer_name: string;
+  customer_email: string;
+  line_items: Array<{
+    description: string;
+    quantity: number;
+    unit_price: number;
+  }>;
+  currency: string;
+  amount: number;
+  status: 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled';
+  due_date: string;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
 // ── Webhook Verification Helper ──────────────────────────────────────────────
 
 export interface VerifyWebhookSignatureOptions {
@@ -408,6 +445,83 @@ export class FluxaPay {
       return JSON.parse(rawBody) as WebhookEvent;
     },
   };
+
+  // ── invoices ─────────────────────────────────────────────────────────────────
+
+  readonly invoices = {
+    /**
+     * Create a new invoice.
+     * 
+     * Canonical route: POST /api/invoices
+     */
+    create: (params: CreateInvoiceParams): Promise<Invoice> =>
+      request<Invoice>(this.baseUrl, this.apiKey, 'POST', '/api/invoices', params),
+
+    /**
+     * Retrieve an invoice by its ID.
+     * 
+     * Canonical route: GET /api/invoices/:invoice_id
+     */
+    get: (invoiceId: string): Promise<Invoice> =>
+      request<Invoice>(this.baseUrl, this.apiKey, 'GET', `/api/invoices/${invoiceId}`),
+
+    /**
+     * List invoices.
+     * 
+     * Canonical route: GET /api/invoices
+     */
+    list: (params?: { page?: number; limit?: number; status?: string }): Promise<{ invoices: Invoice[]; total: number }> => {
+      const qs = new URLSearchParams();
+      if (params?.page) qs.set('page', String(params.page));
+      if (params?.limit) qs.set('limit', String(params.limit));
+      if (params?.status) qs.set('status', params.status);
+      const query = qs.toString();
+      return request(this.baseUrl, this.apiKey, 'GET', `/api/invoices${query ? `?${query}` : ''}`);
+    },
+
+    /**
+     * Update invoice status.
+     * 
+     * Canonical route: PATCH /api/invoices/:invoice_id/status
+     */
+    updateStatus: (invoiceId: string, status: Invoice['status']): Promise<Invoice> =>
+      request<Invoice>(this.baseUrl, this.apiKey, 'PATCH', `/api/invoices/${invoiceId}/status`, { status }),
+  };
 }
 
 export default FluxaPay;
+
+/**
+ * Auto-paging iterator for list methods that support pagination.
+ * Automatically fetches subsequent pages as you iterate.
+ * 
+ * @example
+ * ```ts
+ * for await (const payment of autoPagingIterator(client.payments.list, { limit: 10 })) {
+ *   console.log(payment);
+ * }
+ * ```
+ */
+export async function* autoPagingIterator<T extends { id: string }>(
+  listFn: (params: { page: number; limit: number }) => Promise<{ [key: string]: T[]; total: number }>,
+  options: { limit?: number; maxItems?: number } = {}
+): AsyncGenerator<T, void, unknown> {
+  const { limit = 50, maxItems } = options;
+  let page = 1;
+  let yielded = 0;
+
+  while (true) {
+    const response = await listFn({ page, limit });
+    const items = Object.values(response).find(Array.isArray) as T[] | undefined;
+    if (!items) break;
+
+    for (const item of items) {
+      if (maxItems && yielded >= maxItems) return;
+      yield item;
+      yielded++;
+    }
+
+    if (items.length < limit) break; // Last page
+    page++;
+  }
+}

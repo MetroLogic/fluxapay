@@ -128,6 +128,8 @@ npm run test:contract
 
 **Learn more:** See [docs/OPENAPI_CONTRACT_TESTING.md](docs/OPENAPI_CONTRACT_TESTING.md) for complete guide on documenting endpoints and understanding contract tests.
 
+For an implementation-aligned API walkthrough (auth, payment creation, payment status polling/streaming, and webhook verification), see [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md).
+
 ## Telegram link
 
 https://t.me/+m23gN14007w0ZmQ0

@@ -29,6 +29,8 @@ export interface Payment {
   checkoutLogoUrl?: string;
   /** Normalized hex accent, e.g. #rrggbb */
   checkoutAccentColor?: string;
+  /** Support link for the merchant or Fluxapay. */
+  supportUrl?: string;
 }
 
 export interface PaymentStatusUpdate {

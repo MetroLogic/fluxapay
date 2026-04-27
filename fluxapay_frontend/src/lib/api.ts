@@ -2,15 +2,17 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
 export interface AuthSignupRequest {
-  name: string;
-  businessName: string;
+  business_name: string;
   email: string;
   password: string;
+  phone_number: string;
   country: string;
-  settlementCurrency: string;
-  accountNumber: string;
-  bankName: string;
-  bankCode: string;
+  settlement_currency: string;
+  // Optional bank details during signup
+  account_name?: string;
+  account_number?: string;
+  bank_name?: string;
+  bank_code?: string;
 }
 
 export interface AuthLoginRequest {
@@ -246,6 +248,19 @@ export const api = {
         method: "PATCH",
         body: JSON.stringify({ webhook_url }),
       }),
+
+    addBankAccount: (data: {
+      account_name: string;
+      account_number: string;
+      bank_name: string;
+      bank_code?: string;
+      currency: string;
+      country: string;
+    }) =>
+      fetchWithAuth("/api/merchants/me/bank-account", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
   },
 
   // API Keys endpoints
@@ -267,13 +282,13 @@ export const api = {
   // Sweep / Settlement Batch endpoints (admin-only)
   sweep: {
     getStatus: (): Promise<Response> =>
-      fetch(`${API_BASE_URL}/api/admin/settlement/status`, {
+      fetch(`${API_BASE_URL}/api/v1/admin/settlement/status`, {
         headers: adminHeaders(),
       }),
 
     /** Manually trigger a full accounts sweep (settlement batch) */
     runSweep: (dryRun?: boolean): Promise<Response> =>
-      fetch(`${API_BASE_URL}/api/admin/sweep/run`, {
+      fetch(`${API_BASE_URL}/api/v1/admin/sweep/run`, {
         method: "POST",
         headers: adminHeaders(),
         body: JSON.stringify({ dry_run: dryRun || false }),
@@ -287,12 +302,12 @@ export const api = {
       if (params?.page) qs.set("page", String(params.page));
       if (params?.limit) qs.set("limit", String(params.limit));
       if (params?.status) qs.set("status", params.status);
-      return adminFetch(`/api/merchants/admin/list?${qs.toString()}`);
+      return adminFetch(`/api/v1/merchants/admin/list?${qs.toString()}`);
     },
     get: (merchantId: string) =>
-      adminFetch(`/api/merchants/admin/${merchantId}`),
+      adminFetch(`/api/v1/merchants/admin/${merchantId}`),
     updateStatus: (merchantId: string, status: string) =>
-      adminFetch(`/api/merchants/admin/${merchantId}/status`, {
+      adminFetch(`/api/v1/merchants/admin/${merchantId}/status`, {
         method: "PATCH",
         body: JSON.stringify({ status }),
       }),
@@ -305,15 +320,15 @@ export const api = {
       if (params?.status) qs.set("status", params.status);
       if (params?.page) qs.set("page", String(params.page));
       if (params?.limit) qs.set("limit", String(params.limit));
-      return fetchWithAuth(`/api/merchants/kyc/admin/submissions?${qs.toString()}`);
+      return fetchWithAuth(`/api/v1/merchants/kyc/admin/submissions?${qs.toString()}`);
     },
     getByMerchant: (merchantId: string) =>
-      fetchWithAuth(`/api/merchants/kyc/admin/${merchantId}`),
+      fetchWithAuth(`/api/v1/merchants/kyc/admin/${merchantId}`),
     updateStatus: (
       merchantId: string,
       body: { kyc_status: string; rejection_reason?: string },
     ) =>
-      fetchWithAuth(`/api/merchants/kyc/admin/${merchantId}/status`, {
+      fetchWithAuth(`/api/v1/merchants/kyc/admin/${merchantId}/status`, {
         method: "PATCH",
         body: JSON.stringify(body),
       }),
@@ -462,6 +477,8 @@ export const api = {
     create: (data: {
       amount: number;
       currency: string;
+      customer_email: string;
+      order_id?: string;
       description?: string;
       success_url?: string;
       cancel_url?: string;
@@ -523,13 +540,17 @@ export const api = {
         quantity: number;
         unit_price: number;
       }>;
+      total_amount?: number;
       currency: string;
       due_date: string;
       notes?: string;
     }) =>
       fetchWithAuth("/api/v1/invoices", {
         method: "POST",
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          ...data,
+          amount: data.total_amount,
+        }),
       }),
 
     list: async (params?: {
@@ -559,7 +580,17 @@ export const api = {
       };
     },
 
-    getById: (invoiceId: string) => fetchWithAuth(`/api/v1/invoices/${invoiceId}`),
+    getById: (invoiceId: string) => 
+      fetchWithAuth(`/api/v1/invoices/${invoiceId}`).then(res => {
+        const inv = res.data;
+        return {
+          ...inv,
+          total_amount: Number(inv.amount),
+          customer_name: inv.metadata?.customer_name,
+          line_items: inv.metadata?.line_items || [],
+          notes: inv.metadata?.notes,
+        };
+      }),
 
     updateStatus: (invoiceId: string, status: string) =>
       fetchWithAuth(`/api/v1/invoices/${invoiceId}/status`, {
@@ -642,10 +673,10 @@ export const api = {
         if (params?.limit != null) sp.set("limit", String(params.limit));
         if (params?.kycStatus) sp.set("kycStatus", params.kycStatus);
         if (params?.accountStatus) sp.set("accountStatus", params.accountStatus);
-        return fetchWithAuth(`/api/admin/merchants?${sp.toString()}`);
+        return fetchWithAuth(`/api/v1/admin/merchants?${sp.toString()}`);
       },
       updateStatus: (merchantId: string, status: "active" | "suspended") =>
-        fetchWithAuth(`/api/admin/merchants/${merchantId}/status`, {
+        fetchWithAuth(`/api/v1/admin/merchants/${merchantId}/status`, {
           method: "PATCH",
           body: JSON.stringify({ status }),
         }),
@@ -661,7 +692,7 @@ export const api = {
         if (params?.page != null) sp.set("page", String(params.page));
         if (params?.limit != null) sp.set("limit", String(params.limit));
         if (params?.status) sp.set("status", params.status);
-        return fetchWithAuth(`/api/admin/settlements?${sp.toString()}`);
+        return fetchWithAuth(`/api/v1/admin/settlements?${sp.toString()}`);
       },
     },
     auditLogs: {

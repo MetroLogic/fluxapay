@@ -60,6 +60,17 @@ export default function SettingsPage() {
   const [isSavingCheckoutBranding, setIsSavingCheckoutBranding] =
     useState(false);
 
+  // Bank Details State
+  const [accountName, setAccountName] = useState("");
+  const [accountNumber, setAccountNumber] = useState("");
+  const [bankName, setBankName] = useState("");
+  const [bankCode, setBankCode] = useState("");
+  const [currency, setCurrency] = useState("");
+  const [country, setCountry] = useState("");
+  const [bankSaved, setBankSaved] = useState(false);
+  const [isSavingBank, setIsSavingBank] = useState(false);
+  const [bankError, setBankError] = useState("");
+
   // Loading state
   const [isLoading, setIsLoading] = useState(true);
 
@@ -107,6 +118,19 @@ export default function SettingsPage() {
         (merchant.settlement_schedule as "daily" | "weekly") || "daily",
       );
       setSettlementDay((merchant.settlement_day as number) ?? 1);
+
+      if (merchant.bankAccount) {
+        const ba = merchant.bankAccount as any;
+        setAccountName(ba.account_name || "");
+        setAccountNumber(ba.account_number || "");
+        setBankName(ba.bank_name || "");
+        setBankCode(ba.bank_code || "");
+        setCurrency(ba.currency || "");
+        setCountry(ba.country || "");
+      } else {
+        setCurrency((merchant.settlement_currency as string) || "");
+        setCountry((merchant.country as string) || "");
+      }
 
       setCheckoutLogoUrl(
         typeof merchant.checkout_logo_url === "string"
@@ -160,6 +184,31 @@ export default function SettingsPage() {
       console.error("Failed to save account details:", error);
     } finally {
       setIsSavingAccount(false);
+    }
+  };
+
+  const handleBankSave = async () => {
+    setIsSavingBank(true);
+    setBankError("");
+    
+    try {
+      await api.merchant.addBankAccount({
+        account_name: accountName,
+        account_number: accountNumber,
+        bank_name: bankName,
+        bank_code: bankCode,
+        currency,
+        country,
+      });
+      
+      setBankSaved(true);
+      setTimeout(() => setBankSaved(false), 3000);
+    } catch (error) {
+      const message =
+        error instanceof ApiError ? error.message : "Failed to save bank details";
+      setBankError(message);
+    } finally {
+      setIsSavingBank(false);
     }
   };
 
@@ -557,6 +606,106 @@ export default function SettingsPage() {
               {isSavingAccount ? "Saving..." : "Update Schedule"}
             </Button>
           </div>
+        </div>
+      </div>
+
+      {/* Bank Account Details Section */}
+      <div className="space-y-4 p-6 rounded-2xl border bg-muted/20">
+        <div className="flex items-center gap-2 text-primary font-semibold mb-4">
+          <Palette className="h-5 w-5" />
+          <h3 className="text-lg">Payout Bank Details</h3>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-2">
+              Account Holder Name
+            </label>
+            <Input
+              type="text"
+              value={accountName}
+              onChange={(e) => setAccountName(e.target.value)}
+              placeholder="Full name on bank account"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-2">
+                Bank Name
+              </label>
+              <Input
+                type="text"
+                value={bankName}
+                onChange={(e) => setBankName(e.target.value)}
+                placeholder="e.g. Zenith Bank"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-2">
+                Bank Code (Optional)
+              </label>
+              <Input
+                type="text"
+                value={bankCode}
+                onChange={(e) => setBankCode(e.target.value)}
+                placeholder="e.g. 057"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2">
+              Account Number
+            </label>
+            <Input
+              type="text"
+              value={accountNumber}
+              onChange={(e) => setAccountNumber(e.target.value)}
+              placeholder="Enter account number"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-2">Country</label>
+              <Input value={country} readOnly className="bg-muted/50" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-2">Currency</label>
+              <Input value={currency} readOnly className="bg-muted/50" />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 pt-2">
+            <Button
+              variant="dark"
+              onClick={handleBankSave}
+              disabled={isSavingBank}
+              className="gap-2"
+            >
+              {isSavingBank && (
+                <svg
+                  className="h-4 w-4 animate-spin"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="3"
+                >
+                  <circle cx="12" cy="12" r="10" className="opacity-30" />
+                  <path d="M22 12a10 10 0 0 1-10 10" />
+                </svg>
+              )}
+              {bankSaved && <CheckCircle2 className="h-4 w-4" />}
+              {isSavingBank ? "Saving..." : bankSaved ? "Saved!" : "Save Bank Details"}
+            </Button>
+          </div>
+
+          {bankError && (
+            <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-800">
+              <p className="text-sm">{bankError}</p>
+            </div>
+          )}
         </div>
       </div>
 

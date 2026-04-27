@@ -10,8 +10,12 @@ const options: swaggerJsdoc.Options = {
         },
         servers: [
             {
-                url: 'http://localhost:3000/api/v1',
-                description: 'Local server',
+                url: 'http://localhost:3000',
+                description: 'Local development server',
+            },
+            {
+                url: 'https://api.fluxapay.com',
+                description: 'Production server',
             },
         ],
         components: {
@@ -25,6 +29,11 @@ const options: swaggerJsdoc.Options = {
                     type: 'apiKey',
                     in: 'header',
                     name: 'x-api-key',
+                },
+                adminSecret: {
+                    type: 'apiKey',
+                    in: 'header',
+                    name: 'x-admin-secret',
                 },
             },
             schemas: {
@@ -177,6 +186,10 @@ const options: swaggerJsdoc.Options = {
                 description: 'Merchant authentication and management',
             },
             {
+                name: 'Admin - Merchants',
+                description: 'Admin endpoints for merchant management',
+            },
+            {
                 name: 'KYC',
                 description: 'Know Your Customer verification',
             },
@@ -202,15 +215,39 @@ const options: swaggerJsdoc.Options = {
             },
             {
                 name: 'Webhooks',
-                description: 'Webhook delivery logs and retry operations. Event names follow canonical format (e.g., payment.created, payment.confirmed). Legacy names (payment_completed, etc.) are supported for backward compatibility.',
+                description: 'Webhook delivery logs and retry operations',
+            },
+            {
+                name: 'Webhooks — Admin',
+                description: 'Admin endpoints for webhook DLQ management',
             },
             {
                 name: 'Settlements',
                 description: 'Settlement listing and reporting',
             },
             {
+                name: 'Admin - Settlement',
+                description: 'Admin endpoints for settlement batch management',
+            },
+            {
+                name: 'Admin - Sweep',
+                description: 'Admin endpoints for sweeping funds',
+            },
+            {
                 name: 'Reconciliation',
                 description: 'Admin reconciliation records, thresholds, and discrepancy alerts',
+            },
+            {
+                name: 'Dashboard',
+                description: 'Merchant dashboard metrics and analytics',
+            },
+            {
+                name: 'Admin',
+                description: 'General admin endpoints',
+            },
+            {
+                name: 'Oracle',
+                description: 'Payment verification oracle monitoring',
             },
         ],
     },

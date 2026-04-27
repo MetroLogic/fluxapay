@@ -497,6 +497,30 @@ export class StellarService {
   }
 
   /**
+   * Returns the USDC balance for a given Stellar account.
+   * Returns 0 if the account does not exist or has no USDC trustline.
+   */
+  public async getAccountBalance(publicKey: string): Promise<number> {
+    try {
+      const account = await this.server.loadAccount(publicKey);
+      for (const balance of account.balances) {
+        if (
+          "asset_code" in balance &&
+          balance.asset_code === "USDC" &&
+          "asset_issuer" in balance &&
+          balance.asset_issuer === this.usdcIssuer
+        ) {
+          return parseFloat(balance.balance);
+        }
+      }
+      return 0;
+    } catch (error: any) {
+      if (error.response?.status === 404) return 0;
+      throw error;
+    }
+  }
+
+  /**
    * Sleep utility for delays.
    */
   private sleep(ms: number): Promise<void> {

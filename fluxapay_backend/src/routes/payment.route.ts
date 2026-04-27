@@ -2,6 +2,7 @@ import { Router } from 'express';
 import {
   createPayment,
   getPayments,
+  exportPayments,
   getPaymentById,
   getPaymentStatus,
   streamPaymentStatus,
@@ -247,7 +248,7 @@ router.get('/', authenticateApiKey, merchantApiKeyRateLimit(), getPayments);
  *       200:
  *         description: CSV file download
  */
-router.get('/export', authenticateApiKey, merchantApiKeyRateLimit(), getPayments);
+router.get('/export', authenticateApiKey, merchantApiKeyRateLimit(), exportPayments);
 
 /**
  * @swagger

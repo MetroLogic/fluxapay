@@ -15,6 +15,7 @@ import {
   FileText,
   RefreshCcw,
   Link2,
+  Bell,
 } from "lucide-react";
 import Image from "next/image";
 import FluxapayLogo from "@/assets/fluxapaylogo.png";
@@ -33,6 +34,7 @@ const navItems = [
   { name: "Settlements", href: "/dashboard/settlements", icon: Landmark },
   { name: "Payment Links", href: "/dashboard/payment-links", icon: Link2 },
   { name: "Webhooks", href: "/dashboard/webhooks", icon: Webhook },
+  { name: "Notifications", href: "/dashboard/notifications", icon: Bell },
   { name: "Analytics", href: "/dashboard/analytics", icon: BarChart3 },
   { name: "Settings", href: "/dashboard/settings", icon: Settings },
   { name: "Developers", href: "/dashboard/developers", icon: Code },
