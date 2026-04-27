@@ -1,5 +1,10 @@
 // API Client for FluxaPay Backend
+import { getToken, storeToken, clearToken } from "./auth";
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+
+// Re-export auth functions for backward compatibility
+export { getToken, storeToken, clearToken } from "./auth";
 
 export interface AuthSignupRequest {
   business_name: string;
@@ -57,37 +62,8 @@ class ApiError extends Error {
   }
 }
 
-function getToken(): string {
-  // Check localStorage first (persistent), then sessionStorage (session-only)
-  const token = localStorage.getItem("token") ?? sessionStorage.getItem("token");
-  if (!token) {
-    throw new ApiError(401, "No authentication token found");
-  }
-  return token;
-}
-
-/** Persist auth token.
- *  keepLoggedIn=true  → localStorage  (survives browser close, expires with JWT TTL ~30 days)
- *  keepLoggedIn=false → sessionStorage (cleared when the tab/browser is closed)
- */
-export function storeToken(token: string, keepLoggedIn = false): void {
-  if (keepLoggedIn) {
-    localStorage.setItem("token", token);
-    sessionStorage.removeItem("token"); // clear any leftover session token
-  } else {
-    sessionStorage.setItem("token", token);
-    localStorage.removeItem("token"); // ensure no persistent copy remains
-  }
-}
-
-/** Remove auth token from all storage locations. */
-export function clearToken(): void {
-  localStorage.removeItem("token");
-  sessionStorage.removeItem("token");
-}
-
 async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
-  const token = localStorage.getItem("token") ?? sessionStorage.getItem("token");
+  const token = getToken();
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",

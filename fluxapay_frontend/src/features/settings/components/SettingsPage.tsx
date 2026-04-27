@@ -6,6 +6,7 @@ import Input from "@/components/Input";
 import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
 import { api, ApiError, clearToken } from "@/lib/api";
+import { logout, getToken } from "@/lib/auth";
 import { DOCS_URLS } from "@/lib/docs";
 import { isValidHttpsWebhookUrl } from "@/lib/webhookUrl";
 
@@ -83,11 +84,10 @@ export default function SettingsPage() {
   const getSessionNote = () => {
     if (typeof window === "undefined") return "Current session active";
 
-    const token =
-      localStorage.getItem("token") || sessionStorage.getItem("token");
-    if (!token) return "No active session token found";
-
     try {
+      const token = getToken();
+      if (!token) return "No active session token found";
+
       const payloadSegment = token.split(".")[1];
       if (!payloadSegment) return "Current session active";
 
@@ -304,8 +304,7 @@ export default function SettingsPage() {
 
   const handleSignOutCurrentSession = () => {
     setIsSigningOut(true);
-    clearToken();
-    window.location.href = "/login";
+    logout();
   };
 
   const handleSignOutAllSessions = async () => {
@@ -318,8 +317,7 @@ export default function SettingsPage() {
         console.error("Logout-all request failed:", error);
       }
     } finally {
-      clearToken();
-      window.location.href = "/login";
+      logout();
     }
   };
 
