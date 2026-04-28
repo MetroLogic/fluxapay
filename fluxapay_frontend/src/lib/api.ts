@@ -64,6 +64,48 @@ class ApiError extends Error {
 
 async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
   const token = getToken();
+function getToken(): string {
+  // Check localStorage first (persistent), then sessionStorage (session-only)
+  const token = localStorage.getItem("token") ?? sessionStorage.getItem("token");
+  if (!token) {
+    if (typeof window !== "undefined" && !window.location.pathname.includes("/login")) {
+      const currentUrl = window.location.pathname + window.location.search;
+      window.location.href = `/login?redirect=${encodeURIComponent(currentUrl)}`;
+    }
+    throw new ApiError(401, "No authentication token found");
+  }
+  return token;
+}
+
+/** Persist auth token.
+ *  keepLoggedIn=true  → localStorage  (survives browser close, expires with JWT TTL ~30 days)
+ *  keepLoggedIn=false → sessionStorage (cleared when the tab/browser is closed)
+ */
+export function storeToken(token: string, keepLoggedIn = false): void {
+  if (keepLoggedIn) {
+    localStorage.setItem("token", token);
+    sessionStorage.removeItem("token"); // clear any leftover session token
+  } else {
+    sessionStorage.setItem("token", token);
+    localStorage.removeItem("token"); // ensure no persistent copy remains
+  }
+}
+
+/** Remove auth token from all storage locations. */
+export function clearToken(): void {
+  localStorage.removeItem("token");
+  sessionStorage.removeItem("token");
+}
+
+async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
+  // We use getToken() to automatically handle missing token redirects
+  let token;
+  try {
+    token = getToken();
+  } catch (err) {
+    // getToken handles the redirect, we just need to propagate the error
+    throw err;
+  }
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -83,6 +125,13 @@ async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
   });
 
   if (!response.ok) {
+    if (response.status === 401 && typeof window !== "undefined") {
+      clearToken();
+      if (!window.location.pathname.includes("/login")) {
+        const currentUrl = window.location.pathname + window.location.search;
+        window.location.href = `/login?redirect=${encodeURIComponent(currentUrl)}`;
+      }
+    }
     const error = await response
       .json()
       .catch(() => ({ message: "An error occurred" }));
