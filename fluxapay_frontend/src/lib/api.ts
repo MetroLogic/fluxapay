@@ -61,6 +61,10 @@ function getToken(): string {
   // Check localStorage first (persistent), then sessionStorage (session-only)
   const token = localStorage.getItem("token") ?? sessionStorage.getItem("token");
   if (!token) {
+    if (typeof window !== "undefined" && !window.location.pathname.includes("/login")) {
+      const currentUrl = window.location.pathname + window.location.search;
+      window.location.href = `/login?redirect=${encodeURIComponent(currentUrl)}`;
+    }
     throw new ApiError(401, "No authentication token found");
   }
   return token;
@@ -87,7 +91,14 @@ export function clearToken(): void {
 }
 
 async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
-  const token = localStorage.getItem("token") ?? sessionStorage.getItem("token");
+  // We use getToken() to automatically handle missing token redirects
+  let token;
+  try {
+    token = getToken();
+  } catch (err) {
+    // getToken handles the redirect, we just need to propagate the error
+    throw err;
+  }
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -107,6 +118,13 @@ async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
   });
 
   if (!response.ok) {
+    if (response.status === 401 && typeof window !== "undefined") {
+      clearToken();
+      if (!window.location.pathname.includes("/login")) {
+        const currentUrl = window.location.pathname + window.location.search;
+        window.location.href = `/login?redirect=${encodeURIComponent(currentUrl)}`;
+      }
+    }
     const error = await response
       .json()
       .catch(() => ({ message: "An error occurred" }));
