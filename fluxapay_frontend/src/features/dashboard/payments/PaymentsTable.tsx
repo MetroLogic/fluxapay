@@ -1,6 +1,6 @@
 import { Badge } from "@/components/Badge";
 import { DataTableBodyState } from "@/components/data-table";
-import { Payment, PaymentStatus } from "./payments-mock";
+import { Payment, PaymentStatus } from "./types";
 import { ChevronDown, ChevronUp, Copy, Eye } from "lucide-react";
 import { useState, useMemo, memo, useCallback } from "react";
 

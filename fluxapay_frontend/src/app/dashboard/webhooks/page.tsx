@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Header from "@/components/Header";
 import { WebhooksFilters } from "@/features/webhooks/WebhooksFilters";
 import { WebhooksTable } from "@/features/webhooks/WebhooksTable";
@@ -10,7 +10,7 @@ import { Button } from "@/components/Button";
 import { Send } from "lucide-react";
 import { toastApiError } from "@/lib/toastApiError";
 import { api } from "@/lib/api";
-import { WebhookEvent } from "@/features/webhooks/webhooks-mock";
+import { WebhookEvent } from "@/features/webhooks/types";
 import { DataTableCard, TablePaginationBar } from "@/components/data-table";
 
 export default function WebhooksPage() {
@@ -24,6 +24,7 @@ export default function WebhooksPage() {
     const [webhooks, setWebhooks] = useState<WebhookEvent[]>([]);
     const [page, setPage] = useState(1);
     const [total, setTotal] = useState(0);
+    const [refreshKey, setRefreshKey] = useState(0);
     const pageSize = 50;
 
     const [selectedWebhook, setSelectedWebhook] = useState<WebhookEvent | null>(
@@ -86,13 +87,13 @@ export default function WebhooksPage() {
         return () => {
             cancelled = true;
         };
-    }, [search, statusFilter, eventTypeFilter, dateFrom, dateTo, page]);
+    }, [search, statusFilter, eventTypeFilter, dateFrom, dateTo, page, refreshKey]);
 
     useEffect(() => {
         setPage(1);
     }, [search, statusFilter, eventTypeFilter, dateFrom, dateTo]);
 
-    const filteredWebhooks = useMemo(() => webhooks, [webhooks]);
+    const filteredWebhooks = webhooks;
 
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
@@ -143,6 +144,7 @@ export default function WebhooksPage() {
                 webhook={selectedWebhook}
                 isOpen={!!selectedWebhook}
                 onClose={() => setSelectedWebhook(null)}
+                onRetried={() => setRefreshKey((k) => k + 1)}
             />
 
             <WebhookTest
