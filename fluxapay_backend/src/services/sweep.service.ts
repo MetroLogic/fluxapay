@@ -327,25 +327,29 @@ export class SweepService {
         }
 
         const amountStr = accountUsdcAmount.toFixed(7);
-        const hash = await this.submitUsdcSweepTx({
-          sourceSecret: kp.secretKey,
-          destination: this.vaultKeypair.publicKey(),
-          amount: amountStr,
-          mergeDestination,
-        });
+        
+        // Use the sweepQueue to manage concurrency and prevent overloading Stellar network
+        await sweepQueue.enqueue(`sweep-payment-${p.id}`, async () => {
+          const hash = await this.submitUsdcSweepTx({
+            sourceSecret: kp.secretKey,
+            destination: this.vaultKeypair.publicKey(),
+            amount: amountStr,
+            mergeDestination,
+          });
 
-        await prisma.payment.update({
-          where: { id: p.id },
-          data: {
-            swept: true,
-            swept_at: new Date(),
-            sweep_tx_hash: hash,
-          },
-        });
+          await prisma.payment.update({
+            where: { id: p.id },
+            data: {
+              swept: true,
+              swept_at: new Date(),
+              sweep_tx_hash: hash,
+            },
+          });
 
-        txHashes.push(hash);
-        addressesSwept += 1;
-        total += accountUsdcAmount;
+          txHashes.push(hash);
+          addressesSwept += 1;
+          total += accountUsdcAmount;
+        });
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
         skipped.push({ paymentId: p.id, reason: msg });

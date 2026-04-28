@@ -25,6 +25,11 @@ function isRetryable(error: unknown): boolean {
 }
 
 export function toastApiError(error: unknown): void {
+  // Don't show toast for auth errors (401/403) as they're handled globally with logout
+  if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
+    return;
+  }
+
   try {
     toast.error(resolveMessage(error));
   } catch {

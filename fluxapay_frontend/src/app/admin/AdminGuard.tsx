@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2, ShieldOff } from 'lucide-react';
+import { isAuthenticated, isAdmin } from '@/lib/auth';
 
 const ADMIN_ENABLED = process.env.NEXT_PUBLIC_ADMIN_ENABLED === 'true';
 
@@ -14,23 +15,18 @@ const ADMIN_ENABLED = process.env.NEXT_PUBLIC_ADMIN_ENABLED === 'true';
  */
 export default function AdminGuard({ children }: { children: React.ReactNode }) {
     const router = useRouter();
-    const [checked, setChecked] = useState(false);
+    const [checked, setChecked] = useState(!ADMIN_ENABLED);
 
     useEffect(() => {
         if (!ADMIN_ENABLED) {
-            // Admin is not configured — stop here; don't touch localStorage or redirect.
-            setChecked(true);
+            // Admin is not configured — already marked checked from initial state.
             return;
         }
 
-        const token = localStorage.getItem('token');
-        const isAdmin = localStorage.getItem('isAdmin');
-
-        if (!token || isAdmin !== 'true') {
+        if (!isAuthenticated() || !isAdmin()) {
             router.replace('/login');
             return;
         }
-        // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorage requires post-mount effect
         setChecked(true);
     }, [router]);
 

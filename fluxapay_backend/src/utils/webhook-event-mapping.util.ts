@@ -17,7 +17,9 @@ export type CanonicalEventName =
     | 'refund.failed'
     | 'subscription.created'
     | 'subscription.cancelled'
-    | 'subscription.renewed';
+    | 'subscription.renewed'
+    | 'invoice.paid'
+    | 'invoice.overdue';
 
 export type LegacyEventName =
     | 'payment_completed'
@@ -30,7 +32,9 @@ export type LegacyEventName =
     | 'refund_failed'
     | 'subscription_created'
     | 'subscription_cancelled'
-    | 'subscription_renewed';
+    | 'subscription_renewed'
+    | 'invoice_paid'
+    | 'invoice_overdue';
 
 export type WebhookEventName = CanonicalEventName | LegacyEventName;
 
@@ -47,6 +51,8 @@ const legacyToCanonical: Record<LegacyEventName, CanonicalEventName> = {
     'subscription_created': 'subscription.created',
     'subscription_cancelled': 'subscription.cancelled',
     'subscription_renewed': 'subscription.renewed',
+    'invoice_paid': 'invoice.paid',
+    'invoice_overdue': 'invoice.overdue',
 };
 
 // Mapping from canonical names to legacy names (for backward compat)
@@ -64,6 +70,8 @@ const canonicalToLegacy: Record<CanonicalEventName, LegacyEventName> = {
     'subscription.created': 'subscription_created',
     'subscription.cancelled': 'subscription_cancelled',
     'subscription.renewed': 'subscription_renewed',
+    'invoice.paid': 'invoice_paid',
+    'invoice.overdue': 'invoice_overdue',
 };
 
 /**

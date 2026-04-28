@@ -4,6 +4,9 @@ import { PrismaClient } from "../generated/client/client";
 import { Decimal } from "@prisma/client/runtime/library";
 import { paymentContractService } from "./paymentContract.service";
 import { PaymentStatus } from "../types/payment";
+import { trackPaymentConfirmed, trackPaymentExpired } from "../middleware/metrics.middleware";
+import { createAndDeliverWebhook } from "./webhook.service";
+import { eventBus, AppEvents } from "./EventService";
 
 /**
  * paymentMonitor.service.ts
@@ -36,35 +39,82 @@ export async function runPaymentMonitorTick(): Promise<void> {
   const partialPaymentExpiry = new Date(now.getTime() - PARTIAL_PAYMENT_TIMEOUT);
   const stalePaymentExpiry = new Date(now.getTime() - STALE_PAYMENT_TIMEOUT);
 
-  // 1. Check for expired payments by expiration date
-  await prisma.payment.updateMany({
+  // 1. Check for payments expired by their expiration date and fire webhooks
+  const expiredPayments = await prisma.payment.findMany({
     where: {
       status: { in: [PaymentStatus.PENDING, PaymentStatus.PARTIALLY_PAID] },
       expiration: { lte: now },
     },
-    data: { status: PaymentStatus.EXPIRED },
+    select: {
+      id: true,
+      merchantId: true,
+      amount: true,
+      currency: true,
+      customer_email: true,
+      expiration: true,
+    },
   });
 
-  // 2. Check for partial payments that have timed out
-  await prisma.payment.updateMany({
+  for (const payment of expiredPayments) {
+    // Idempotent update: only transitions rows still in pending/partially_paid
+    const updated = await prisma.payment.updateMany({
+      where: { id: payment.id, status: { in: [PaymentStatus.PENDING, PaymentStatus.PARTIALLY_PAID] } },
+      data: { status: PaymentStatus.EXPIRED },
+    });
+
+    if (updated.count === 0) continue;
+
+    trackPaymentExpired(1);
+    eventBus.emit(AppEvents.PAYMENT_EXPIRED, { ...payment, status: PaymentStatus.EXPIRED });
+
+    const eventId = `${payment.id}:expired`;
+    try {
+      await createAndDeliverWebhook(
+        payment.merchantId,
+        "payment.failed",
+        {
+          event: "payment.expired",
+          data: {
+            payment_id: payment.id,
+            amount: payment.amount.toString(),
+            currency: payment.currency,
+            status: PaymentStatus.EXPIRED,
+            customer_email: payment.customer_email,
+            expired_at: now.toISOString(),
+            reason: "Payment window expired without on-chain confirmation.",
+          },
+        },
+        payment.id,
+        undefined,
+        eventId,
+      );
+    } catch (err: unknown) {
+      console.error(`[PaymentMonitor] Webhook failed for expired payment ${payment.id}:`, err);
+    }
+  }
+
+  // 2. Expire partially-paid payments past the partial-payment timeout
+  const expired2 = await prisma.payment.updateMany({
     where: {
       status: PaymentStatus.PARTIALLY_PAID,
       last_seen_at: { lte: partialPaymentExpiry },
     },
     data: { status: PaymentStatus.EXPIRED },
   });
+  if (expired2.count > 0) trackPaymentExpired(expired2.count);
 
-  // 3. Check for stale payments (no recent activity)
-  await prisma.payment.updateMany({
+  // 3. Expire stale pending payments that haven't seen activity
+  const expired3 = await prisma.payment.updateMany({
     where: {
       status: { in: [PaymentStatus.PENDING, PaymentStatus.PARTIALLY_PAID] },
       last_seen_at: { lte: stalePaymentExpiry },
-      expiration: { gt: now }, // Not already expired by date
+      expiration: { gt: now },
     },
     data: { status: PaymentStatus.EXPIRED },
   });
+  if (expired3.count > 0) trackPaymentExpired(expired3.count);
 
-  // 2. Monitor active payments
+  // 4. Monitor active payments for new on-chain transactions
   const payments = await prisma.payment.findMany({
     where: {
       status: { in: [PaymentStatus.PENDING, PaymentStatus.PARTIALLY_PAID] },
@@ -78,30 +128,26 @@ export async function runPaymentMonitorTick(): Promise<void> {
     if (!address) continue;
 
     try {
-      // Fetch total USDC balance for cumulative payment handling
+      // Fetch current USDC balance for cumulative payment handling
       const account = await getServer().loadAccount(address);
       const usdcBalanceRecord = account.balances.find((b: any) =>
         'asset_code' in b && b.asset_code === 'USDC' && b.asset_issuer === getUsdcAsset().issuer
       );
       const totalReceived = usdcBalanceRecord ? parseFloat(usdcBalanceRecord.balance) : 0;
 
-      // Build the payments query with cursor support to find new transactions
+      // Use cursor (last_paging_token) to only fetch transactions newer than last seen
       let paymentsQuery = getServer().payments()
         .forAccount(address)
         .order('desc')
         .limit(10);
 
-      // If we have a last paging token, start from there to only get new transactions
       if (payment.last_paging_token) {
         paymentsQuery = paymentsQuery.cursor(payment.last_paging_token);
       }
 
       const transactions = await paymentsQuery.call();
 
-      // Track the latest paging token to avoid re-processing
       let latestPagingToken = payment.last_paging_token;
-
-      // Process new transactions (if any) to find the latest valid payment
       let latestTxHash: string | undefined;
       let latestPayer: string | undefined;
 
@@ -114,6 +160,11 @@ export async function runPaymentMonitorTick(): Promise<void> {
           record.asset_type === 'credit_alphanum4' &&
           record.asset_code === 'USDC' &&
           record.asset_issuer === getUsdcAsset().issuer) {
+
+          // Dedupe: skip transactions already recorded on this payment
+          if (record.transaction_hash && record.transaction_hash === payment.transaction_hash) {
+            continue;
+          }
 
           if (!latestTxHash) {
             latestTxHash = record.transaction_hash;
@@ -163,6 +214,10 @@ export async function runPaymentMonitorTick(): Promise<void> {
             ...(newStatus === PaymentStatus.CONFIRMED && { confirmed_at: new Date() }),
           },
         });
+
+        if (newStatus === PaymentStatus.CONFIRMED) {
+          trackPaymentConfirmed();
+        }
 
         // Emit generic status change event
         const { eventBus, AppEvents } = await import('./EventService');

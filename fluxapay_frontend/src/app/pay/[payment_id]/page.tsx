@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Loader2, XCircle, CheckCircle, AlertCircle } from 'lucide-react';
 import { usePaymentStatus } from '@/hooks/usePaymentStatus';
@@ -24,11 +24,18 @@ export default function CheckoutPage() {
   const t = useTranslations('payment');
   const tAuth = useTranslations('auth');
   const params = useParams();
+  const searchParams = useSearchParams();
   const paymentId = params.payment_id as string;
+  
   const { payment, loading, error, isOffline, retryConnection } =
     usePaymentStatus(paymentId);
 
-  const accentHex = payment?.checkoutAccentColor ?? DEFAULT_ACCENT;
+  // Customization from query params (SDK overrides)
+  const qAccent = searchParams.get('accentColor') || searchParams.get('primaryColor');
+  const qLogo = searchParams.get('logoUrl');
+
+  const accentHex = qAccent || payment?.checkoutAccentColor || DEFAULT_ACCENT;
+  const logoUrl = qLogo || payment?.checkoutLogoUrl;
   const showBrandHeader = Boolean(payment && !error);
 
   // Auto-redirect when payment is confirmed
@@ -42,15 +49,16 @@ export default function CheckoutPage() {
     }
   }, [payment?.status, payment?.successUrl]);
 
-  const handleExpire = () => {};
+  const handleExpire = () => { };
 
   return (
     <CheckoutBrandingShell
       accentHex={accentHex}
-      logoUrl={payment?.checkoutLogoUrl}
+      logoUrl={logoUrl}
       merchantName={payment?.merchantName}
       showBrandHeader={showBrandHeader}
     >
+
       <div className="absolute right-4 top-4 z-10">
         <LanguageSwitcher />
       </div>
@@ -351,9 +359,21 @@ export default function CheckoutPage() {
               />
             </div>
 
+            <div className="mb-8 space-y-4">
+              <CopyField label="Payment Address" value={payment.address} truncate />
+
+              {payment.memo && (
+                <CopyField
+                  label={`Memo (${payment.memoType?.replace('MEMO_', '') || 'TEXT'})`}
+                  value={payment.memo}
+                  required={payment.memoRequired}
+                />
+              )}
+            </div>
+
             {payment.memoRequired && (
               <div
-                className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-900"
+                className="mb-8 overflow-hidden rounded-xl border border-amber-200 bg-amber-50 shadow-sm"
                 role="alert"
                 aria-live="polite"
               >

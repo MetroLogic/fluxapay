@@ -1,4 +1,5 @@
 import { Metadata } from "next";
+import Hero from "@/features/landing/sections/Hero";
 import {
   WhyFluxapay,
   Bridges,
@@ -7,13 +8,20 @@ import {
   FAQ,
   Footer,
 } from "@/features/landing";
-import Hero from "@/features/landing/sections/Hero";
 import {
   organizationSchema,
   softwareApplicationSchema,
   jsonLdScript,
 } from "@/lib/seo-schemas";
 import { generatePageMetadata } from "@/lib/seo";
+
+const WhyFluxapay = dynamic(() => import("@/features/landing").then(mod => mod.WhyFluxapay));
+const Bridges = dynamic(() => import("@/features/landing").then(mod => mod.Bridges));
+const GlobalReach = dynamic(() => import("@/features/landing").then(mod => mod.GlobalReach));
+const UseCases = dynamic(() => import("@/features/landing").then(mod => mod.UseCases));
+const FAQ = dynamic(() => import("@/features/landing").then(mod => mod.FAQ));
+const Footer = dynamic(() => import("@/features/landing").then(mod => mod.Footer));
+
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
   const { locale } = await params;

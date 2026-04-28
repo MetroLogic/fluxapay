@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { randomUUID } from "crypto";
 import { AuthRequest } from "../types/express";
+import { loggerStorage } from "../utils/logger";
 
 /**
  * Request ID Middleware
@@ -21,5 +22,8 @@ export function requestIdMiddleware(
   // Add to response headers for client visibility
   res.setHeader("x-request-id", requestId);
 
-  next();
+  // Run downstream middleware in the logger storage context
+  loggerStorage.run({ requestId }, () => {
+    next();
+  });
 }

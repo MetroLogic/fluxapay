@@ -477,11 +477,11 @@ export default function LocalizedApiReferencePage() {
       <div className="space-y-8">
         {/* Header */}
         <div>
-          <p className="text-sm font-semibold text-amber-600 uppercase tracking-wider mb-2">
+          <p className="text-sm font-semibold text-zinc-500 uppercase tracking-wider mb-2">
             API Reference
           </p>
           <h1 className="text-4xl font-bold text-slate-900 mb-4">
-            REST API Documentation
+            Developer API Reference
           </h1>
           <p className="text-lg text-slate-600 max-w-2xl">
             Complete reference for the FluxaPay REST API. All endpoints require authentication
@@ -507,7 +507,7 @@ export default function LocalizedApiReferencePage() {
             Create and manage payment intents. Payments represent the core transaction flow in FluxaPay.
           </p>
           {endpoints.payments.map((endpoint) => (
-            <EndpointCard key={endpoint.path} {...endpoint} />
+            <EndpointCard key={`${endpoint.method}-${endpoint.path}`} {...endpoint} />
           ))}
         </section>
 
@@ -521,7 +521,7 @@ export default function LocalizedApiReferencePage() {
             for easy payment.
           </p>
           {endpoints.invoices.map((endpoint) => (
-            <EndpointCard key={endpoint.path} {...endpoint} />
+            <EndpointCard key={`${endpoint.method}-${endpoint.path}`} {...endpoint} />
           ))}
         </section>
 
@@ -535,7 +535,7 @@ export default function LocalizedApiReferencePage() {
             payments to your local currency.
           </p>
           {endpoints.settlements.map((endpoint) => (
-            <EndpointCard key={endpoint.path} {...endpoint} />
+            <EndpointCard key={`${endpoint.method}-${endpoint.path}`} {...endpoint} />
           ))}
         </section>
 
@@ -549,7 +549,7 @@ export default function LocalizedApiReferencePage() {
             in the dashboard settings.
           </p>
           {endpoints.webhooks.map((endpoint) => (
-            <EndpointCard key={endpoint.path} {...endpoint} />
+            <EndpointCard key={`${endpoint.method}-${endpoint.path}`} {...endpoint} />
           ))}
         </section>
 
@@ -562,7 +562,7 @@ export default function LocalizedApiReferencePage() {
             Initiate and track refunds for completed payments. Refunds are processed on the Stellar network.
           </p>
           {endpoints.refunds.map((endpoint) => (
-            <EndpointCard key={endpoint.path} {...endpoint} />
+            <EndpointCard key={`${endpoint.method}-${endpoint.path}`} {...endpoint} />
           ))}
         </section>
 

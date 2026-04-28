@@ -17,6 +17,11 @@ export const signupSchema = z.object({
     .min(0, 'settlement_day must be 0–6 (Sun–Sat)')
     .max(6, 'settlement_day must be 0–6 (Sun–Sat)')
     .optional(),
+  // Optional bank details during signup
+  account_name: z.string().min(2, 'Account name is required').optional(),
+  account_number: z.string().min(5, 'Account number is required').optional(),
+  bank_name: z.string().min(2, 'Bank name is required').optional(),
+  bank_code: z.string().optional(),
 })
   .refine(
     (data) =>
@@ -78,6 +83,35 @@ export const bankAccountSchema = z.object({
   currency: z.string().min(3, 'Currency is required'),
   country: z.string().min(2, 'Country is required'),
 });
+
+const bankAccountBaseFields = z.object({
+  account_name: z.string().min(2, 'Account name is required').optional(),
+  account_number: z.string().min(5, 'Account number is required').optional(),
+  bank_name: z.string().min(2, 'Bank name is required').optional(),
+  bank_code: z.string().optional(),
+  currency: z.string().min(3, 'Currency is required').optional(),
+  country: z.string().min(2, 'Country is required').optional().refine(
+    val => val === undefined || allowedCountryCodes.includes(val),
+    { message: 'Invalid country code' },
+  ),
+});
+
+export const updateBankAccountSchema = bankAccountBaseFields
+  .refine(data => Object.keys(data).some(k => (data as any)[k] !== undefined), {
+    message: 'At least one field must be provided',
+  })
+  .superRefine((data, ctx) => {
+    if (data.country && data.currency) {
+      const entry = countryMap.find(x => x.countryCode === data.country);
+      if (entry && entry.currencyCode !== data.currency) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Currency ${data.currency} is not valid for country ${data.country}. Expected ${entry.currencyCode}.`,
+          path: ['currency'],
+        });
+      }
+    }
+  });
 
 const checkoutLogoUrlField = z
   .union([z.string().max(2048), z.literal(''), z.null()])

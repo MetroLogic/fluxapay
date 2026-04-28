@@ -5,22 +5,26 @@ import toast from "react-hot-toast";
 import { toastApiError } from "@/lib/toastApiError";
 import Image from "next/image";
 import { Link, useRouter } from "@/i18n/routing";
+import { useSearchParams } from "next/navigation";
 import * as yup from "yup";
 import Input from "@/components/Input";
 import { Button } from "@/components/Button";
 import { api, ApiError, storeToken } from "@/lib/api";
 import { useTranslations } from "next-intl";
 
-const loginSchema = (t: any) => yup.object({
+type AuthTranslator = (key: string) => string;
+
+const loginSchema = (t: AuthTranslator) => yup.object({
   email: yup.string().email(t("validation.emailInvalid")).required(t("validation.emailRequired")),
   password: yup.string().min(6, t("validation.passwordMin")).required(t("validation.passwordRequired")),
   keepLoggedIn: yup.boolean(),
 });
 
-type LoginFormData = yup.InferType<typeof loginSchema>;
+type LoginFormData = yup.InferType<ReturnType<typeof loginSchema>>;
 
 const LoginForm = () => {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const tAuth = useTranslations("auth");
   const [formData, setFormData] = useState<LoginFormData>({ email: "", password: "", keepLoggedIn: false });
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({ email: "", password: "" });
@@ -53,6 +57,16 @@ const LoginForm = () => {
       }
 
       storeToken(data.token, Boolean(validData.keepLoggedIn));
+      toast.success(data.message || "Login successful!");
+      
+      const redirectUrl = searchParams.get("redirect");
+      if (redirectUrl) {
+        // We use window.location.href here because redirectUrl might contain the locale
+        // and using router.push with next-intl can sometimes double-prefix or strip it.
+        window.location.href = redirectUrl;
+      } else {
+        router.push("/dashboard");
+      }
       toast.success(data.message || tAuth("signupSuccess")); // Assuming signupSuccess for now or just generic
       router.push("/dashboard");
     } catch (err) {

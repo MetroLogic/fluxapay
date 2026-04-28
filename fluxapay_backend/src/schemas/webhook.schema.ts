@@ -16,6 +16,9 @@ export const webhookEventTypes = [
   'subscription.created',
   'subscription.cancelled',
   'subscription.renewed',
+  // Invoice events
+  'invoice.paid',
+  'invoice.overdue',
   // Legacy event names (for backward compatibility)
   'payment_completed',
   'payment_confirmed',
@@ -26,6 +29,8 @@ export const webhookEventTypes = [
   'subscription_created',
   'subscription_cancelled',
   'subscription_renewed',
+  'invoice_paid',
+  'invoice_overdue',
 ] as const;
 
 export const webhookStatuses = [
