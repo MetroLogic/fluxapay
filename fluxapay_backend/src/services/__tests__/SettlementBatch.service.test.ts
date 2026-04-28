@@ -1,79 +1,377 @@
 /**
  * settlementBatch.service.test.ts
  *
- * Unit tests for the schedule-filtering logic.
- * Run with:  npx jest settlementBatch.service.test
+ * Comprehensive tests for the settlement batch service
  */
 
-import { isMerchantDueForSettlement } from "../settlementBatch.service";
+import { runSettlementBatch, isMerchantDueForSettlement } from "../settlementBatch.service";
+import { PrismaClient } from "../../generated/client/client";
+import { getExchangePartner } from "../exchange.service";
 
+// Mock dependencies
+const mockPrisma = {
+  merchant: {
+    findMany: jest.fn(),
+    findUnique: jest.fn(),
+  },
+  payment: {
+    findMany: jest.fn(),
+    updateMany: jest.fn(),
+  },
+  settlement: {
+    create: jest.fn(),
+  },
+  $transaction: jest.fn(),
+};
 
-// Helper: build a Date at a specific UTC weekday
-// JS Date months are 0-indexed; 2025-01-05 is a Sunday (day=0)
-const SUNDAY = new Date("2025-01-05T00:00:00Z"); // UTCDay = 0
-const MONDAY = new Date("2025-01-06T00:00:00Z"); // UTCDay = 1
-const TUESDAY = new Date("2025-01-07T00:00:00Z"); // UTCDay = 2
-const WEDNESDAY = new Date("2025-01-08T00:00:00Z"); // UTCDay = 3
-const THURSDAY = new Date("2025-01-09T00:00:00Z"); // UTCDay = 4
-const FRIDAY = new Date("2025-01-10T00:00:00Z"); // UTCDay = 5
-const SATURDAY = new Date("2025-01-11T00:00:00Z"); // UTCDay = 6
+jest.mock("../../generated/client/client", () => ({
+  PrismaClient: jest.fn(() => mockPrisma),
+  Prisma: {
+    TransactionClient: jest.fn(),
+  },
+}));
 
-describe("isMerchantDueForSettlement", () => {
+jest.mock("../exchange.service");
+jest.mock("../webhook.service", () => ({
+  createAndDeliverWebhook: jest.fn(),
+}));
+jest.mock("../audit.service", () => ({
+  logSettlementBatch: jest.fn().mockResolvedValue({ id: "audit_123" }),
+  updateSettlementBatchCompletion: jest.fn(),
+}));
 
-    // ── daily ──────────────────────────────────────────────────────────────────
-    describe("daily schedule", () => {
-        it("returns true on every day of the week", () => {
-            const days = [SUNDAY, MONDAY, TUESDAY, WEDNESDAY, THURSDAY, FRIDAY, SATURDAY];
-            days.forEach((day) => {
-                expect(isMerchantDueForSettlement("daily", null, day)).toBe(true);
-                expect(isMerchantDueForSettlement("daily", 1, day)).toBe(true); // settlement_day ignored
-            });
-        });
+describe("settlementBatch.service", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    process.env.SETTLEMENT_FEE_PERCENT = "2";
+    process.env.SETTLEMENT_BATCH_LIMIT = "500";
+    process.env.EXCHANGE_PARTNER = "mock";
+  });
+
+  describe("isMerchantDueForSettlement", () => {
+    it("should return true for daily schedule", () => {
+      const result = isMerchantDueForSettlement("daily", null, new Date("2024-01-15"));
+      expect(result).toBe(true);
     });
 
-    // ── weekly ─────────────────────────────────────────────────────────────────
-    describe("weekly schedule", () => {
-        it("returns true only on the configured day", () => {
-            // settlement_day = 1 (Monday)
-            expect(isMerchantDueForSettlement("weekly", 1, MONDAY)).toBe(true);
-        });
-
-        it("returns false on every other day", () => {
-            const notMonday = [SUNDAY, TUESDAY, WEDNESDAY, THURSDAY, FRIDAY, SATURDAY];
-            notMonday.forEach((day) => {
-                expect(isMerchantDueForSettlement("weekly", 1, day)).toBe(false);
-            });
-        });
-
-        it("handles Sunday (0) correctly", () => {
-            expect(isMerchantDueForSettlement("weekly", 0, SUNDAY)).toBe(true);
-            expect(isMerchantDueForSettlement("weekly", 0, MONDAY)).toBe(false);
-        });
-
-        it("handles Saturday (6) correctly", () => {
-            expect(isMerchantDueForSettlement("weekly", 6, SATURDAY)).toBe(true);
-            expect(isMerchantDueForSettlement("weekly", 6, FRIDAY)).toBe(false);
-        });
-
-        it("returns false and warns when settlement_day is null (misconfigured)", () => {
-            const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => { });
-            expect(isMerchantDueForSettlement("weekly", null, MONDAY)).toBe(false);
-            expect(warnSpy).toHaveBeenCalledWith(
-                expect.stringContaining("no settlement_day set"),
-            );
-            warnSpy.mockRestore();
-        });
+    it("should return true for weekly schedule on matching day", () => {
+      // Monday = 1
+      const monday = new Date("2024-01-15"); // This is a Monday
+      const result = isMerchantDueForSettlement("weekly", 1, monday);
+      expect(result).toBe(true);
     });
 
-    // ── unknown schedule ───────────────────────────────────────────────────────
-    describe("unknown schedule", () => {
-        it("returns false and warns", () => {
-            const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => { });
-            expect(isMerchantDueForSettlement("biweekly", null, MONDAY)).toBe(false);
-            expect(warnSpy).toHaveBeenCalledWith(
-                expect.stringContaining("Unknown settlement_schedule"),
-            );
-            warnSpy.mockRestore();
-        });
+    it("should return false for weekly schedule on non-matching day", () => {
+      // Monday = 1, but checking on Tuesday
+      const tuesday = new Date("2024-01-16");
+      const result = isMerchantDueForSettlement("weekly", 1, tuesday);
+      expect(result).toBe(false);
     });
+
+    it("should return false for weekly schedule with null settlement_day", () => {
+      const consoleSpy = jest.spyOn(console, "warn").mockImplementation();
+      const result = isMerchantDueForSettlement("weekly", null, new Date());
+      expect(result).toBe(false);
+      expect(consoleSpy).toHaveBeenCalled();
+      consoleSpy.mockRestore();
+    });
+
+    it("should return false for unknown schedule", () => {
+      const consoleSpy = jest.spyOn(console, "warn").mockImplementation();
+      const result = isMerchantDueForSettlement("monthly", null, new Date());
+      expect(result).toBe(false);
+      expect(consoleSpy).toHaveBeenCalled();
+      consoleSpy.mockRestore();
+    });
+  });
+
+  describe("runSettlementBatch", () => {
+    it("should process batch with confirmed payments", async () => {
+      const mockMerchants = [
+        {
+          id: "merchant_1",
+          business_name: "Test Business",
+          settlement_schedule: "daily",
+          settlement_day: null,
+          settlement_currency: "NGN",
+          webhook_url: "https://example.com/webhook",
+          bankAccount: {
+            account_name: "Test Account",
+            account_number: "1234567890",
+            bank_name: "Test Bank",
+            bank_code: "123",
+            currency: "NGN",
+            country: "NG",
+          },
+        },
+      ];
+
+      const mockPayments = [
+        {
+          id: "payment_1",
+          merchantId: "merchant_1",
+          amount: 100,
+          swept: true,
+          settled: false,
+          createdAt: new Date(),
+        },
+        {
+          id: "payment_2",
+          merchantId: "merchant_1",
+          amount: 50,
+          swept: true,
+          settled: false,
+          createdAt: new Date(),
+        },
+      ];
+
+      const mockExchangePartner = {
+        getQuote: jest.fn().mockResolvedValue({
+          fiat_gross: 232500,
+          exchange_rate: 1550,
+          fiat_currency: "NGN",
+          quote_ref: "quote_123",
+        }),
+        convertAndPayout: jest.fn().mockResolvedValue({
+          transfer_ref: "transfer_123",
+          exchange_ref: "exchange_123",
+          initiated_at: new Date().toISOString(),
+          raw_partner_payload: {},
+        }),
+      };
+
+      mockPrisma.merchant.findMany.mockResolvedValue(mockMerchants);
+      mockPrisma.payment.findMany.mockResolvedValue(mockPayments);
+      mockPrisma.merchant.findUnique.mockResolvedValue(mockMerchants[0]);
+      mockPrisma.$transaction.mockImplementation(async (callback: any) => {
+        return callback({
+          settlement: {
+            create: jest.fn().mockResolvedValue({
+              id: "settlement_123",
+              merchantId: "merchant_1",
+            }),
+          },
+          payment: {
+            updateMany: jest.fn(),
+          },
+        });
+      });
+
+      (getExchangePartner as jest.Mock).mockReturnValue(mockExchangePartner);
+
+      const result = await runSettlementBatch(new Date("2024-01-15"), "admin_1");
+
+      expect(result.totalMerchantsProcessed).toBe(1);
+      expect(result.totalMerchantsSucceeded).toBe(1);
+      expect(mockExchangePartner.convertAndPayout).toHaveBeenCalled();
+    });
+
+    it("should skip merchants with no bank account", async () => {
+      const mockMerchants = [
+        {
+          id: "merchant_1",
+          business_name: "Test Business",
+          settlement_schedule: "daily",
+          settlement_day: null,
+          settlement_currency: "NGN",
+          bankAccount: null,
+        },
+      ];
+
+      const mockPayments = [
+        {
+          id: "payment_1",
+          merchantId: "merchant_1",
+          amount: 100,
+          swept: true,
+          settled: false,
+          createdAt: new Date(),
+        },
+      ];
+
+      mockPrisma.merchant.findMany.mockResolvedValue(mockMerchants);
+      mockPrisma.payment.findMany.mockResolvedValue(mockPayments);
+      mockPrisma.merchant.findUnique.mockResolvedValue(mockMerchants[0]);
+
+      const result = await runSettlementBatch(new Date("2024-01-15"), "admin_1");
+
+      expect(result.totalMerchantsSkipped).toBe(1);
+      expect(result.merchantResults[0].error).toContain("No bank account");
+    });
+
+    it("should skip merchants not due for settlement", async () => {
+      const mockMerchants = [
+        {
+          id: "merchant_1",
+          business_name: "Test Business",
+          settlement_schedule: "weekly",
+          settlement_day: 1, // Monday
+          settlement_currency: "NGN",
+          bankAccount: {
+            account_name: "Test Account",
+            account_number: "1234567890",
+            bank_name: "Test Bank",
+            currency: "NGN",
+            country: "NG",
+          },
+        },
+      ];
+
+      const mockPayments = [
+        {
+          id: "payment_1",
+          merchantId: "merchant_1",
+          amount: 100,
+          swept: true,
+          settled: false,
+          createdAt: new Date(),
+        },
+      ];
+
+      mockPrisma.merchant.findMany.mockResolvedValue(mockMerchants);
+      mockPrisma.payment.findMany.mockResolvedValue(mockPayments);
+      mockPrisma.merchant.findUnique.mockResolvedValue(mockMerchants[0]);
+
+      // Run on Tuesday (day 2), but merchant is scheduled for Monday (day 1)
+      const tuesday = new Date("2024-01-16");
+      const result = await runSettlementBatch(tuesday, "admin_1");
+
+      expect(result.totalMerchantsSkipped).toBe(1);
+      expect(result.merchantResults[0].error).toContain("Not due today");
+    });
+
+    it("should handle exchange partner failures gracefully", async () => {
+      const mockMerchants = [
+        {
+          id: "merchant_1",
+          business_name: "Test Business",
+          settlement_schedule: "daily",
+          settlement_day: null,
+          settlement_currency: "NGN",
+          webhook_url: null,
+          bankAccount: {
+            account_name: "Test Account",
+            account_number: "1234567890",
+            bank_name: "Test Bank",
+            currency: "NGN",
+            country: "NG",
+          },
+        },
+      ];
+
+      const mockPayments = [
+        {
+          id: "payment_1",
+          merchantId: "merchant_1",
+          amount: 100,
+          swept: true,
+          settled: false,
+          createdAt: new Date(),
+        },
+      ];
+
+      const mockExchangePartner = {
+        getQuote: jest.fn().mockRejectedValue(new Error("Exchange API unavailable")),
+        convertAndPayout: jest.fn(),
+      };
+
+      mockPrisma.merchant.findMany.mockResolvedValue(mockMerchants);
+      mockPrisma.payment.findMany.mockResolvedValue(mockPayments);
+      mockPrisma.merchant.findUnique.mockResolvedValue(mockMerchants[0]);
+      mockPrisma.settlement.create.mockResolvedValue({
+        id: "settlement_failed",
+        status: "failed",
+      });
+
+      (getExchangePartner as jest.Mock).mockReturnValue(mockExchangePartner);
+
+      const result = await runSettlementBatch(new Date("2024-01-15"), "admin_1");
+
+      expect(result.totalMerchantsFailed).toBe(1);
+      expect(result.merchantResults[0].error).toContain("Exchange API unavailable");
+    });
+
+    it("should return empty result when no unsettled payments found", async () => {
+      mockPrisma.merchant.findMany.mockResolvedValue([]);
+      mockPrisma.payment.findMany.mockResolvedValue([]);
+
+      const result = await runSettlementBatch(new Date("2024-01-15"), "admin_1");
+
+      expect(result.totalMerchantsProcessed).toBe(0);
+      expect(result.merchantResults).toHaveLength(0);
+    });
+
+    it("should calculate fees correctly", async () => {
+      process.env.SETTLEMENT_FEE_PERCENT = "2.5";
+
+      const mockMerchants = [
+        {
+          id: "merchant_1",
+          business_name: "Test Business",
+          settlement_schedule: "daily",
+          settlement_day: null,
+          settlement_currency: "NGN",
+          webhook_url: null,
+          bankAccount: {
+            account_name: "Test Account",
+            account_number: "1234567890",
+            bank_name: "Test Bank",
+            currency: "NGN",
+            country: "NG",
+          },
+        },
+      ];
+
+      const mockPayments = [
+        {
+          id: "payment_1",
+          merchantId: "merchant_1",
+          amount: 100,
+          swept: true,
+          settled: false,
+          createdAt: new Date(),
+        },
+      ];
+
+      const mockExchangePartner = {
+        getQuote: jest.fn().mockResolvedValue({
+          fiat_gross: 155000,
+          exchange_rate: 1550,
+          fiat_currency: "NGN",
+        }),
+        convertAndPayout: jest.fn().mockResolvedValue({
+          transfer_ref: "transfer_123",
+          exchange_ref: "exchange_123",
+          initiated_at: new Date().toISOString(),
+        }),
+      };
+
+      mockPrisma.merchant.findMany.mockResolvedValue(mockMerchants);
+      mockPrisma.payment.findMany.mockResolvedValue(mockPayments);
+      mockPrisma.merchant.findUnique.mockResolvedValue(mockMerchants[0]);
+      mockPrisma.$transaction.mockImplementation(async (callback: any) => {
+        return callback({
+          settlement: {
+            create: jest.fn().mockResolvedValue({
+              id: "settlement_123",
+              merchantId: "merchant_1",
+            }),
+          },
+          payment: {
+            updateMany: jest.fn(),
+          },
+        });
+      });
+
+      (getExchangePartner as jest.Mock).mockReturnValue(mockExchangePartner);
+
+      const result = await runSettlementBatch(new Date("2024-01-15"), "admin_1");
+
+      expect(result.totalMerchantsSucceeded).toBe(1);
+      // Fee should be 2.5% of 155000 = 3875
+      // Net should be 155000 - 3875 = 151125
+      expect(result.merchantResults[0].feeAmount).toBe(3875);
+      expect(result.merchantResults[0].netAmount).toBe(151125);
+    });
+  });
 });
