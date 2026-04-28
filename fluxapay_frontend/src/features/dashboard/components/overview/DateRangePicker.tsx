@@ -17,13 +17,18 @@ const inputClass =
 export function DateRangePicker() {
   const { dateRange, setDateRange, setPreset, presets } = useDashboardDateRange();
 
-  const presetValue =
-    Object.entries(presets).find(([, v]) => {
-      const from = new Date(dateRange.from);
-      const to = new Date(dateRange.to);
-      const diff = Math.round((to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24));
-      return diff === v.days;
-    })?.[0] ?? "custom";
+  // Detect which preset is active by matching from/to dates
+  const presetValue = (() => {
+    const to = new Date(dateRange.to);
+    const from = new Date(dateRange.from);
+    const diffDays = Math.round((to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24));
+
+    for (const [key, v] of Object.entries(presets)) {
+      if (key === "all" && dateRange.from === "2020-01-01") return "all";
+      if (key !== "all" && diffDays === v.days) return key;
+    }
+    return "custom";
+  })();
 
   return (
     <div className="flex flex-wrap items-center gap-2">
