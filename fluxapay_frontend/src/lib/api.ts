@@ -1,5 +1,10 @@
 // API Client for FluxaPay Backend
+import { getToken, storeToken, clearToken } from "./auth";
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+
+// Re-export auth functions for backward compatibility
+export { getToken, storeToken, clearToken } from "./auth";
 
 export interface AuthSignupRequest {
   business_name: string;
@@ -57,6 +62,8 @@ class ApiError extends Error {
   }
 }
 
+async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
+  const token = getToken();
 function getToken(): string {
   // Check localStorage first (persistent), then sessionStorage (session-only)
   const token = localStorage.getItem("token") ?? sessionStorage.getItem("token");
