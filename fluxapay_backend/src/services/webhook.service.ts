@@ -181,6 +181,107 @@ export async function getWebhookLogsService(params: GetWebhookLogsParams) {
   };
 }
 
+interface ExportWebhookLogsParams {
+  merchantId: string;
+  event_type?: WebhookEventType;
+  status?: WebhookStatus;
+  date_from?: string;
+  date_to?: string;
+  search?: string;
+}
+
+export async function exportWebhookLogsService(params: ExportWebhookLogsParams) {
+  const { merchantId, event_type, status, date_from, date_to, search } = params;
+
+  const where: any = {
+    merchantId,
+  };
+
+  if (event_type) {
+    where.event_type = event_type;
+  }
+
+  if (status) {
+    where.status = status;
+  }
+
+  if (date_from || date_to) {
+    where.created_at = {};
+    if (date_from) {
+      where.created_at.gte = new Date(date_from);
+    }
+    if (date_to) {
+      where.created_at.lte = new Date(date_to);
+    }
+  }
+
+  if (search) {
+    where.OR = [
+      { id: { contains: search, mode: "insensitive" } },
+      { payment_id: { contains: search, mode: "insensitive" } },
+    ];
+  }
+
+  const logs = await prisma.webhookLog.findMany({
+    where,
+    orderBy: { created_at: "desc" },
+    select: {
+      id: true,
+      event_type: true,
+      status: true,
+      http_status: true,
+      payment_id: true,
+      endpoint_url: true,
+      event_id: true,
+      retry_count: true,
+      created_at: true,
+      updated_at: true,
+    },
+  });
+
+  const escapeCsv = (value: unknown) => {
+    const text = value == null ? "" : String(value);
+    return `"${text.replace(/"/g, '""')}"`;
+  };
+
+  const header = [
+    "ID",
+    "Event Type",
+    "Status",
+    "HTTP Status",
+    "Payment ID",
+    "Endpoint URL",
+    "Event ID",
+    "Retry Count",
+    "Created At",
+    "Updated At",
+  ];
+
+  const rows = logs.map((log) =>
+    [
+      escapeCsv(log.id),
+      escapeCsv(log.event_type),
+      escapeCsv(log.status),
+      escapeCsv(log.http_status),
+      escapeCsv(log.payment_id),
+      escapeCsv(log.endpoint_url),
+      escapeCsv(log.event_id),
+      escapeCsv(log.retry_count),
+      escapeCsv(log.created_at.toISOString()),
+      escapeCsv(log.updated_at.toISOString()),
+    ].join(","),
+  );
+
+  const filename = `webhook_logs_${date_from ?? "all"}_${date_to ?? "all"}.csv`;
+  const content = [header.join(","), ...rows].join("\n");
+
+  return {
+    filename,
+    content,
+    contentType: "text/csv",
+  };
+}
+
 export async function getWebhookLogDetailsService(params: WebhookLogDetailsParams) {
   const { merchantId, log_id } = params;
 

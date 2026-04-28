@@ -481,6 +481,30 @@ export function buildPublicCheckoutDto(payment: {
 
 /** Public hosted checkout — no auth. */
 export const getPublicCheckoutPayment = async (req: Request, res: Response) => {
+    try {
+        const id = String(req.params.id);
+        const payment = await prisma.payment.findUnique({
+            where: { id },
+            include: {
+                merchant: {
+                    select: {
+                        business_name: true,
+                        checkout_logo_url: true,
+                        checkout_accent_color: true,
+                    },
+                },
+            },
+        });
+
+        if (!payment?.stellar_address) {
+            return res.status(404).json({ error: "Payment not found" });
+        }
+
+        const checkoutPayment = payment as Parameters<typeof buildPublicCheckoutDto>[0];
+        res.json(buildPublicCheckoutDto(checkoutPayment));
+    } catch (error: unknown) {
+        console.error("getPublicCheckoutPayment", error);
+        res.status(500).json({ error: "Failed to load payment" });
   try {
     const id = String(req.params.id);
     const payment = await prisma.payment.findUnique({

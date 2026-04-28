@@ -1,5 +1,8 @@
 import { PrismaClient, Prisma } from '../generated/client/client';
 import {
+  AuditActionType,
+  AuditEntityType,
+  KYCStatus,
   CreateAuditLogParams,
   QueryAuditLogsParams,
   PaginationInfo,
