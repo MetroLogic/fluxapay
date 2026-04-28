@@ -90,6 +90,9 @@ export function usePaymentStatus(paymentId: string): UsePaymentStatusReturn {
         supportUrl:
           (raw.supportUrl as string | undefined) ??
           (raw.support_url as string | undefined),
+        transactionHash:
+          (raw.transactionHash as string | undefined) ??
+          (raw.transaction_hash as string | undefined),
       };
 
       pollingBackoffRef.current = 3000;

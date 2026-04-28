@@ -31,6 +31,8 @@ export interface Payment {
   checkoutAccentColor?: string;
   /** Support link for the merchant or Fluxapay. */
   supportUrl?: string;
+  /** Stellar transaction hash, present once the payment is confirmed on-chain. */
+  transactionHash?: string;
 }
 
 export interface PaymentStatusUpdate {
