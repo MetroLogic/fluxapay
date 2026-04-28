@@ -224,6 +224,101 @@ export const exportSettlementService = async (
     };
 };
 
+interface ExportSettlementRangeParams {
+    merchantId: string;
+    date_from?: string;
+    date_to?: string;
+    format?: "pdf" | "csv";
+}
+
+export const exportSettlementRangeService = async (
+    params: ExportSettlementRangeParams
+) => {
+    const { merchantId, date_from, date_to, format = "csv" } = params;
+    const where: any = { merchantId };
+
+    if (date_from || date_to) {
+        where.created_at = {};
+        if (date_from) where.created_at.gte = new Date(date_from);
+        if (date_to) where.created_at.lte = new Date(date_to);
+    }
+
+    const settlements = await prisma.settlement.findMany({
+        where,
+        orderBy: { created_at: "desc" },
+        include: { merchant: true },
+    });
+
+    const filename = `settlement_report_${date_from ?? "all"}_${date_to ?? "all"}.${format}`;
+
+    if (format === "csv") {
+        const escapeCsv = (value: unknown) => {
+            const text = value == null ? "" : String(value);
+            return `"${text.replace(/"/g, '""')}"`;
+        };
+
+        const header = [
+            "Settlement ID",
+            "Status",
+            "Amount",
+            "Currency",
+            "Fees",
+            "Net Amount",
+            "Scheduled Date",
+            "Processed Date",
+            "Created At",
+            "Bank Transfer ID",
+            "Merchant",
+        ];
+
+        const rows = settlements.map((settlement) =>
+            [
+                escapeCsv(settlement.id),
+                escapeCsv(settlement.status),
+                escapeCsv(settlement.amount),
+                escapeCsv(settlement.currency),
+                escapeCsv(settlement.fees),
+                escapeCsv(Number(settlement.amount) - Number(settlement.fees)),
+                escapeCsv(settlement.scheduled_date?.toISOString().split("T")[0] ?? ""),
+                escapeCsv(settlement.processed_date?.toISOString().split("T")[0] ?? ""),
+                escapeCsv(settlement.created_at.toISOString()),
+                escapeCsv(settlement.bank_transfer_id ?? ""),
+                escapeCsv(settlement.merchant.business_name ?? settlement.merchant.id),
+            ].join(","),
+        );
+
+        return {
+            filename,
+            content: [header.join(","), ...rows].join("\n"),
+            contentType: "text/csv",
+        };
+    }
+
+    return {
+        filename,
+        content: {
+            date_from: date_from ?? null,
+            date_to: date_to ?? null,
+            generated_at: new Date().toISOString(),
+            merchant_name: settlements[0]?.merchant.business_name ?? "",
+            settlements: settlements.map((settlement) => ({
+                id: settlement.id,
+                status: settlement.status,
+                amount: Number(settlement.amount),
+                currency: settlement.currency,
+                fees: Number(settlement.fees),
+                net_amount: Number(settlement.amount) - Number(settlement.fees),
+                scheduled_date: settlement.scheduled_date?.toISOString() ?? null,
+                processed_date: settlement.processed_date?.toISOString() ?? null,
+                created_at: settlement.created_at.toISOString(),
+                bank_transfer_id: settlement.bank_transfer_id,
+                merchant_name: settlement.merchant.business_name,
+            })),
+        },
+        contentType: "application/json",
+    };
+};
+
 export const getSettlementBatchService = async (
     merchantId: string,
     date_from?: string,

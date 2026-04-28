@@ -45,33 +45,35 @@ const signupSchema = (t: AuthTranslator) => yup.object({
   bankCode: yup.string().required(t("validation.bankCodeRequired")),
 });
 
-type SignUpFormData = yup.InferType<typeof signupSchema>;
+type SignUpFormData = yup.InferType<ReturnType<typeof signupSchema>>;
 
 const SignUpForm = () => {
   const router = useRouter();
   const tAuth = useTranslations("auth");
   const [formData, setFormData] = useState<SignUpFormData>({
-    name: "",
-    businessName: "",
+    business_name: "",
     email: "",
+    phone_number: "",
     password: "",
     country: "",
-    settlementCurrency: "",
-    accountNumber: "",
-    bankName: "",
-    bankCode: "",
+    settlement_currency: "",
+    account_name: "",
+    account_number: "",
+    bank_name: "",
+    bank_code: "",
   });
 
   const [errors, setErrors] = useState<{
-    name?: string;
-    businessName?: string;
+    business_name?: string;
     email?: string;
+    phone_number?: string;
     password?: string;
     country?: string;
-    settlementCurrency?: string;
-    accountNumber?: string;
-    bankName?: string;
-    bankCode?: string;
+    settlement_currency?: string;
+    account_name?: string;
+    account_number?: string;
+    bank_name?: string;
+    bank_code?: string;
   }>({});
 
   const [showPassword, setShowPassword] = useState(false);
@@ -90,9 +92,9 @@ const SignUpForm = () => {
     setFormData((prev) => ({
       ...prev,
       country: value,
-      settlementCurrency: selectedCountry?.currency || "",
+      settlement_currency: selectedCountry?.currency || "",
     }));
-    setErrors((prev) => ({ ...prev, country: "", settlementCurrency: "" }));
+    setErrors((prev) => ({ ...prev, country: "", settlement_currency: "" }));
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -104,7 +106,7 @@ const SignUpForm = () => {
       setErrors({});
       setIsSubmitting(true);
 
-      const response = await api.auth.signup(validData);
+      const response = await api.auth.signup(validData as any);
 
       toast.success(tAuth("signupSuccess"));
       
@@ -115,20 +117,10 @@ const SignUpForm = () => {
       }
     } catch (err) {
       if (err instanceof yup.ValidationError) {
-        const fieldErrors: {
-          name?: string;
-          businessName?: string;
-          email?: string;
-          password?: string;
-          country?: string;
-          settlementCurrency?: string;
-          accountNumber?: string;
-          bankName?: string;
-          bankCode?: string;
-        } = {};
+        const fieldErrors: any = {};
         err.inner.forEach((issue) => {
-          if (issue.path && !fieldErrors[issue.path as keyof SignUpFormData]) {
-            fieldErrors[issue.path as keyof SignUpFormData] = issue.message;
+          if (issue.path) {
+            fieldErrors[issue.path] = issue.message;
           }
         });
         setErrors(fieldErrors);
@@ -190,9 +182,9 @@ const SignUpForm = () => {
               <div>
                 <Input
                   type="text"
-                  name="businessName"
+                  name="business_name"
                   label={tAuth("businessName")}
-                  value={formData.businessName}
+                  value={formData.business_name}
                   onChange={handleChange}
                   placeholder={tAuth("businessNamePlaceholder")}
                   error={errors.businessName}
@@ -209,6 +201,19 @@ const SignUpForm = () => {
                   onChange={handleChange}
                   placeholder={tAuth("emailSignupPlaceholder")}
                   error={errors.email}
+                />
+              </div>
+
+              {/* Phone Number */}
+              <div>
+                <Input
+                  type="tel"
+                  name="phone_number"
+                  label="Phone Number"
+                  value={formData.phone_number}
+                  onChange={handleChange}
+                  placeholder="+234..."
+                  error={errors.phone_number}
                 />
               </div>
 
@@ -289,6 +294,35 @@ const SignUpForm = () => {
                   placeholder={tAuth("accountNumberPlaceholder")}
                   error={errors.accountNumber}
                 />
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <Input
+                    type="text"
+                    name="bank_name"
+                    label="Bank"
+                    value={formData.bank_name}
+                    onChange={handleChange}
+                    placeholder="Bank Name"
+                    error={errors.bank_name}
+                  />
+                  <Input
+                    type="text"
+                    name="bank_code"
+                    label="Code"
+                    value={formData.bank_code}
+                    onChange={handleChange}
+                    placeholder="Bank Code"
+                    error={errors.bank_code}
+                  />
+                  <Input
+                    type="text"
+                    name="account_number"
+                    label="Account"
+                    value={formData.account_number}
+                    onChange={handleChange}
+                    placeholder="Account Number"
+                    error={errors.account_number}
+                  />
+                </div>
               </div>
 
               {/* Password */}

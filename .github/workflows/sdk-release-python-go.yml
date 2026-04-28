@@ -1,0 +1,76 @@
+name: SDK Release (Python & Go)
+
+on:
+  push:
+    tags:
+      - "python-sdk-v*.*.*"
+      - "go-sdk-v*.*.*"
+
+jobs:
+  # ── Python SDK → PyPI ────────────────────────────────────────────────────────
+  publish-python-sdk:
+    name: Publish Python SDK to PyPI
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref_name, 'python-sdk-v')
+    defaults:
+      run:
+        working-directory: ./fluxapay_python_sdk
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Validate tag matches package version
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#python-sdk-v}"
+          PKG_VERSION=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "Tag $TAG_VERSION != pyproject.toml $PKG_VERSION"
+            exit 1
+          fi
+
+      - name: Install build deps
+        run: pip install build pytest pytest-asyncio respx httpx
+
+      - name: Run tests
+        run: pytest tests/ -v
+
+      - name: Build distribution
+        run: python -m build
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: fluxapay_python_sdk/dist/
+          password: ${{ secrets.PYPI_TOKEN }}
+
+  # ── Go SDK → tag (go get compatible) ─────────────────────────────────────────
+  validate-go-sdk:
+    name: Validate Go SDK
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref_name, 'go-sdk-v')
+    defaults:
+      run:
+        working-directory: ./fluxapay_go_sdk
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.21"
+
+      - name: Validate tag matches go.mod module path
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#go-sdk-v}"
+          echo "Releasing Go SDK v$TAG_VERSION"
+          go vet ./...
+
+      - name: Run tests
+        run: go test ./... -v
+
+      - name: Build check
+        run: go build ./...

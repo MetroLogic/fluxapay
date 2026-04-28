@@ -64,8 +64,10 @@ const AdminReconciliationPage = () => {
   
   const [activeTab, setActiveTab] = useState<"overview" | "alerts">("overview");
 
+  const [merchantIdFilter, setMerchantIdFilter] = useState("");
+
   const { records: rawRecords, summary, discrepancies, resolveDiscrepancy } =
-    useAdminReconciliation({ start: globalStart, end: globalEnd });
+    useAdminReconciliation({ start: globalStart, end: globalEnd }, merchantIdFilter || undefined);
     
   const records = rawRecords.map(r => ({
     ...r,
@@ -501,6 +503,13 @@ const AdminReconciliationPage = () => {
                 />
               </div>
               <div className="flex items-center gap-3">
+                <input
+                  type="text"
+                  placeholder="Filter by Merchant ID..."
+                  className="px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-slate-900/5 focus:border-slate-400 transition-all w-52"
+                  value={merchantIdFilter}
+                  onChange={(e) => setMerchantIdFilter(e.target.value)}
+                />
                 <div className="relative">
                   <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 w-4 h-4" />
                   <select
@@ -1132,6 +1141,18 @@ const AdminReconciliationPage = () => {
             </div>
 
             <div className="p-8 space-y-5">
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">
+                  Merchant ID (optional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="All merchants"
+                  value={merchantIdFilter}
+                  onChange={(e) => setMerchantIdFilter(e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
+                />
+              </div>
               <div>
                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">
                   Period Start

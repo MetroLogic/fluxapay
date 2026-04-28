@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2, ShieldOff } from 'lucide-react';
+import { isAuthenticated, isAdmin } from '@/lib/auth';
 
 const ADMIN_ENABLED = process.env.NEXT_PUBLIC_ADMIN_ENABLED === 'true';
 
@@ -22,10 +23,7 @@ export default function AdminGuard({ children }: { children: React.ReactNode }) 
             return;
         }
 
-        const token = localStorage.getItem('token');
-        const isAdmin = localStorage.getItem('isAdmin');
-
-        if (!token || isAdmin !== 'true') {
+        if (!isAuthenticated() || !isAdmin()) {
             router.replace('/login');
             return;
         }

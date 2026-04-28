@@ -23,7 +23,7 @@ describe('PaymentStatus', () => {
 
   it('renders expired state', () => {
     render(<PaymentStatus status="expired" />);
-    expect(screen.getByText(/checkout.expiredDescription/i)).toBeInTheDocument();
+    expect(screen.getByText(/this payment link has expired/i)).toBeInTheDocument();
   });
 
   it('renders failed state', () => {
@@ -56,3 +56,5 @@ describe('PaymentStatus', () => {
     expect(screen.getByText('Custom message here')).toBeInTheDocument();
   });
 });
+
+

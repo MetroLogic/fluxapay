@@ -61,7 +61,8 @@ export function PaymentQRCode({ address, amount, memoType, memo, size = 256 }: P
           <button
             type="button"
             onClick={() => copyToClipboard(address, 'Address')}
-            className="shrink-0 inline-flex items-center gap-1 text-xs font-medium text-blue-700 hover:text-blue-900"
+            className="shrink-0 inline-flex items-center gap-1 text-xs font-medium hover:opacity-80 transition-opacity"
+            style={{ color: 'var(--checkout-accent)' }}
             aria-label="Copy payment address"
           >
             <Copy className="w-3 h-3" aria-hidden="true" />
@@ -85,12 +86,14 @@ export function PaymentQRCode({ address, amount, memoType, memo, size = 256 }: P
             <button
               type="button"
               onClick={() => copyToClipboard(memo, 'Memo')}
-              className="shrink-0 inline-flex items-center gap-1 text-xs font-medium text-blue-700 hover:text-blue-900"
+              className="shrink-0 inline-flex items-center gap-1 text-xs font-medium hover:opacity-80 transition-opacity"
+              style={{ color: 'var(--checkout-accent)' }}
               aria-label="Copy memo"
             >
               <Copy className="w-3 h-3" aria-hidden="true" />
               Copy
             </button>
+
           </div>
         </div>
       )}

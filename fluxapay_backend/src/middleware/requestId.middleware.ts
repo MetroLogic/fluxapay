@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import { randomUUID } from "crypto";
 import { AuthRequest } from "../types/express";
 import { requestContextStorage } from "../utils/requestContext";
+import { loggerStorage } from "../utils/logger";
 
 /**
  * Request ID Middleware
@@ -24,6 +25,8 @@ export function requestIdMiddleware(
 
   // Run the rest of the request within the async local storage context
   requestContextStorage.run({ requestId }, () => {
+  // Run downstream middleware in the logger storage context
+  loggerStorage.run({ requestId }, () => {
     next();
   });
 }

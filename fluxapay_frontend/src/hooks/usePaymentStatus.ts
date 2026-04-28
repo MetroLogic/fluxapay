@@ -90,6 +90,9 @@ export function usePaymentStatus(paymentId: string): UsePaymentStatusReturn {
         supportUrl:
           (raw.supportUrl as string | undefined) ??
           (raw.support_url as string | undefined),
+        transactionHash:
+          (raw.transactionHash as string | undefined) ??
+          (raw.transaction_hash as string | undefined),
       };
 
       pollingBackoffRef.current = 3000;
@@ -125,8 +128,10 @@ export function usePaymentStatus(paymentId: string): UsePaymentStatusReturn {
 
       setPayment((prev) => {
         if (!prev) return prev;
-        if (prev.status !== data.status) {
-          return { ...prev, status: data.status };
+        const statusChanged = prev.status !== data.status;
+        const paidAmountChanged = data.paidAmount !== undefined && prev.paidAmount !== data.paidAmount;
+        if (statusChanged || paidAmountChanged) {
+          return { ...prev, status: data.status, ...(data.paidAmount !== undefined ? { paidAmount: data.paidAmount } : {}) };
         }
         return prev;
       });
@@ -197,8 +202,10 @@ export function usePaymentStatus(paymentId: string): UsePaymentStatusReturn {
             const data = JSON.parse(event.data);
             setPayment((prev) => {
               if (!prev) return prev;
-              if (prev.status !== data.status) {
-                return { ...prev, status: data.status };
+              const statusChanged = prev.status !== data.status;
+              const paidAmountChanged = data.paidAmount !== undefined && prev.paidAmount !== data.paidAmount;
+              if (statusChanged || paidAmountChanged) {
+                return { ...prev, status: data.status, ...(data.paidAmount !== undefined ? { paidAmount: data.paidAmount } : {}) };
               }
               return prev;
             });

@@ -1,4 +1,5 @@
 import z from "zod";
+import { MerchantStatus } from "../generated/client/client";
 import { createController } from "../helpers/controller.helper";
 import * as merchantSchema from "../schemas/merchant.schema";
 import {
@@ -152,7 +153,7 @@ export async function adminGetMerchant(req: Request, res: Response) {
 export async function adminUpdateMerchantStatus(req: Request, res: Response) {
   try {
     const merchantId = String(req.params.merchantId);
-    const { status } = req.body;
+    const { status } = req.body as { status: MerchantStatus };
 
     if (!["active", "pending_verification"].includes(status)) {
       return res.status(400).json({ message: "Invalid status value" });
@@ -175,7 +176,7 @@ export async function adminBulkUpdateMerchantStatus(req: Request, res: Response)
   try {
     const { merchantIds, status, reason } = req.body as {
       merchantIds: string[];
-      status: string;
+      status: MerchantStatus;
       reason: string;
     };
 

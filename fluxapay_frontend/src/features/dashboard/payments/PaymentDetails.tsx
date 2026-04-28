@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Payment } from "./payments-mock";
+import { Payment } from "./types";
 import { Badge } from "@/components/Badge";
 import {
   Copy,
@@ -14,7 +14,11 @@ import {
 import { Button } from "@/components/Button";
 import { Input } from "@/components/Input";
 import { Select } from "@/components/Select";
+import { TxHashLink } from "@/components/TxHashLink";
+import { getStellarExpertTxUrl } from "@/lib/stellar";
 import type { RefundRecord, RefundReason } from "../refunds/refunds-mock";
+import { QRCodeCanvas } from "qrcode.react";
+import toast from "react-hot-toast";
 
 interface PaymentDetailsProps {
   payment: Payment;
@@ -52,8 +56,13 @@ export const PaymentDetails = ({
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success("Copied to clipboard.");
+    } catch {
+      toast.error("Unable to copy to clipboard.");
+    }
   };
 
   const paymentRefunds = useMemo(
@@ -182,7 +191,7 @@ export const PaymentDetails = ({
               <div className="group flex items-center gap-2">
                 <code className="text-xs font-mono">{payment.id}</code>
                 <button
-                  onClick={() => copyToClipboard(payment.id)}
+                  onClick={() => void copyToClipboard(payment.id)}
                   className="rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 >
                   <Copy className="h-3 w-3" />
@@ -196,26 +205,52 @@ export const PaymentDetails = ({
                   {payment.depositAddress}
                 </code>
                 <button
-                  onClick={() => copyToClipboard(payment.depositAddress)}
+                  onClick={() => void copyToClipboard(payment.depositAddress)}
                   className="rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 >
                   <Copy className="h-3 w-3" />
                 </button>
               </div>
             </div>
-            {payment.txHash && (
+            {payment.checkoutUrl && (
               <div>
-                <p className="text-xs text-muted-foreground">Transaction Hash</p>
-                <a
-                  href={payment.stellarExpertUrl || `https://stellar.expert/explorer/public/tx/${payment.txHash}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="mt-1 flex items-center gap-1 text-xs font-mono text-primary hover:underline"
-                >
-                  {payment.txHash.substring(0, 16)}...{" "}
-                  <ExternalLink className="h-3 w-3" />
-                </a>
+                <p className="text-xs text-muted-foreground">Checkout URL</p>
+                <div className="mt-1 flex items-start gap-2">
+                  <a
+                    href={payment.checkoutUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="min-w-0 break-all text-xs font-mono text-primary hover:underline"
+                  >
+                    {payment.checkoutUrl}
+                  </a>
+                  <button
+                    onClick={() => void copyToClipboard(payment.checkoutUrl!)}
+                    className="shrink-0 rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    title="Copy checkout URL"
+                  >
+                    <Copy className="h-3 w-3" />
+                  </button>
+                </div>
+                <div className="mt-3 flex justify-center rounded-lg border bg-card p-3">
+                  <QRCodeCanvas
+                    value={payment.checkoutUrl}
+                    size={132}
+                    includeMargin
+                    level="M"
+                  />
+                </div>
               </div>
+            )}
+            {payment.txHash && (
+              <TxHashLink
+                txHash={payment.txHash}
+                stellarExpertUrl={payment.stellarExpertUrl}
+                label="Transaction Hash"
+                showCopy
+                truncateStart={16}
+                truncateEnd={6}
+              />
             )}
             {payment.sweepStatus && (
               <div>
@@ -447,7 +482,7 @@ export const PaymentDetails = ({
         <Button 
           className="flex-1 gap-2"
           onClick={() => {
-            const url = payment.stellarExpertUrl || (payment.txHash ? `https://stellar.expert/explorer/public/tx/${payment.txHash}` : null);
+            const url = payment.stellarExpertUrl || (payment.txHash ? getStellarExpertTxUrl(payment.txHash) : null);
             if (url) window.open(url, "_blank");
           }}
           disabled={!payment.txHash && !payment.stellarExpertUrl}
