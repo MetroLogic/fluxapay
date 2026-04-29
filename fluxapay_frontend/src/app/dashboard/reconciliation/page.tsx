@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { subDays, startOfDay } from 'date-fns';
 import { ReconciliationRecord } from '../../../types/reconciliation';
 import { ReconciliationSummary } from '../../../components/reconciliation/ReconciliationSummary';
@@ -9,10 +9,18 @@ import { StatementDownload } from '../../../components/reconciliation/StatementD
 import { DiscrepancyAlert } from '../../../components/reconciliation/DiscrepancyAlert';
 import { useReconciliation } from '../../../hooks/useReconciliation';
 import { exportToPDF, exportToCSV } from '../../../utils/exportHelpers';
-import { ApiError } from '../../../lib/api';
+import { api, ApiError } from '../../../lib/api';
 
 export default function ReconciliationPage() {
     const [dateRangeFilter, setDateRangeFilter] = useState<'today' | '7days' | '30days'>('30days');
+    const [merchant, setMerchant] = useState<{ name: string; id: string }>({ name: '', id: '' });
+
+    useEffect(() => {
+        api.merchant.getMe().then((res) => {
+            const m = (res as { merchant?: { id?: string; business_name?: string } }).merchant;
+            if (m?.id) setMerchant({ id: m.id, name: m.business_name ?? '' });
+        }).catch(() => {});
+    }, []);
 
     // Compute date range based on filter, memoized to prevent infinite loops
     const { startDate, endDate } = useMemo(() => {
@@ -40,7 +48,7 @@ export default function ReconciliationPage() {
         await exportToPDF(
             records,
             summary,
-            { name: 'Demo Merchant', id: 'MERCH-10293' }
+            { name: merchant.name || 'Merchant', id: merchant.id }
         );
     };
 
@@ -58,7 +66,6 @@ export default function ReconciliationPage() {
     };
 
     const handleDownloadRecord = async (record: ReconciliationRecord) => {
-        // Helper to download single record
         if (!summary) return;
         const singleSummary = {
             ...summary,
@@ -70,7 +77,7 @@ export default function ReconciliationPage() {
             startDate: record.date,
             endDate: record.date
         };
-        await exportToPDF([record], singleSummary, { name: 'Demo Merchant', id: 'MERCH-10293' });
+        await exportToPDF([record], singleSummary, { name: merchant.name || 'Merchant', id: merchant.id });
     };
 
     if (error) {

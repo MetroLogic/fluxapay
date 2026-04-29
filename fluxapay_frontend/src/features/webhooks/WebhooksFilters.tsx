@@ -2,7 +2,8 @@ import { ListPageFilterBar } from "@/components/data-table";
 import { Input } from "@/components/Input";
 import { Select } from "@/components/Select";
 import { Search } from "lucide-react";
-import { memo, useCallback } from "react";
+import { memo, useCallback, useState, useEffect } from "react";
+import { useDebounce } from "@/lib/performance";
 
 interface WebhooksFiltersProps {
     onSearchChange: (value: string) => void;
@@ -19,9 +20,12 @@ export const WebhooksFilters = memo(({
     onDateFromChange,
     onDateToChange,
 }: WebhooksFiltersProps) => {
-    const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-        onSearchChange(e.target.value);
-    }, [onSearchChange]);
+    const [searchValue, setSearchValue] = useState("");
+    const debouncedSearch = useDebounce(searchValue, 300);
+
+    useEffect(() => {
+        onSearchChange(debouncedSearch);
+    }, [debouncedSearch, onSearchChange]);
 
     const handleStatusChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
         onStatusChange(e.target.value);
@@ -38,6 +42,7 @@ export const WebhooksFilters = memo(({
     const handleDateToChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
         onDateToChange(e.target.value);
     }, [onDateToChange]);
+
     return (
         <ListPageFilterBar>
             <div className="relative flex-1">
@@ -45,29 +50,34 @@ export const WebhooksFilters = memo(({
                 <Input
                     placeholder="Search by Webhook ID or Payment ID..."
                     className="pl-10"
-                    onChange={handleSearchChange}
+                    value={searchValue}
+                    onChange={(e) => setSearchValue(e.target.value)}
                 />
             </div>
             <div className="flex gap-4">
-                <Select
-                    className="w-[150px]"
-                    onChange={handleStatusChange}
-                >
+                <Select className="w-[150px]" onChange={handleStatusChange}>
                     <option value="all">All Statuses</option>
                     <option value="delivered">Delivered</option>
                     <option value="pending">Pending</option>
+                    <option value="retrying">Retrying</option>
                     <option value="failed">Failed</option>
                 </Select>
-                <Select
-                    className="w-[180px]"
-                    onChange={handleEventTypeChange}
-                >
+                <Select className="w-[200px]" onChange={handleEventTypeChange}>
                     <option value="all">All Event Types</option>
                     <option value="payment_completed">payment_completed</option>
+                    <option value="payment_confirmed">payment_confirmed</option>
                     <option value="payment_failed">payment_failed</option>
                     <option value="payment_pending">payment_pending</option>
+                    <option value="payment_expired">payment_expired</option>
+                    <option value="payment_partially_paid">payment_partially_paid</option>
+                    <option value="payment_overpaid">payment_overpaid</option>
                     <option value="refund_completed">refund_completed</option>
                     <option value="refund_failed">refund_failed</option>
+                    <option value="settlement_completed">settlement_completed</option>
+                    <option value="settlement_failed">settlement_failed</option>
+                    <option value="subscription_created">subscription_created</option>
+                    <option value="subscription_cancelled">subscription_cancelled</option>
+                    <option value="subscription_renewed">subscription_renewed</option>
                 </Select>
                 <Input
                     type="date"

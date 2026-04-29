@@ -21,7 +21,6 @@ export function requestLoggingMiddleware(req: Request, res: Response, next: Next
   
   // Prepare base context with PII-safe data
   const baseContext: any = {
-    requestId: authReq.requestId,
     method: req.method,
     path: req.originalUrl,
   };
@@ -61,6 +60,8 @@ export function requestLoggingMiddleware(req: Request, res: Response, next: Next
       ip: req.ip,
       authorization: redactAuthHeader(req.headers.authorization),
       hasApiKey: !!(req.headers['x-api-key'] || req.headers['authorization']),
+      query: sanitizeObject(req.query),
+      body: sanitizeObject(req.body),
       contentLength: contentLength ? parseInt(contentLength, 10) : undefined,
       responseSize: responseContentLength ? parseInt(responseContentLength, 10) : undefined,
     });
@@ -132,7 +133,6 @@ export function errorLoggingMiddleware(
   next: NextFunction
 ): void {
   const logger = getLogger().child({
-    requestId: (req as AuthRequest).requestId,
     method: req.method,
     path: req.originalUrl,
   });

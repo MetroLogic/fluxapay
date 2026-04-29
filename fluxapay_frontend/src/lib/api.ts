@@ -1,16 +1,23 @@
 // API Client for FluxaPay Backend
+import { getToken, storeToken, clearToken } from "./auth";
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
+// Re-export auth functions for backward compatibility
+export { getToken, storeToken, clearToken } from "./auth";
+
 export interface AuthSignupRequest {
-  name: string;
-  businessName: string;
+  business_name: string;
   email: string;
   password: string;
+  phone_number: string;
   country: string;
-  settlementCurrency: string;
-  accountNumber: string;
-  bankName: string;
-  bankCode: string;
+  settlement_currency: string;
+  // Optional bank details during signup
+  account_name?: string;
+  account_number?: string;
+  bank_name?: string;
+  bank_code?: string;
 }
 
 export interface AuthLoginRequest {
@@ -55,10 +62,16 @@ class ApiError extends Error {
   }
 }
 
+async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
+  const token = getToken();
 function getToken(): string {
   // Check localStorage first (persistent), then sessionStorage (session-only)
   const token = localStorage.getItem("token") ?? sessionStorage.getItem("token");
   if (!token) {
+    if (typeof window !== "undefined" && !window.location.pathname.includes("/login")) {
+      const currentUrl = window.location.pathname + window.location.search;
+      window.location.href = `/login?redirect=${encodeURIComponent(currentUrl)}`;
+    }
     throw new ApiError(401, "No authentication token found");
   }
   return token;
@@ -85,7 +98,14 @@ export function clearToken(): void {
 }
 
 async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
-  const token = localStorage.getItem("token") ?? sessionStorage.getItem("token");
+  // We use getToken() to automatically handle missing token redirects
+  let token;
+  try {
+    token = getToken();
+  } catch (err) {
+    // getToken handles the redirect, we just need to propagate the error
+    throw err;
+  }
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -105,6 +125,13 @@ async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
   });
 
   if (!response.ok) {
+    if (response.status === 401 && typeof window !== "undefined") {
+      clearToken();
+      if (!window.location.pathname.includes("/login")) {
+        const currentUrl = window.location.pathname + window.location.search;
+        window.location.href = `/login?redirect=${encodeURIComponent(currentUrl)}`;
+      }
+    }
     const error = await response
       .json()
       .catch(() => ({ message: "An error occurred" }));
@@ -246,6 +273,19 @@ export const api = {
         method: "PATCH",
         body: JSON.stringify({ webhook_url }),
       }),
+
+    addBankAccount: (data: {
+      account_name: string;
+      account_number: string;
+      bank_name: string;
+      bank_code?: string;
+      currency: string;
+      country: string;
+    }) =>
+      fetchWithAuth("/api/merchants/me/bank-account", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
   },
 
   // API Keys endpoints
@@ -267,13 +307,13 @@ export const api = {
   // Sweep / Settlement Batch endpoints (admin-only)
   sweep: {
     getStatus: (): Promise<Response> =>
-      fetch(`${API_BASE_URL}/api/admin/settlement/status`, {
+      fetch(`${API_BASE_URL}/api/v1/admin/settlement/status`, {
         headers: adminHeaders(),
       }),
 
     /** Manually trigger a full accounts sweep (settlement batch) */
     runSweep: (dryRun?: boolean): Promise<Response> =>
-      fetch(`${API_BASE_URL}/api/admin/sweep/run`, {
+      fetch(`${API_BASE_URL}/api/v1/admin/sweep/run`, {
         method: "POST",
         headers: adminHeaders(),
         body: JSON.stringify({ dry_run: dryRun || false }),
@@ -287,12 +327,12 @@ export const api = {
       if (params?.page) qs.set("page", String(params.page));
       if (params?.limit) qs.set("limit", String(params.limit));
       if (params?.status) qs.set("status", params.status);
-      return adminFetch(`/api/merchants/admin/list?${qs.toString()}`);
+      return adminFetch(`/api/v1/merchants/admin/list?${qs.toString()}`);
     },
     get: (merchantId: string) =>
-      adminFetch(`/api/merchants/admin/${merchantId}`),
+      adminFetch(`/api/v1/merchants/admin/${merchantId}`),
     updateStatus: (merchantId: string, status: string) =>
-      adminFetch(`/api/merchants/admin/${merchantId}/status`, {
+      adminFetch(`/api/v1/merchants/admin/${merchantId}/status`, {
         method: "PATCH",
         body: JSON.stringify({ status }),
       }),
@@ -305,15 +345,15 @@ export const api = {
       if (params?.status) qs.set("status", params.status);
       if (params?.page) qs.set("page", String(params.page));
       if (params?.limit) qs.set("limit", String(params.limit));
-      return fetchWithAuth(`/api/merchants/kyc/admin/submissions?${qs.toString()}`);
+      return fetchWithAuth(`/api/v1/merchants/kyc/admin/submissions?${qs.toString()}`);
     },
     getByMerchant: (merchantId: string) =>
-      fetchWithAuth(`/api/merchants/kyc/admin/${merchantId}`),
+      fetchWithAuth(`/api/v1/merchants/kyc/admin/${merchantId}`),
     updateStatus: (
       merchantId: string,
       body: { kyc_status: string; rejection_reason?: string },
     ) =>
-      fetchWithAuth(`/api/merchants/kyc/admin/${merchantId}/status`, {
+      fetchWithAuth(`/api/v1/merchants/kyc/admin/${merchantId}/status`, {
         method: "PATCH",
         body: JSON.stringify(body),
       }),
@@ -352,7 +392,7 @@ export const api = {
       date_from?: string;
       date_to?: string;
       format?: "pdf" | "csv";
-    }): Promise<Blob> => {
+    }): Promise<Blob | any> => {
       const sp = new URLSearchParams();
       if (params.date_from) sp.set("date_from", params.date_from);
       if (params.date_to) sp.set("date_to", params.date_to);
@@ -363,6 +403,9 @@ export const api = {
       );
       if (!response.ok) {
         throw new ApiError(response.status, `Failed to export settlements: ${response.statusText}`);
+      }
+      if (params.format === "pdf") {
+        return response.json();
       }
       return response.blob();
     },
@@ -606,6 +649,26 @@ export const api = {
       return fetchWithAuth(`/api/v1/webhooks/logs?${sp.toString()}`);
     },
     logDetails: (logId: string) => fetchWithAuth(`/api/v1/webhooks/logs/${logId}`),
+    export: async (params?: {
+      event_type?: string;
+      status?: string;
+      date_from?: string;
+      date_to?: string;
+      search?: string;
+    }): Promise<Blob> => {
+      const sp = new URLSearchParams();
+      if (params?.event_type && params.event_type !== "all") sp.set("event_type", params.event_type);
+      if (params?.status && params.status !== "all") sp.set("status", params.status);
+      if (params?.date_from) sp.set("date_from", params.date_from);
+      if (params?.date_to) sp.set("date_to", params.date_to);
+      if (params?.search) sp.set("search", params.search);
+      const response = await fetch(
+        `${API_BASE_URL}/api/v1/webhooks/logs/export?${sp.toString()}`,
+        { headers: { Authorization: `Bearer ${getToken()}` } },
+      );
+      if (!response.ok) throw new ApiError(response.status, "Failed to export webhook logs");
+      return response.blob();
+    },
     retry: (logId: string) =>
       fetchWithAuth(`/api/v1/webhooks/logs/${logId}/retry`, { method: "POST" }),
     sendTest: (data: {
@@ -658,10 +721,10 @@ export const api = {
         if (params?.limit != null) sp.set("limit", String(params.limit));
         if (params?.kycStatus) sp.set("kycStatus", params.kycStatus);
         if (params?.accountStatus) sp.set("accountStatus", params.accountStatus);
-        return fetchWithAuth(`/api/admin/merchants?${sp.toString()}`);
+        return fetchWithAuth(`/api/v1/admin/merchants?${sp.toString()}`);
       },
       updateStatus: (merchantId: string, status: "active" | "suspended") =>
-        fetchWithAuth(`/api/admin/merchants/${merchantId}/status`, {
+        fetchWithAuth(`/api/v1/admin/merchants/${merchantId}/status`, {
           method: "PATCH",
           body: JSON.stringify({ status }),
         }),
@@ -677,7 +740,7 @@ export const api = {
         if (params?.page != null) sp.set("page", String(params.page));
         if (params?.limit != null) sp.set("limit", String(params.limit));
         if (params?.status) sp.set("status", params.status);
-        return fetchWithAuth(`/api/admin/settlements?${sp.toString()}`);
+        return fetchWithAuth(`/api/v1/admin/settlements?${sp.toString()}`);
       },
     },
     auditLogs: {
