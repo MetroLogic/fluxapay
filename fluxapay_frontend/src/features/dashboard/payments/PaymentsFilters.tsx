@@ -10,8 +10,8 @@ interface PaymentsFiltersProps {
     searchValue: string;
     statusValue: string;
     currencyValue: string;
-    dateFromValue: string;
-    dateToValue: string;
+    dateFrom: string;
+    dateTo: string;
     onSearchChange: (value: string) => void;
     onStatusChange: (value: string) => void;
     onCurrencyChange: (value: string) => void;
@@ -33,8 +33,8 @@ export const PaymentsFilters = memo(({
     searchValue,
     statusValue,
     currencyValue,
-    dateFromValue,
-    dateToValue,
+    dateFrom,
+    dateTo,
     onSearchChange,
     onStatusChange,
     onCurrencyChange,
@@ -88,8 +88,8 @@ export const PaymentsFilters = memo(({
             search: searchValue,
             status: statusValue,
             currency: currencyValue,
-            dateFrom: dateFromValue,
-            dateTo: dateToValue,
+            dateFrom,
+            dateTo,
         };
 
         savePresets([...presets, newPreset]);
@@ -188,6 +188,10 @@ export const PaymentsFilters = memo(({
                         <option value="all">All Statuses</option>
                         <option value="pending">Pending</option>
                         <option value="confirmed">Confirmed</option>
+                        <option value="partially_paid">Partially Paid</option>
+                        <option value="overpaid">Overpaid</option>
+                        <option value="paid">Paid</option>
+                        <option value="completed">Completed</option>
                         <option value="expired">Expired</option>
                         <option value="failed">Failed</option>
                     </Select>
@@ -201,25 +205,21 @@ export const PaymentsFilters = memo(({
                         <option value="XLM">XLM</option>
                         <option value="EURC">EURC</option>
                     </Select>
-                </div>
-            </div>
-            <div className="flex flex-col md:flex-row gap-4">
-                <div className="flex items-center gap-2">
-                    <label className="text-sm text-slate-600 whitespace-nowrap">From</label>
                     <Input
                         type="date"
-                        value={dateFromValue}
+                        className="w-[150px]"
+                        title="From date"
+                        value={dateFrom}
                         onChange={(e) => {
                             onDateFromChange(e.target.value);
                             setSelectedPresetId("custom");
                         }}
                     />
-                </div>
-                <div className="flex items-center gap-2">
-                    <label className="text-sm text-slate-600 whitespace-nowrap">To</label>
                     <Input
                         type="date"
-                        value={dateToValue}
+                        className="w-[150px]"
+                        title="To date"
+                        value={dateTo}
                         onChange={(e) => {
                             onDateToChange(e.target.value);
                             setSelectedPresetId("custom");

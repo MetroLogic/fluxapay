@@ -4,9 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PaymentsTable } from "@/features/dashboard/payments/PaymentsTable";
 import { PaymentsFilters } from "@/features/dashboard/payments/PaymentsFilters";
-import { type Payment } from "@/features/dashboard/payments/payments.types";
+import { type Payment } from "@/features/dashboard/payments/types";
 import {
-  MOCK_REFUNDS,
   type RefundRecord,
   type RefundReason,
 } from "@/features/dashboard/refunds/refunds-mock";
@@ -107,12 +106,12 @@ function PaymentsContent() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [currencyFilter, setCurrencyFilter] = useState("all");
-  const [dateFromFilter, setDateFromFilter] = useState("");
-  const [dateToFilter, setDateToFilter] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
   const [selectedPaymentId, setSelectedPaymentId] = useState<string | null>(paymentIdFromQuery || null);
   const [detailedPayment, setDetailedPayment] = useState<Payment | null>(null);
-  const [refunds, setRefunds] = useState<RefundRecord[]>(MOCK_REFUNDS);
+  const [refunds, setRefunds] = useState<RefundRecord[]>([]);
 
   const [showCreateLinkModal, setShowCreateLinkModal] = useState(shouldOpenCreateLink);
   const [linkAmount, setLinkAmount] = useState("100");
@@ -138,15 +137,6 @@ function PaymentsContent() {
     searchDebounceRef.current = setTimeout(() => setDebouncedSearch(value), 400);
   }, []);
 
-  const dateFromIso = useMemo(
-    () => (dateFromFilter ? new Date(`${dateFromFilter}T00:00:00.000Z`).toISOString() : undefined),
-    [dateFromFilter],
-  );
-  const dateToIso = useMemo(
-    () => (dateToFilter ? new Date(`${dateToFilter}T23:59:59.999Z`).toISOString() : undefined),
-    [dateToFilter],
-  );
-
   const fetchPayments = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
@@ -157,8 +147,8 @@ function PaymentsContent() {
         status: statusFilter,
         currency: currencyFilter,
         search: debouncedSearch || undefined,
-        date_from: dateFromIso,
-        date_to: dateToIso,
+        date_from: dateFrom || undefined,
+        date_to: dateTo || undefined,
       })) as { data: BackendPayment[]; meta: { total: number } };
       setPayments(result.data.map(mapBackendPayment));
       setTotal(result.meta.total);
@@ -169,11 +159,11 @@ function PaymentsContent() {
     } finally {
       setLoading(false);
     }
-  }, [page, statusFilter, currencyFilter, debouncedSearch, dateFromIso, dateToIso]);
+  }, [page, statusFilter, currencyFilter, debouncedSearch, dateFrom, dateTo]);
 
   useEffect(() => {
     setPage(1);
-  }, [statusFilter, currencyFilter, debouncedSearch, dateFromFilter, dateToFilter]);
+  }, [statusFilter, currencyFilter, debouncedSearch, dateFrom, dateTo]);
 
   useEffect(() => {
     fetchPayments();
@@ -190,6 +180,7 @@ function PaymentsContent() {
   useEffect(() => {
     if (!selectedIdToFetch) {
       setDetailedPayment(null);
+      setRefunds([]);
       return;
     }
     const fetchDetailedPayment = async () => {
@@ -201,7 +192,17 @@ function PaymentsContent() {
         console.error("Failed to fetch detailed payment", error);
       }
     };
+    const fetchRefunds = async () => {
+      try {
+        const res = (await api.refunds.list({ paymentId: selectedIdToFetch })) as { data?: BackendRefund[] };
+        const list = res?.data ?? [];
+        setRefunds(list.map(mapBackendRefund));
+      } catch {
+        // non-critical — leave empty
+      }
+    };
     fetchDetailedPayment();
+    fetchRefunds();
   }, [selectedIdToFetch]);
 
   const handleExportCSV = async () => {
@@ -210,8 +211,8 @@ function PaymentsContent() {
         status: statusFilter,
         currency: currencyFilter,
         search: debouncedSearch || undefined,
-        date_from: dateFromIso,
-        date_to: dateToIso,
+        date_from: dateFrom || undefined,
+        date_to: dateTo || undefined,
       });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -396,13 +397,13 @@ function PaymentsContent() {
             searchValue={search}
             statusValue={statusFilter}
             currencyValue={currencyFilter}
-            dateFromValue={dateFromFilter}
-            dateToValue={dateToFilter}
+            dateFrom={dateFrom}
+            dateTo={dateTo}
             onSearchChange={handleSearchChange}
             onStatusChange={(v) => setStatusFilter(v)}
             onCurrencyChange={(v) => setCurrencyFilter(v)}
-            onDateFromChange={(v) => setDateFromFilter(v)}
-            onDateToChange={(v) => setDateToFilter(v)}
+            onDateFromChange={(v) => setDateFrom(v)}
+            onDateToChange={(v) => setDateTo(v)}
           />
         }
         footer={

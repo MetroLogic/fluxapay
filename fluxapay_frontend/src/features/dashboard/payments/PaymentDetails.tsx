@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Payment } from "./payments.types";
+import { Payment } from "./types";
 import { Badge } from "@/components/Badge";
 import {
   Copy,
@@ -14,6 +14,8 @@ import {
 import { Button } from "@/components/Button";
 import { Input } from "@/components/Input";
 import { Select } from "@/components/Select";
+import { TxHashLink } from "@/components/TxHashLink";
+import { getStellarExpertTxUrl } from "@/lib/stellar";
 import type { RefundRecord, RefundReason } from "../refunds/refunds-mock";
 import { QRCodeCanvas } from "qrcode.react";
 import toast from "react-hot-toast";
@@ -241,18 +243,14 @@ export const PaymentDetails = ({
               </div>
             )}
             {payment.txHash && (
-              <div>
-                <p className="text-xs text-muted-foreground">Transaction Hash</p>
-                <a
-                  href={payment.stellarExpertUrl || `https://stellar.expert/explorer/public/tx/${payment.txHash}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="mt-1 flex items-center gap-1 text-xs font-mono text-primary hover:underline"
-                >
-                  {payment.txHash.substring(0, 16)}...{" "}
-                  <ExternalLink className="h-3 w-3" />
-                </a>
-              </div>
+              <TxHashLink
+                txHash={payment.txHash}
+                stellarExpertUrl={payment.stellarExpertUrl}
+                label="Transaction Hash"
+                showCopy
+                truncateStart={16}
+                truncateEnd={6}
+              />
             )}
             {payment.sweepStatus && (
               <div>
@@ -484,7 +482,7 @@ export const PaymentDetails = ({
         <Button 
           className="flex-1 gap-2"
           onClick={() => {
-            const url = payment.stellarExpertUrl || (payment.txHash ? `https://stellar.expert/explorer/public/tx/${payment.txHash}` : null);
+            const url = payment.stellarExpertUrl || (payment.txHash ? getStellarExpertTxUrl(payment.txHash) : null);
             if (url) window.open(url, "_blank");
           }}
           disabled={!payment.txHash && !payment.stellarExpertUrl}
