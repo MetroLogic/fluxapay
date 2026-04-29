@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from 'async_hooks';
 import { Logger, LogEntry, LogLevel, LogContext, MetricsCollector, MetricEvent, MetricsTags } from '../types/logging.types';
+import { getRequestId } from './requestContext';
 
 export const loggerStorage = new AsyncLocalStorage<{ requestId: string }>();
 
@@ -48,6 +49,15 @@ class StructuredLogger implements Logger {
       version: this.version,
       environment: this.environment,
     };
+
+    // Merge default context with provided context
+    const mergedContext = { ...this.defaultContext, ...context };
+    
+    // Automatically inject requestId from AsyncLocalStorage if available and not already provided
+    const requestId = getRequestId();
+    if (requestId && !mergedContext.requestId) {
+      mergedContext.requestId = requestId;
+    }
 
     // Merge default context with storage context and provided context
     const storageContext = loggerStorage.getStore() || {};

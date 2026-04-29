@@ -4,6 +4,9 @@ import { PrismaClient } from "../generated/client/client";
 import { Decimal } from "@prisma/client/runtime/library";
 import { paymentContractService } from "./paymentContract.service";
 import { PaymentStatus } from "../types/payment";
+import { getLogger } from "../utils/logger";
+import { requestContextStorage } from "../utils/requestContext";
+import { randomUUID } from "crypto";
 import { trackPaymentConfirmed, trackPaymentExpired } from "../middleware/metrics.middleware";
 import { createAndDeliverWebhook } from "./webhook.service";
 import { eventBus, AppEvents } from "./EventService";
@@ -28,6 +31,7 @@ const ACCEPT_OVERPAYMENTS = process.env.ACCEPT_OVERPAYMENTS !== 'false';
 
 const prisma = new PrismaClient();
 const getServer = () => new Horizon.Server(HORIZON_URL());
+const logger = getLogger();
 
 /**
  * Run one pass of the payment monitor: check for expired payments,
@@ -266,7 +270,7 @@ export async function runPaymentMonitorTick(): Promise<void> {
     } catch (e) {
       // Handle 404 meaning account doesn't exist yet (no payments received)
       if ((e as any).response?.status !== 404) {
-        console.error(`[PaymentMonitor] Error checking address ${address}:`, e);
+        logger.error(`Error checking address ${address}`, { error: (e as Error).message });
       }
     }
   }
@@ -279,15 +283,24 @@ let monitorTimer: NodeJS.Timeout | null = null;
  */
 export function startPaymentMonitor() {
   const intervalMs = parseInt(process.env.PAYMENT_MONITOR_INTERVAL_MS || '120000', 10);
-  console.log(`[PaymentMonitor] Starting payment monitor loop (interval: ${intervalMs}ms)`);
+  logger.info(`Starting payment monitor loop`, { intervalMs });
+
+  const runTickWithContext = async () => {
+    const requestId = `monitor-${randomUUID()}`;
+    await requestContextStorage.run({ requestId }, async () => {
+      try {
+        await runPaymentMonitorTick();
+      } catch (err: any) {
+        logger.error('Tick failed', { error: err.message });
+      }
+    });
+  };
 
   // Run immediately
-  runPaymentMonitorTick().catch(err => console.error('[PaymentMonitor] Immediate tick failed:', err));
+  runTickWithContext();
 
   // Run on interval
-  monitorTimer = setInterval(() => {
-    runPaymentMonitorTick().catch(err => console.error('[PaymentMonitor] Tick failed:', err));
-  }, intervalMs);
+  monitorTimer = setInterval(runTickWithContext, intervalMs);
 }
 
 /**
@@ -297,7 +310,7 @@ export function stopPaymentMonitor() {
   if (monitorTimer) {
     clearInterval(monitorTimer);
     monitorTimer = null;
-    console.log('[PaymentMonitor] Payment monitor loop stopped.');
+    logger.info('Payment monitor loop stopped.');
   }
 }
 

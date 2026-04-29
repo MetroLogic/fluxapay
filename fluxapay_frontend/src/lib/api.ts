@@ -1,5 +1,10 @@
 // API Client for FluxaPay Backend
+import { getToken, storeToken, clearToken } from "./auth";
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+
+// Re-export auth functions for backward compatibility
+export { getToken, storeToken, clearToken } from "./auth";
 
 export interface AuthSignupRequest {
   business_name: string;
@@ -57,10 +62,16 @@ class ApiError extends Error {
   }
 }
 
+async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
+  const token = getToken();
 function getToken(): string {
   // Check localStorage first (persistent), then sessionStorage (session-only)
   const token = localStorage.getItem("token") ?? sessionStorage.getItem("token");
   if (!token) {
+    if (typeof window !== "undefined" && !window.location.pathname.includes("/login")) {
+      const currentUrl = window.location.pathname + window.location.search;
+      window.location.href = `/login?redirect=${encodeURIComponent(currentUrl)}`;
+    }
     throw new ApiError(401, "No authentication token found");
   }
   return token;
@@ -87,7 +98,14 @@ export function clearToken(): void {
 }
 
 async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
-  const token = localStorage.getItem("token") ?? sessionStorage.getItem("token");
+  // We use getToken() to automatically handle missing token redirects
+  let token;
+  try {
+    token = getToken();
+  } catch (err) {
+    // getToken handles the redirect, we just need to propagate the error
+    throw err;
+  }
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -107,6 +125,13 @@ async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
   });
 
   if (!response.ok) {
+    if (response.status === 401 && typeof window !== "undefined") {
+      clearToken();
+      if (!window.location.pathname.includes("/login")) {
+        const currentUrl = window.location.pathname + window.location.search;
+        window.location.href = `/login?redirect=${encodeURIComponent(currentUrl)}`;
+      }
+    }
     const error = await response
       .json()
       .catch(() => ({ message: "An error occurred" }));
@@ -367,7 +392,7 @@ export const api = {
       date_from?: string;
       date_to?: string;
       format?: "pdf" | "csv";
-    }): Promise<Blob> => {
+    }): Promise<Blob | any> => {
       const sp = new URLSearchParams();
       if (params.date_from) sp.set("date_from", params.date_from);
       if (params.date_to) sp.set("date_to", params.date_to);
@@ -378,6 +403,9 @@ export const api = {
       );
       if (!response.ok) {
         throw new ApiError(response.status, `Failed to export settlements: ${response.statusText}`);
+      }
+      if (params.format === "pdf") {
+        return response.json();
       }
       return response.blob();
     },
@@ -621,6 +649,26 @@ export const api = {
       return fetchWithAuth(`/api/v1/webhooks/logs?${sp.toString()}`);
     },
     logDetails: (logId: string) => fetchWithAuth(`/api/v1/webhooks/logs/${logId}`),
+    export: async (params?: {
+      event_type?: string;
+      status?: string;
+      date_from?: string;
+      date_to?: string;
+      search?: string;
+    }): Promise<Blob> => {
+      const sp = new URLSearchParams();
+      if (params?.event_type && params.event_type !== "all") sp.set("event_type", params.event_type);
+      if (params?.status && params.status !== "all") sp.set("status", params.status);
+      if (params?.date_from) sp.set("date_from", params.date_from);
+      if (params?.date_to) sp.set("date_to", params.date_to);
+      if (params?.search) sp.set("search", params.search);
+      const response = await fetch(
+        `${API_BASE_URL}/api/v1/webhooks/logs/export?${sp.toString()}`,
+        { headers: { Authorization: `Bearer ${getToken()}` } },
+      );
+      if (!response.ok) throw new ApiError(response.status, "Failed to export webhook logs");
+      return response.blob();
+    },
     retry: (logId: string) =>
       fetchWithAuth(`/api/v1/webhooks/logs/${logId}/retry`, { method: "POST" }),
     sendTest: (data: {

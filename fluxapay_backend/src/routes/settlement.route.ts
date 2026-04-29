@@ -4,6 +4,7 @@ import {
     getSettlementDetails,
     getSettlementSummary,
     exportSettlement,
+    exportSettlementRange,
     getSettlementBatch,
 } from "../controllers/settlement.controller";
 import { authenticateApiKey } from "../middleware/apiKeyAuth.middleware";
@@ -59,6 +60,40 @@ router.use(merchantApiKeyRateLimit());
  *         description: List of settlements
  */
 router.get("/", validate(settlementSchema.listSettlementsSchema), listSettlements);
+
+/**
+ * @swagger
+ * /api/v1/settlements/export:
+ *   get:
+ *     summary: Export settlement reports in a date range
+ *     tags: [Settlements]
+ *     security:
+ *       - apiKeyAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: date_from
+ *         schema:
+ *           type: string
+ *         description: Filter settlements from this date
+ *       - in: query
+ *         name: date_to
+ *         schema:
+ *           type: string
+ *         description: Filter settlements until this date
+ *       - in: query
+ *         name: format
+ *         schema:
+ *           type: string
+ *           enum: [pdf, csv]
+ *           default: csv
+ *         description: Export format
+ *     responses:
+ *       200:
+ *         description: Exported file
+ *       401:
+ *         description: Unauthorized
+ */
+router.get("/export", validate(settlementSchema.exportSettlementRangeSchema), exportSettlementRange);
 
 /**
  * @swagger

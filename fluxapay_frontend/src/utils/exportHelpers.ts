@@ -93,25 +93,94 @@ export async function exportToPDF(
     doc.save(`fluxapay-reconciliation-${format(summary.startDate, 'yyyyMMdd')}-${format(summary.endDate, 'yyyyMMdd')}.pdf`);
 }
 
-export function exportToCSV(records: ReconciliationRecord[]): void {
-    const csvData = records.map(record => ({
-        'Date': format(record.date, 'yyyy-MM-dd HH:mm:ss'),
-        'Settlement ID': record.settlementId,
-        'USDC Received': record.usdcReceived.toFixed(2),
-        'Fiat Payout ($)': record.fiatPayout.toFixed(2),
-        'Fees ($)': record.fees.toFixed(2),
-        'Discrepancy ($)': record.discrepancy.toFixed(2),
-        'Status': Math.abs(record.discrepancy) > 0.01 ? 'Discrepancy' : 'Balanced'
-    }));
+export function exportSettlementReportPDF(report: {
+    date_from?: string | null;
+    date_to?: string | null;
+    generated_at: string;
+    merchant_name: string;
+    settlements: Array<{
+        id: string;
+        status: string;
+        amount: number;
+        currency: string;
+        fees: number;
+        net_amount: number;
+        scheduled_date: string | null;
+        processed_date: string | null;
+        created_at: string;
+        bank_transfer_id: string | null;
+    }>;
+}, filename: string): void {
+    const doc = new jsPDF();
+    doc.setFontSize(18);
+    doc.setTextColor(33, 33, 33);
+    doc.text('FluxaPay Settlement Report', 14, 20);
 
-    const csv = Papa.unparse(csvData);
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', `reconciliation_export_${format(new Date(), 'yyyyMMdd_HHmmss')}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    doc.setFontSize(11);
+    doc.setTextColor(100, 100, 100);
+    doc.text(`Merchant: ${report.merchant_name}`, 14, 30);
+    doc.text(`Period: ${report.date_from ?? 'All'} - ${report.date_to ?? 'All'}`, 14, 36);
+    doc.text(`Generated: ${format(new Date(report.generated_at), 'PPpp')}`, 14, 42);
+
+    const tableBody = report.settlements.map((item) => [
+        item.id,
+        item.status,
+        item.amount.toString(),
+        item.currency,
+        item.fees.toString(),
+        item.net_amount.toString(),
+        item.scheduled_date ?? 'N/A',
+        item.processed_date ?? 'N/A',
+        item.created_at.split('T')[0],
+        item.bank_transfer_id ?? 'N/A',
+    ]);
+
+    autoTable(doc, {
+        startY: 52,
+        head: [[
+            'Settlement ID',
+            'Status',
+            'Amount',
+            'Currency',
+            'Fees',
+            'Net Amount',
+            'Scheduled Date',
+            'Processed Date',
+            'Created At',
+            'Bank Transfer ID',
+        ]],
+        body: tableBody,
+        theme: 'striped',
+        headStyles: { fillColor: [63, 81, 181] },
+        styles: { fontSize: 8 },
+        columnStyles: {
+            0: { cellWidth: 40 },
+            1: { cellWidth: 20 },
+            2: { cellWidth: 20 },
+            3: { cellWidth: 18 },
+            4: { cellWidth: 20 },
+            5: { cellWidth: 22 },
+            6: { cellWidth: 24 },
+            7: { cellWidth: 24 },
+            8: { cellWidth: 24 },
+            9: { cellWidth: 38 },
+        },
+    });
+
+    const pageCount = doc.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(10);
+        doc.setTextColor(150);
+        doc.text(
+            `Page ${i} of ${pageCount}`,
+            doc.internal.pageSize.width / 2,
+            doc.internal.pageSize.height - 10,
+            { align: 'center' }
+        );
+    }
+
+    doc.save(filename);
 }
+
+export function exportToCSV(records: ReconciliationRecord[]): void {
