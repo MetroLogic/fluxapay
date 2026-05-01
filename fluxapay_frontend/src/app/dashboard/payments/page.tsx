@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PaymentsTable } from "@/features/dashboard/payments/PaymentsTable";
 import { PaymentsFilters } from "@/features/dashboard/payments/PaymentsFilters";
-import { PaymentDetails } from "@/features/dashboard/payments/PaymentDetails";
 import { type Payment } from "@/features/dashboard/payments/types";
 import {
   type RefundRecord,
@@ -212,6 +211,8 @@ function PaymentsContent() {
         status: statusFilter,
         currency: currencyFilter,
         search: debouncedSearch || undefined,
+        date_from: dateFrom || undefined,
+        date_to: dateTo || undefined,
       });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -424,8 +425,6 @@ function PaymentsContent() {
       </DataTableCard>
 
       <Modal
-
-      <Modal
         isOpen={showCreateLinkModal}
         onClose={() => setShowCreateLinkModal(false)}
         title="Create Payment"
@@ -551,4 +550,3 @@ export default function PaymentsPage() {
     </Suspense>
   );
 }
-

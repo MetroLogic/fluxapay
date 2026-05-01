@@ -3,7 +3,7 @@ import { Input } from "@/components/Input";
 import { Select } from "@/components/Select";
 import { Button } from "@/components/Button";
 import { Search, Save, XCircle } from "lucide-react";
-import { memo, useCallback, useEffect, useState } from "react";
+import { memo, useCallback, useEffect, useState, type ChangeEvent } from "react";
 import toast from "react-hot-toast";
 
 interface PaymentsFiltersProps {
@@ -25,6 +25,8 @@ interface SavedPreset {
     search: string;
     status: string;
     currency: string;
+    dateFrom: string;
+    dateTo: string;
 }
 
 export const PaymentsFilters = memo(({
@@ -61,17 +63,17 @@ export const PaymentsFilters = memo(({
         localStorage.setItem("fluxapay_payment_presets", JSON.stringify(newPresets));
     };
 
-    const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleSearchChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
         onSearchChange(e.target.value);
         setSelectedPresetId("custom");
     }, [onSearchChange]);
 
-    const handleStatusChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
+    const handleStatusChange = useCallback((e: ChangeEvent<HTMLSelectElement>) => {
         onStatusChange(e.target.value);
         setSelectedPresetId("custom");
     }, [onStatusChange]);
 
-    const handleCurrencyChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
+    const handleCurrencyChange = useCallback((e: ChangeEvent<HTMLSelectElement>) => {
         onCurrencyChange(e.target.value);
         setSelectedPresetId("custom");
     }, [onCurrencyChange]);
@@ -86,6 +88,8 @@ export const PaymentsFilters = memo(({
             search: searchValue,
             status: statusValue,
             currency: currencyValue,
+            dateFrom,
+            dateTo,
         };
 
         savePresets([...presets, newPreset]);
@@ -93,7 +97,7 @@ export const PaymentsFilters = memo(({
         toast.success(`Preset "${name}" saved!`);
     };
 
-    const handleLoadPreset = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const handleLoadPreset = (e: ChangeEvent<HTMLSelectElement>) => {
         const id = e.target.value;
         setSelectedPresetId(id);
         
@@ -101,6 +105,8 @@ export const PaymentsFilters = memo(({
             onSearchChange("");
             onStatusChange("all");
             onCurrencyChange("all");
+            onDateFromChange("");
+            onDateToChange("");
             return;
         }
 
@@ -109,6 +115,8 @@ export const PaymentsFilters = memo(({
             onSearchChange(preset.search);
             onStatusChange(preset.status);
             onCurrencyChange(preset.currency);
+            onDateFromChange(preset.dateFrom || "");
+            onDateToChange(preset.dateTo || "");
         }
     };
 
@@ -202,14 +210,20 @@ export const PaymentsFilters = memo(({
                         className="w-[150px]"
                         title="From date"
                         value={dateFrom}
-                        onChange={(e) => onDateFromChange(e.target.value)}
+                        onChange={(e) => {
+                            onDateFromChange(e.target.value);
+                            setSelectedPresetId("custom");
+                        }}
                     />
                     <Input
                         type="date"
                         className="w-[150px]"
                         title="To date"
                         value={dateTo}
-                        onChange={(e) => onDateToChange(e.target.value)}
+                        onChange={(e) => {
+                            onDateToChange(e.target.value);
+                            setSelectedPresetId("custom");
+                        }}
                     />
                 </div>
             </div>
