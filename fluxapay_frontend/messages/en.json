@@ -272,6 +272,8 @@
       "businessNameRequired": "Business name is required",
       "countryRequired": "Country is required",
       "currencyRequired": "Settlement currency is required",
+      "phoneNumberRequired": "Phone number is required",
+      "phoneNumberInvalid": "Invalid phone number format (use international format)",
       "accountNumberRequired": "Account number is required",
       "bankNameRequired": "Bank name is required",
       "bankCodeRequired": "Bank code is required"
@@ -280,6 +282,8 @@
     "fullNamePlaceholder": "Your name",
     "businessNamePlaceholder": "Business name",
     "emailSignupPlaceholder": "you@example.com",
+    "phoneNumber": "Phone Number",
+    "phoneNumberPlaceholder": "+234...",
     "selectCountry": "Select Country",
     "currencyLabel": "Currency",
     "bankLabel": "Bank",

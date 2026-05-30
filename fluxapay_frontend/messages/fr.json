@@ -272,6 +272,8 @@
       "businessNameRequired": "Le nom de l'entreprise est requis",
       "countryRequired": "Le pays est requis",
       "currencyRequired": "La devise de règlement est requise",
+      "phoneNumberRequired": "Le numéro de téléphone est requis",
+      "phoneNumberInvalid": "Format de numéro de téléphone invalide (utilisez le format international)",
       "accountNumberRequired": "Le numéro de compte est requis",
       "bankNameRequired": "Le nom de la banque est requis",
       "bankCodeRequired": "Le code de la banque est requis"
@@ -280,6 +282,8 @@
     "fullNamePlaceholder": "Votre nom",
     "businessNamePlaceholder": "Nom de l'entreprise",
     "emailSignupPlaceholder": "vous@exemple.com",
+    "phoneNumber": "Numéro de Téléphone",
+    "phoneNumberPlaceholder": "+234...",
     "selectCountry": "Choisir le pays",
     "currencyLabel": "Devise",
     "bankLabel": "Banque",
