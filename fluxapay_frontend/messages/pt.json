@@ -272,6 +272,8 @@
       "businessNameRequired": "O nome da empresa é obrigatório",
       "countryRequired": "O país é obrigatório",
       "currencyRequired": "A moeda de liquidação é obrigatória",
+      "phoneNumberRequired": "O número de telefone é obrigatório",
+      "phoneNumberInvalid": "Formato de número de telefone inválido (use o formato internacional)",
       "accountNumberRequired": "O número da conta é obrigatório",
       "bankNameRequired": "O nome do banco é obrigatório",
       "bankCodeRequired": "O código do banco é obrigatório"
@@ -280,6 +282,8 @@
     "fullNamePlaceholder": "Seu nome",
     "businessNamePlaceholder": "Nome da empresa",
     "emailSignupPlaceholder": "voce@exemplo.com",
+    "phoneNumber": "Número de Telefone",
+    "phoneNumberPlaceholder": "+234...",
     "selectCountry": "Selecionar País",
     "currencyLabel": "Moeda",
     "bankLabel": "Banco",

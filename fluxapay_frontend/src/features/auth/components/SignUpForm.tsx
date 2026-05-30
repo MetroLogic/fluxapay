@@ -28,21 +28,25 @@ const COUNTRIES = [
 type AuthTranslator = (key: string) => string;
 
 const signupSchema = (t: AuthTranslator) => yup.object({
-  name: yup.string().required(t("validation.nameRequired")),
-  businessName: yup.string().required(t("validation.businessNameRequired")),
+  business_name: yup.string().required(t("validation.businessNameRequired")),
   email: yup
     .string()
     .email(t("validation.emailInvalid"))
     .required(t("validation.emailRequired")),
+  phone_number: yup
+    .string()
+    .matches(/^\+?[1-9]\d{1,14}$/, "Invalid phone number format (use international format)")
+    .required("Phone number is required"),
   password: yup
     .string()
-    .min(6, t("validation.passwordMin"))
+    .min(8, "Password must be at least 8 characters")
+    .matches(/[A-Z]/, "Password must contain at least one uppercase letter")
+    .matches(/[a-z]/, "Password must contain at least one lowercase letter")
+    .matches(/[0-9]/, "Password must contain at least one number")
+    .matches(/[@$!%*?&]/, "Password must contain at least one special character (@$!%*?&)")
     .required(t("validation.passwordRequired")),
-  country: yup.string().required(t("validation.countryRequired")),
-  settlementCurrency: yup.string().required(t("validation.currencyRequired")),
-  accountNumber: yup.string().required(t("validation.accountNumberRequired")),
-  bankName: yup.string().required(t("validation.bankNameRequired")),
-  bankCode: yup.string().required(t("validation.bankCodeRequired")),
+  country: yup.string().length(2, "Country code must be 2 characters").required(t("validation.countryRequired")),
+  settlement_currency: yup.string().length(3, "Currency must be 3 characters").required(t("validation.currencyRequired")),
 });
 
 type SignUpFormData = yup.InferType<ReturnType<typeof signupSchema>>;
@@ -57,10 +61,6 @@ const SignUpForm = () => {
     password: "",
     country: "",
     settlement_currency: "",
-    account_name: "",
-    account_number: "",
-    bank_name: "",
-    bank_code: "",
   });
 
   const [errors, setErrors] = useState<{
@@ -70,10 +70,6 @@ const SignUpForm = () => {
     password?: string;
     country?: string;
     settlement_currency?: string;
-    account_name?: string;
-    account_number?: string;
-    bank_name?: string;
-    bank_code?: string;
   }>({});
 
   const [showPassword, setShowPassword] = useState(false);
@@ -106,7 +102,7 @@ const SignUpForm = () => {
       setErrors({});
       setIsSubmitting(true);
 
-      const response = await api.auth.signup(validData as any);
+      const response = await api.auth.signup(validData);
 
       toast.success(tAuth("signupSuccess"));
       
@@ -165,19 +161,6 @@ const SignUpForm = () => {
               noValidate
               className="space-y-5 animate-fade-in [animation-delay:200ms]"
             >
-              {/* Name */}
-              <div>
-                <Input
-                  type="text"
-                  name="name"
-                  label={tAuth("fullName")}
-                  value={formData.name}
-                  onChange={handleChange}
-                  placeholder={tAuth("fullNamePlaceholder")}
-                  error={errors.name}
-                />
-              </div>
-
               {/* Business Name */}
               <div>
                 <Input
@@ -187,7 +170,7 @@ const SignUpForm = () => {
                   value={formData.business_name}
                   onChange={handleChange}
                   placeholder={tAuth("businessNamePlaceholder")}
-                  error={errors.businessName}
+                  error={errors.business_name}
                 />
               </div>
 
@@ -209,10 +192,10 @@ const SignUpForm = () => {
                 <Input
                   type="tel"
                   name="phone_number"
-                  label="Phone Number"
+                  label={tAuth("phoneNumber")}
                   value={formData.phone_number}
                   onChange={handleChange}
-                  placeholder="+234..."
+                  placeholder={tAuth("phoneNumberPlaceholder")}
                   error={errors.phone_number}
                 />
               </div>
@@ -254,73 +237,13 @@ const SignUpForm = () => {
                 <div className="space-y-2">
                   <Input
                     type="text"
-                    name="settlementCurrency"
+                    name="settlement_currency"
                     label={tAuth("currencyLabel")}
-                    value={formData.settlementCurrency}
+                    value={formData.settlement_currency}
                     readOnly
                     placeholder={tAuth("currencyLabel")}
-                    error={errors.settlementCurrency}
+                    error={errors.settlement_currency}
                     className="bg-slate-50 cursor-not-allowed"
-                  />
-                </div>
-              </div>
-
-              {/* Bank Details */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Input
-                  type="text"
-                  name="bankName"
-                  label={tAuth("bankLabel")}
-                  value={formData.bankName}
-                  onChange={handleChange}
-                  placeholder={tAuth("bankNamePlaceholder")}
-                  error={errors.bankName}
-                />
-                <Input
-                  type="text"
-                  name="bankCode"
-                  label={tAuth("codeLabel")}
-                  value={formData.bankCode}
-                  onChange={handleChange}
-                  placeholder={tAuth("bankCodePlaceholder")}
-                  error={errors.bankCode}
-                />
-                <Input
-                  type="text"
-                  name="accountNumber"
-                  label={tAuth("accountLabel")}
-                  value={formData.accountNumber}
-                  onChange={handleChange}
-                  placeholder={tAuth("accountNumberPlaceholder")}
-                  error={errors.accountNumber}
-                />
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <Input
-                    type="text"
-                    name="bank_name"
-                    label="Bank"
-                    value={formData.bank_name}
-                    onChange={handleChange}
-                    placeholder="Bank Name"
-                    error={errors.bank_name}
-                  />
-                  <Input
-                    type="text"
-                    name="bank_code"
-                    label="Code"
-                    value={formData.bank_code}
-                    onChange={handleChange}
-                    placeholder="Bank Code"
-                    error={errors.bank_code}
-                  />
-                  <Input
-                    type="text"
-                    name="account_number"
-                    label="Account"
-                    value={formData.account_number}
-                    onChange={handleChange}
-                    placeholder="Account Number"
-                    error={errors.account_number}
                   />
                 </div>
               </div>
@@ -376,6 +299,9 @@ const SignUpForm = () => {
                     )}
                   </button>
                 </div>
+                <p className="mt-1 text-xs text-slate-500">
+                  Must be 8+ characters with uppercase, lowercase, number, and special character
+                </p>
               </div>
 
               {/* Submit button */}
