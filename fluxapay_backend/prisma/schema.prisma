@@ -60,6 +60,7 @@ model Merchant {
   dataExportJobs        DataExportJob[]
   paymentLinks          PaymentLink[]
   dailyReconciliationReports DailyReconciliationReport[]
+  refreshTokens            RefreshToken[]
 }
 
 model Customer {
@@ -569,6 +570,9 @@ enum WebhookEventType {
   subscription_renewed
   invoice_paid
   invoice_overdue
+  payment_escrow_released
+  payment_escrow_refunded
+  payment_escrow_expired
 }
 
 enum WebhookStatus {
@@ -709,7 +713,73 @@ enum WebhookDeliveryStatus {
   FAILED
 }
 
+enum EscrowStatus {
+  pending
+  active
+  released
+  refunded
+  expired
+}
+
 model WorkerState {
   key   String @id
   value String
+}
+
+/// Refresh tokens for JWT-based authentication with rotation
+/// Stores hashed refresh tokens to detect reuse and enable session invalidation
+model RefreshToken {
+  id                String   @id @default(cuid())
+  merchant          Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  merchantId        String
+  /// Hashed token value (bcrypt cost 12)
+  token_hash        String   @unique
+  /// Token expiration (30 days from creation)
+  expires_at        DateTime
+  /// Whether this token has been invalidated (logout or rotation)
+  is_revoked        Boolean  @default(false)
+  /// Set to true if a reused token was detected (security incident)
+  is_reused         Boolean  @default(false)
+  /// IP address of the client that created this token
+  created_at_ip     String?
+  /// User agent of the client that created this token
+  created_at_user_agent String?
+  created_at        DateTime @default(now())
+  revoked_at        DateTime?
+
+  @@index([merchantId])
+  @@index([token_hash])
+  @@index([expires_at])
+}
+
+/// Tracks failed login attempts for account lockout
+model LoginAttempt {
+  id                String   @id @default(cuid())
+  merchantId        String
+  /// Email used for login attempt
+  email             String
+  /// IP address of the attempt
+  ip_address        String
+  /// Whether the attempt was successful
+  success           Boolean  @default(false)
+  created_at        DateTime @default(now())
+
+  @@index([merchantId])
+  @@index([email])
+  @@index([ip_address])
+  @@index([created_at])
+}
+
+/// Logs rate limit events for monitoring and abuse detection
+model RateLimitLog {
+  id                String   @id @default(cuid())
+  ip_address        String
+  endpoint          String
+  limit_type        String
+  retry_after_seconds Int
+  timestamp         DateTime @default(now())
+
+  @@index([ip_address])
+  @@index([timestamp])
+  @@index([limit_type])
 }

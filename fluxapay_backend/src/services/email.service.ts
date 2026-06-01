@@ -271,3 +271,48 @@ export async function sendInvoiceEmail(
     throw err;
   }
 }
+
+export async function sendSecurityAlertEmail(data: {
+  to: string;
+  subject: string;
+  message: string;
+}) {
+  try {
+    const response = await getResend().emails.send({
+      from: process.env.MAIL_FROM || "noreply@fluxapay.com",
+      to: data.to,
+      subject: data.subject,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #dc2626;">⚠️ Security Alert</h2>
+          <p>Hello,</p>
+          <p>${data.message}</p>
+          <div style="background: #fef2f2; border-left: 4px solid #dc2626; padding: 16px; border-radius: 4px; margin: 16px 0;">
+            <p style="margin: 0; color: #991b1b;"><strong>Recommended Actions:</strong></p>
+            <ul style="margin: 8px 0; color: #991b1b;">
+              <li>Login to your account to verify your identity</li>
+              <li>Review your recent login activity</li>
+              <li>Change your password if you suspect unauthorized access</li>
+              <li>Contact support if you did not initiate this action</li>
+            </ul>
+          </div>
+          <p style="color: #666; font-size: 14px;">
+            If you believe this is an error or need assistance, please contact our support team immediately.
+          </p>
+          <p>— The FluxaPay Security Team</p>
+        </div>
+      `,
+    });
+    if (response.error) {
+      if (isDevEnv()) {
+        console.error("Error sending security alert email:", response.error);
+      }
+      throw new Error("Failed to send security alert email");
+    }
+  } catch (err) {
+    if (isDevEnv()) {
+      console.error("Error sending security alert email:", err);
+    }
+    // Don't throw - security alerts shouldn't block the main flow
+  }
+}
