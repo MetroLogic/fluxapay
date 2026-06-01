@@ -13,6 +13,7 @@ export const createInvoiceSchema = z.object({
   notes: z.string().optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
   due_date: z.string().datetime().optional(),
+  tax_rate: z.number().min(0).max(100).optional(),
 });
 
 export const updateInvoiceStatusSchema = z.object({
@@ -20,14 +21,14 @@ export const updateInvoiceStatusSchema = z.object({
     invoice_id: z.string(),
   }),
   body: z.object({
-    status: z.enum(["pending", "paid", "cancelled", "overdue"]),
+    status: z.enum(["draft", "sent", "paid", "overdue", "voided"]),
   }),
 });
 
 export const listInvoicesQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(100).default(10),
-  status: z.enum(["pending", "paid", "cancelled", "overdue"]).optional(),
+  status: z.enum(["draft", "sent", "paid", "overdue", "voided"]).optional(),
   /** Search invoice number or customer email (case-insensitive) */
   search: z.string().trim().max(200).optional(),
 });

@@ -50,18 +50,15 @@ class StructuredLogger implements Logger {
       environment: this.environment,
     };
 
-    // Merge default context with provided context
-    const mergedContext = { ...this.defaultContext, ...context };
-    
     // Automatically inject requestId from AsyncLocalStorage if available and not already provided
     const requestId = getRequestId();
-    if (requestId && !mergedContext.requestId) {
-      mergedContext.requestId = requestId;
-    }
 
     // Merge default context with storage context and provided context
     const storageContext = loggerStorage.getStore() || {};
     const mergedContext = { ...this.defaultContext, ...storageContext, ...context };
+    if (requestId && !mergedContext.requestId) {
+      mergedContext.requestId = requestId;
+    }
     if (Object.keys(mergedContext).length > 0) {
       entry.context = mergedContext;
     }

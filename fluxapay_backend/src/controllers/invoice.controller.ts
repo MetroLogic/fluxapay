@@ -7,6 +7,8 @@ import {
   listInvoicesService,
   exportInvoiceService,
   updateInvoiceStatusService,
+  sendInvoiceService,
+  voidInvoiceService,
   ExportFormat,
 } from "../services/invoice.service";
 
@@ -34,7 +36,7 @@ export async function getInvoiceById(req: AuthRequest, res: Response) {
   try {
     const merchantId = await validateUserId(req);
     // Route uses either :id or :invoice_id depending on the path
-    const invoiceId = req.params.id ?? req.params.invoice_id;
+    const invoiceId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id ?? (Array.isArray(req.params.invoice_id) ? req.params.invoice_id[0] : req.params.invoice_id);
     const result = await getInvoiceByIdService(merchantId, invoiceId);
     res.status(200).json(result);
   } catch (err: any) {
@@ -48,7 +50,7 @@ export async function listInvoices(req: Request, res: Response) {
     const q = req.query as {
       page?: number;
       limit?: number;
-      status?: "pending" | "paid" | "cancelled" | "overdue";
+      status?: "draft" | "sent" | "paid" | "overdue" | "voided";
       search?: string;
     };
     const result = await listInvoicesService({
@@ -67,7 +69,7 @@ export async function listInvoices(req: Request, res: Response) {
 export async function updateInvoiceStatus(req: AuthRequest, res: Response) {
   try {
     const merchantId = await validateUserId(req);
-    const invoiceId = req.params.id ?? req.params.invoice_id;
+    const invoiceId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id ?? (Array.isArray(req.params.invoice_id) ? req.params.invoice_id[0] : req.params.invoice_id);
     const { status } = req.body;
 
     const result = await updateInvoiceStatusService(merchantId, invoiceId, status);
@@ -83,17 +85,40 @@ export async function updateInvoiceStatus(req: AuthRequest, res: Response) {
   }
 }
 
+export async function sendInvoice(req: AuthRequest, res: Response) {
+  try {
+    const merchantId = await validateUserId(req);
+    const invoiceId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id ?? (Array.isArray(req.params.invoice_id) ? req.params.invoice_id[0] : req.params.invoice_id);
+
+    const result = await sendInvoiceService(merchantId, invoiceId);
+    res.status(200).json(result);
+  } catch (err: any) {
+    res.status(err.status || 500).json({ message: err.message || "Server error" });
+  }
+}
+
+export async function voidInvoice(req: AuthRequest, res: Response) {
+  try {
+    const merchantId = await validateUserId(req);
+    const invoiceId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id ?? (Array.isArray(req.params.invoice_id) ? req.params.invoice_id[0] : req.params.invoice_id);
+
+    const result = await voidInvoiceService(merchantId, invoiceId);
+    res.status(200).json(result);
+  } catch (err: any) {
+    res.status(err.status || 500).json({ message: err.message || "Server error" });
+  }
+}
+
 export async function exportInvoice(req: AuthRequest, res: Response) {
   try {
     const merchantId = await validateUserId(req);
-    const invoiceId = req.params.id ?? req.params.invoice_id;
+    const invoiceId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id ?? (Array.isArray(req.params.invoice_id) ? req.params.invoice_id[0] : req.params.invoice_id);
     const format = (req.query.format as ExportFormat) || "pdf";
 
     const result = await exportInvoiceService(merchantId, invoiceId, format);
 
     res.setHeader("Content-Disposition", `attachment; filename="${result.filename}"`);
     res.setHeader("Content-Type", result.contentType);
-
     if (result.format === "pdf") {
       result.stream.pipe(res);
       result.stream.on("error", () => {

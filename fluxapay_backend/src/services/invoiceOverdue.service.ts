@@ -15,7 +15,7 @@ export async function runInvoiceOverdueJob(): Promise<{ updated: number }> {
 
     const result = await prisma.invoice.updateMany({
         where: {
-            status: "pending",
+            status: "sent",
             due_date: { lt: now, not: null },
         },
         data: {

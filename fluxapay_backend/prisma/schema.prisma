@@ -58,20 +58,55 @@ model Merchant {
   discrepancyAlerts     DiscrepancyAlert[]
   customers             Customer[]
   dataExportJobs        DataExportJob[]
+  paymentLinks          PaymentLink[]
+  dailyReconciliationReports DailyReconciliationReport[]
 }
 
 model Customer {
-  id         String   @id @default(cuid())
-  merchant   Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
-  merchantId String
-  email      String
-  metadata   Json     @default("{}")
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
-  payments   Payment[]
+  id              String   @id @default(cuid())
+  merchant        Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  merchantId      String
+  email           String
+  name            String?
+  phone           String?
+  stellar_address String?
+  metadata        Json     @default("{}")
+  deleted_at      DateTime?
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+  payments        Payment[]
+  paymentLinks    PaymentLink[]
 
   @@index([merchantId])
   @@index([merchantId, email])
+  @@index([deleted_at])
+}
+
+model PaymentLink {
+  id             String   @id @default(cuid())
+  merchant       Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  merchantId     String
+  slug           String   @unique
+  title          String
+  description    String?
+  amount         Decimal?
+  currency       String
+  redirect_url   String?
+  expiry         DateTime?
+  active         Boolean  @default(true)
+  metadata       Json     @default("{}")
+  total_payments Int      @default(0)
+  total_volume   Decimal  @default(0)
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+  payments       Payment[]
+  customerId     String?
+  customer       Customer? @relation(fields: [customerId], references: [id])
+
+  @@index([merchantId])
+  @@index([slug])
+  @@index([active])
+  @@index([expiry])
 }
 
 model MerchantHDIndex {
@@ -307,7 +342,8 @@ model Payment {
   settlement_fiat_currency String?
   settlementId       String?
   settlement         Settlement? @relation(fields: [settlementId], references: [id])
-  
+  paymentLinkId      String?
+
   // reminder
   reminder_sent_at   DateTime?
 
@@ -319,6 +355,7 @@ model Payment {
   invoice            Invoice?
   customerId         String?
   customer           Customer?   @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  paymentLink        PaymentLink? @relation(fields: [paymentLinkId], references: [id])
 
   @@index([swept, status])
   @@index([customerId])
@@ -350,13 +387,21 @@ model Invoice {
   invoice_number String        @unique
   amount         Decimal
   currency       String
+  subtotal       Decimal?
+  tax_amount     Decimal?
+  tax_rate       Decimal?
   customer_email String
+  customer_name  String?
+  line_items     Json?
+  notes          String?
   metadata       Json?
   payment        Payment?      @relation(fields: [payment_id], references: [id])
   payment_id     String?       @unique
   payment_link   String
-  status         InvoiceStatus @default(pending)
+  status         InvoiceStatus @default(draft)
   due_date       DateTime?
+  sent_at        DateTime?
+  voided_at      DateTime?
   created_at     DateTime      @default(now())
   updated_at     DateTime      @updatedAt
 
@@ -381,6 +426,27 @@ model ReconciliationRecord {
   updated_at          DateTime             @updatedAt
 
   @@unique([merchantId, period_start, period_end])
+}
+
+model DailyReconciliationReport {
+  id                  String   @id @default(cuid())
+  merchant            Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  merchantId          String
+  report_date         DateTime
+  total_charges       Int      @default(0)
+  total_volume_usdc   Decimal  @default(0)
+  total_volume_fiat   Decimal  @default(0)
+  total_fees          Decimal  @default(0)
+  total_net_settled  Decimal  @default(0)
+  report_data         Json     @default("{}")
+  csv_url             String?
+  emailed_at          DateTime?
+  created_at          DateTime @default(now())
+  updated_at          DateTime @updatedAt
+
+  @@unique([merchantId, report_date])
+  @@index([merchantId])
+  @@index([report_date])
 }
 
 model DiscrepancyThreshold {
@@ -520,10 +586,11 @@ enum RefundStatus {
 }
 
 enum InvoiceStatus {
-  pending
+  draft
+  sent
   paid
-  cancelled
   overdue
+  voided
 }
 
 enum ReconciliationStatus {
