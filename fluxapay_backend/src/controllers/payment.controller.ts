@@ -6,6 +6,7 @@ import { AuthRequest } from "../types/express";
 import { eventBus, AppEvents } from "../services/EventService";
 import { validateUserId } from "../helpers/request.helper";
 import { MetadataValidationError } from "../utils/metadata.util";
+import { paymentSettlementService } from "../services/paymentSettlement.service";
 
 
 const prisma = new PrismaClient();
@@ -511,5 +512,29 @@ export const getPublicCheckoutPaymentStatus = async (
   } catch (error: unknown) {
     console.error("getPublicCheckoutPaymentStatus", error);
     res.status(500).json({ error: "Failed to load status" });
+  }
+};
+
+/**
+ * GET /api/v1/charges/{id}/settlement
+ * Get settlement details for a specific payment.
+ */
+export const getPaymentSettlement = async (req: Request, res: Response) => {
+  try {
+    const merchantId = await validateUserId(req as AuthRequest);
+    const paymentId = String(req.params.id);
+
+    const settlement = await paymentSettlementService.getPaymentSettlement(
+      paymentId,
+      merchantId,
+    );
+
+    res.json(settlement);
+  } catch (error: unknown) {
+    if (error instanceof Error && error.message === "Payment not found") {
+      return res.status(404).json({ error: "Payment not found" });
+    }
+    console.error("Error fetching payment settlement:", error);
+    res.status(500).json({ error: "Internal Server Error" });
   }
 };

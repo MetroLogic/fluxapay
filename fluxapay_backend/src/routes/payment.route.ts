@@ -8,6 +8,7 @@ import {
   streamPaymentStatus,
   getPublicCheckoutPayment,
   getPublicCheckoutPaymentStatus,
+  getPaymentSettlement,
 } from '../controllers/payment.controller';
 import { validatePayment } from '../validators/payment.validator';
 import { authenticateApiKey } from '../middleware/apiKeyAuth.middleware';
@@ -273,5 +274,70 @@ router.get('/export', authenticateApiKey, merchantApiKeyRateLimit(), exportPayme
  *         description: Payment not found
  */
 router.get('/:id', authenticateApiKey, merchantApiKeyRateLimit(), getPaymentById);
+
+/**
+ * @swagger
+ * /api/v1/charges/{id}/settlement:
+ *   get:
+ *     summary: Get settlement details for a payment
+ *     tags: [Payments]
+ *     security:
+ *       - apiKeyAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Payment ID
+ *     responses:
+ *       200:
+ *         description: Settlement details
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 payment_id:
+ *                   type: string
+ *                 settled:
+ *                   type: boolean
+ *                 settlement:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: string
+ *                     gross_usdc:
+ *                       type: number
+ *                     fee_usdc:
+ *                       type: number
+ *                     net_usdc:
+ *                       type: number
+ *                     fx_rate:
+ *                       type: number
+ *                     net_fiat:
+ *                       type: number
+ *                     currency:
+ *                       type: string
+ *                     payout_channel:
+ *                       type: string
+ *                     exchange_ref:
+ *                       type: string
+ *                     transfer_ref:
+ *                       type: string
+ *                     status:
+ *                       type: string
+ *                     created_at:
+ *                       type: string
+ *                       format: date-time
+ *                     processed_date:
+ *                       type: string
+ *                       format: date-time
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Payment not found
+ */
+router.get('/:id/settlement', authenticateApiKey, merchantApiKeyRateLimit(), getPaymentSettlement);
 
 export default router;
