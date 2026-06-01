@@ -3,7 +3,6 @@
 import { Clock } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { Clock } from 'lucide-react';
 
 interface PaymentTimerProps {
   expiresAt: Date;

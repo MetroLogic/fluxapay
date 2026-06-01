@@ -16,7 +16,6 @@ export async function exportToPDF(
 ): Promise<void> {
     const doc = new jsPDF();
 
-    // Header
     doc.setFontSize(20);
     doc.setTextColor(33, 33, 33);
     doc.text('FluxaPay Reconciliation Statement', 14, 22);
@@ -27,7 +26,6 @@ export async function exportToPDF(
     doc.text(`Period: ${format(summary.startDate, 'MMM d, yyyy')} - ${format(summary.endDate, 'MMM d, yyyy')}`, 14, 38);
     doc.text(`Generated: ${format(new Date(), 'MMM d, yyyy HH:mm:ss')}`, 14, 44);
 
-    // Summary Section
     doc.setFontSize(14);
     doc.setTextColor(33, 33, 33);
     doc.text('Summary', 14, 55);
@@ -46,7 +44,6 @@ export async function exportToPDF(
         alternateRowStyles: { fillColor: [245, 245, 245] }
     });
 
-    // Transactions Table
     doc.setFontSize(14);
     doc.text('Transactions', 14, (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 15);
 
@@ -70,7 +67,7 @@ export async function exportToPDF(
                 const valStr = data.cell.raw as string;
                 const val = parseFloat(valStr.replace('$', ''));
                 if (Math.abs(val) > 0.01) {
-                    data.cell.styles.textColor = [220, 53, 69]; // Red for discrepancy
+                    data.cell.styles.textColor = [220, 53, 69];
                     data.cell.styles.fontStyle = 'bold';
                 }
             }
@@ -184,3 +181,21 @@ export function exportSettlementReportPDF(report: {
 }
 
 export function exportToCSV(records: ReconciliationRecord[]): void {
+    const csv = Papa.unparse(
+        records.map((record) => ({
+            Date: format(record.date, 'yyyy-MM-dd HH:mm'),
+            SettlementID: record.settlementId,
+            USDReceived: record.usdcReceived.toFixed(2),
+            FiatPayout: record.fiatPayout.toFixed(2),
+            Fees: record.fees.toFixed(2),
+            Discrepancy: record.discrepancy.toFixed(2),
+        }))
+    );
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `reconciliation-${format(new Date(), 'yyyyMMddHHmmss')}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+}

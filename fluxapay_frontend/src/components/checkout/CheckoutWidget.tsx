@@ -3,9 +3,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useTranslations } from "next-intl";
 import { X } from "lucide-react";
-import { useState } from "react";
-import { useTranslations } from "next-intl";
-import { X } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export interface CheckoutWidgetConfig {

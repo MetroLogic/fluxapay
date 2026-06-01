@@ -1,6 +1,7 @@
 import { DashboardShell } from "@/features/dashboard/layout/DashboardShell";
 import { AuthGuard } from "@/components/AuthGuard";
 import { Metadata } from "next";
+import { Suspense } from "react";
 
 export const metadata: Metadata = {
   title: "Merchant Dashboard | FluxaPay",
@@ -18,8 +19,10 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   return (
-    <AuthGuard>
-      <DashboardShell>{children}</DashboardShell>
-    </AuthGuard>
+    <Suspense fallback={null}>
+      <AuthGuard>
+        <DashboardShell>{children}</DashboardShell>
+      </AuthGuard>
+    </Suspense>
   );
 }

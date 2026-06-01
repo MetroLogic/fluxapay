@@ -4,17 +4,58 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { Loader2, XCircle, CheckCircle, AlertCircle } from 'lucide-react';
+import { Loader2, XCircle, CheckCircle, AlertCircle, RefreshCw } from 'lucide-react';
 import { usePaymentStatus } from '@/hooks/usePaymentStatus';
 import { TxHashLink } from '@/components/TxHashLink';
 import { PaymentQRCode } from '@/components/checkout/PaymentQRCode';
 import { PaymentTimer } from '@/components/checkout/PaymentTimer';
 import { PaymentStatus } from '@/components/checkout/PaymentStatus';
+import { StellarPayButton } from '@/components/checkout/StellarPayButton';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import {
   CheckoutBrandingShell,
   DEFAULT_ACCENT,
 } from '@/components/checkout/CheckoutBrandingShell';
+
+function CopyField({
+  label,
+  value,
+  truncate,
+  required,
+}: {
+  label: string;
+  value: string;
+  truncate?: boolean;
+  required?: boolean;
+}) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(value);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="rounded-lg border bg-gray-50 p-3">
+      <div className="flex items-center justify-between mb-1">
+        <p className="text-xs font-medium text-gray-500">
+          {label}
+          {required && <span className="text-red-500 ml-1">*Required</span>}
+        </p>
+        <button
+          onClick={handleCopy}
+          className="text-xs font-medium text-[color:var(--checkout-accent)] hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--checkout-accent)] rounded"
+          aria-label={`Copy ${label}`}
+        >
+          {copied ? '✓ Copied' : 'Copy'}
+        </button>
+      </div>
+      <p className={`font-mono text-sm break-all ${truncate ? 'truncate' : ''}`}>
+        {value}
+      </p>
+    </div>
+  );
+}
 
 /**
  * Main checkout page for FluxaPay payment gateway

@@ -9,7 +9,9 @@ export type PaymentStatus =
   | 'expired' 
   | 'failed' 
   | 'paid' 
-  | 'completed';
+  | 'completed'
+  | 'settled'
+  | 'underpaid';
 
 export interface Payment {
   id: string;
