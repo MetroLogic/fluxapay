@@ -2,7 +2,7 @@ import { Router } from "express";
 import { authenticateApiKey } from "../middleware/apiKeyAuth.middleware";
 import { merchantApiKeyRateLimit } from "../middleware/rateLimit.middleware";
 import { validate, validateQuery } from "../middleware/validation.middleware";
-import { createInvoice, listInvoices, getInvoiceById, updateInvoiceStatus, exportInvoice } from "../controllers/invoice.controller";
+import { createInvoice, listInvoices, getInvoiceById, updateInvoiceStatus, exportInvoice, sendInvoice, voidInvoice } from "../controllers/invoice.controller";
 import {
   createInvoiceSchema,
   listInvoicesQuerySchema,
@@ -144,6 +144,56 @@ router.get("/:invoice_id", authenticateApiKey, validate(getInvoiceByIdSchema), g
  *         description: Invoice not found
  */
 router.patch("/:invoice_id/status", authenticateApiKey, validate(updateInvoiceStatusSchema), updateInvoiceStatus);
+
+/**
+ * @swagger
+ * /api/v1/invoices/{invoice_id}/send:
+ *   post:
+ *     summary: Send invoice to customer via email
+ *     tags: [Invoices]
+ *     security:
+ *       - apiKeyAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: invoice_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Invoice sent successfully
+ *       400:
+ *         description: Invoice not in draft status
+ *       404:
+ *         description: Invoice not found
+ */
+router.post("/:invoice_id/send", authenticateApiKey, merchantApiKeyRateLimit(), validate(getInvoiceByIdSchema), sendInvoice);
+
+/**
+ * @swagger
+ * /api/v1/invoices/{invoice_id}/void:
+ *   post:
+ *     summary: Void an unpaid invoice
+ *     tags: [Invoices]
+ *     security:
+ *       - apiKeyAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: invoice_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Invoice voided successfully
+ *       400:
+ *         description: Invoice already voided
+ *       404:
+ *         description: Invoice not found
+ *       422:
+ *         description: Cannot void a paid invoice
+ */
+router.post("/:invoice_id/void", authenticateApiKey, merchantApiKeyRateLimit(), validate(getInvoiceByIdSchema), voidInvoice);
 
 /**
  * @swagger

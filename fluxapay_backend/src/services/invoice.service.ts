@@ -2,6 +2,7 @@ import { PrismaClient, Prisma, InvoiceStatus } from "../generated/client/client"
 import crypto from "crypto";
 import { createAndDeliverWebhook } from "./webhook.service";
 import { generateInvoicePdf } from "./invoicePdf.service";
+import { sendInvoiceEmail } from "./email.service";
 import { Readable } from "stream";
 
 const prisma = new PrismaClient();
@@ -29,6 +30,7 @@ export async function createInvoiceService(params: {
   notes?: string;
   metadata?: Record<string, unknown>;
   due_date?: string;
+  tax_rate?: number;
 }) {
   const {
     merchantId,
@@ -39,7 +41,22 @@ export async function createInvoiceService(params: {
     notes,
     metadata = {},
     due_date,
+    tax_rate,
   } = params;
+
+  // Calculate subtotal from line items
+  let subtotal = 0;
+  if (line_items && line_items.length > 0) {
+    subtotal = line_items.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
+  } else if (params.amount) {
+    subtotal = params.amount;
+  }
+
+  // Calculate tax
+  const taxRate = tax_rate ?? 0;
+  const taxAmount = subtotal * (taxRate / 100);
+  const total = subtotal + taxAmount;
+
   const metadataJson = {
     ...metadata,
     ...(customer_name ? { customer_name } : {}),
@@ -47,61 +64,41 @@ export async function createInvoiceService(params: {
     ...(notes ? { notes } : {}),
   } as Prisma.InputJsonValue;
 
-  // Calculate amount from line items if not provided
-  let amount = params.amount;
-  if (amount === undefined && line_items) {
-    amount = line_items.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
-  }
-
-  if (amount === undefined) {
-    throw new Error("Amount is required if line_items are not provided");
-  }
-
-  // Create payment first
-  const paymentId = crypto.randomUUID();
-  const checkoutBase = process.env.PAY_CHECKOUT_BASE || process.env.BASE_URL || "http://localhost:3000";
-  const checkout_url = `${checkoutBase.replace(/\/$/, "")}/pay/${paymentId}`;
-
-  const payment = await prisma.payment.create({
-    data: {
-      id: paymentId,
-      merchantId,
-      amount,
-      currency,
-      customer_email,
-      metadata: metadataJson,
-      description: notes || `Invoice for ${customer_email}`,
-      expiration: due_date ? new Date(due_date) : new Date(Date.now() + 15 * 60 * 1000),
-      status: "pending",
-      checkout_url,
-    },
-  });
-
+  // Create invoice in draft status
   const invoice = await prisma.invoice.create({
     data: {
       merchantId,
       invoice_number: buildInvoiceNumber(),
-      amount,
+      amount: Math.floor(total * 100),
       currency,
+      subtotal: Math.floor(subtotal * 100),
+      tax_amount: Math.floor(taxAmount * 100),
+      tax_rate: taxRate ? Math.floor(taxRate * 100) : null,
       customer_email,
+      customer_name,
+      line_items: line_items as Prisma.InputJsonValue,
+      notes,
       metadata: metadataJson,
-      payment_id: payment.id,
-      payment_link: `/pay/${payment.id}`,
       due_date: due_date ? new Date(due_date) : null,
-      status: "pending",
+      payment_link: "", // Will be generated when invoice is sent
+      status: "draft",
     },
   });
 
   return {
-    message: "Invoice created with payment intent",
+    message: "Invoice created in draft status",
     data: {
       id: invoice.id,
       invoice_number: invoice.invoice_number,
-      amount: invoice.amount,
+      amount: Number(invoice.amount) / 100,
+      subtotal: invoice.subtotal ? Number(invoice.subtotal) / 100 : 0,
+      tax_amount: invoice.tax_amount ? Number(invoice.tax_amount) / 100 : 0,
+      tax_rate: invoice.tax_rate ? Number(invoice.tax_rate) / 100 : 0,
       currency: invoice.currency,
       customer_email: invoice.customer_email,
-      payment_id: invoice.payment_id,
-      payment_link: invoice.payment_link,
+      customer_name: invoice.customer_name,
+      line_items: invoice.line_items,
+      notes: invoice.notes,
       status: invoice.status,
       due_date: invoice.due_date,
       created_at: invoice.created_at,
@@ -153,7 +150,7 @@ export async function listInvoicesService(params: {
   merchantId: string;
   page: number;
   limit: number;
-  status?: "pending" | "paid" | "cancelled" | "overdue";
+  status?: "draft" | "sent" | "paid" | "overdue" | "voided";
   search?: string;
 }) {
   const { merchantId, page, limit, status, search } = params;
@@ -200,7 +197,7 @@ export async function updateInvoiceStatusService(
   invoiceId: string,
   newStatus: string,
 ) {
-  const validStatuses = ["pending", "paid", "cancelled", "overdue"];
+  const validStatuses = ["draft", "sent", "paid", "overdue", "voided"];
   if (!validStatuses.includes(newStatus)) {
     throw new Error("Invalid status");
   }
@@ -215,10 +212,11 @@ export async function updateInvoiceStatusService(
 
   // Validate status transition
   const validTransitions: Record<string, string[]> = {
-    pending: ["paid", "cancelled", "overdue"],
+    draft: ["sent", "voided"],
+    sent: ["paid", "overdue", "voided"],
     paid: [],        // terminal
-    cancelled: [],   // terminal
-    overdue: ["paid", "cancelled"],
+    overdue: ["paid", "voided"],
+    voided: [],   // terminal
   };
 
   if (!validTransitions[invoice.status]?.includes(newStatus)) {
@@ -258,6 +256,126 @@ export async function updateInvoiceStatusService(
       invoice_number: updatedInvoice.invoice_number,
       status: updatedInvoice.status,
       updated_at: updatedInvoice.updated_at,
+    },
+  };
+}
+
+export async function sendInvoiceService(merchantId: string, invoiceId: string) {
+  const invoice = await prisma.invoice.findFirst({
+    where: { id: invoiceId, merchantId },
+    include: { merchant: true },
+  });
+
+  if (!invoice) {
+    throw { status: 404, message: "Invoice not found" };
+  }
+
+  if (invoice.status !== "draft") {
+    throw { status: 400, message: "Only draft invoices can be sent" };
+  }
+
+  // Create payment link if not exists
+  let paymentLink = invoice.payment_link;
+  if (!paymentLink || !invoice.payment_id) {
+    const paymentId = crypto.randomUUID();
+    const checkoutBase = process.env.PAY_CHECKOUT_BASE || process.env.BASE_URL || "http://localhost:3000";
+    const checkout_url = `${checkoutBase.replace(/\/$/, "")}/pay/${paymentId}`;
+
+    const payment = await prisma.payment.create({
+      data: {
+        id: paymentId,
+        merchantId,
+        amount: invoice.amount,
+        currency: invoice.currency,
+        customer_email: invoice.customer_email,
+        metadata: invoice.metadata as Prisma.InputJsonValue,
+        description: invoice.notes || `Invoice ${invoice.invoice_number}`,
+        expiration: invoice.due_date || new Date(Date.now() + 30 * 24 * 60 * 1000),
+        status: "pending",
+        checkout_url,
+      },
+    });
+
+    paymentLink = `/pay/${payment.id}`;
+
+    await prisma.invoice.update({
+      where: { id: invoiceId },
+      data: {
+        payment_id: payment.id,
+        payment_link: paymentLink,
+      },
+    });
+  }
+
+  // Update invoice status to sent
+  await prisma.invoice.update({
+    where: { id: invoiceId },
+    data: {
+      status: "sent",
+      sent_at: new Date(),
+    },
+  });
+
+  // Send email
+  try {
+    await sendInvoiceEmail(
+      invoice.customer_email,
+      invoice.invoice_number,
+      (Number(invoice.amount) / 100).toFixed(2),
+      invoice.currency,
+      invoice.due_date?.toISOString() || null,
+      `${process.env.BASE_URL || "http://localhost:3000"}${paymentLink}`,
+      invoice.merchant.business_name,
+    );
+  } catch (err: any) {
+    console.error(`[InvoiceService] Failed to send invoice email:`, err);
+    // Don't fail the request if email fails
+  }
+
+  return {
+    message: "Invoice sent successfully",
+    data: {
+      id: invoice.id,
+      invoice_number: invoice.invoice_number,
+      status: "sent",
+      sent_at: new Date(),
+      payment_link: paymentLink,
+    },
+  };
+}
+
+export async function voidInvoiceService(merchantId: string, invoiceId: string) {
+  const invoice = await prisma.invoice.findFirst({
+    where: { id: invoiceId, merchantId },
+  });
+
+  if (!invoice) {
+    throw { status: 404, message: "Invoice not found" };
+  }
+
+  if (invoice.status === "paid") {
+    throw { status: 422, message: "Cannot void a paid invoice" };
+  }
+
+  if (invoice.status === "voided") {
+    throw { status: 400, message: "Invoice is already voided" };
+  }
+
+  const updatedInvoice = await prisma.invoice.update({
+    where: { id: invoiceId },
+    data: {
+      status: "voided",
+      voided_at: new Date(),
+    },
+  });
+
+  return {
+    message: "Invoice voided successfully",
+    data: {
+      id: updatedInvoice.id,
+      invoice_number: updatedInvoice.invoice_number,
+      status: updatedInvoice.status,
+      voided_at: updatedInvoice.voided_at,
     },
   };
 }

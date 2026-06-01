@@ -32,12 +32,28 @@ const router = Router();
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/CreateCustomerRequest'
+ *             type: object
+ *             required: [email]
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               name:
+ *                 type: string
+ *               phone:
+ *                 type: string
+ *               stellar_address:
+ *                 type: string
+ *               metadata:
+ *                 type: object
+ *                 maxProperties: 10
  *     responses:
  *       201:
  *         description: Customer created
  *       400:
  *         description: Validation error
+ *       409:
+ *         description: Customer with this email already exists
  *   get:
  *     summary: List customers for the authenticated merchant
  *     tags: [Customers]
@@ -55,6 +71,14 @@ const router = Router();
  *         name: search
  *         schema: { type: string }
  *         description: Filter by email (case-insensitive contains)
+ *       - in: query
+ *         name: created_after
+ *         schema: { type: string, format: date-time }
+ *         description: Filter customers created after this date
+ *       - in: query
+ *         name: created_before
+ *         schema: { type: string, format: date-time }
+ *         description: Filter customers created before this date
  *     responses:
  *       200:
  *         description: Paginated customers
@@ -102,12 +126,27 @@ router.get(
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/UpdateCustomerRequest'
+ *             type: object
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               name:
+ *                 type: string
+ *               phone:
+ *                 type: string
+ *               stellar_address:
+ *                 type: string
+ *               metadata:
+ *                 type: object
+ *                 maxProperties: 10
  *     responses:
  *       200:
  *         description: Customer updated
  *       404:
  *         description: Not found
+ *       409:
+ *         description: Customer with this email already exists
  *   delete:
  *     summary: Delete a customer
  *     tags: [Customers]
@@ -121,7 +160,7 @@ router.get(
  *         schema: { type: string }
  *     responses:
  *       204:
- *         description: Deleted
+ *         description: Customer soft-deleted with GDPR anonymization
  *       404:
  *         description: Not found
  */

@@ -135,7 +135,6 @@ export async function sendCheckoutExpiryReminderEmail(
 }
 
 export interface PaymentConfirmationDetails {
-interface PaymentConfirmationDetails {
   amount: string;
   currency: string;
   payment_id: string;
@@ -207,6 +206,67 @@ export async function sendPaymentConfirmationEmail(
   } catch (err) {
     if (isDevEnv()) {
       console.error("Error sending payment confirmation email:", err);
+    }
+    throw err;
+  }
+}
+
+export async function sendInvoiceEmail(
+  to: string,
+  invoiceNumber: string,
+  amount: string,
+  currency: string,
+  dueDate: string | null,
+  paymentLink: string,
+  merchantName?: string,
+) {
+  try {
+    const response = await getResend().emails.send({
+      from: process.env.MAIL_FROM || "noreply@fluxapay.com",
+      to,
+      subject: `Invoice #${invoiceNumber} from ${merchantName || "FluxaPay"}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2>Invoice #${invoiceNumber}</h2>
+          <p>Hello,</p>
+          <p>You have received a new invoice from ${merchantName || "FluxaPay"}.</p>
+
+          <div style="background: #f4f4f4; padding: 16px; border-radius: 4px; margin: 16px 0;">
+            <table style="width: 100%; border-collapse: collapse;">
+              <tr>
+                <td style="padding: 8px 0;"><strong>Amount:</strong></td>
+                <td style="padding: 8px 0;">${amount} ${currency}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0;"><strong>Due Date:</strong></td>
+                <td style="padding: 8px 0;">${dueDate ? new Date(dueDate).toLocaleDateString() : "On receipt"}</td>
+              </tr>
+            </table>
+          </div>
+
+          <p>
+            <a href="${paymentLink}"
+               style="display: inline-block; padding: 12px 24px; background: #0066cc; color: white; text-decoration: none; border-radius: 4px;">
+              Pay Invoice Now
+            </a>
+          </p>
+
+          <p style="color: #666; font-size: 14px; margin-top: 24px;">
+            If you have any questions about this invoice, please contact the sender directly.
+          </p>
+          <p>— The FluxaPay Team</p>
+        </div>
+      `,
+    });
+    if (response.error) {
+      if (isDevEnv()) {
+        console.error("Error sending invoice email:", response.error);
+      }
+      throw new Error("Failed to send invoice email");
+    }
+  } catch (err) {
+    if (isDevEnv()) {
+      console.error("Error sending invoice email:", err);
     }
     throw err;
   }

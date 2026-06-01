@@ -25,8 +25,9 @@ export function requestIdMiddleware(
 
   // Run the rest of the request within the async local storage context
   requestContextStorage.run({ requestId }, () => {
-  // Run downstream middleware in the logger storage context
-  loggerStorage.run({ requestId }, () => {
-    next();
+    // Run downstream middleware in the logger storage context
+    loggerStorage.run({ requestId }, () => {
+      next();
+    });
   });
 }

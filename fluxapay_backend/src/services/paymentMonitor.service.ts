@@ -75,7 +75,7 @@ export async function runPaymentMonitorTick(): Promise<void> {
     try {
       await createAndDeliverWebhook(
         payment.merchantId,
-        "payment.failed",
+        "payment.expired" as any,
         {
           event: "payment.expired",
           data: {
