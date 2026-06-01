@@ -6,10 +6,7 @@ import { AuthRequest } from "../types/express";
 import { eventBus, AppEvents } from "../services/EventService";
 import { validateUserId } from "../helpers/request.helper";
 import { MetadataValidationError } from "../utils/metadata.util";
-import {
-  IdempotentRequest,
-  storeIdempotentResponse,
-} from "../middleware/idempotency.middleware";
+
 
 const prisma = new PrismaClient();
 
@@ -81,17 +78,7 @@ export const createPayment = async (req: Request, res: Response) => {
       checkout_url: payment.checkout_url,
     };
 
-    // Store idempotent response if idempotency key was provided
-    const idempotencyKey = (req as IdempotentRequest).idempotencyKey;
-    if (idempotencyKey) {
-      await storeIdempotentResponse(
-        idempotencyKey,
-        req.body,
-        201,
-        responseBody,
-        merchantId,
-      );
-    }
+
 
     res.status(201).json(responseBody);
   } catch (error: unknown) {
