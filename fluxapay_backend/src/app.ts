@@ -31,6 +31,7 @@ import auditRoutes from "./routes/audit.route";
 import merchantDeletionRoutes from "./routes/merchantDeletion.route";
 import dataExportRoutes from "./routes/dataExport.route";
 import oracleRoutes from "./routes/oracle.route";
+import chargesRoutes from "./routes/charges.route";
 
 const app = express();
 const prisma = new PrismaClient();
@@ -138,6 +139,7 @@ app.get("/api-docs.json", (req, res) => {
 app.use("/api/v1/settlements", settlementRoutes);
 app.use("/api/v1/webhooks", webhookRoutes);
 app.use("/api/v1/payments", paymentRoutes);
+app.use("/api/v1/charges", chargesRoutes);
 app.use("/api/v1/invoices", invoiceRoutes);
 app.use("/api/v1/customers", customerRoutes);
 app.use("/api/v1/payment-links", paymentLinkRoutes);
