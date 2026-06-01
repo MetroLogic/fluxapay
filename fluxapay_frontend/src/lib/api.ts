@@ -1,10 +1,6 @@
-// API Client for FluxaPay Backend
-import { getToken, storeToken, clearToken } from "./auth";
-
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
 // Re-export auth functions for backward compatibility
-export { getToken, storeToken, clearToken } from "./auth";
 
 export interface AuthSignupRequest {
   business_name: string;
@@ -62,10 +58,7 @@ class ApiError extends Error {
   }
 }
 
-async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
-  const token = getToken();
-function getToken(): string {
-  // Check localStorage first (persistent), then sessionStorage (session-only)
+export function getToken(): string {
   const token = localStorage.getItem("token") ?? sessionStorage.getItem("token");
   if (!token) {
     if (typeof window !== "undefined" && !window.location.pathname.includes("/login")) {
@@ -467,7 +460,7 @@ export const api = {
         fetchWithAuth(`/api/merchants/kyc/admin/${merchantId}`),
       updateStatus: (
         merchantId: string,
-        body: { status: "approved" | "rejected" | "additional_info_required"; rejection_reason?: string },
+        body: { status: string; rejection_reason?: string },
       ) =>
         fetchWithAuth(`/api/merchants/kyc/admin/${merchantId}/status`, {
           method: "PATCH",

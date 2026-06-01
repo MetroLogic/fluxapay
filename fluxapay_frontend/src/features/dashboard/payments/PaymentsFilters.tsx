@@ -12,11 +12,15 @@ interface PaymentsFiltersProps {
     currencyValue: string;
     dateFrom: string;
     dateTo: string;
+    amountMin: string;
+    amountMax: string;
     onSearchChange: (value: string) => void;
     onStatusChange: (value: string) => void;
     onCurrencyChange: (value: string) => void;
     onDateFromChange: (value: string) => void;
     onDateToChange: (value: string) => void;
+    onAmountMinChange: (value: string) => void;
+    onAmountMaxChange: (value: string) => void;
 }
 
 interface SavedPreset {
@@ -35,11 +39,15 @@ export const PaymentsFilters = memo(({
     currencyValue,
     dateFrom,
     dateTo,
+    amountMin,
+    amountMax,
     onSearchChange,
     onStatusChange,
     onCurrencyChange,
     onDateFromChange,
     onDateToChange,
+    onAmountMinChange,
+    onAmountMaxChange,
 }: PaymentsFiltersProps) => {
     const [presets, setPresets] = useState<SavedPreset[]>([]);
     const [selectedPresetId, setSelectedPresetId] = useState<string>("default");
@@ -126,6 +134,8 @@ export const PaymentsFilters = memo(({
         onCurrencyChange("all");
         onDateFromChange("");
         onDateToChange("");
+        onAmountMinChange("");
+        onAmountMaxChange("");
         setSelectedPresetId("default");
     };
 
@@ -194,6 +204,8 @@ export const PaymentsFilters = memo(({
                         <option value="completed">Completed</option>
                         <option value="expired">Expired</option>
                         <option value="failed">Failed</option>
+                        <option value="settled">Settled</option>
+                        <option value="underpaid">Underpaid</option>
                     </Select>
                     <Select
                         className="w-[120px]"
@@ -222,6 +234,38 @@ export const PaymentsFilters = memo(({
                         value={dateTo}
                         onChange={(e) => {
                             onDateToChange(e.target.value);
+                            setSelectedPresetId("custom");
+                        }}
+                    />
+                </div>
+            </div>
+
+            {/* Amount Range */}
+            <div className="flex flex-col md:flex-row gap-4">
+                <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-muted-foreground whitespace-nowrap">Amount:</span>
+                    <Input
+                        type="number"
+                        className="w-[120px]"
+                        placeholder="Min"
+                        value={amountMin}
+                        min="0"
+                        step="0.01"
+                        onChange={(e) => {
+                            onAmountMinChange(e.target.value);
+                            setSelectedPresetId("custom");
+                        }}
+                    />
+                    <span className="text-muted-foreground">–</span>
+                    <Input
+                        type="number"
+                        className="w-[120px]"
+                        placeholder="Max"
+                        value={amountMax}
+                        min="0"
+                        step="0.01"
+                        onChange={(e) => {
+                            onAmountMaxChange(e.target.value);
                             setSelectedPresetId("custom");
                         }}
                     />

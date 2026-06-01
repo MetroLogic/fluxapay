@@ -5,13 +5,15 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { PaymentsTable } from "@/features/dashboard/payments/PaymentsTable";
 import { PaymentsFilters } from "@/features/dashboard/payments/PaymentsFilters";
 import { type Payment } from "@/features/dashboard/payments/types";
+import { PaymentDrawer } from "@/features/dashboard/payments/PaymentDrawer";
+import { usePaymentUpdates } from "@/hooks/usePaymentUpdates";
 import {
   type RefundRecord,
   type RefundReason,
 } from "@/features/dashboard/refunds/refunds-mock";
 import { Modal } from "@/components/Modal";
 import { Button } from "@/components/Button";
-import { Download, Plus } from "lucide-react";
+import { Download, Plus, Wifi, WifiOff } from "lucide-react";
 import { Suspense } from "react";
 import toast from "react-hot-toast";
 import { api } from "@/lib/api";
@@ -36,6 +38,8 @@ interface BackendPayment {
   sweep_status?: string;
   settlement_linkage?: unknown;
   stellar_expert_url?: string;
+  fiat_equivalent?: number;
+  fiat_currency?: string;
 }
 
 interface BackendRefund {
@@ -70,6 +74,8 @@ function mapBackendPayment(p: BackendPayment): Payment {
     sweepStatus: p.sweep_status,
     settlementLinkage: p.settlement_linkage,
     stellarExpertUrl: p.stellar_expert_url,
+    fiatEquivalent: p.fiat_equivalent,
+    fiatCurrency: p.fiat_currency,
   };
 }
 
@@ -95,7 +101,6 @@ function PaymentsContent() {
   const shouldOpenCreateLink =
     searchParams.get("action") === "create-payment" ||
     searchParams.get("action") === "create-payment-link";
-  const paymentIdFromQuery = searchParams.get("paymentId");
 
   const [payments, setPayments] = useState<Payment[]>([]);
   const [total, setTotal] = useState(0);
@@ -108,10 +113,12 @@ function PaymentsContent() {
   const [currencyFilter, setCurrencyFilter] = useState("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [amountMin, setAmountMin] = useState("");
+  const [amountMax, setAmountMax] = useState("");
 
-  const [selectedPaymentId, setSelectedPaymentId] = useState<string | null>(paymentIdFromQuery || null);
-  const [detailedPayment, setDetailedPayment] = useState<Payment | null>(null);
-  const [refunds, setRefunds] = useState<RefundRecord[]>([]);
+  // Drawer state
+  const [drawerPayment, setDrawerPayment] = useState<Payment | null>(null);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
   const [showCreateLinkModal, setShowCreateLinkModal] = useState(shouldOpenCreateLink);
   const [linkAmount, setLinkAmount] = useState("100");
@@ -136,6 +143,31 @@ function PaymentsContent() {
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
     searchDebounceRef.current = setTimeout(() => setDebouncedSearch(value), 400);
   }, []);
+
+  // Real-time payment updates via SSE
+  const handlePaymentUpdate = useCallback(
+    (event: { paymentId: string; status: Payment["status"]; txHash?: string; fiatEquivalent?: number; fiatCurrency?: string }) => {
+      setPayments((prev) =>
+        prev.map((p) =>
+          p.id === event.paymentId
+            ? {
+                ...p,
+                status: event.status,
+                txHash: event.txHash ?? p.txHash,
+                fiatEquivalent: event.fiatEquivalent ?? p.fiatEquivalent,
+                fiatCurrency: event.fiatCurrency ?? p.fiatCurrency,
+              }
+            : p,
+        ),
+      );
+    },
+    [],
+  );
+
+  const { isConnected } = usePaymentUpdates({
+    onUpdate: handlePaymentUpdate,
+    enabled: true,
+  });
 
   const fetchPayments = useCallback(async () => {
     setLoading(true);
@@ -163,47 +195,21 @@ function PaymentsContent() {
 
   useEffect(() => {
     setPage(1);
-  }, [statusFilter, currencyFilter, debouncedSearch, dateFrom, dateTo]);
+  }, [statusFilter, currencyFilter, debouncedSearch, dateFrom, dateTo, amountMin, amountMax]);
 
   useEffect(() => {
     fetchPayments();
   }, [fetchPayments]);
 
-  const selectedPayment = useMemo(() => {
-    const id = selectedPaymentId ?? paymentIdFromQuery;
-    if (!id) return null;
-    return payments.find((p) => p.id === id) ?? null;
-  }, [selectedPaymentId, paymentIdFromQuery, payments]);
+  const handleRowClick = useCallback((payment: Payment) => {
+    setDrawerPayment(payment);
+    setIsDrawerOpen(true);
+  }, []);
 
-  const selectedIdToFetch = selectedPayment?.id;
-
-  useEffect(() => {
-    if (!selectedIdToFetch) {
-      setDetailedPayment(null);
-      setRefunds([]);
-      return;
-    }
-    const fetchDetailedPayment = async () => {
-      try {
-        const response = (await api.payments.getById(selectedIdToFetch)) as Record<string, unknown>;
-        const backendPayment = (response.data || response.payment || response) as BackendPayment;
-        setDetailedPayment(mapBackendPayment(backendPayment));
-      } catch (error) {
-        console.error("Failed to fetch detailed payment", error);
-      }
-    };
-    const fetchRefunds = async () => {
-      try {
-        const res = (await api.refunds.list({ paymentId: selectedIdToFetch })) as { data?: BackendRefund[] };
-        const list = res?.data ?? [];
-        setRefunds(list.map(mapBackendRefund));
-      } catch {
-        // non-critical — leave empty
-      }
-    };
-    fetchDetailedPayment();
-    fetchRefunds();
-  }, [selectedIdToFetch]);
+  const handleCloseDrawer = useCallback(() => {
+    setIsDrawerOpen(false);
+    setDrawerPayment(null);
+  }, []);
 
   const handleExportCSV = async () => {
     try {
@@ -286,7 +292,7 @@ function PaymentsContent() {
 
       setGeneratedLink(url);
       setRecentLinks((prev) =>
-        [{ id: payment.id, url, amount: amountNumber, currency: linkCurrency, description: linkDescription || undefined, createdAt: new Date().toISOString() }, ...prev].slice(0, 5),
+        [{ id: payment.id!, url, amount: amountNumber, currency: linkCurrency, description: linkDescription || undefined, createdAt: new Date().toISOString() }, ...prev].slice(0, 5),
       );
       toast.success("Payment created successfully.");
       fetchPayments();
@@ -294,39 +300,6 @@ function PaymentsContent() {
       toast.error(error instanceof Error ? error.message : "Unable to create payment.");
     } finally {
       setIsGeneratingLink(false);
-    }
-  };
-
-  const handleInitiateRefund = async (payload: {
-    paymentId: string;
-    merchantId: string;
-    amount: number;
-    currency: "USDC" | "XLM";
-    customerAddress: string;
-    reason: RefundReason;
-    reasonNote?: string;
-  }) => {
-    try {
-      const response = (await api.refunds.initiate(payload)) as { refund?: BackendRefund };
-      const created: RefundRecord = response.refund
-        ? mapBackendRefund(response.refund)
-        : {
-            id: `ref_${Date.now()}`,
-            paymentId: payload.paymentId,
-            merchantId: payload.merchantId,
-            amount: payload.amount,
-            currency: payload.currency,
-            customerAddress: payload.customerAddress,
-            reason: payload.reason,
-            reasonNote: payload.reasonNote,
-            status: "initiated",
-            createdAt: new Date().toISOString(),
-          };
-      setRefunds((prev) => [created, ...prev]);
-      toast.success("Refund submitted successfully.");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Unable to submit refund.");
-      throw error;
     }
   };
 
@@ -340,6 +313,18 @@ function PaymentsContent() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          {/* Real-time connection indicator */}
+          <div
+            className="flex items-center gap-1.5 text-xs text-muted-foreground"
+            title={isConnected ? "Live updates active" : "Live updates disconnected"}
+          >
+            {isConnected ? (
+              <Wifi className="h-3.5 w-3.5 text-green-500" />
+            ) : (
+              <WifiOff className="h-3.5 w-3.5 text-muted-foreground" />
+            )}
+            <span className="hidden sm:inline">{isConnected ? "Live" : "Offline"}</span>
+          </div>
           <Button variant="secondary" className="gap-2" onClick={() => router.push("/dashboard/refunds")}>
             Refunds
           </Button>
@@ -399,11 +384,15 @@ function PaymentsContent() {
             currencyValue={currencyFilter}
             dateFrom={dateFrom}
             dateTo={dateTo}
+            amountMin={amountMin}
+            amountMax={amountMax}
             onSearchChange={handleSearchChange}
             onStatusChange={(v) => setStatusFilter(v)}
             onCurrencyChange={(v) => setCurrencyFilter(v)}
             onDateFromChange={(v) => setDateFrom(v)}
             onDateToChange={(v) => setDateTo(v)}
+            onAmountMinChange={(v) => setAmountMin(v)}
+            onAmountMaxChange={(v) => setAmountMax(v)}
           />
         }
         footer={
@@ -420,9 +409,16 @@ function PaymentsContent() {
           isLoading={loading}
           error={loadError}
           payments={payments}
-          onRowClick={(payment) => router.push(`/dashboard/payments/${payment.id}`)}
+          onRowClick={handleRowClick}
         />
       </DataTableCard>
+
+      {/* Detail Drawer */}
+      <PaymentDrawer
+        payment={drawerPayment}
+        isOpen={isDrawerOpen}
+        onClose={handleCloseDrawer}
+      />
 
       <Modal
         isOpen={showCreateLinkModal}
