@@ -29,6 +29,8 @@ model Merchant {
   api_key_last_four     String?
   settlement_schedule   String?                @default("daily")
   settlement_day        Int?
+  /** FluxaPay fee percentage for this merchant (default 1.5%) */
+  settlement_fee_percent Decimal               @default(1.5)
   /** HTTPS URL of logo shown on hosted checkout (/pay/:id). */
   checkout_logo_url     String?
   /** Primary accent for hosted checkout, e.g. #RRGGBB or #RGB. */
@@ -60,6 +62,7 @@ model Merchant {
   dataExportJobs        DataExportJob[]
   paymentLinks          PaymentLink[]
   dailyReconciliationReports DailyReconciliationReport[]
+  apiKeys               ApiKey[]
   refreshTokens            RefreshToken[]
 }
 
@@ -561,6 +564,7 @@ enum WebhookEventType {
   payment_expired
   payment_partially_paid
   payment_overpaid
+  payment_settled
   refund_completed
   refund_failed
   settlement_completed
@@ -713,6 +717,37 @@ enum WebhookDeliveryStatus {
   FAILED
 }
 
+model ApiKey {
+  id                String   @id @default(cuid())
+  merchant          Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  merchantId        String
+  name              String
+  /** SHA-256 hash of the API key */
+  key_hash          String   @unique
+  /** Last 4 characters of the key for display */
+  key_last_four     String
+  /** Environment: live or test */
+  environment       ApiKeyEnvironment
+  /** Status: active or revoked */
+  status            ApiKeyStatus            @default(active)
+  /** Timestamp when the key was last used for authentication */
+  last_used_at      DateTime?
+  created_at        DateTime               @default(now())
+  updated_at        DateTime               @updatedAt
+
+  @@index([merchantId])
+  @@index([merchantId, status])
+  @@index([key_hash])
+}
+
+enum ApiKeyEnvironment {
+  live
+  test
+}
+
+enum ApiKeyStatus {
+  active
+  revoked
 enum EscrowStatus {
   pending
   active

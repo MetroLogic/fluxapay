@@ -10,6 +10,7 @@ import { startPaymentOracle, stopPaymentOracle } from "./services/paymentOracle.
 import { initializeEmailNotifications } from "./services/emailNotification.service";
 import { registerShutdownHandlers } from "./services/shutdown.service";
 import { getLogger } from "./utils/logger";
+import { paymentSettlementService } from "./services/paymentSettlement.service";
 
 dotenv.config();
 
@@ -56,6 +57,10 @@ try {
 
     // Initialize email notification listeners
     initializeEmailNotifications();
+
+    // Initialize per-payment settlement service (subscribes to PAYMENT_CONFIRMED events)
+    // Service auto-starts via constructor subscription
+    logger.info("Payment settlement service initialized");
   });
 
   /**

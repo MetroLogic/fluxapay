@@ -32,7 +32,7 @@ import merchantDeletionRoutes from "./routes/merchantDeletion.route";
 import dataExportRoutes from "./routes/dataExport.route";
 import oracleRoutes from "./routes/oracle.route";
 import chargesRoutes from "./routes/charges.route";
-import authRoutes from "./routes/auth.route";
+import apiKeyRoutes from "./routes/apiKey.route";
 
 const app = express();
 const prisma = new PrismaClient();
@@ -149,6 +149,7 @@ app.use("/api/v1/payment-links", paymentLinkRoutes);
 app.use("/api/v1/reports/reconciliation", dailyReconciliationRoutes);
 app.use("/api/v1/refunds", refundRoutes);
 app.use("/api/v1/keys", keysRoutes);
+app.use("/api/v1/api-keys", apiKeyRoutes);
 app.use("/api/v1/dashboard", merchantRateLimit(), dashboardRoutes);
 
 // ── Admin routes ───────────────────────────────────────────────────────────────
