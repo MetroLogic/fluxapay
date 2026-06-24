@@ -26,6 +26,30 @@ const nextConfig: NextConfig = {
     );
     return config;
   },
+  async headers() {
+    return [
+      {
+        // Prevent the browser from caching the service worker script so updates
+        // are picked up immediately on the next page load.
+        source: "/sw.js",
+        headers: [
+          { key: "Service-Worker-Allowed", value: "/" },
+          { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
+        ],
+      },
+      {
+        // Allow the checkout shell HTML to be served stale while the SW
+        // revalidates it in the background (matching the SW strategy).
+        source: "/pay/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=0, stale-while-revalidate=86400",
+          },
+        ],
+      },
+    ];
+  },
   async redirects() {
     const redirects = [
       {

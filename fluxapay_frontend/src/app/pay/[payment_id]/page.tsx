@@ -6,6 +6,7 @@ import { useParams, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Loader2, XCircle, CheckCircle, AlertCircle, RefreshCw } from 'lucide-react';
 import { usePaymentStatus } from '@/hooks/usePaymentStatus';
+import { useOfflineSync } from '@/hooks/useOfflineSync';
 import { TxHashLink } from '@/components/TxHashLink';
 import { PaymentQRCode } from '@/components/checkout/PaymentQRCode';
 import { PaymentTimer } from '@/components/checkout/PaymentTimer';
@@ -72,6 +73,8 @@ export default function CheckoutPage() {
   const { payment, loading, error, isOffline, retryConnection } =
     usePaymentStatus(paymentId);
 
+  const { pendingCount, queueAction } = useOfflineSync(paymentId, retryConnection);
+
   // Customization from query params (SDK overrides)
   const qAccent = searchParams.get('accentColor') || searchParams.get('primaryColor');
   const qLogo = searchParams.get('logoUrl');
@@ -112,13 +115,20 @@ export default function CheckoutPage() {
           aria-live="polite"
         >
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm font-medium">
-              {t('checkout.offlineMessage')}
-            </p>
+            <div>
+              <p className="text-sm font-medium">
+                {t('checkout.offlineMessage')}
+              </p>
+              {pendingCount > 0 && (
+                <p className="mt-1 text-xs text-amber-700">
+                  {pendingCount} action{pendingCount > 1 ? 's' : ''} queued — will sync when reconnected
+                </p>
+              )}
+            </div>
             <button
               type="button"
               onClick={() => {
-                void retryConnection();
+                void queueAction('retry-connection');
               }}
               className="rounded-md border border-amber-400 bg-white px-3 py-1 text-sm font-semibold text-amber-900 hover:bg-amber-100"
             >
