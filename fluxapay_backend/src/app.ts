@@ -14,6 +14,8 @@ import { globalRateLimit, merchantRateLimit, authRateLimit } from "./middleware/
 
 import merchantRoutes from "./routes/merchant.route";
 import settlementRoutes from "./routes/settlement.route";
+import addressPoolRoutes from "./routes/addressPool.route";
+import fxRoutes from "./routes/fx.route";
 import kycRoutes from "./routes/kyc.route";
 import webhookRoutes from "./routes/webhook.route";
 import paymentRoutes from "./routes/payment.route";
@@ -148,6 +150,8 @@ app.use("/api/v1/customers", customerRoutes);
 app.use("/api/v1/payment-links", paymentLinkRoutes);
 app.use("/api/v1/reports/reconciliation", dailyReconciliationRoutes);
 app.use("/api/v1/refunds", refundRoutes);
+app.use("/api/v1/admin/address-pool", addressPoolRoutes);
+app.use("/api/v1/fx-rates", fxRoutes);
 app.use("/api/v1/keys", keysRoutes);
 app.use("/api/v1/api-keys", apiKeyRoutes);
 app.use("/api/v1/dashboard", merchantRateLimit(), dashboardRoutes);

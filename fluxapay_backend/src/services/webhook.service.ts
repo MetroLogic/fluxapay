@@ -374,9 +374,11 @@ export async function retryWebhookService(params: RetryWebhookParams) {
     },
   });
 
-  // Calculate next retry time with exponential backoff
+  // Calculate next retry time using exact schedule: 5s, 30s, 2m, 10m, 1h
+  const retryDelaysMs = [5000, 30000, 120000, 600000, 3600000];
+  const delayMs = retryDelaysMs[newRetryCount - 1] || 3600000;
   const nextRetryAt = newStatus === "retrying"
-    ? new Date(Date.now() + Math.pow(2, newRetryCount) * 60 * 1000)
+    ? new Date(Date.now() + delayMs)
     : null;
 
   // Update the webhook log — persist DLQ metadata on permanent failure

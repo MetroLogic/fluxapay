@@ -30,6 +30,7 @@ import { runPaymentExpiryJob } from "./paymentExpiry.service";
 import { performDatabaseBackup } from "./dbBackup.service";
 import { runInvoiceOverdueJob } from "./invoiceOverdue.service";
 import { cleanupExpiredIdempotencyRecords } from "../middleware/idempotency.middleware";
+import { DepositAddressService } from "./depositAddress.service";
 
 const SETTLEMENT_CRON_EXPR = process.env.SETTLEMENT_CRON ?? "0 0 * * *";
 const BILLING_CRON_EXPR = process.env.BILLING_CRON ?? "0 1 * * *";
@@ -40,6 +41,7 @@ const PAYMENT_EXPIRY_CRON_EXPR = process.env.PAYMENT_EXPIRY_CRON ?? "*/5 * * * *
 const DB_BACKUP_CRON_EXPR = process.env.DB_BACKUP_CRON ?? "0 2 * * *";
 const INVOICE_OVERDUE_CRON_EXPR = process.env.INVOICE_OVERDUE_CRON ?? "0 * * * *";
 const IDEMPOTENCY_CLEANUP_CRON_EXPR = process.env.IDEMPOTENCY_CLEANUP_CRON ?? "0 3 * * *";
+const ADDRESS_POOL_CRON_EXPR = process.env.ADDRESS_POOL_CRON ?? "*/10 * * * *";
 
 let settlementTask: ScheduledTask | null = null;
 let billingTask: ScheduledTask | null = null;
@@ -50,6 +52,7 @@ let paymentExpiryTask: ScheduledTask | null = null;
 let dbBackupTask: ScheduledTask | null = null;
 let invoiceOverdueTask: ScheduledTask | null = null;
 let idempotencyCleanupTask: ScheduledTask | null = null;
+let addressPoolTask: ScheduledTask | null = null;
 
 /**
  * Starts all scheduled cron jobs.
@@ -170,6 +173,24 @@ export function startCronJobs(): void {
     }
   }, { timezone: "UTC" });
 
+  // ── Address Pool ───────────────────────────────────────────────────────────
+  addressPoolTask = schedule(ADDRESS_POOL_CRON_EXPR, async () => {
+    try {
+      const recycled = await DepositAddressService.recycleAddresses();
+      if (recycled > 0) {
+        console.log(`[Cron] ✅ Address pool — recycled ${recycled} addresses.`);
+      }
+      const stats = await DepositAddressService.getPoolStats();
+      if (stats.available < 100) {
+        const toGenerate = 100 - stats.available;
+        const generated = await DepositAddressService.generatePoolAddresses(toGenerate);
+        console.log(`[Cron] ✅ Address pool — generated ${generated} new addresses.`);
+      }
+    } catch (err: any) {
+      console.error(`[Cron] ❌ Address pool job failed: ${err.message}`);
+    }
+  }, { timezone: "UTC" });
+
   console.log("[Cron] All jobs scheduled successfully.");
 }
 
@@ -187,6 +208,7 @@ export function stopCronJobs(): void {
     [dbBackupTask, "Database backup"],
     [invoiceOverdueTask, "Invoice overdue"],
     [idempotencyCleanupTask, "Idempotency cleanup"],
+    [addressPoolTask, "Address pool"],
   ];
   for (const [task, name] of tasks) {
     if (task) {
@@ -203,4 +225,5 @@ export function stopCronJobs(): void {
   dbBackupTask = null;
   invoiceOverdueTask = null;
   idempotencyCleanupTask = null;
+  addressPoolTask = null;
 }

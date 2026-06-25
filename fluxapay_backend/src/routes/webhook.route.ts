@@ -105,6 +105,14 @@ router.get(
   getWebhookLogs
 );
 
+// Alias /deliveries to /logs
+router.get(
+  "/deliveries",
+  authenticateToken, merchantApiKeyRateLimit(),
+  validateQuery(webhookSchema.getWebhookLogsSchema),
+  getWebhookLogs
+);
+
 /**
  * @swagger
  * /api/v1/webhooks/logs/export:
@@ -147,6 +155,14 @@ router.get(
  */
 router.get(
   "/logs/export",
+  authenticateToken, merchantApiKeyRateLimit(),
+  validateQuery(webhookSchema.getWebhookLogsSchema),
+  exportWebhookLogs,
+);
+
+// Alias /deliveries/export to /logs/export
+router.get(
+  "/deliveries/export",
   authenticateToken, merchantApiKeyRateLimit(),
   validateQuery(webhookSchema.getWebhookLogsSchema),
   exportWebhookLogs,
@@ -205,6 +221,9 @@ router.get(
  */
 router.get("/logs/:log_id", authenticateToken, merchantApiKeyRateLimit(), getWebhookLogDetails);
 
+// Alias /deliveries/:log_id to /logs/:log_id
+router.get("/deliveries/:log_id", authenticateToken, merchantApiKeyRateLimit(), getWebhookLogDetails);
+
 /**
  * @swagger
  * /api/v1/webhooks/logs/{log_id}/retry:
@@ -251,7 +270,14 @@ router.get("/logs/:log_id", authenticateToken, merchantApiKeyRateLimit(), getWeb
 router.post(
   "/logs/:log_id/retry",
   authenticateToken, merchantApiKeyRateLimit(),
-  retryWebhook,
+  retryWebhook
+);
+
+// Alias /deliveries/:log_id/retry to /logs/:log_id/retry
+router.post(
+  "/deliveries/:log_id/retry",
+  authenticateToken, merchantApiKeyRateLimit(),
+  retryWebhook
 );
 
 /**
