@@ -347,6 +347,9 @@ model Payment {
   settlementId       String?
   settlement         Settlement? @relation(fields: [settlementId], references: [id])
   paymentLinkId      String?
+  escrow_mode             Boolean       @default(false)
+  escrow_status           EscrowStatus?
+  escrow_contract_address String?       @unique
 
   // reminder
   reminder_sent_at   DateTime?
@@ -748,6 +751,8 @@ enum ApiKeyEnvironment {
 enum ApiKeyStatus {
   active
   revoked
+}
+
 enum EscrowStatus {
   pending
   active

@@ -42,7 +42,7 @@ const metrics = getMetricsCollector();
 // ─── Configuration ───────────────────────────────────────────────────────────
 
 const HORIZON_URL = process.env.STELLAR_HORIZON_URL || "https://horizon-testnet.stellar.org";
-const USDC_ISSUER = process.env.USDC_ISSUER_PUBLIC_KEY || "GBBD47IF6LWK7P7MDEVSCWT73IQIGCEZHR7OMXMBZQ3ZONN2T4U6W23Y";
+const USDC_ISSUER = process.env.USDC_ISSUER_PUBLIC_KEY || "GBVXGET7UCLTTLDZGVWDDMZ7FVLCNZL75GU7BLVPTWUP6UIVYHAY5OAX";
 const POLLING_INTERVAL_MS = parseInt(process.env.ORACLE_POLLING_INTERVAL_MS || "30000", 10); // 30 seconds default
 const MAX_MISSED_POLLS = parseInt(process.env.ORACLE_MAX_MISSED_POLLS || "5", 10);
 const ENABLE_SMART_CONTRACT_VERIFICATION = process.env.ENABLE_SOROBAN_VERIFICATION === "true";

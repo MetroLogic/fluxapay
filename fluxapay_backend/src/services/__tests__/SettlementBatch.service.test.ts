@@ -4,10 +4,6 @@
  * Comprehensive tests for the settlement batch service
  */
 
-import { runSettlementBatch, isMerchantDueForSettlement } from "../settlementBatch.service";
-import { PrismaClient } from "../../generated/client/client";
-import { getExchangePartner } from "../exchange.service";
-
 // Mock dependencies
 const mockPrisma = {
   merchant: {
@@ -30,6 +26,9 @@ jest.mock("../../generated/client/client", () => ({
     TransactionClient: jest.fn(),
   },
 }));
+
+const { runSettlementBatch, isMerchantDueForSettlement } = require("../settlementBatch.service");
+const { getExchangePartner } = require("../exchange.service");
 
 jest.mock("../exchange.service");
 jest.mock("../webhook.service", () => ({

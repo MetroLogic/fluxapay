@@ -4,7 +4,7 @@ import {
     getSettlementDetails,
     getSettlementSummary,
     exportSettlement,
-    exportSettlementRange,
+    exportSettlementsRange,
     getSettlementBatch,
 } from "../controllers/settlement.controller";
 import { authenticateApiKey } from "../middleware/apiKeyAuth.middleware";
@@ -93,7 +93,7 @@ router.get("/", validate(settlementSchema.listSettlementsSchema), listSettlement
  *       401:
  *         description: Unauthorized
  */
-router.get("/export", validate(settlementSchema.exportSettlementRangeSchema), exportSettlementRange);
+router.get("/export", validate(settlementSchema.exportSettlementsRangeSchema), exportSettlementsRange);
 
 /**
  * @swagger
@@ -163,8 +163,6 @@ router.get("/batch", validate(settlementSchema.settlementBatchSchema), getSettle
  *       404:
  *         description: Settlement not found
  */
-router.get("/export", validate(settlementSchema.exportSettlementsRangeSchema), exportSettlementsRange);
-
 router.get("/:settlement_id", validate(settlementSchema.settlementDetailsSchema), getSettlementDetails);
 
 /**

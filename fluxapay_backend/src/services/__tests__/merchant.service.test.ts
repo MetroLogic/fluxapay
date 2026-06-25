@@ -8,8 +8,18 @@ const mockMerchant = {
   update: jest.fn(),
 };
 
+const mockBankAccount = {
+  create: jest.fn(),
+};
+
+const mockPrisma = {
+  merchant: mockMerchant,
+  bankAccount: mockBankAccount,
+  $transaction: jest.fn(async (cb) => cb(mockPrisma)),
+};
+
 jest.mock("../../generated/client/client", () => ({
-  PrismaClient: jest.fn(() => ({ merchant: mockMerchant })),
+  PrismaClient: jest.fn(() => mockPrisma),
 }));
 
 jest.mock("../otp.service", () => ({

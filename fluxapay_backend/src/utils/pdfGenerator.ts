@@ -55,7 +55,7 @@ export function generateSettlementPDF(settlement: any, payments: any[]): Promise
             doc.fillColor('#3F51B5').fontSize(14).font('Helvetica-Bold').text('Settlement Summary');
             doc.moveDown(0.5);
             
-            let summaryY = doc.y;
+            const summaryY = doc.y;
             // Draw a light grey background box for summary
             doc.rect(50, summaryY, 500, 90).fill('#F5F5F5');
             
@@ -215,7 +215,7 @@ export function generateSettlementsRangePDF(
             doc.fillColor('#3F51B5').fontSize(14).font('Helvetica-Bold').text('Reconciliation Statistics');
             doc.moveDown(0.5);
 
-            let summaryY = doc.y;
+            const summaryY = doc.y;
             doc.rect(50, summaryY, 500, 70).fill('#F5F5F5');
 
             doc.fillColor('#333333').fontSize(11).font('Helvetica');

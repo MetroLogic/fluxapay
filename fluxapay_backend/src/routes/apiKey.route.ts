@@ -11,7 +11,7 @@ const router = Router();
 
 /**
  * @swagger
- * /v1/api-keys:
+ * /api/v1/api-keys:
  *   post:
  *     summary: Create a new API key
  *     tags: [API Keys]
@@ -70,7 +70,7 @@ router.post('/', authenticateApiKey, merchantApiKeyRateLimit(), createApiKey);
 
 /**
  * @swagger
- * /v1/api-keys:
+ * /api/v1/api-keys:
  *   get:
  *     summary: List API keys
  *     tags: [API Keys]
@@ -113,7 +113,7 @@ router.get('/', authenticateApiKey, merchantApiKeyRateLimit(), listApiKeys);
 
 /**
  * @swagger
- * /v1/api-keys/{id}:
+ * /api/v1/api-keys/{id}:
  *   delete:
  *     summary: Revoke an API key
  *     tags: [API Keys]

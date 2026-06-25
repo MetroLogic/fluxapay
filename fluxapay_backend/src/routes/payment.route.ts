@@ -277,7 +277,7 @@ router.get('/:id', authenticateApiKey, merchantApiKeyRateLimit(), getPaymentById
 
 /**
  * @swagger
- * /api/v1/charges/{id}/settlement:
+ * /api/v1/payments/{id}/settlement:
  *   get:
  *     summary: Get settlement details for a payment
  *     tags: [Payments]

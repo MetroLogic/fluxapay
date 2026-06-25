@@ -17,7 +17,7 @@ export class PaymentContractService {
         this.contractId = process.env.PAYMENT_CONTRACT_ID || '';
 
         const adminSecret = process.env.ADMIN_SECRET_KEY;
-        if (adminSecret) {
+        if (adminSecret && adminSecret.startsWith('S') && adminSecret.length === 56) {
             this.adminKeypair = Keypair.fromSecret(adminSecret);
         } else {
             this.adminKeypair = Keypair.random();

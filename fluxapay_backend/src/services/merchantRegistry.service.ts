@@ -26,7 +26,7 @@ export class MerchantRegistryService {
     this.contractId = process.env.MERCHANT_REGISTRY_CONTRACT_ID || "";
 
     const adminSecret = process.env.ADMIN_SECRET_KEY;
-    if (adminSecret) {
+    if (adminSecret && adminSecret.startsWith('S') && adminSecret.length === 56) {
       this.adminKeypair = Keypair.fromSecret(adminSecret);
     } else {
       // Create a random one for dev/fallback if missing, though it won't actually have authorization on mainnet

@@ -45,7 +45,8 @@ const router = Router();
  *                 example: "1-hour consultation session"
  *               amount:
  *                 type: number
- *                 positive: true
+ *                 minimum: 0
+ *                 exclusiveMinimum: true
  *                 example: 100.00
  *                 description: Optional for open-amount links
  *               currency:

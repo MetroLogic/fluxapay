@@ -1,6 +1,5 @@
 import { Request, Response } from "express";
 import z from "zod";
-import { Response } from "express";
 import { createController } from "../helpers/controller.helper";
 import * as settlementSchema from "../schemas/settlement.schema";
 import {
@@ -166,8 +165,6 @@ export const exportSettlementsRange = async (req: AuthRequest, res: Response) =>
         return res.status(error.status || 500).json({ error: error.message || "Failed to export reconciliation report" });
     }
 };
-
-);
 
 export const exportSettlementRange = async (req: Request, res: Response) => {
     try {
