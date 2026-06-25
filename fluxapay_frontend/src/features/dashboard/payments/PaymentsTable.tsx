@@ -41,14 +41,9 @@ const StatusBadge = memo(({ status }: { status: PaymentStatus }) => {
       return <Badge variant="error">Failed</Badge>;
     case "expired":
       return <Badge variant="secondary">Expired</Badge>;
-    case "settled":
-      return <Badge variant="info">Settled</Badge>;
-    case "underpaid":
-      return (
-        <Badge className="border-transparent bg-orange-500/10 text-orange-500 hover:bg-orange-500/20">
-          Underpaid
-        </Badge>
-      );
+    case "paid":
+    case "completed":
+      return <Badge variant="success">{status === "paid" ? "Paid" : "Completed"}</Badge>;
     case "partially_paid":
       return (
         <Badge className="border-transparent bg-orange-500/10 text-orange-500 hover:bg-orange-500/20">

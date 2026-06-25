@@ -31,26 +31,24 @@ function StatusBadgeInline({ status }: { status: string }) {
   switch (status) {
     case "confirmed":
       return <Badge variant="success">Confirmed</Badge>;
+    case "paid":
+      return <Badge variant="success">Paid</Badge>;
+    case "completed":
+      return <Badge variant="success">Completed</Badge>;
     case "pending":
       return <Badge variant="warning">Pending</Badge>;
-    case "failed":
-      return <Badge variant="error">Failed</Badge>;
-    case "expired":
-      return <Badge variant="secondary">Expired</Badge>;
-    case "settled":
-      return <Badge variant="info">Settled</Badge>;
-    case "underpaid":
-      return (
-        <Badge className="border-transparent bg-orange-500/10 text-orange-500">
-          Underpaid
-        </Badge>
-      );
     case "partially_paid":
       return (
         <Badge className="border-transparent bg-orange-500/10 text-orange-500">
           Partially Paid
         </Badge>
       );
+    case "overpaid":
+      return <Badge variant="info">Overpaid</Badge>;
+    case "failed":
+      return <Badge variant="error">Failed</Badge>;
+    case "expired":
+      return <Badge variant="secondary">Expired</Badge>;
     default:
       return <Badge>{status}</Badge>;
   }
@@ -65,11 +63,13 @@ function TimelineItem({
 }) {
   const colorMap: Record<string, string> = {
     confirmed: "bg-green-500 ring-green-500/20",
+    paid: "bg-green-500 ring-green-500/20",
+    completed: "bg-green-500 ring-green-500/20",
     pending: "bg-yellow-500 ring-yellow-500/20",
+    partially_paid: "bg-orange-500 ring-orange-500/20",
+    overpaid: "bg-blue-500 ring-blue-500/20",
     failed: "bg-red-500 ring-red-500/20",
     expired: "bg-muted-foreground/50 ring-muted-foreground/10",
-    settled: "bg-blue-500 ring-blue-500/20",
-    underpaid: "bg-orange-500 ring-orange-500/20",
   };
 
   const dotClass = colorMap[entry.status] ?? "bg-primary ring-primary/20";

@@ -1,3 +1,7 @@
+/**
+ * Payment status — aligned with backend Prisma PaymentStatus enum.
+ * Values: pending, partially_paid, confirmed, overpaid, expired, failed, paid, completed
+ */
 export type PaymentStatus =
   | "pending"
   | "confirmed"
@@ -6,9 +10,7 @@ export type PaymentStatus =
   | "partially_paid"
   | "overpaid"
   | "paid"
-  | "completed"
-  | "settled"
-  | "underpaid";
+  | "completed";
 
 export interface WebhookLogEntry {
   id: string;
