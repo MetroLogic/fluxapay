@@ -39,6 +39,9 @@ model Merchant {
   email_notifications_enabled Boolean            @default(true)
   notify_on_payment     Boolean                @default(false)
   notify_on_settlement  Boolean                @default(true)
+  /** On-chain registry state — prevents duplicate Soroban registrations on retry */
+  onchain_registered        Boolean   @default(false)
+  onchain_registry_tx_hash  String?
   /** Compliance: set when merchant requests account deletion */
   deletion_requested_at DateTime?
   /** Compliance: set after PII anonymization is complete */

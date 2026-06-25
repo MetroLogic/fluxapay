@@ -1,0 +1,71 @@
+name: Load Tests
+
+on:
+  # Run weekly so performance regressions are caught automatically.
+  schedule:
+    - cron: "0 2 * * 1"  # every Monday at 02:00 UTC
+
+  # Allow manual runs with tunable parameters (e.g. after a deploy or on demand).
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: "API base URL (must look like staging)"
+        required: false
+        default: ""
+      ramp_vus:
+        description: "VUs during ramp-up"
+        required: false
+        default: "5"
+      steady_vus:
+        description: "VUs during steady state"
+        required: false
+        default: "10"
+      ramp_up:
+        description: "Ramp-up duration (e.g. 30s, 1m)"
+        required: false
+        default: "30s"
+      steady_duration:
+        description: "Steady-state duration (e.g. 2m, 5m)"
+        required: false
+        default: "2m"
+      ramp_down:
+        description: "Ramp-down duration"
+        required: false
+        default: "30s"
+
+concurrency:
+  group: load-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  payment-create-list:
+    name: "k6 — Payment Create + List"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run k6 load test
+        uses: grafana/k6-action@v0.3.1
+        with:
+          filename: fluxapay_backend/load-tests/k6-payment-create-list.js
+          flags: >-
+            --out json=k6-results.json
+        env:
+          BASE_URL: ${{ inputs.base_url || secrets.STAGING_BASE_URL }}
+          API_KEY: ${{ secrets.STAGING_API_KEY }}
+          RAMP_VUS: ${{ inputs.ramp_vus || '5' }}
+          STEADY_VUS: ${{ inputs.steady_vus || '10' }}
+          RAMP_UP: ${{ inputs.ramp_up || '30s' }}
+          STEADY_DURATION: ${{ inputs.steady_duration || '2m' }}
+          RAMP_DOWN: ${{ inputs.ramp_down || '30s' }}
+          REQUIRE_STAGING_GUARD: "true"
+
+      - name: Upload k6 results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: k6-results-${{ github.run_id }}
+          path: k6-results.json
+          retention-days: 30
