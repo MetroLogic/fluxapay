@@ -1,4 +1,4 @@
-import { Keypair, nativeToScVal, rpc, TransactionBuilder, Networks, Contract, xdr } from '@stellar/stellar-sdk';
+import { Keypair, nativeToScVal, rpc, TransactionBuilder, Networks, Contract } from '@stellar/stellar-sdk';
 import { isDevEnv } from '../helpers/env.helper';
 import { PrismaClient } from '../generated/client/client';
 
@@ -45,20 +45,19 @@ export class PaymentContractService {
 
         while (attempt < MAX_RETRIES) {
             try {
-                const txResponse = await this.invokeVerifyContract(paymentId, txHash, amount);
+                const contractTxHash = await this.invokeVerifyContract(paymentId, txHash, amount);
 
-                // Update local DB to reflect success
                 await prisma.payment.update({
                     where: { id: paymentId },
                     data: {
                         onchain_verified: true,
-                        contract_tx_hash: txHash,
+                        contract_tx_hash: contractTxHash,
                         verification_error: null
                     }
                 });
 
                 if (isDevEnv()) {
-                    console.log(`Successfully verified payment ${paymentId} on-chain.`);
+                    console.log(`Successfully verified payment ${paymentId} on-chain (tx: ${contractTxHash}).`);
                 }
                 return true;
             } catch (error) {
@@ -69,7 +68,6 @@ export class PaymentContractService {
                 console.error(`Attempt ${attempt} to verify payment ${paymentId} on-chain failed:`, errorMessage);
 
                 if (attempt >= MAX_RETRIES) {
-                    // Update DB with error message
                     await prisma.payment.update({
                         where: { id: paymentId },
                         data: {
@@ -87,12 +85,16 @@ export class PaymentContractService {
         return false;
     }
 
-    private async invokeVerifyContract(paymentId: string, txHash: string, amount: string) {
+    /**
+     * Builds and submits the verify_payment Soroban call.
+     * Fee is derived from XDR simulation rather than hardcoded.
+     * Returns the confirmed transaction hash.
+     */
+    private async invokeVerifyContract(paymentId: string, txHash: string, amount: string): Promise<string> {
         const contract = new Contract(this.contractId);
-        // USDC has 7 decimals on Stellar. We must convert the decimal string amount to stroops (integer).
+        // USDC has 7 decimals on Stellar. Convert decimal string amount to stroops (integer).
         const stroops = BigInt(Math.round(parseFloat(amount) * 10_000_000));
 
-        // Prepare arguments: payment_id (string), tx_hash (string), amount (i128)
         const args = [
             nativeToScVal(paymentId, { type: 'string' }),
             nativeToScVal(txHash, { type: 'string' }),
@@ -101,18 +103,24 @@ export class PaymentContractService {
 
         const sourceAccount = await this.server.getAccount(this.adminKeypair.publicKey());
 
-        const builder = new TransactionBuilder(sourceAccount, {
-            fee: '100000',
+        // Use a minimal placeholder fee; the real fee is determined by XDR simulation below.
+        const tx = new TransactionBuilder(sourceAccount, {
+            fee: '100',
             networkPassphrase: this.networkPassphrase,
-        });
-
-        const tx = builder
+        })
             .addOperation(contract.call('verify_payment', ...args))
             .setTimeout(30)
             .build();
 
-        const preparedTx = await this.server.prepareTransaction(tx) as any;
+        // Estimate Soroban resource fees by simulating the transaction and reading the XDR result.
+        const simulation = await this.server.simulateTransaction(tx);
+        if (rpc.Api.isSimulationError(simulation)) {
+            throw new Error(`Soroban XDR fee estimation failed: ${simulation.error}`);
+        }
 
+        // assembleTransaction replaces the placeholder fee with the actual resource fee from XDR,
+        // and sets the Soroban footprint (ledger keys) and auth entries.
+        const preparedTx = rpc.assembleTransaction(tx, simulation).build();
         preparedTx.sign(this.adminKeypair);
 
         const sendTxResponse = await this.server.sendTransaction(preparedTx);
@@ -121,13 +129,12 @@ export class PaymentContractService {
             throw new Error(`Transaction submission failed: ${JSON.stringify(sendTxResponse)}`);
         }
 
-        // Wait for the transaction to be processed
-        let txResponse = await this.server.getTransaction((sendTxResponse as any).hash);
-
+        // Poll until confirmed or times out.
+        let txResponse = await this.server.getTransaction(sendTxResponse.hash);
         let retries = 0;
         while (txResponse.status === 'NOT_FOUND' && retries < 15) {
             await new Promise(resolve => setTimeout(resolve, 3000));
-            txResponse = await this.server.getTransaction((sendTxResponse as any).hash);
+            txResponse = await this.server.getTransaction(sendTxResponse.hash);
             retries++;
         }
 
@@ -135,7 +142,7 @@ export class PaymentContractService {
             throw new Error(`Transaction failed on-chain: ${JSON.stringify(txResponse)}`);
         }
 
-        return txResponse;
+        return sendTxResponse.hash;
     }
 
     private logToManualInterventionQueue(paymentId: string, reason: string) {

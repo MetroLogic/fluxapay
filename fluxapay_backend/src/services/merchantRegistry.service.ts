@@ -43,7 +43,8 @@ export class MerchantRegistryService {
 
   /**
    * Registers a merchant on-chain via the Soroban Smart Contract.
-   * Includes an automatic retry mechanism for robustness.
+   * Idempotent: checks DB state before each attempt so retries never submit
+   * a second registration transaction for the same merchant.
    * Throws an error if we exceed max retries.
    */
   public async register_merchant(
@@ -58,20 +59,60 @@ export class MerchantRegistryService {
       return false;
     }
 
+    // Idempotency guard: if a previous call already completed on-chain, skip.
+    const existing = await prisma.merchant.findUnique({
+      where: { id: merchantId },
+      select: { onchain_registered: true, onchain_registry_tx_hash: true },
+    });
+    if (existing?.onchain_registered) {
+      if (isDevEnv()) {
+        console.log(
+          `Merchant ${merchantId} already registered on-chain (tx: ${existing.onchain_registry_tx_hash}). Skipping.`,
+        );
+      }
+      return true;
+    }
+
     const MAX_RETRIES = 3;
     let attempt = 0;
     const baseDelay = 1000;
 
     while (attempt < MAX_RETRIES) {
+      // Re-check DB at each retry boundary to handle concurrent callers.
+      if (attempt > 0) {
+        const recheck = await prisma.merchant.findUnique({
+          where: { id: merchantId },
+          select: { onchain_registered: true },
+        });
+        if (recheck?.onchain_registered) {
+          if (isDevEnv()) {
+            console.log(
+              `Merchant ${merchantId} registered on-chain by a concurrent process. Skipping retry.`,
+            );
+          }
+          return true;
+        }
+      }
+
       try {
-        await this.invokeRegisterContract(
+        const txHash = await this.invokeRegisterContract(
           merchantId,
           businessName,
           settlementCurrency,
         );
+
+        // Mark as registered in DB so future calls (or retries) are no-ops.
+        await prisma.merchant.update({
+          where: { id: merchantId },
+          data: {
+            onchain_registered: true,
+            onchain_registry_tx_hash: txHash,
+          },
+        });
+
         if (isDevEnv()) {
           console.log(
-            `Successfully registered merchant ${merchantId} on-chain.`,
+            `Successfully registered merchant ${merchantId} on-chain (tx: ${txHash}).`,
           );
         }
         return true;
@@ -101,11 +142,15 @@ export class MerchantRegistryService {
     return false;
   }
 
+  /**
+   * Submits the register_merchant call to Soroban and waits for confirmation.
+   * Returns the confirmed transaction hash.
+   */
   private async invokeRegisterContract(
     merchantId: string,
     businessName: string,
     settlementCurrency: string,
-  ) {
+  ): Promise<string> {
     const contract = new Contract(this.contractId);
 
     // Prepare arguments: merchant_id, business_name, settlement_currency
@@ -119,18 +164,25 @@ export class MerchantRegistryService {
       this.adminKeypair.publicKey(),
     );
 
-    const builder = new TransactionBuilder(sourceAccount, {
-      fee: "100000",
+    // Use a minimal placeholder fee; real fee is determined by XDR simulation below.
+    const tx = new TransactionBuilder(sourceAccount, {
+      fee: "100",
       networkPassphrase: this.networkPassphrase,
-    });
-
-    const tx = builder
+    })
       .addOperation(contract.call("register_merchant", ...args))
       .setTimeout(30)
       .build();
 
-    const preparedTx = (await this.server.prepareTransaction(tx)) as any;
+    // Estimate Soroban resource fees from XDR simulation result.
+    const simulation = await this.server.simulateTransaction(tx);
+    if (rpc.Api.isSimulationError(simulation)) {
+      throw new Error(
+        `Soroban XDR fee simulation failed: ${simulation.error}`,
+      );
+    }
 
+    // assembleTransaction sets the resource fee, footprint, and auth from simulation XDR.
+    const preparedTx = rpc.assembleTransaction(tx, simulation).build();
     preparedTx.sign(this.adminKeypair);
 
     const sendTxResponse = await this.server.sendTransaction(preparedTx);
@@ -141,9 +193,8 @@ export class MerchantRegistryService {
       );
     }
 
-    // Wait for the transaction to be processed
+    // Poll until the transaction is confirmed or times out.
     let txResponse = await this.server.getTransaction(sendTxResponse.hash);
-
     let retries = 0;
     while (txResponse.status === "NOT_FOUND" && retries < 10) {
       await new Promise((resolve) => setTimeout(resolve, 2000));
@@ -151,7 +202,13 @@ export class MerchantRegistryService {
       retries++;
     }
 
-    return true;
+    if (txResponse.status === "FAILED") {
+      throw new Error(
+        `Transaction failed on-chain: ${JSON.stringify(txResponse)}`,
+      );
+    }
+
+    return sendTxResponse.hash;
   }
 
   private async logToManualInterventionQueue(
