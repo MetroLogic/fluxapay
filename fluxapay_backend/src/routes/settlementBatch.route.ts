@@ -12,31 +12,13 @@
 
 import { Router, Request, Response } from "express";
 import { runSettlementBatch } from "../services/settlementBatch.service";
+import { adminAuth } from "../middleware/adminAuth.middleware";
 
 const router = Router();
 
-/** Middleware: simple static secret for internal admin endpoints. */
-function requireAdminSecret(req: Request, res: Response, next: () => void) {
-    const secret = process.env.ADMIN_INTERNAL_SECRET;
-    const provided = req.headers["x-admin-secret"];
-
-    if (!secret) {
-        // No secret configured – only allow in dev
-        if (process.env.NODE_ENV === "production") {
-            res.status(503).json({ message: "Admin endpoints are disabled in production when ADMIN_INTERNAL_SECRET is not set." });
-            return;
-        }
-    } else if (provided !== secret) {
-        res.status(401).json({ message: "Unauthorized. Invalid admin secret." });
-        return;
-    }
-
-    next();
-}
-
 /**
  * @swagger
- * /api/admin/settlement/run:
+ * /api/v1/admin/settlement/run:
  *   post:
  *     summary: Manually trigger a settlement batch run
  *     tags: [Admin - Settlement]
@@ -58,12 +40,14 @@ function requireAdminSecret(req: Request, res: Response, next: () => void) {
  *                   type: integer
  *                 totalMerchantsFailed:
  *                   type: integer
+ *                 totalMerchantsSkipped:
+ *                   type: integer
  *                 durationMs:
  *                   type: integer
  *       500:
  *         description: Batch run failed with unhandled error
  */
-router.post("/run", requireAdminSecret, async (_req: Request, res: Response) => {
+router.post("/run", adminAuth, async (_req: Request, res: Response) => {
     try {
         const result = await runSettlementBatch();
         const durationMs = result.completedAt.getTime() - result.startedAt.getTime();
@@ -76,6 +60,7 @@ router.post("/run", requireAdminSecret, async (_req: Request, res: Response) => 
             totalMerchantsProcessed: result.totalMerchantsProcessed,
             totalMerchantsSucceeded: result.totalMerchantsSucceeded,
             totalMerchantsFailed: result.totalMerchantsFailed,
+            totalMerchantsSkipped: result.totalMerchantsSkipped,
             merchantResults: result.merchantResults,
         });
     } catch (err: unknown) {
@@ -87,7 +72,7 @@ router.post("/run", requireAdminSecret, async (_req: Request, res: Response) => 
 
 /**
  * @swagger
- * /api/admin/settlement/status:
+ * /api/v1/admin/settlement/status:
  *   get:
  *     summary: Settlement system status
  *     tags: [Admin - Settlement]
@@ -97,7 +82,7 @@ router.post("/run", requireAdminSecret, async (_req: Request, res: Response) => 
  *       200:
  *         description: System status
  */
-router.get("/status", requireAdminSecret, async (_req: Request, res: Response) => {
+router.get("/status", adminAuth, async (_req: Request, res: Response) => {
     const { PrismaClient } = await import("../generated/client/client");
     const prisma = new PrismaClient();
 

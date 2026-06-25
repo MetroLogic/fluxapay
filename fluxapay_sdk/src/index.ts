@@ -1,0 +1,527 @@
+import crypto from 'crypto';
+
+// ── Types ────────────────────────────────────────────────────────────────────
+
+export interface FluxaPayConfig {
+  /** Your secret API key (keep server-side). */
+  apiKey: string;
+  /**
+   * Base URL of the FluxaPay backend.
+   * Defaults to the hosted production URL.
+   */
+  baseUrl?: string;
+}
+
+export interface CreatePaymentParams {
+  /** Amount in the specified currency (e.g. 99.99). */
+  amount: number;
+  /** ISO 4217 currency code the customer sees (e.g. "USD", "NGN"). */
+  currency: string;
+  /** Customer email for receipt / tracking. */
+  customer_email: string;
+  /** Your internal order / reference ID. */
+  order_id?: string;
+  /** URL to redirect to after successful payment. */
+  success_url?: string;
+  /** URL to redirect to after payment expiry / failure. */
+  cancel_url?: string;
+  /** Arbitrary metadata attached to the payment. */
+  metadata?: Record<string, unknown>;
+  /** Minutes until payment link expires. Default: 30. */
+  expires_in_minutes?: number;
+}
+
+export interface Payment {
+  id: string;
+  amount: number;
+  currency: string;
+  status: 'pending' | 'confirmed' | 'failed' | 'expired';
+  checkout_url: string;
+  stellar_address: string;
+  customer_email: string;
+  order_id?: string;
+  metadata?: Record<string, unknown>;
+  created_at: string;
+  expires_at: string;
+}
+
+export interface PaymentStatus {
+  id: string;
+  status: Payment['status'];
+  transaction_hash?: string;
+  confirmed_at?: string;
+}
+
+export interface WebhookEvent {
+  event: string;
+  payment_id: string;
+  merchant_id: string;
+  timestamp: string;
+  data: Record<string, unknown>;
+}
+
+export interface CreateInvoiceParams {
+  /** Customer name for the invoice. */
+  customer_name: string;
+  /** Customer email for the invoice. */
+  customer_email: string;
+  /** Line items for the invoice. */
+  line_items: Array<{
+    description: string;
+    quantity: number;
+    unit_price: number;
+  }>;
+  /** ISO 4217 currency code. */
+  currency: string;
+  /** Due date in ISO 8601 format. */
+  due_date: string;
+  /** Optional notes. */
+  notes?: string;
+}
+
+export interface Invoice {
+  id: string;
+  customer_name: string;
+  customer_email: string;
+  line_items: Array<{
+    description: string;
+    quantity: number;
+    unit_price: number;
+  }>;
+  currency: string;
+  amount: number;
+  status: 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled';
+  due_date: string;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// ── Webhook Verification Helper ──────────────────────────────────────────────
+
+export interface VerifyWebhookSignatureOptions {
+  /** Max age of the webhook in seconds before it is rejected. Default: 300 (5 min). */
+  toleranceSeconds?: number;
+}
+
+export interface WebhookVerificationResult {
+  valid: boolean;
+  error?: string;
+}
+
+/**
+ * Verify a FluxaPay webhook signature without instantiating the SDK client.
+ *
+ * The backend signs webhooks using HMAC-SHA256 over `"${timestamp}.${rawBody}"`.
+ * Both `X-FluxaPay-Signature` and `X-FluxaPay-Timestamp` headers must be forwarded.
+ *
+ * @param rawBody   - Raw JSON string received in the request body (do NOT parse first).
+ * @param signature - Value of the `X-FluxaPay-Signature` header.
+ * @param timestamp - Value of the `X-FluxaPay-Timestamp` header (ISO 8601).
+ * @param secret    - Your webhook secret (`whsec_...`).
+ * @param options   - Optional replay-protection window.
+ *
+ * @example
+ * ```ts
+ * import { verifyWebhookSignature } from '@fluxapay/sdk';
+ *
+ * const result = verifyWebhookSignature(rawBody, sig, ts, process.env.WEBHOOK_SECRET!);
+ * if (!result.valid) throw new Error(result.error);
+ * ```
+ */
+export function verifyWebhookSignature(
+  rawBody: string,
+  signature: string,
+  timestamp: string,
+  secret: string,
+  options: VerifyWebhookSignatureOptions = {},
+): WebhookVerificationResult {
+  const { toleranceSeconds = 300 } = options;
+
+  if (!rawBody || !signature || !timestamp || !secret) {
+    return { valid: false, error: 'Missing required parameter' };
+  }
+
+  // Replay-protection: reject webhooks outside the tolerance window
+  const webhookMs = new Date(timestamp).getTime();
+  if (isNaN(webhookMs)) {
+    return { valid: false, error: 'Invalid timestamp format' };
+  }
+  const diffSeconds = (Date.now() - webhookMs) / 1000;
+  if (diffSeconds < 0) {
+    return { valid: false, error: 'Webhook timestamp is in the future' };
+  }
+  if (diffSeconds > toleranceSeconds) {
+    return {
+      valid: false,
+      error: `Webhook timestamp is older than ${toleranceSeconds} seconds`,
+    };
+  }
+
+  // Compute expected HMAC-SHA256 over "${timestamp}.${rawBody}"
+  const signingString = `${timestamp}.${rawBody}`;
+  const expected = crypto
+    .createHmac('sha256', secret)
+    .update(signingString)
+    .digest('hex');
+
+  // Constant-time comparison to prevent timing attacks
+  try {
+    const sigBuf = Buffer.from(signature);
+    const expBuf = Buffer.from(expected);
+    if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
+      return { valid: false, error: 'Signature mismatch' };
+    }
+  } catch {
+    return { valid: false, error: 'Signature verification failed' };
+  }
+
+  return { valid: true };
+}
+
+// ── Errors ───────────────────────────────────────────────────────────────────
+
+export class FluxaPayError extends Error {
+  constructor(
+    public readonly statusCode: number,
+    message: string,
+    public readonly raw?: unknown,
+  ) {
+    super(message);
+    this.name = 'FluxaPayError';
+  }
+}
+
+// ── Client ───────────────────────────────────────────────────────────────────
+
+const DEFAULT_BASE_URL = 'https://api.fluxapay.com';
+const API_VERSION = 'v1';
+
+async function request<T>(
+  baseUrl: string,
+  apiKey: string,
+  method: string,
+  path: string,
+  body?: unknown,
+): Promise<T> {
+  const url = `${baseUrl}${path}`;
+  const res = await fetch(url, {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+      'X-API-Version': API_VERSION,
+    },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+
+  const json = await res.json().catch(() => null);
+
+  if (!res.ok) {
+    throw new FluxaPayError(
+      res.status,
+      (json as { message?: string })?.message ?? `HTTP ${res.status}`,
+      json,
+    );
+  }
+
+  return json as T;
+}
+
+/**
+ * FluxaPay SDK client.
+ *
+ * @example
+ * ```ts
+ * import { FluxaPay } from '@fluxapay/sdk';
+ *
+ * const client = new FluxaPay({ apiKey: 'sk_live_...' });
+ *
+ * const payment = await client.payments.create({
+ *   amount: 49.99,
+ *   currency: 'USD',
+ *   customer_email: 'buyer@example.com',
+ *   order_id: 'order_123',
+ * });
+ *
+ * console.log(payment.checkout_url);
+ * ```
+ */
+export class FluxaPay {
+  private readonly baseUrl: string;
+  private readonly apiKey: string;
+
+  constructor(config: FluxaPayConfig) {
+    if (!config.apiKey) throw new Error('FluxaPay: apiKey is required');
+    this.apiKey = config.apiKey;
+    this.baseUrl = (config.baseUrl ?? DEFAULT_BASE_URL).replace(/\/$/, '');
+  }
+
+  // ── payments ───────────────────────────────────────────────────────────────
+
+  readonly payments = {
+    /**
+     * Create a new payment link.
+     * Returns a `checkout_url` your customer should be redirected to.
+     * 
+     * Canonical route: POST /api/payments
+     */
+    create: (params: CreatePaymentParams): Promise<Payment> =>
+      request<Payment>(this.baseUrl, this.apiKey, 'POST', '/api/payments', params),
+
+    /**
+     * Retrieve a payment by its ID.
+     * 
+     * Canonical route: GET /api/payments/:payment_id
+     */
+    get: (paymentId: string): Promise<Payment> =>
+      request<Payment>(this.baseUrl, this.apiKey, 'GET', `/api/payments/${paymentId}`),
+
+    /**
+     * Poll the current status of a payment.
+     * 
+     * Canonical route: GET /api/payments/:payment_id
+     * (Status is included in the payment object)
+     */
+    getStatus: (paymentId: string): Promise<PaymentStatus> =>
+      request<PaymentStatus>(this.baseUrl, this.apiKey, 'GET', `/api/payments/${paymentId}`),
+
+    /**
+     * List recent payments.
+     * 
+     * Canonical route: GET /api/payments
+     */
+    list: (params?: { page?: number; limit?: number; status?: string }): Promise<{ payments: Payment[]; total: number }> => {
+      const qs = new URLSearchParams();
+      if (params?.page) qs.set('page', String(params.page));
+      if (params?.limit) qs.set('limit', String(params.limit));
+      if (params?.status) qs.set('status', params.status);
+      const query = qs.toString();
+      return request(this.baseUrl, this.apiKey, 'GET', `/api/payments${query ? `?${query}` : ''}`);
+    },
+  };
+
+  // ── settlements ─────────────────────────────────────────────────────────────
+
+  readonly settlements = {
+    /**
+     * List settlements for the authenticated merchant.
+     * 
+     * Canonical route: GET /api/settlements
+     */
+    list: (params?: {
+      page?: number;
+      limit?: number;
+      status?: string;
+      currency?: string;
+      date_from?: string;
+      date_to?: string;
+    }): Promise<{ settlements: unknown[]; total: number }> => {
+      const qs = new URLSearchParams();
+      if (params?.page) qs.set('page', String(params.page));
+      if (params?.limit) qs.set('limit', String(params.limit));
+      if (params?.status) qs.set('status', params.status);
+      if (params?.currency) qs.set('currency', params.currency);
+      if (params?.date_from) qs.set('date_from', params.date_from);
+      if (params?.date_to) qs.set('date_to', params.date_to);
+      const query = qs.toString();
+      return request(this.baseUrl, this.apiKey, 'GET', `/api/settlements${query ? `?${query}` : ''}`);
+    },
+
+    /**
+     * Get settlement summary statistics.
+     * 
+     * Canonical route: GET /api/settlements/summary
+     */
+    summary: (): Promise<unknown> =>
+      request(this.baseUrl, this.apiKey, 'GET', '/api/settlements/summary'),
+
+    /**
+     * Get a specific settlement by ID.
+     * 
+     * Canonical route: GET /api/settlements/:settlement_id
+     */
+    get: (settlementId: string): Promise<unknown> =>
+      request(this.baseUrl, this.apiKey, 'GET', `/api/settlements/${settlementId}`),
+
+    /**
+     * Export settlement report.
+     * 
+     * Canonical route: GET /api/settlements/:settlement_id/export
+     */
+    export: (settlementId: string, format: 'pdf' | 'csv' = 'pdf'): Promise<Blob> =>
+      request(this.baseUrl, this.apiKey, 'GET', `/api/settlements/${settlementId}/export?format=${format}`),
+  };
+
+  // ── merchant ────────────────────────────────────────────────────────────────
+
+  readonly merchant = {
+    /**
+     * Get the authenticated merchant's profile.
+     * 
+     * Canonical route: GET /api/merchants/me
+     */
+    getProfile: (): Promise<unknown> =>
+      request(this.baseUrl, this.apiKey, 'GET', '/api/merchants/me'),
+
+    /**
+     * Update the authenticated merchant's profile.
+     * 
+     * Canonical route: PATCH /api/merchants/me
+     */
+    updateProfile: (data: {
+      business_name?: string;
+      email?: string;
+      settlement_schedule?: 'daily' | 'weekly';
+      settlement_day?: number;
+    }): Promise<unknown> =>
+      request(this.baseUrl, this.apiKey, 'PATCH', '/api/merchants/me', data),
+
+    /**
+     * Update webhook URL.
+     * 
+     * Canonical route: PATCH /api/merchants/me/webhook
+     */
+    updateWebhook: (webhook_url: string): Promise<unknown> =>
+      request(this.baseUrl, this.apiKey, 'PATCH', '/api/merchants/me/webhook', { webhook_url }),
+
+    /**
+     * Update settlement schedule.
+     * 
+     * Canonical route: PATCH /api/merchants/me/settlement-schedule
+     */
+    updateSettlementSchedule: (data: {
+      settlement_schedule: 'daily' | 'weekly';
+      settlement_day?: number;
+    }): Promise<unknown> =>
+      request(this.baseUrl, this.apiKey, 'PATCH', '/api/merchants/me/settlement-schedule', data),
+
+    /**
+     * Add a bank account for settlements.
+     * 
+     * Canonical route: POST /api/merchants/me/bank-account
+     */
+    addBankAccount: (data: {
+      account_number: string;
+      bank_name: string;
+      bank_code: string;
+      account_name?: string;
+    }): Promise<unknown> =>
+      request(this.baseUrl, this.apiKey, 'POST', '/api/merchants/me/bank-account', data),
+  };
+
+  // ── webhooks ────────────────────────────────────────────────────────────────
+
+  readonly webhooks = {
+    /**
+     * Verify a webhook signature.
+     *
+     * FluxaPay signs webhook payloads using HMAC-SHA256.
+     * The signature covers the payload **and** the timestamp header, so
+     * provide the same `X-FluxaPay-Timestamp` value if you have it.
+     *
+     * @example
+     * ```ts
+     * const isValid = client.webhooks.verify(rawBody, signature, webhookSecret, timestamp);
+     * if (!isValid) throw new Error('Invalid webhook signature');
+     * const event = JSON.parse(rawBody) as WebhookEvent;
+     * ```
+     */
+    verify: (rawBody: string, signature: string, webhookSecret: string, timestamp?: string): boolean => {
+      // Delegates to the standalone verifyWebhookSignature helper.
+      // Node.js 18+ only – never expose your webhook secret client-side.
+      const ts = timestamp ?? new Date().toISOString();
+      return verifyWebhookSignature(rawBody, signature, ts, webhookSecret, {
+        // When no timestamp is provided we skip replay-protection by using a large window.
+        toleranceSeconds: timestamp ? 300 : Number.MAX_SAFE_INTEGER,
+      }).valid;
+    },
+
+    /**
+     * Parse and return a typed `WebhookEvent` from the raw body string.
+     * Always call `verify()` before parsing in production.
+     */
+    parse: (rawBody: string): WebhookEvent => {
+      return JSON.parse(rawBody) as WebhookEvent;
+    },
+  };
+
+  // ── invoices ─────────────────────────────────────────────────────────────────
+
+  readonly invoices = {
+    /**
+     * Create a new invoice.
+     * 
+     * Canonical route: POST /api/invoices
+     */
+    create: (params: CreateInvoiceParams): Promise<Invoice> =>
+      request<Invoice>(this.baseUrl, this.apiKey, 'POST', '/api/invoices', params),
+
+    /**
+     * Retrieve an invoice by its ID.
+     * 
+     * Canonical route: GET /api/invoices/:invoice_id
+     */
+    get: (invoiceId: string): Promise<Invoice> =>
+      request<Invoice>(this.baseUrl, this.apiKey, 'GET', `/api/invoices/${invoiceId}`),
+
+    /**
+     * List invoices.
+     * 
+     * Canonical route: GET /api/invoices
+     */
+    list: (params?: { page?: number; limit?: number; status?: string }): Promise<{ invoices: Invoice[]; total: number }> => {
+      const qs = new URLSearchParams();
+      if (params?.page) qs.set('page', String(params.page));
+      if (params?.limit) qs.set('limit', String(params.limit));
+      if (params?.status) qs.set('status', params.status);
+      const query = qs.toString();
+      return request(this.baseUrl, this.apiKey, 'GET', `/api/invoices${query ? `?${query}` : ''}`);
+    },
+
+    /**
+     * Update invoice status.
+     * 
+     * Canonical route: PATCH /api/invoices/:invoice_id/status
+     */
+    updateStatus: (invoiceId: string, status: Invoice['status']): Promise<Invoice> =>
+      request<Invoice>(this.baseUrl, this.apiKey, 'PATCH', `/api/invoices/${invoiceId}/status`, { status }),
+  };
+}
+
+export default FluxaPay;
+
+/**
+ * Auto-paging iterator for list methods that support pagination.
+ * Automatically fetches subsequent pages as you iterate.
+ * 
+ * @example
+ * ```ts
+ * for await (const payment of autoPagingIterator(client.payments.list, { limit: 10 })) {
+ *   console.log(payment);
+ * }
+ * ```
+ */
+export async function* autoPagingIterator<T extends { id: string }>(
+  listFn: (params: { page: number; limit: number }) => Promise<{ [key: string]: T[]; total: number }>,
+  options: { limit?: number; maxItems?: number } = {}
+): AsyncGenerator<T, void, unknown> {
+  const { limit = 50, maxItems } = options;
+  let page = 1;
+  let yielded = 0;
+
+  while (true) {
+    const response = await listFn({ page, limit });
+    const items = Object.values(response).find(Array.isArray) as T[] | undefined;
+    if (!items) break;
+
+    for (const item of items) {
+      if (maxItems && yielded >= maxItems) return;
+      yield item;
+      yielded++;
+    }
+
+    if (items.length < limit) break; // Last page
+    page++;
+  }
+}

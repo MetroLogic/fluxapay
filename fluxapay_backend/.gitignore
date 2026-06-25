@@ -7,4 +7,3 @@ coverage
 /docker-compose.yaml
 
 /src/generated/
-/prisma/migrations/

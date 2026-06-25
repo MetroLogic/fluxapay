@@ -1,34 +1,72 @@
-import { z } from "zod";
-import { createController } from "../helpers/controller.helper";
-import * as refundSchema from "../schemas/refund.schema";
-import {
-  initiateRefund,
-  getRefund,
-  listRefunds,
-} from "../services/refund.service";
-import { AuthRequest } from "../types/express";
+import { Request, Response } from "express";
 import { validateUserId } from "../helpers/request.helper";
+import { AuthRequest } from "../types/express";
+import {
+  createRefundService,
+  listRefundsService,
+  updateRefundStatusService,
+} from "../services/refund.service";
+import { RefundStatus } from "../generated/client/client";
 
-type InitiateRefundRequest = z.infer<typeof refundSchema.initiateRefundSchema>;
-type ListRefundsRequest = z.infer<typeof refundSchema.listRefundsSchema>;
+export async function createRefund(req: AuthRequest, res: Response) {
+  try {
+    const merchantId = await validateUserId(req);
+    const result = await createRefundService({
+      merchantId,
+      payment_id: req.body.payment_id,
+      amount: req.body.amount,
+      reason: req.body.reason,
+      idempotency_key:
+        req.body.idempotency_key ||
+        (req.headers["idempotency-key"] as string | undefined),
+    });
 
-export const initiateRefundController = createController<InitiateRefundRequest>(
-  async (data, req) => {
-    const adminUserId = await validateUserId(req as AuthRequest);
-    return initiateRefund(data, adminUserId);
-  },
-  201,
-);
+    res.status(201).json(result);
+  } catch (err: any) {
+    res
+      .status(err.status || 500)
+      .json({ message: err.message || "Server error" });
+  }
+}
 
-export const getRefundController = createController(
-  async (_data, req) => {
-    const refundId = req.params.refundId as string;
-    return getRefund(refundId);
-  },
-);
+export async function listRefunds(req: Request, res: Response) {
+  try {
+    const merchantId = await validateUserId(req as AuthRequest);
+    const result = await listRefundsService({
+      merchantId,
+      page: Number(req.query.page) || 1,
+      limit: Number(req.query.limit) || 10,
+      status: req.query.status as RefundStatus | undefined,
+    });
 
-export const listRefundsController = createController(
-  async (_data, req) => {
-    return listRefunds(req.query as unknown as ListRefundsRequest);
-  },
-);
+    res.status(200).json(result);
+  } catch (err: any) {
+    res
+      .status(err.status || 500)
+      .json({ message: err.message || "Server error" });
+  }
+}
+
+export async function updateRefundStatus(req: AuthRequest, res: Response) {
+  try {
+    const merchantId = await validateUserId(req);
+    const refundIdRaw = (req.params as any).refund_id as string | string[] | undefined;
+    const refund_id = Array.isArray(refundIdRaw) ? refundIdRaw[0] : refundIdRaw;
+    if (!refund_id) {
+      return res.status(400).json({ message: "refund_id is required" });
+    }
+
+    const result = await updateRefundStatusService({
+      merchantId,
+      refund_id: String(refund_id),
+      status: req.body.status,
+      failed_reason: req.body.failed_reason,
+    });
+
+    res.status(200).json(result);
+  } catch (err: any) {
+    res
+      .status(err.status || 500)
+      .json({ message: err.message || "Server error" });
+  }
+}

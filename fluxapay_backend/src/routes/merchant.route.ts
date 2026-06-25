@@ -9,18 +9,28 @@ import {
   updateMerchantWebhook,
   rotateApiKey,
   rotateWebhookSecret,
+  adminListMerchants,
+  adminGetMerchant,
+  adminUpdateMerchantStatus,
+  adminBulkUpdateMerchantStatus,
   updateSettlementSchedule,
+  addBankAccount,
+  updateBankAccount,
 } from "../controllers/merchant.controller";
 import { validate } from "../middleware/validation.middleware";
 import * as merchantSchema from "../schemas/merchant.schema";
-import { authenticateToken } from "../middleware/auth.middleware";
-import { updateSettlementScheduleSchema } from "../schemas/merchant.schema";
+import { authenticateApiKey } from "../middleware/apiKeyAuth.middleware";
+import { idempotencyMiddleware } from "../middleware/idempotency.middleware";
+import { adminAuth } from "../middleware/adminAuth.middleware";
+import { updateSettlementScheduleSchema, bankAccountSchema, updateBankAccountSchema } from "../schemas/merchant.schema";
+import { authRateLimit, merchantApiKeyRateLimit, merchantRateLimit } from "../middleware/rateLimit.middleware";
 
 const router = Router();
 
+
 /**
  * @swagger
- * /api/merchants/signup:
+ * /api/v1/merchants/signup:
  *   post:
  *     summary: Register a new merchant
  *     tags: [Merchants]
@@ -56,11 +66,11 @@ const router = Router();
  *       400:
  *         description: Email or phone already exists
  */
-router.post("/signup", validate(merchantSchema.signupSchema), signupMerchant);
+router.post("/signup", idempotencyMiddleware, authRateLimit(), validate(merchantSchema.signupSchema), signupMerchant);
 
 /**
  * @swagger
- * /api/merchants/login:
+ * /api/v1/merchants/login:
  *   post:
  *     summary: Login a merchant
  *     tags: [Merchants]
@@ -84,11 +94,11 @@ router.post("/signup", validate(merchantSchema.signupSchema), signupMerchant);
  *       400:
  *         description: Invalid credentials
  */
-router.post("/login", validate(merchantSchema.loginSchema), loginMerchant);
+router.post("/login", authRateLimit(), validate(merchantSchema.loginSchema), loginMerchant);
 
 /**
  * @swagger
- * /api/merchants/verify-otp:
+ * /api/v1/merchants/verify-otp:
  *   post:
  *     summary: Verify OTP for merchant activation
  *     tags: [Merchants]
@@ -116,10 +126,10 @@ router.post("/login", validate(merchantSchema.loginSchema), loginMerchant);
  *       400:
  *         description: Invalid or expired OTP
  */
-router.post("/verify-otp", validate(merchantSchema.verifyOtpSchema), verifyOtp);
+router.post("/verify-otp", idempotencyMiddleware, authRateLimit(), validate(merchantSchema.verifyOtpSchema), verifyOtp);
 /**
  * @swagger
- * /api/merchants/resend-otp:
+ * /api/v1/merchants/resend-otp:
  *   post:
  *     summary: Resend OTP
  *     tags: [Merchants]
@@ -144,11 +154,11 @@ router.post("/verify-otp", validate(merchantSchema.verifyOtpSchema), verifyOtp);
  *       404:
  *         description: Merchant not found
  */
-router.post("/resend-otp", validate(merchantSchema.resendOtpSchema), resendOtp);
+router.post("/resend-otp", idempotencyMiddleware, authRateLimit(), validate(merchantSchema.resendOtpSchema), resendOtp);
 
 /**
  * @swagger
- * /api/merchants/me:
+ * /api/v1/merchants/me:
  *   get:
  *     summary: Get the currently logged-in merchant
  *     tags: [Merchants]
@@ -171,11 +181,11 @@ router.post("/resend-otp", validate(merchantSchema.resendOtpSchema), resendOtp);
  *       404:
  *         description: Merchant not found
  */
-router.get("/me", authenticateToken, getLoggedInMerchant);
+router.get("/me", authenticateApiKey, merchantApiKeyRateLimit(), getLoggedInMerchant);
 
 /**
  * @swagger
- * /api/merchants/me:
+ * /api/v1/merchants/me:
  *   patch:
  *     summary: Update merchant profile
  *     tags: [Merchants]
@@ -198,11 +208,16 @@ router.get("/me", authenticateToken, getLoggedInMerchant);
  *       401:
  *         description: Unauthorized
  */
-router.patch("/me", authenticateToken, updateMerchantProfile);
+router.patch(
+  "/me",
+  authenticateApiKey, merchantApiKeyRateLimit(),
+  validate(merchantSchema.updateMerchantProfileSchema),
+  updateMerchantProfile,
+);
 
 /**
  * @swagger
- * /api/merchants/me/webhook:
+ * /api/v1/merchants/me/webhook:
  *   patch:
  *     summary: Update merchant webhook URL
  *     tags: [Merchants]
@@ -225,12 +240,12 @@ router.patch("/me", authenticateToken, updateMerchantProfile);
  *       401:
  *         description: Unauthorized
  */
-router.patch("/me/webhook", authenticateToken, updateMerchantWebhook);
+router.patch("/me/webhook", authenticateApiKey, merchantApiKeyRateLimit(), updateMerchantWebhook);
 
 
 /**
  * @swagger
- * /api/merchants/keys/rotate-api-key:
+ * /api/v1/merchants/keys/rotate-api-key:
  *   post:
  *     summary: Rotate merchant API key
  *     tags: [Merchants]
@@ -249,11 +264,11 @@ router.patch("/me/webhook", authenticateToken, updateMerchantWebhook);
  *                 apiKey:
  *                   type: string
  */
-router.post("/keys/rotate-api-key", authenticateToken, rotateApiKey);
+router.post("/keys/rotate-api-key", authenticateApiKey, merchantApiKeyRateLimit(), merchantRateLimit(), rotateApiKey);
 
 /**
  * @swagger
- * /api/merchants/keys/rotate-webhook-secret:
+ * /api/v1/merchants/keys/rotate-webhook-secret:
  *   post:
  *     summary: Rotate merchant webhook secret
  *     tags: [Merchants]
@@ -274,13 +289,125 @@ router.post("/keys/rotate-api-key", authenticateToken, rotateApiKey);
  */
 router.post(
   "/keys/rotate-webhook-secret",
-  authenticateToken,
+  authenticateApiKey, merchantApiKeyRateLimit(),
+  merchantRateLimit(),
   rotateWebhookSecret,
 );
 
+// ── Admin routes ──────────────────────────────────────────────────────────────
+
 /**
  * @swagger
- * /api/merchants/me/settlement-schedule:
+ * /api/v1/merchants/admin/list:
+ *   get:
+ *     summary: List all merchants (Admin only)
+ *     tags: [Admin - Merchants]
+ *     security:
+ *       - adminSecret: []
+ *     responses:
+ *       200:
+ *         description: List of merchants
+ *       401:
+ *         description: Unauthorized
+ */
+router.get("/admin/list", adminAuth, adminListMerchants);
+
+/**
+ * @swagger
+ * /api/v1/merchants/admin/{merchantId}:
+ *   get:
+ *     summary: Get merchant details by ID (Admin only)
+ *     tags: [Admin - Merchants]
+ *     security:
+ *       - adminSecret: []
+ *     parameters:
+ *       - in: path
+ *         name: merchantId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Merchant found
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Merchant not found
+ */
+router.get("/admin/:merchantId", adminAuth, adminGetMerchant);
+
+/**
+ * @swagger
+ * /api/v1/merchants/admin/{merchantId}/status:
+ *   patch:
+ *     summary: Update merchant account status (Admin only)
+ *     tags: [Admin - Merchants]
+ *     security:
+ *       - adminSecret: []
+ *     parameters:
+ *       - in: path
+ *         name: merchantId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [status]
+ *             properties:
+ *               status:
+ *                 type: string
+ *                 enum: [pending, active, suspended, rejected]
+ *     responses:
+ *       200:
+ *         description: Status updated
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Merchant not found
+ */
+router.patch("/admin/:merchantId/status", adminAuth, adminUpdateMerchantStatus);
+
+/**
+ * @swagger
+ * /api/v1/merchants/admin/bulk-status:
+ *   post:
+ *     summary: Bulk suspend or activate merchants (Admin only)
+ *     tags: [Admin - Merchants]
+ *     security:
+ *       - adminSecret: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [merchantIds, status, reason]
+ *             properties:
+ *               merchantIds:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *               status:
+ *                 type: string
+ *                 enum: [active, suspended]
+ *               reason:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Bulk update result with per-merchant success/failure
+ *       400:
+ *         description: Validation error
+ *       401:
+ *         description: Unauthorized
+ */
+router.post("/admin/bulk-status", adminAuth, adminBulkUpdateMerchantStatus);
+/**
+ * @swagger
+ * /api/v1/merchants/me/settlement-schedule:
  *   patch:
  *     summary: Update merchant settlement schedule
  *     tags: [Merchants]
@@ -313,10 +440,102 @@ router.post(
  */
 router.patch(
   "/me/settlement-schedule",
-  authenticateToken,
+  authenticateApiKey, merchantApiKeyRateLimit(),
   validate(updateSettlementScheduleSchema),
   updateSettlementSchedule,
 );
 
+
+/**
+ * @swagger
+ * /api/v1/merchants/me/bank-account:
+ *   post:
+ *     summary: Add or update merchant bank account
+ *     tags: [Merchants]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - account_name
+ *               - account_number
+ *               - bank_name
+ *               - currency
+ *               - country
+ *             properties:
+ *               account_name:
+ *                 type: string
+ *               account_number:
+ *                 type: string
+ *               bank_name:
+ *                 type: string
+ *               bank_code:
+ *                 type: string
+ *               currency:
+ *                 type: string
+ *               country:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: Bank account saved successfully
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Merchant not found
+ */
+router.post(
+  "/me/bank-account",
+  authenticateApiKey, merchantApiKeyRateLimit(),
+  validate(bankAccountSchema),
+  addBankAccount,
+);
+
+/**
+ * @swagger
+ * /api/v1/merchants/me/bank-account:
+ *   patch:
+ *     summary: Update existing bank account details
+ *     tags: [Merchants]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               account_name:
+ *                 type: string
+ *               account_number:
+ *                 type: string
+ *               bank_name:
+ *                 type: string
+ *               bank_code:
+ *                 type: string
+ *               currency:
+ *                 type: string
+ *               country:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Bank account updated
+ *       400:
+ *         description: Validation error (e.g. currency/country mismatch)
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: No bank account found (use POST to create)
+ */
+router.patch(
+  "/me/bank-account",
+  authenticateApiKey, merchantApiKeyRateLimit(),
+  validate(updateBankAccountSchema),
+  updateBankAccount,
+);
 
 export default router;

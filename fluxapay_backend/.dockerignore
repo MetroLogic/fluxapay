@@ -1,0 +1,21 @@
+# Don't copy generated Prisma client - it gets regenerated inside the container
+# for the correct platform (alpine vs debian binaries are incompatible)
+src/generated/
+
+# Build artifacts
+dist/
+node_modules/
+
+# Test files
+**/__tests__/
+**/*.test.ts
+**/*.spec.ts
+
+# Local dev files
+.env
+.env.*
+!.env.example
+
+# Git files
+.git/
+.gitignore

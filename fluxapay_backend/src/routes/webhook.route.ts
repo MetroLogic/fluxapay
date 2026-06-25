@@ -4,16 +4,21 @@ import {
   getWebhookLogDetails,
   retryWebhook,
   sendTestWebhook,
+  getDeadLetterQueue,
+  requeueWebhook,
+  exportWebhookLogs,
 } from "../controllers/webhook.controller";
 import { validate, validateQuery } from "../middleware/validation.middleware";
 import * as webhookSchema from "../schemas/webhook.schema";
 import { authenticateToken } from "../middleware/auth.middleware";
+import { merchantApiKeyRateLimit } from "../middleware/rateLimit.middleware";
+import { adminAuth } from "../middleware/adminAuth.middleware";
 
 const router = Router();
 
 /**
  * @swagger
- * /api/webhooks/logs:
+ * /api/v1/webhooks/logs:
  *   get:
  *     summary: Get webhook logs list
  *     tags: [Webhooks]
@@ -24,7 +29,7 @@ const router = Router();
  *         name: event_type
  *         schema:
  *           type: string
- *           enum: [payment_completed, payment_failed, payment_pending, refund_completed, refund_failed, subscription_created, subscription_cancelled, subscription_renewed]
+ *           enum: [payment.created, payment.pending, payment.confirmed, payment.failed, payment.settled, refund.created, refund.completed, refund.failed, subscription.created, subscription.cancelled, subscription.renewed]
  *         description: Filter by event type
  *       - in: query
  *         name: status
@@ -95,14 +100,61 @@ const router = Router();
  */
 router.get(
   "/logs",
-  authenticateToken,
+  authenticateToken, merchantApiKeyRateLimit(),
   validateQuery(webhookSchema.getWebhookLogsSchema),
   getWebhookLogs
 );
 
 /**
  * @swagger
- * /api/webhooks/logs/{log_id}:
+ * /api/v1/webhooks/logs/export:
+ *   get:
+ *     summary: Export webhook logs as CSV
+ *     tags: [Webhooks]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: event_type
+ *         schema:
+ *           type: string
+ *         description: Filter by event type
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *         description: Filter by webhook status
+ *       - in: query
+ *         name: date_from
+ *         schema:
+ *           type: string
+ *         description: Filter logs from this date
+ *       - in: query
+ *         name: date_to
+ *         schema:
+ *           type: string
+ *         description: Filter logs until this date
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Search by webhook ID or payment ID
+ *     responses:
+ *       200:
+ *         description: CSV file download
+ *       401:
+ *         description: Unauthorized
+ */
+router.get(
+  "/logs/export",
+  authenticateToken, merchantApiKeyRateLimit(),
+  validateQuery(webhookSchema.getWebhookLogsSchema),
+  exportWebhookLogs,
+);
+
+/**
+ * @swagger
+ * /api/v1/webhooks/logs/{log_id}:
  *   get:
  *     summary: Get webhook log details
  *     tags: [Webhooks]
@@ -151,11 +203,11 @@ router.get(
  *       401:
  *         description: Unauthorized
  */
-router.get("/logs/:log_id", authenticateToken, getWebhookLogDetails);
+router.get("/logs/:log_id", authenticateToken, merchantApiKeyRateLimit(), getWebhookLogDetails);
 
 /**
  * @swagger
- * /api/webhooks/logs/{log_id}/retry:
+ * /api/v1/webhooks/logs/{log_id}/retry:
  *   post:
  *     summary: Retry a failed webhook
  *     tags: [Webhooks]
@@ -196,11 +248,15 @@ router.get("/logs/:log_id", authenticateToken, getWebhookLogDetails);
  *       401:
  *         description: Unauthorized
  */
-router.post("/logs/:log_id/retry", authenticateToken, retryWebhook);
+router.post(
+  "/logs/:log_id/retry",
+  authenticateToken, merchantApiKeyRateLimit(),
+  retryWebhook,
+);
 
 /**
  * @swagger
- * /api/webhooks/test:
+ * /api/v1/webhooks/test:
  *   post:
  *     summary: Send a test webhook
  *     tags: [Webhooks]
@@ -218,7 +274,7 @@ router.post("/logs/:log_id/retry", authenticateToken, retryWebhook);
  *             properties:
  *               event_type:
  *                 type: string
- *                 enum: [payment_completed, payment_failed, payment_pending, refund_completed, refund_failed, subscription_created, subscription_cancelled, subscription_renewed]
+ *                 enum: [payment.created, payment.pending, payment.confirmed, payment.failed, payment.settled, refund.created, refund.completed, refund.failed, subscription.created, subscription.cancelled, subscription.renewed]
  *                 description: The type of webhook event to simulate
  *               endpoint_url:
  *                 type: string
@@ -229,7 +285,10 @@ router.post("/logs/:log_id/retry", authenticateToken, retryWebhook);
  *                 description: Optional custom payload data to override defaults
  *     responses:
  *       200:
- *         description: Test webhook sent
+ *         description: Test webhook sent. The delivery includes
+ *           `X-FluxaPay-Signature` and `X-FluxaPay-Timestamp` headers signed
+ *           using the merchant's webhook secret; clients should verify the
+ *           signature by recomputing the HMAC over the timestamp and body.
  *         content:
  *           application/json:
  *             schema:
@@ -261,9 +320,94 @@ router.post("/logs/:log_id/retry", authenticateToken, retryWebhook);
  */
 router.post(
   "/test",
-  authenticateToken,
+  authenticateToken, merchantApiKeyRateLimit(),
   validate(webhookSchema.sendTestWebhookSchema),
   sendTestWebhook
+);
+
+/* ── Admin DLQ endpoints (protected by X-Admin-Secret) ─────────────────── */
+
+/**
+ * @swagger
+ * /api/v1/webhooks/admin/dead-letter-queue:
+ *   get:
+ *     summary: List permanently failed webhooks (DLQ)
+ *     tags: [Webhooks — Admin]
+ *     security:
+ *       - adminSecret: []
+ *     parameters:
+ *       - in: query
+ *         name: merchant_id
+ *         schema:
+ *           type: string
+ *         description: Filter by merchant ID
+ *       - in: query
+ *         name: date_from
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *         description: Filter from this date
+ *       - in: query
+ *         name: date_to
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *         description: Filter until this date
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Page number
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *           maximum: 100
+ *         description: Items per page
+ *     responses:
+ *       200:
+ *         description: DLQ items retrieved successfully
+ *       401:
+ *         description: Unauthorized — missing or invalid X-Admin-Secret
+ */
+router.get(
+  "/admin/dead-letter-queue",
+  adminAuth,
+  validateQuery(webhookSchema.getDeadLetterQueueSchema),
+  getDeadLetterQueue
+);
+
+/**
+ * @swagger
+ * /api/v1/webhooks/admin/dead-letter-queue/{log_id}/requeue:
+ *   post:
+ *     summary: Requeue a permanently failed webhook for redelivery
+ *     tags: [Webhooks — Admin]
+ *     security:
+ *       - adminSecret: []
+ *     parameters:
+ *       - in: path
+ *         name: log_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The webhook log ID to requeue
+ *     responses:
+ *       200:
+ *         description: Webhook requeued successfully
+ *       400:
+ *         description: Webhook is not in failed status
+ *       404:
+ *         description: Webhook log not found
+ *       401:
+ *         description: Unauthorized — missing or invalid X-Admin-Secret
+ */
+router.post(
+  "/admin/dead-letter-queue/:log_id/requeue",
+  adminAuth,
+  requeueWebhook
 );
 
 export default router;

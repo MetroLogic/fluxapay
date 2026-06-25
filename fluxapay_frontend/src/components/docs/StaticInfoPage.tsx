@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { Link } from "@/i18n/routing";
 
 type InfoSection = {
   title: string;
@@ -17,6 +17,7 @@ export type StaticInfoPageProps = {
   description: string;
   sections: InfoSection[];
   ctas?: InfoCta[];
+  lastUpdated?: string;
 };
 
 export default function StaticInfoPage({
@@ -25,6 +26,7 @@ export default function StaticInfoPage({
   description,
   sections,
   ctas = [],
+  lastUpdated,
 }: StaticInfoPageProps) {
   return (
     <main className="min-h-screen bg-slate-50 py-16">
@@ -39,17 +41,41 @@ export default function StaticInfoPage({
             {title}
           </h1>
           <p className="mt-3 text-base text-slate-600">{description}</p>
+          {lastUpdated ? (
+            <p className="mt-2 text-xs text-slate-400">
+              Last updated: {lastUpdated}
+            </p>
+          ) : null}
           {ctas.length > 0 ? (
             <div className="mt-6 flex flex-wrap gap-3">
-              {ctas.map((cta) => (
-                <Link
-                  key={cta.href}
-                  href={cta.href}
-                  className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
-                >
-                  {cta.label}
-                </Link>
-              ))}
+              {ctas.map((cta) => {
+                const isExternal = cta.href.startsWith("http");
+                const className = "rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700";
+
+                if (isExternal) {
+                  return (
+                    <a
+                      key={cta.href}
+                      href={cta.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={className}
+                    >
+                      {cta.label}
+                    </a>
+                  );
+                }
+
+                return (
+                  <Link
+                    key={cta.href}
+                    href={cta.href}
+                    className={className}
+                  >
+                    {cta.label}
+                  </Link>
+                );
+              })}
             </div>
           ) : null}
         </header>

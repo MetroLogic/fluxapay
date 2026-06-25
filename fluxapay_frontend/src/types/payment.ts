@@ -1,17 +1,44 @@
+/**
+ * Payment status enum values matching backend PaymentStatus enum
+ */
+export type PaymentStatus = 
+  | 'pending' 
+  | 'partially_paid' 
+  | 'confirmed' 
+  | 'overpaid' 
+  | 'expired' 
+  | 'failed' 
+  | 'paid' 
+  | 'completed'
+  | 'settled'
+  | 'underpaid';
+
 export interface Payment {
   id: string;
   amount: number;
   currency: string;
   address: string; // Stellar payment address
+  memoType?: 'text' | 'id' | 'hash' | 'return';
+  memo?: string;
+  memoRequired?: boolean;
   expiresAt: Date;
-  status: 'pending' | 'confirmed' | 'expired' | 'failed';
+  status: PaymentStatus;
+  paidAmount?: number;
   successUrl?: string;
   merchantName?: string;
   description?: string;
+  /** HTTPS logo URL for hosted checkout (merchant settings). */
+  checkoutLogoUrl?: string;
+  /** Normalized hex accent, e.g. #rrggbb */
+  checkoutAccentColor?: string;
+  /** Support link for the merchant or Fluxapay. */
+  supportUrl?: string;
+  /** Stellar transaction hash, present once the payment is confirmed on-chain. */
+  transactionHash?: string;
 }
 
 export interface PaymentStatusUpdate {
   paymentId: string;
-  status: 'pending' | 'confirmed' | 'expired' | 'failed';
+  status: PaymentStatus;
   timestamp: Date;
 }

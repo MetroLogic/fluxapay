@@ -1,6 +1,6 @@
 import { Keypair, nativeToScVal, rpc, TransactionBuilder, Networks, Contract, xdr } from '@stellar/stellar-sdk';
 import { isDevEnv } from '../helpers/env.helper';
-import { PrismaClient } from '../generated/client';
+import { PrismaClient } from '../generated/client/client';
 
 const prisma = new PrismaClient();
 
@@ -52,7 +52,7 @@ export class PaymentContractService {
                     where: { id: paymentId },
                     data: {
                         onchain_verified: true,
-                        contract_tx_hash: (txResponse as any).hash || txHash,
+                        contract_tx_hash: txHash,
                         verification_error: null
                     }
                 });
@@ -122,12 +122,12 @@ export class PaymentContractService {
         }
 
         // Wait for the transaction to be processed
-        let txResponse = await this.server.getTransaction(sendTxResponse.hash);
+        let txResponse = await this.server.getTransaction((sendTxResponse as any).hash);
 
         let retries = 0;
         while (txResponse.status === 'NOT_FOUND' && retries < 15) {
             await new Promise(resolve => setTimeout(resolve, 3000));
-            txResponse = await this.server.getTransaction(sendTxResponse.hash);
+            txResponse = await this.server.getTransaction((sendTxResponse as any).hash);
             retries++;
         }
 

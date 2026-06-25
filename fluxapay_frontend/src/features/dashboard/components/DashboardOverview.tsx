@@ -5,8 +5,8 @@ import { StatsCards } from "./overview/StatsCards";
 import { ChartsSection } from "./overview/ChartsSection";
 import { RecentActivity } from "./overview/RecentActivity";
 import { QuickActions } from "./overview/QuickActions";
+import { NotificationsCenter } from "./overview/NotificationsCenter";
 import { DateRangePicker } from "./overview/DateRangePicker";
-
 function OverviewContent() {
     return (
         <div className="space-y-4 animate-fade-in">
@@ -18,8 +18,11 @@ function OverviewContent() {
             <StatsCards />
             <ChartsSection />
 
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-12">
                 <RecentActivity />
+                <div className="col-span-1 lg:col-span-3">
+                    <NotificationsCenter compact />
+                </div>
                 <QuickActions />
             </div>
         </div>

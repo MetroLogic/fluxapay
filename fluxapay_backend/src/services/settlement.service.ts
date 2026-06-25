@@ -180,7 +180,7 @@ export const exportSettlementService = async (
             `Payment ID,Amount,Currency,Customer Email,Date,Status`,
         ];
 
-        const paymentRows = payments.map((p) =>
+        const paymentRows = payments.map((p: typeof payments[number]) =>
             `${p.id},${p.amount},${p.currency},${p.customer_email},${p.createdAt.toISOString().split('T')[0]},${p.status}`
         );
 
@@ -210,7 +210,7 @@ export const exportSettlementService = async (
                 processed_date: settlement.processed_date,
                 created_at: settlement.created_at,
             },
-            payments: payments.map((p) => ({
+            payments: payments.map((p: typeof payments[number]) => ({
                 id: p.id,
                 amount: Number(p.amount),
                 currency: p.currency,
@@ -221,5 +221,150 @@ export const exportSettlementService = async (
             generated_at: new Date().toISOString(),
         },
         contentType: "application/json",
+    };
+};
+
+interface ExportSettlementRangeParams {
+    merchantId: string;
+    date_from?: string;
+    date_to?: string;
+    format?: "pdf" | "csv";
+}
+
+export const exportSettlementRangeService = async (
+    params: ExportSettlementRangeParams
+) => {
+    const { merchantId, date_from, date_to, format = "csv" } = params;
+    const where: any = { merchantId };
+
+    if (date_from || date_to) {
+        where.created_at = {};
+        if (date_from) where.created_at.gte = new Date(date_from);
+        if (date_to) where.created_at.lte = new Date(date_to);
+    }
+
+    const settlements = await prisma.settlement.findMany({
+        where,
+        orderBy: { created_at: "desc" },
+        include: { merchant: true },
+    });
+
+    const filename = `settlement_report_${date_from ?? "all"}_${date_to ?? "all"}.${format}`;
+
+    if (format === "csv") {
+        const escapeCsv = (value: unknown) => {
+            const text = value == null ? "" : String(value);
+            return `"${text.replace(/"/g, '""')}"`;
+        };
+
+        const header = [
+            "Settlement ID",
+            "Status",
+            "Amount",
+            "Currency",
+            "Fees",
+            "Net Amount",
+            "Scheduled Date",
+            "Processed Date",
+            "Created At",
+            "Bank Transfer ID",
+            "Merchant",
+        ];
+
+        const rows = settlements.map((settlement) =>
+            [
+                escapeCsv(settlement.id),
+                escapeCsv(settlement.status),
+                escapeCsv(settlement.amount),
+                escapeCsv(settlement.currency),
+                escapeCsv(settlement.fees),
+                escapeCsv(Number(settlement.amount) - Number(settlement.fees)),
+                escapeCsv(settlement.scheduled_date?.toISOString().split("T")[0] ?? ""),
+                escapeCsv(settlement.processed_date?.toISOString().split("T")[0] ?? ""),
+                escapeCsv(settlement.created_at.toISOString()),
+                escapeCsv(settlement.bank_transfer_id ?? ""),
+                escapeCsv(settlement.merchant.business_name ?? settlement.merchant.id),
+            ].join(","),
+        );
+
+        return {
+            filename,
+            content: [header.join(","), ...rows].join("\n"),
+            contentType: "text/csv",
+        };
+    }
+
+    return {
+        filename,
+        content: {
+            date_from: date_from ?? null,
+            date_to: date_to ?? null,
+            generated_at: new Date().toISOString(),
+            merchant_name: settlements[0]?.merchant.business_name ?? "",
+            settlements: settlements.map((settlement) => ({
+                id: settlement.id,
+                status: settlement.status,
+                amount: Number(settlement.amount),
+                currency: settlement.currency,
+                fees: Number(settlement.fees),
+                net_amount: Number(settlement.amount) - Number(settlement.fees),
+                scheduled_date: settlement.scheduled_date?.toISOString() ?? null,
+                processed_date: settlement.processed_date?.toISOString() ?? null,
+                created_at: settlement.created_at.toISOString(),
+                bank_transfer_id: settlement.bank_transfer_id,
+                merchant_name: settlement.merchant.business_name,
+            })),
+        },
+        contentType: "application/json",
+    };
+};
+
+export const getSettlementBatchService = async (
+    merchantId: string,
+    date_from?: string,
+    date_to?: string
+) => {
+    const where: any = { merchantId };
+
+    if (date_from || date_to) {
+        where.scheduled_date = {};
+        if (date_from) where.scheduled_date.gte = new Date(date_from);
+        if (date_to) where.scheduled_date.lte = new Date(date_to);
+    }
+
+    const settlements = await prisma.settlement.findMany({
+        where,
+        orderBy: { scheduled_date: "desc" },
+    });
+
+    const batches = settlements.reduce((acc: Record<string, {
+        scheduled_date: string;
+        total_amount: number;
+        total_fees: number;
+        settlement_count: number;
+        statuses: Record<string, number>;
+    }>, item) => {
+        const batchKey = item.scheduled_date.toISOString().slice(0, 10);
+
+        if (!acc[batchKey]) {
+            acc[batchKey] = {
+                scheduled_date: batchKey,
+                total_amount: 0,
+                total_fees: 0,
+                settlement_count: 0,
+                statuses: {},
+            };
+        }
+
+        acc[batchKey].total_amount += Number(item.amount);
+        acc[batchKey].total_fees += Number(item.fees);
+        acc[batchKey].settlement_count += 1;
+        acc[batchKey].statuses[item.status] = (acc[batchKey].statuses[item.status] || 0) + 1;
+
+        return acc;
+    }, {});
+
+    return {
+        batches: Object.values(batches),
     };
 };

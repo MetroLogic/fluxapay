@@ -1,34 +1,46 @@
-import { PrismaClient } from '../generated/client/client';
-import { v4 as uuidv4 } from 'uuid';
-import { createAndDeliverWebhook, generateMerchantPayload } from './webhook.service';
-import { HDWalletService } from './HDWalletService';
-import { StellarService } from './StellarService';
+import { PrismaClient } from "../generated/client/client";
+import crypto from "crypto";
+import { HDWalletService } from "./HDWalletService";
+import { StellarService } from "./StellarService";
+import { sorobanQueue } from "./sorobanQueue.service";
+import { eventBus, AppEvents } from "./EventService";
+import { validateAndSanitizeMetadata } from "../utils/metadata.util";
+import { PaymentStatus } from "../types/payment";
+import { trackPaymentCreated } from "../middleware/metrics.middleware";
 
 const prisma = new PrismaClient();
 
 export class PaymentService {
-  static async checkRateLimit(merchantId: string) {
-    const configuredLimit = Number(process.env.PAYMENT_RATE_LIMIT_PER_MINUTE);
-    const maxPaymentsPerMinute =
-      Number.isFinite(configuredLimit) && configuredLimit > 0 ? configuredLimit : 5;
+    static getRateLimitWindowSeconds() {
+        const configuredWindow = Number(process.env.PAYMENT_RATE_LIMIT_WINDOW_SECONDS);
+        return Number.isFinite(configuredWindow) && configuredWindow > 0
+            ? Math.floor(configuredWindow)
+            : 60;
+    }
 
-    const oneMinuteAgo = new Date(Date.now() - 60 * 1000);
-    const count = await prisma.payment.count({
-      where: {
-        merchantId,
-        createdAt: { gte: oneMinuteAgo },
-      },
-    });
-    return count < maxPaymentsPerMinute;
-  }
+    static async checkRateLimit(merchantId: string) {
+        const configuredLimit = Number(process.env.PAYMENT_RATE_LIMIT_PER_MINUTE);
+        const maxPaymentsPerMinute =
+            Number.isFinite(configuredLimit) && configuredLimit > 0 ? configuredLimit : 5;
+
+        const rateLimitWindowMs = this.getRateLimitWindowSeconds() * 1000;
+        const windowStart = new Date(Date.now() - rateLimitWindowMs);
+        const count = await prisma.payment.count({
+            where: {
+                merchantId,
+                createdAt: { gte: windowStart },
+            },
+        });
+        return count < maxPaymentsPerMinute;
+    }
 
   /** Base URL for hosted checkout (e.g. https://pay.fluxapay.com). Uses PAY_CHECKOUT_BASE or BASE_URL. */
   static getCheckoutBaseUrl(): string {
     const base =
       process.env.PAY_CHECKOUT_BASE ||
       process.env.BASE_URL ||
-      'http://localhost:3000';
-    return base.replace(/\/$/, '');
+      "http://localhost:3000";
+    return base.replace(/\/$/, "");
   }
 
   static async createPayment({
@@ -36,78 +48,117 @@ export class PaymentService {
     currency,
     customer_email,
     merchantId,
+    description,
     metadata,
     success_url,
     cancel_url,
+    customerId,
   }: {
     amount: number;
     currency: string;
     customer_email: string;
     merchantId: string;
+    description?: string;
     metadata?: Record<string, unknown>;
     success_url?: string;
     cancel_url?: string;
+    customerId?: string;
   }) {
-    const paymentId = uuidv4();
+    const paymentId = crypto.randomUUID();
     const expiration = new Date(Date.now() + 15 * 60 * 1000); // 15 min expiry
+    const sanitizedMetadata = validateAndSanitizeMetadata(metadata);
+
+    // Build absolute checkout URL using PAY_CHECKOUT_BASE env var
     const checkoutBase = PaymentService.getCheckoutBaseUrl();
     const checkout_url = `${checkoutBase}/pay/${paymentId}`;
 
-    // Derive the Stellar address for this payment using KMS-backed HDWalletService
+    // Derive the Stellar address using BIP44 HD derivation.
+    // This atomically assigns merchant_index and payment_index counters in the DB.
     const hdWalletService = new HDWalletService();
-    const stellarAddress = await hdWalletService.derivePaymentAddress(merchantId, paymentId);
+    const derived = await hdWalletService.derivePaymentAddress(
+      merchantId,
+      paymentId,
+    );
 
-    // Create payment with the derived Stellar address
+    // Encrypt the derivation indices for secure storage on the Payment row.
+    // These are used by SweepService to reconstruct the keypair without DB index lookup.
+    const encryptedKeyData = await hdWalletService.encryptKeyData(
+      derived.merchantIndex,
+      derived.paymentIndex,
+    );
+
+    // Create payment with the derived Stellar address and derivation metadata
     const payment = await prisma.payment.create({
       data: {
         id: paymentId,
         amount,
         currency,
         customer_email,
+        description: description ?? null,
         merchantId,
-        metadata: (metadata ?? {}) as any,
+        metadata: sanitizedMetadata as any,
         expiration,
-        status: 'pending',
+        status: PaymentStatus.PENDING,
         checkout_url,
         success_url: success_url ?? null,
         cancel_url: cancel_url ?? null,
-        stellar_address: stellarAddress,
+        ...(customerId ? { customerId } : {}),
+        stellar_address: derived.publicKey,
+        // HD wallet derivation fields — stored for sweep key recovery
+        payment_index: derived.paymentIndex,
+        derivation_path: derived.derivationPath,
+        encrypted_key_data: encryptedKeyData,
       },
     });
 
+    trackPaymentCreated();
+
     // Prepare the Stellar account asynchronously (fund and add trustline)
-    // This runs in the background to avoid blocking payment creation
-    const stellarService = new StellarService();
-    stellarService.prepareAccount(merchantId, paymentId).catch((error) => {
-      console.error(`Failed to prepare Stellar account for payment ${paymentId}:`, error);
-    });
+    // This runs in the background to avoid blocking payment creation.
+    // Contract tests can disable this side effect to avoid post-test async logs.
+    if (process.env.DISABLE_STELLAR_PREPARE !== "true") {
+      const stellarService = new StellarService();
+      stellarService.prepareAccount(merchantId, paymentId).catch((error) => {
+        console.error(
+          `Failed to prepare Stellar account for payment ${paymentId}:`,
+          error,
+        );
+      });
+    }
 
     return payment;
   }
 
-  static async confirmPayment(paymentId: string, txnHash: string, payerAddress: string) {
+  /**
+   * Verifies a payment on-chain via the Soroban queue, updates the database,
+   * and emits an internal event.
+   *
+   * The on-chain submission is enqueued asynchronously; the DB is updated
+   * optimistically so the rest of the payment flow is not blocked.
+   */
+  static async verifyPayment(
+    paymentId: string,
+    transactionHash: string,
+    payerAddress: string,
+    amountReceived: number,
+  ): Promise<any> {
+    // 1. Update local PostgreSQL database optimistically
     const payment = await prisma.payment.update({
       where: { id: paymentId },
       data: {
-        status: 'confirmed',
-        transaction_hash: txnHash,
+        status: PaymentStatus.CONFIRMED,
+        transaction_hash: transactionHash,
         payer_address: payerAddress,
         confirmed_at: new Date(),
       },
-      include: {
-        merchant: true,
-      },
     });
 
-    if (payment.merchant?.webhook_url) {
-      const payload = generateMerchantPayload(payment);
-      await createAndDeliverWebhook(
-        payment.merchantId,
-        'payment_confirmed' as any,
-        payload,
-        payment.id
-      );
-    }
+    // 2. Enqueue the Soroban contract submission (non-blocking)
+    sorobanQueue.enqueue(paymentId, transactionHash, String(amountReceived));
+
+    // 3. Emit internal event for Webhook Service to pick up
+    eventBus.emit(AppEvents.PAYMENT_CONFIRMED, payment);
+    eventBus.emit(AppEvents.PAYMENT_UPDATED, payment);
 
     return payment;
   }

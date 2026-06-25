@@ -1,6 +1,7 @@
 import { Router } from "express";
+import { authenticateApiKey } from "../middleware/apiKeyAuth.middleware";
+import { merchantApiKeyRateLimit } from "../middleware/rateLimit.middleware";
 import { regenerateApiKey } from "../controllers/keys.controller";
-import { authenticateToken } from "../middleware/auth.middleware";
 
 const router = Router();
 
@@ -8,13 +9,13 @@ const router = Router();
  * @swagger
  * /api/v1/keys/regenerate:
  *   post:
- *     summary: Regenerate API key for the authenticated merchant
- *     tags: [API Keys]
+ *     summary: Regenerate merchant API key
+ *     tags: [Keys]
  *     security:
- *       - bearerAuth: []
+ *       - apiKeyAuth: []
  *     responses:
  *       200:
- *         description: API key regenerated successfully
+ *         description: New API key generated
  *         content:
  *           application/json:
  *             schema:
@@ -22,11 +23,9 @@ const router = Router();
  *               properties:
  *                 message:
  *                   type: string
- *                 api_key:
+ *                 apiKey:
  *                   type: string
- *       401:
- *         description: Unauthorized
  */
-router.post("/regenerate", authenticateToken, regenerateApiKey);
+router.post("/regenerate", authenticateApiKey, merchantApiKeyRateLimit(), regenerateApiKey);
 
 export default router;

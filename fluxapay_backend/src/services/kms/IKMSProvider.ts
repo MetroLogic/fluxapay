@@ -16,12 +16,24 @@ export interface IKMSProvider {
   storeMasterSeed(seed: string): Promise<void>;
 
   /**
-   * Rotates the master seed encryption key (if supported)
+   * Rotates the master seed encryption key (if supported).
+   * Returns the new encrypted seed value.
    */
-  rotateEncryptionKey?(): Promise<void>;
+  rotateEncryptionKey?(newKeyId?: string): Promise<string>;
 
   /**
    * Health check for KMS availability
    */
   healthCheck(): Promise<boolean>;
+
+  /**
+   * Encrypts arbitrary data using the KMS key material.
+   * Used to encrypt derivation path indices before storing on Payment rows.
+   */
+  encrypt?(data: string): Promise<string>;
+
+  /**
+   * Decrypts data previously encrypted with encrypt().
+   */
+  decrypt?(data: string): Promise<string>;
 }

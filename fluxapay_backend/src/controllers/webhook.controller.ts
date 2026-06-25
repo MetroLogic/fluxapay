@@ -6,8 +6,11 @@ import {
   getWebhookLogDetailsService,
   retryWebhookService,
   sendTestWebhookService,
+  getDeadLetterQueueService,
+  requeueWebhookService,
+  exportWebhookLogsService,
 } from "../services/webhook.service";
-import { WebhookEventType, WebhookStatus } from "../generated/client";
+import { WebhookEventType, WebhookStatus } from "../generated/client/client";
 import { AuthRequest } from "../types/express";
 import { validateUserId } from "../helpers/request.helper";
 
@@ -31,6 +34,29 @@ export async function getWebhookLogs(req: AuthRequest, res: Response) {
     });
 
     res.status(200).json(result);
+  } catch (err) {
+    console.error(err);
+    res.status((err as any).status || 500).json({ message: (err as any).message || "Server error" });
+  }
+}
+
+export async function exportWebhookLogs(req: AuthRequest, res: Response) {
+  try {
+    const merchantId = await validateUserId(req);
+    const query = req.query as Record<string, string | undefined>;
+
+    const result = await exportWebhookLogsService({
+      merchantId,
+      event_type: query.event_type as WebhookEventType | undefined,
+      status: query.status as WebhookStatus | undefined,
+      date_from: query.date_from,
+      date_to: query.date_to,
+      search: query.search,
+    });
+
+    res.setHeader("Content-Type", result.contentType);
+    res.attachment(result.filename);
+    return res.status(200).send(result.content);
   } catch (err) {
     console.error(err);
     res.status((err as any).status || 500).json({ message: (err as any).message || "Server error" });
@@ -95,5 +121,42 @@ export async function sendTestWebhook(req: AuthRequest, res: Response) {
   } catch (err) {
     console.error(err);
     res.status((err as any).status || 500).json({ message: (err as any).message || "Server error" });
+  }
+}
+
+/* ── Admin DLQ endpoints (X-Admin-Secret, not merchant JWT) ─────────────── */
+
+export async function getDeadLetterQueue(req: Request, res: Response) {
+  try {
+    const query = req.query as any;
+
+    const result = await getDeadLetterQueueService({
+      page: Number(query.page) || 1,
+      limit: Number(query.limit) || 10,
+      date_from: query.date_from,
+      date_to: query.date_to,
+      merchant_id: query.merchant_id,
+    });
+
+    res.status(200).json(result);
+  } catch (err: any) {
+    console.error(err);
+    res.status(err.status || 500).json({ message: err.message || "Server error" });
+  }
+}
+
+export async function requeueWebhook(req: Request, res: Response) {
+  try {
+    const { log_id } = req.params;
+
+    if (!log_id || Array.isArray(log_id)) {
+      return res.status(400).json({ message: "Log ID is required" });
+    }
+
+    const result = await requeueWebhookService({ log_id });
+    res.status(200).json(result);
+  } catch (err: any) {
+    console.error(err);
+    res.status(err.status || 500).json({ message: err.message || "Server error" });
   }
 }

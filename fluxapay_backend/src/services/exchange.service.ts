@@ -13,6 +13,8 @@
  *   ANCHOR_API_URL            – Anchor base URL
  */
 
+import { sanitizeObject } from "../utils/piiRedactor";
+
 export interface ExchangeQuoteResult {
   /** Amount of fiat the merchant will receive before fees */
   fiat_gross: number;
@@ -40,6 +42,8 @@ export interface PayoutResult {
   exchange_ref?: string;
   /** ISO timestamp when payout was initiated */
   initiated_at: string;
+  /** Raw partner payload for audit (sanitized) */
+  raw_partner_payload?: any;
 }
 
 export interface ExchangePartner {
@@ -78,7 +82,7 @@ const MOCK_RATES: Record<string, number> = {
   USD: 1,
 };
 
-class MockExchangePartner implements ExchangePartner {
+export class MockExchangePartner implements ExchangePartner {
   async getQuote(usdcAmount: number, targetCurrency: string): Promise<ExchangeQuoteResult> {
     const rate = MOCK_RATES[targetCurrency] ?? 1;
     return {
@@ -102,10 +106,21 @@ class MockExchangePartner implements ExchangePartner {
       `[MockExchange] Simulating payout: ${usdcAmount} USDC → ${targetCurrency} | ref: ${reference}`,
     );
 
+    const transferRef = `mock_transfer_${reference}_${Date.now()}`;
+    const exchangeRef = `mock_exchange_${Date.now()}`;
     return {
-      transfer_ref: `mock_transfer_${reference}_${Date.now()}`,
-      exchange_ref: `mock_exchange_${Date.now()}`,
+      transfer_ref: transferRef,
+      exchange_ref: exchangeRef,
       initiated_at: new Date().toISOString(),
+      raw_partner_payload: {
+        partner: 'mock',
+        transfer_ref: transferRef,
+        exchange_ref: exchangeRef,
+        usdc_amount: usdcAmount,
+        target_currency: targetCurrency,
+        reference,
+        timestamp: new Date().toISOString(),
+      },
     };
   }
 }
@@ -114,7 +129,7 @@ class MockExchangePartner implements ExchangePartner {
 // Yellow Card partner (https://docs.yellowcard.io)
 // ──────────────────────────────────────────────────────────────────────────────
 
-class YellowCardPartner implements ExchangePartner {
+export class YellowCardPartner implements ExchangePartner {
   private apiKey: string;
   private baseUrl: string;
 
@@ -191,6 +206,11 @@ class YellowCardPartner implements ExchangePartner {
       transfer_ref: data.transferId,
       exchange_ref: quote.quote_ref,
       initiated_at: new Date().toISOString(),
+      raw_partner_payload: {
+        partner: 'yellowcard',
+        response: sanitizeObject(data),
+        timestamp: new Date().toISOString(),
+      },
     };
   }
 }
@@ -199,7 +219,7 @@ class YellowCardPartner implements ExchangePartner {
 // Anchor partner (https://docs.anchorusd.com)
 // ──────────────────────────────────────────────────────────────────────────────
 
-class AnchorPartner implements ExchangePartner {
+export class AnchorPartner implements ExchangePartner {
   private apiKey: string;
   private baseUrl: string;
 
@@ -269,6 +289,11 @@ class AnchorPartner implements ExchangePartner {
       transfer_ref: data.reference,
       exchange_ref: data.exchange_id,
       initiated_at: new Date().toISOString(),
+      raw_partner_payload: {
+        partner: 'anchor',
+        response: sanitizeObject(data),
+        timestamp: new Date().toISOString(),
+      },
     };
   }
 }

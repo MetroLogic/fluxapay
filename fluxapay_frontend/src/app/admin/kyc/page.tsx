@@ -15,13 +15,14 @@ import {
   Globe,
 } from "lucide-react";
 import toast from "react-hot-toast";
+import { toastApiError } from "@/lib/toastApiError";
 import EmptyState from "@/components/EmptyState";
+import { api } from "@/lib/api";
 import {
   useKycSubmissions,
   useKycDetails,
   type KycApplicationShape,
 } from "@/hooks/useKycSubmissions";
-import { api } from "@/lib/api";
 
 interface StatusConfig {
   color: string;
@@ -112,8 +113,8 @@ const AdminKycPage = () => {
       setShowRejectModal(false);
       setRejectionReason("");
       void mutate();
-    } catch {
-      toast.error("Failed to update application status");
+    } catch (err) {
+      toastApiError(err);
     }
   };
 

@@ -7,7 +7,7 @@ export interface AdminMerchant {
   id: string;
   businessName: string;
   email: string;
-  kycStatus: "approved" | "pending" | "rejected" | "unverified";
+  kycStatus: "approved" | "pending_review" | "rejected" | "not_submitted";
   accountStatus: string;
   volume: number;
   revenue: number;

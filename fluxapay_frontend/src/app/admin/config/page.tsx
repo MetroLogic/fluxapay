@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Save,
   Settings,
@@ -14,8 +14,23 @@ import {
   Lock,
   Zap,
   CreditCard,
+  Loader2
 } from "lucide-react";
 import toast from "react-hot-toast";
+import { api } from "@/lib/api";
+import { Link } from "@/i18n/routing";
+
+const ACTION_MAP: Record<string, string> = {
+  'kyc_approve': 'KYC Approval',
+  'kyc_reject': 'KYC Rejection',
+  'config_change': 'Config Change',
+  'sweep_trigger': 'Sweep Trigger',
+  'sweep_complete': 'Sweep Complete',
+  'sweep_fail': 'Sweep Failure',
+  'settlement_batch_initiate': 'Settlement Start',
+  'settlement_batch_complete': 'Settlement Complete',
+  'settlement_batch_fail': 'Settlement Failure'
+};
 
 interface ConfigState {
   fees: {
@@ -71,29 +86,46 @@ const AdminConfigPage = () => {
     },
   });
 
-  const [auditLogs] = useState<AuditLog[]>([
-    {
-      id: "1",
-      action: "Update Fees",
-      user: "admin@fluxapay.com",
-      timestamp: "2024-03-24 14:20",
-      description: "Changed transaction percent from 1.2% to 1.5%",
-    },
-    {
-      id: "2",
-      action: "Toggle Feature",
-      user: "admin@fluxapay.com",
-      timestamp: "2024-03-24 10:15",
-      description: "Enabled USDC payments",
-    },
-    {
-      id: "3",
-      action: "Network Change",
-      user: "sys_admin",
-      timestamp: "2024-03-23 09:00",
-      description: "Updated Horizon URL",
-    },
-  ]);
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+  const [loadingLogs, setLoadingLogs] = useState(false);
+
+  useEffect(() => {
+    const fetchRecentLogs = async () => {
+      try {
+        setLoadingLogs(true);
+        const response = await api.admin.auditLogs.list({ limit: 5, page: 1 });
+        if (response.success) {
+          // Transform API response to fit the local AuditLog interface
+          const transformedLogs: AuditLog[] = (response.data as Array<{
+            id: string;
+            action_type: string;
+            admin_id: string;
+            created_at: string;
+            entity_type: string | null;
+            entity_id: string | null;
+          }>).map((log) => ({
+            id: log.id,
+            action: ACTION_MAP[log.action_type] || log.action_type,
+            user: log.admin_id,
+            timestamp: new Date(log.created_at).toLocaleString('en-US', {
+              month: 'short',
+              day: '2-digit',
+              hour: '2-digit',
+              minute: '2-digit'
+            }),
+            description: log.entity_type ? `${log.entity_type}: ${log.entity_id}` : 'General action',
+          }));
+          setAuditLogs(transformedLogs);
+        }
+      } catch (error) {
+        console.error("Failed to fetch recent audit logs:", error);
+      } finally {
+        setLoadingLogs(false);
+      }
+    };
+
+    fetchRecentLogs();
+  }, []);
 
   const [isSaving, setIsSaving] = useState(false);
 
@@ -565,35 +597,49 @@ const AdminConfigPage = () => {
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
               <div className="p-5 border-b border-slate-200 flex items-center justify-between">
                 <h3 className="font-bold text-slate-900">Audit History</h3>
-                <button className="text-xs font-semibold text-slate-500 hover:text-slate-900 transition-colors">
+                <Link href="/admin/audit-logs" className="text-xs font-semibold text-slate-500 hover:text-slate-900 transition-colors">
                   View All
-                </button>
+                </Link>
               </div>
-              <div className="divide-y divide-slate-100">
-                {auditLogs.map((log) => (
-                  <div
-                    key={log.id}
-                    className="p-5 hover:bg-slate-50 transition-colors"
-                  >
-                    <div className="flex items-start justify-between gap-2 mb-1">
-                      <span className="text-sm font-bold text-slate-900">
-                        {log.action}
-                      </span>
-                      <span className="text-[10px] font-medium text-slate-400 whitespace-nowrap bg-slate-100 px-1.5 py-0.5 rounded uppercase">
-                        {log.timestamp.split(" ")[1]}
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed mb-2">
-                      {log.description}
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <div className="w-4 h-4 rounded-full bg-slate-200" />
-                      <span className="text-[10px] font-semibold text-slate-500">
-                        {log.user}
-                      </span>
-                    </div>
+              <div className="divide-y divide-slate-100 min-h-[300px] flex flex-col">
+                {loadingLogs ? (
+                  <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
+                    <Loader2 className="w-6 h-6 text-slate-300 animate-spin mb-2" />
+                    <p className="text-xs text-slate-400 font-medium">Loading trail...</p>
                   </div>
-                ))}
+                ) : auditLogs.length === 0 ? (
+                   <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
+                    <Clock className="w-6 h-6 text-slate-200 mb-2" />
+                    <p className="text-xs text-slate-400 font-medium">No recent actions</p>
+                  </div>
+                ) : (
+                  auditLogs.map((log) => (
+                    <div
+                      key={log.id}
+                      className="p-5 hover:bg-slate-50 transition-colors"
+                    >
+                      <div className="flex items-start justify-between gap-2 mb-1">
+                        <span className="text-sm font-bold text-slate-900">
+                          {log.action}
+                        </span>
+                        <span className="text-[10px] font-medium text-slate-400 whitespace-nowrap bg-slate-100 px-1.5 py-0.5 rounded uppercase">
+                          {log.timestamp.includes(',') ? log.timestamp.split(',')[1].trim() : log.timestamp}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed mb-2">
+                        {log.description}
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 rounded-full bg-slate-900 text-white flex items-center justify-center text-[8px] font-bold">
+                          {log.user.charAt(0).toUpperCase()}
+                        </div>
+                        <span className="text-[10px] font-semibold text-slate-500 truncate w-32" title={log.user}>
+                          {log.user}
+                        </span>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
               <div className="p-4 bg-slate-50 border-t border-slate-100">
                 <button className="w-full flex items-center justify-center gap-2 text-xs font-bold text-slate-400 hover:text-slate-600 transition-colors uppercase tracking-widest">

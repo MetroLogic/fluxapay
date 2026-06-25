@@ -1,27 +1,22 @@
 import type { Metadata } from "next";
-import { Inter, Caveat } from "next/font/google";
-import "@/styles/globals.css";
-import { Providers } from "../providers";
-import { Toaster } from "react-hot-toast";
 import { NextIntlClientProvider } from "next-intl";
 import { notFound } from "next/navigation";
 import { routing } from "@/i18n/routing";
+import { baseMetadata, SITE_BASE_URL } from "@/lib/seo";
 
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-inter",
-});
+export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
+  const { locale } = await params;
 
-const caveat = Caveat({
-  subsets: ["latin"],
-  variable: "--font-caveat",
-});
-
-export const metadata: Metadata = {
-  title: "FluxaPay | Global Payment Infrastructure",
-  description:
-    "The next generation of global payments. Accept crypto and fiat seamlessly.",
-};
+  return {
+    ...baseMetadata,
+    alternates: {
+      canonical: `${SITE_BASE_URL}/${locale}`,
+      languages: Object.fromEntries(
+        routing.locales.map((l) => [l, `${SITE_BASE_URL}/${l}`])
+      ),
+    },
+  };
+}
 
 export function generateStaticParams() {
   return routing.locales.map((locale) => ({ locale }));
@@ -44,15 +39,8 @@ export default async function LocaleLayout({
   const messages = (await import(`../../../messages/${locale}.json`)).default;
 
   return (
-    <html lang={locale} suppressHydrationWarning>
-      <body
-        className={`${inter.variable} ${caveat.variable} font-sans antialiased`}
-      >
-        <NextIntlClientProvider locale={locale} messages={messages}>
-          <Providers>{children}</Providers>
-          <Toaster position="top-right" />
-        </NextIntlClientProvider>
-      </body>
-    </html>
+    <NextIntlClientProvider locale={locale} messages={messages}>
+      {children}
+    </NextIntlClientProvider>
   );
 }

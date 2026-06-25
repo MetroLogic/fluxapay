@@ -1,165 +1,106 @@
 import { Router } from "express";
-import {
-  initiateRefundController,
-  getRefundController,
-  listRefundsController,
-} from "../controllers/refund.controller";
+import { authenticateApiKey } from "../middleware/apiKeyAuth.middleware";
+import { merchantApiKeyRateLimit } from "../middleware/rateLimit.middleware";
 import { validate, validateQuery } from "../middleware/validation.middleware";
-import { authenticateToken } from "../middleware/auth.middleware";
-import { authorizeAdmin } from "../middleware/admin.middleware";
-import * as refundSchema from "../schemas/refund.schema";
+import { idempotencyMiddleware } from "../middleware/idempotency.middleware";
+import {
+  createRefund,
+  listRefunds,
+  updateRefundStatus,
+} from "../controllers/refund.controller";
+import {
+  createRefundSchema,
+  listRefundsQuerySchema,
+  updateRefundStatusSchema,
+} from "../schemas/refund.schema";
 
 const router = Router();
 
 /**
  * @swagger
- * /api/refunds:
+ * /api/v1/refunds:
  *   post:
- *     summary: Initiate a refund
+ *     summary: Create a refund
  *     tags: [Refunds]
  *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: header
- *         name: X-Admin-API-Key
- *         required: true
- *         schema:
- *           type: string
- *         description: Admin API key for authorization
+ *       - apiKeyAuth: []
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
- *             type: object
- *             required:
- *               - paymentId
- *               - merchantId
- *               - amount
- *               - currency
- *               - customerAddress
- *               - reason
- *             properties:
- *               paymentId:
- *                 type: string
- *               merchantId:
- *                 type: string
- *               amount:
- *                 type: number
- *               currency:
- *                 type: string
- *                 enum: [USDC, XLM]
- *               customerAddress:
- *                 type: string
- *                 description: Stellar public key (G...)
- *               reason:
- *                 type: string
- *                 enum: [customer_request, duplicate_payment, failed_delivery, merchant_request, dispute_resolution]
- *               reasonNote:
- *                 type: string
+ *             $ref: '#/components/schemas/CreateRefundRequest'
  *     responses:
  *       201:
- *         description: Refund initiated and completed
- *       400:
- *         description: Validation error
- *       403:
- *         description: Unauthorized - missing or invalid admin API key
- *       409:
- *         description: Duplicate refund for this payment
- *       502:
- *         description: Stellar network error
- */
-router.post(
-  "/",
-  authenticateToken,
-  authorizeAdmin,
-  validate(refundSchema.initiateRefundSchema),
-  initiateRefundController,
-);
-
-/**
- * @swagger
- * /api/refunds:
+ *         description: Refund created
  *   get:
- *     summary: List refunds with optional filters
+ *     summary: List merchant refunds
  *     tags: [Refunds]
  *     security:
- *       - bearerAuth: []
+ *       - apiKeyAuth: []
  *     parameters:
- *       - in: header
- *         name: X-Admin-API-Key
- *         required: true
- *         schema:
- *           type: string
- *       - in: query
- *         name: paymentId
- *         schema:
- *           type: string
- *       - in: query
- *         name: merchantId
- *         schema:
- *           type: string
- *       - in: query
- *         name: status
- *         schema:
- *           type: string
- *           enum: [initiated, processing, completed, failed]
  *       - in: query
  *         name: page
  *         schema:
  *           type: integer
- *           default: 1
  *       - in: query
  *         name: limit
  *         schema:
  *           type: integer
- *           default: 20
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [pending, processing, completed, failed]
  *     responses:
  *       200:
- *         description: List of refunds with pagination
- *       403:
- *         description: Unauthorized
+ *         description: Refunds retrieved
  */
+router.post(
+  "/",
+  authenticateApiKey, merchantApiKeyRateLimit(),
+  idempotencyMiddleware,
+  validate(createRefundSchema),
+  createRefund,
+);
 router.get(
   "/",
-  authenticateToken,
-  authorizeAdmin,
-  validateQuery(refundSchema.listRefundsSchema),
-  listRefundsController,
+  authenticateApiKey, merchantApiKeyRateLimit(),
+  validateQuery(listRefundsQuerySchema),
+  listRefunds,
 );
 
 /**
  * @swagger
- * /api/refunds/{refundId}:
- *   get:
- *     summary: Get a single refund by ID
+ * /api/v1/refunds/{refund_id}/status:
+ *   patch:
+ *     summary: Update refund status and emit webhook
  *     tags: [Refunds]
  *     security:
- *       - bearerAuth: []
+ *       - apiKeyAuth: []
  *     parameters:
- *       - in: header
- *         name: X-Admin-API-Key
- *         required: true
- *         schema:
- *           type: string
  *       - in: path
- *         name: refundId
+ *         name: refund_id
  *         required: true
  *         schema:
  *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/UpdateRefundStatusRequest'
  *     responses:
  *       200:
- *         description: Refund details
- *       403:
- *         description: Unauthorized
+ *         description: Refund status updated
  *       404:
  *         description: Refund not found
  */
-router.get(
-  "/:refundId",
-  authenticateToken,
-  authorizeAdmin,
-  getRefundController,
+router.patch(
+  "/:refund_id/status",
+  authenticateApiKey, merchantApiKeyRateLimit(),
+  validate(updateRefundStatusSchema),
+  updateRefundStatus,
 );
 
 export default router;

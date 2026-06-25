@@ -51,8 +51,17 @@
   --color-yellow: #FED449;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono:
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    "Liberation Mono",
+    "Courier New",
+    monospace;
+  --font-caveat: "Caveat", "Bradley Hand", "Comic Sans MS", cursive;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -202,6 +211,32 @@
 
   body {
     @apply bg-background text-foreground;
+  }
+
+  /* Skip to main content link for keyboard users */
+  .skip-to-content {
+    @apply absolute -top-full left-4 z-[9999] px-4 py-2 bg-primary text-primary-foreground font-semibold rounded-md transition-all;
+    &:focus {
+      @apply top-4;
+    }
+  }
+
+  /* Ensure focus-visible rings are always visible */
+  :focus-visible {
+    outline: 2px solid oklch(0.5 0.24 264);
+    outline-offset: 2px;
+  }
+
+  /* High-contrast focus for interactive elements */
+  a:focus-visible,
+  button:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible,
+  [tabindex]:focus-visible {
+    outline: 2px solid oklch(0.5 0.24 264);
+    outline-offset: 2px;
+    border-radius: 4px;
   }
 }
 

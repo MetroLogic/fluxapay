@@ -1,0 +1,65 @@
+name: Integration Smoke Test
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main", "feature/*", "ci/*"]
+
+jobs:
+  smoke-test:
+    name: Docker Integration Smoke Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Bring up services
+        run: docker compose -f docker-compose.ci.yml up -d --build
+
+      - name: Wait for Backend to be healthy
+        run: |
+          echo "Waiting for backend to be ready..."
+          # The healthcheck is already defined in docker-compose.ci.yml
+          # We'll wait for it manually if needed, but 'docker compose up -d' 
+          # doesn't wait for health by default.
+          for i in {1..60}; do
+            HEALTH_STATUS=$(docker inspect --format='{{json .State.Health.Status}}' fluxapay-ci-backend 2>/dev/null || echo '"starting"')
+            if [ "$HEALTH_STATUS" == '"healthy"' ]; then
+              echo "Backend is healthy!"
+              exit 0
+            fi
+            echo "Status: $HEALTH_STATUS... ($i/60)"
+            sleep 5
+          done
+          echo "Backend failed to become healthy"
+          docker compose -f docker-compose.ci.yml logs
+          exit 1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: fluxapay_backend/package-lock.json
+
+      - name: Run API smoke tests
+        working-directory: ./fluxapay_backend
+        run: |
+          npm ci || npm install
+          npm run test:smoke
+        env:
+          API_BASE_URL: http://localhost:3000
+
+      - name: Frontend build step (Optional)
+        working-directory: ./fluxapay_frontend
+        run: |
+          npm ci --legacy-peer-deps || npm install --legacy-peer-deps
+          npm run build
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:3000
+
+      - name: Cleanup
+        if: always()
+        run: docker compose -f docker-compose.ci.yml down

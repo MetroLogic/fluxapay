@@ -1,13 +1,14 @@
 "use client";
 
-import React, { useState, useMemo } from 'react';
-import { subDays, startOfDay, format } from 'date-fns';
+import React, { useState, useMemo, useEffect } from 'react';
+import { subDays, startOfDay } from 'date-fns';
 import { ReconciliationRecord } from '../../../types/reconciliation';
 import { ReconciliationSummary } from '../../../components/reconciliation/ReconciliationSummary';
 import { ReconciliationTable } from '../../../components/reconciliation/ReconciliationTable';
 import { StatementDownload } from '../../../components/reconciliation/StatementDownload';
 import { DiscrepancyAlert } from '../../../components/reconciliation/DiscrepancyAlert';
 import { useReconciliation } from '../../../hooks/useReconciliation';
+
 import { api } from '../../../lib/api';
 
 export default function ReconciliationPage() {
@@ -15,6 +16,20 @@ export default function ReconciliationPage() {
     const [assetFilter, setAssetFilter] = useState<'all' | 'USDC' | 'XLM'>('all');
     const [minDiscrepancyFilter, setMinDiscrepancyFilter] = useState<string>('');
     const [exportError, setExportError] = useState<string | null>(null);
+
+import { exportToPDF, exportToCSV } from '../../../utils/exportHelpers';
+import { api, ApiError } from '../../../lib/api';
+
+export default function ReconciliationPage() {
+    const [dateRangeFilter, setDateRangeFilter] = useState<'today' | '7days' | '30days'>('30days');
+    const [merchant, setMerchant] = useState<{ name: string; id: string }>({ name: '', id: '' });
+
+    useEffect(() => {
+        api.merchant.getMe().then((res) => {
+            const m = (res as { merchant?: { id?: string; business_name?: string } }).merchant;
+            if (m?.id) setMerchant({ id: m.id, name: m.business_name ?? '' });
+        }).catch(() => {});
+    }, []);
 
     // Compute date range based on filter, memoized to prevent infinite loops
     const { startDate, endDate } = useMemo(() => {
@@ -32,7 +47,7 @@ export default function ReconciliationPage() {
         return { startDate: start, endDate: end };
     }, [dateRangeFilter]);
 
-    const { records, summary, discrepancies, loading, error, setDiscrepancies } = useReconciliation({
+    const { records, summary, discrepancies, loading, error, resolveDiscrepancy } = useReconciliation({
         start: startDate,
         end: endDate
     });
@@ -53,6 +68,7 @@ export default function ReconciliationPage() {
     }, [records, assetFilter, minDiscrepancyFilter]);
 
     const handleDownloadPDF = async () => {
+
         try {
             setExportError(null);
             const response = await api.settlements.exportRange({
@@ -82,6 +98,12 @@ export default function ReconciliationPage() {
             setExportError(err.message || 'An error occurred while exporting PDF.');
             throw err;
         }
+        if (!summary) return;
+        await exportToPDF(
+            records,
+            summary,
+            { name: merchant.name || 'Merchant', id: merchant.id }
+        );
     };
 
     const handleDownloadCSV = async () => {
@@ -116,11 +138,17 @@ export default function ReconciliationPage() {
         }
     };
 
-    const handleResolveAlert = (id: string) => {
-        setDiscrepancies(prev => prev.map(a => a.id === id ? { ...a, resolved: true } : a));
+    const handleResolveAlert = async (id: string) => {
+        try {
+            await resolveDiscrepancy(id);
+        } catch (e) {
+            const message = e instanceof ApiError ? e.message : 'Could not resolve alert';
+            window.alert(message);
+        }
     };
 
     const handleDownloadRecord = async (record: ReconciliationRecord) => {
+
         try {
             setExportError(null);
             const response = await api.settlements.export(record.settlementId, 'pdf');
@@ -143,6 +171,19 @@ export default function ReconciliationPage() {
             console.error('Record Export Error:', err);
             setExportError(err.message || 'An error occurred while exporting settlement details PDF.');
         }
+=======
+        if (!summary) return;
+        const singleSummary = {
+            ...summary,
+            totalUSDCReceived: record.usdcReceived,
+            totalFiatPayout: record.fiatPayout,
+            totalFees: record.fees,
+            discrepancy: record.discrepancy,
+            transactionCount: 1,
+            startDate: record.date,
+            endDate: record.date
+        };
+        await exportToPDF([record], singleSummary, { name: merchant.name || 'Merchant', id: merchant.id });
     };
 
     if (error) {

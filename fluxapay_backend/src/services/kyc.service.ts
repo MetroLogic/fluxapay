@@ -1,6 +1,15 @@
-import { PrismaClient, KYCStatus, DocumentType, BusinessType, GovernmentIdType } from "../generated/client/client";
+import {
+  PrismaClient,
+  KYCStatus as PrismaKYCStatus,
+  DocumentType,
+  BusinessType,
+  GovernmentIdType,
+  Prisma,
+} from "../generated/client/client";
 import { uploadToCloudinary, deleteFromCloudinary } from "./cloudinary.service";
 import { SubmitKycInput, UpdateKycStatusInput } from "../schemas/kyc.schema";
+import { logKycDecision } from "./audit.service";
+import { KYCStatus as AuditKYCStatus } from "../types/audit.types";
 
 const prisma = new PrismaClient();
 
@@ -42,7 +51,7 @@ export async function submitKycService(
         director_phone: data.director_phone,
         government_id_type: data.government_id_type as GovernmentIdType,
         government_id_number: data.government_id_number,
-        kyc_status: "pending_review",
+        kyc_status: PrismaKYCStatus.pending_review,
         rejection_reason: null,
       },
     });
@@ -67,7 +76,7 @@ export async function submitKycService(
       director_phone: data.director_phone,
       government_id_type: data.government_id_type as GovernmentIdType,
       government_id_number: data.government_id_number,
-      kyc_status: "pending_review",
+      kyc_status: PrismaKYCStatus.pending_review,
     },
   });
 
@@ -207,7 +216,7 @@ export async function getKycStatusService(merchantId: string) {
   if (!kyc) {
     return {
       message: "KYC not submitted",
-      kyc_status: "not_submitted" as KYCStatus,
+      kyc_status: PrismaKYCStatus.not_submitted,
       kyc: null,
     };
   }
@@ -249,6 +258,26 @@ export async function getKycStatusService(merchantId: string) {
 }
 
 /**
+ * Allowed KYC status transitions.
+ *
+ * The lifecycle is linear:
+ *   not_submitted  →  pending_review  →  approved
+ *                                     →  rejected
+ *
+ * Rejected / approved merchants may resubmit (handled by submitKycService),
+ * which moves them back to pending_review.  Admin reviewers may only act on
+ * submissions that are in pending_review.
+ */
+const ALLOWED_ADMIN_TRANSITIONS: Partial<
+  Record<PrismaKYCStatus, PrismaKYCStatus[]>
+> = {
+  pending_review: [
+    PrismaKYCStatus.approved,
+    PrismaKYCStatus.rejected,
+  ],
+};
+
+/**
  * Update KYC status (admin only)
  */
 export async function updateKycStatusService(
@@ -264,26 +293,66 @@ export async function updateKycStatusService(
     throw { status: 404, message: "KYC not found for this merchant" };
   }
 
-  if (kyc.kyc_status !== "pending_review") {
+  const currentStatus = kyc.kyc_status as PrismaKYCStatus;
+  const newStatus = data.status as PrismaKYCStatus;
+
+  // Validate transition using the explicit allowlist.
+  const allowedNext = ALLOWED_ADMIN_TRANSITIONS[currentStatus] ?? [];
+  if (!allowedNext.includes(newStatus)) {
     throw {
       status: 400,
-      message: "KYC is not in pending review status",
+      message: `Invalid status transition: '${currentStatus}' → '${newStatus}'. Allowed transitions from '${currentStatus}': ${
+        allowedNext.length > 0
+          ? allowedNext.join(", ")
+          : "none (only pending_review submissions can be reviewed)"
+      }.`,
     };
   }
 
-  const updatedKyc = await prisma.merchantKYC.update({
-    where: { merchantId },
-    data: {
-      kyc_status: data.status as KYCStatus,
-      rejection_reason: data.status === "rejected" ? data.rejection_reason : null,
-      reviewed_at: new Date(),
-      reviewed_by: reviewerId,
-    },
+  // Reject without a reason is a client error — enforce here in addition to
+  // the schema-level check so the service is self-consistent.
+  if (newStatus === PrismaKYCStatus.rejected && !data.rejection_reason?.trim()) {
+    throw {
+      status: 400,
+      message: "rejection_reason is required when rejecting a KYC submission.",
+    };
+  }
+
+  const previousStatus = currentStatus;
+  const action = data.status === "approved" ? "approve" : "reject";
+
+  // Use transaction to ensure atomicity
+  const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    // Update KYC status
+    const updatedKyc = await tx.merchantKYC.update({
+      where: { merchantId },
+      data: {
+        kyc_status: newStatus,
+        rejection_reason: data.status === "rejected" ? data.rejection_reason : null,
+        reviewed_at: new Date(),
+        reviewed_by: reviewerId,
+      },
+    });
+
+    // Create audit log entry
+    await logKycDecision(
+      {
+        adminId: reviewerId,
+        merchantId,
+        action,
+        previousStatus: previousStatus as AuditKYCStatus,
+        newStatus: newStatus as AuditKYCStatus,
+        reason: data.rejection_reason,
+      },
+      tx
+    );
+
+    return updatedKyc;
   });
 
   return {
     message: `KYC ${data.status}`,
-    kyc: updatedKyc,
+    kyc: result,
   };
 }
 
@@ -291,7 +360,7 @@ export async function updateKycStatusService(
  * Get all KYC submissions for admin review
  */
 export async function getAllKycSubmissionsService(
-  status?: KYCStatus,
+  status?: PrismaKYCStatus,
   page: number = 1,
   limit: number = 10
 ) {

@@ -16,9 +16,10 @@
  */
 
 import { Decimal } from "@prisma/client/runtime/library";
-import { Merchant, PrismaClient } from "../generated/client/client";
+import { Merchant, PrismaClient, Prisma } from "../generated/client/client";
 import { getExchangePartner } from "./exchange.service";
 import { createAndDeliverWebhook } from "./webhook.service";
+import { logSettlementBatch, updateSettlementBatchCompletion } from "./audit.service";
 
 const prisma = new PrismaClient();
 
@@ -38,6 +39,7 @@ interface SettlementBatchResult {
     totalMerchantsProcessed: number;
     totalMerchantsSucceeded: number;
     totalMerchantsFailed: number;
+    totalMerchantsSkipped: number;
 }
 
 interface MerchantSettlementResult {
@@ -101,13 +103,34 @@ interface MerchantAggregate {
     totalUsdc: number;
 }
 
-async function getUnsettledPaymentsByMerchant(): Promise<MerchantAggregate[]> {
+async function getUnsettledPaymentsByMerchant(runAt: Date): Promise<MerchantAggregate[]> {
+    // Pre-compute which merchant IDs are due today so we skip loading
+    // payments for merchants whose schedule doesn't fall on this run date.
+    const todayUTCDay = runAt.getUTCDay(); // 0=Sun … 6=Sat
+
+    const dueMerchants = await prisma.merchant.findMany({
+        where: {
+            OR: [
+                // Daily merchants are always due
+                { settlement_schedule: "daily" },
+                // Weekly merchants are due only on their designated day
+                { settlement_schedule: "weekly", settlement_day: todayUTCDay },
+            ],
+        },
+        select: { id: true },
+    });
+
+    if (dueMerchants.length === 0) return [];
+
+    const dueMerchantIds = dueMerchants.map((m) => m.id);
+
     // Raw grouping query – Prisma's groupBy aggregation doesn't easily return ids,
     // so we fetch payment rows and group in-process.
     const payments = await prisma.payment.findMany({
         where: {
             swept: true,
             settled: false,
+            merchantId: { in: dueMerchantIds },
         },
         select: {
             id: true,
@@ -200,7 +223,7 @@ async function settleMerchant(
     try {
         // 4. Build a unique reference for idempotency
         const batchDate = now.toISOString().split("T")[0]; // YYYY-MM-DD
-        const settlementRef = `SETTLE_${merchantId.slice(-6).toUpperCase()}_${batchDate}_${Date.now()}`;
+        const settlementRef = `SETTLE_${merchantId.slice(-6).toUpperCase()}_${batchDate}`;
 
         // 5. Convert USDC → fiat + initiate bank transfer
         const partner = getExchangePartner();
@@ -230,7 +253,7 @@ async function settleMerchant(
         const netAmount = parseFloat((fiatGross - feeAmount).toFixed(2));
 
         // 8. Create Settlement record inside a transaction
-        const settlement = await prisma.$transaction(async (tx) => {
+        const settlement = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
             const s = await tx.settlement.create({
                 data: {
                     merchantId,
@@ -244,6 +267,7 @@ async function settleMerchant(
                     exchange_ref: payout.exchange_ref,
                     bank_transfer_id: payout.transfer_ref,
                     payment_ids: paymentIds,
+                    payout_partner_payload: payout.raw_partner_payload || null,
                     status: "completed",
                     scheduled_date: now,
                     processed_date: now,
@@ -391,6 +415,7 @@ async function settleMerchant(
  */
 export async function runSettlementBatch(
     runAt: Date = new Date(),
+    adminId: string = 'system',
 ): Promise<SettlementBatchResult> {
     const batchId = `batch_${Date.now()}`;
     const startedAt = runAt;
@@ -400,13 +425,32 @@ export async function runSettlementBatch(
         `(UTC day=${startedAt.getUTCDay()})`,
     );
 
-    const aggregates = await getUnsettledPaymentsByMerchant();
+    // Create audit log for batch initiation
+    const auditLog = await logSettlementBatch({
+        adminId,
+        batchId,
+        reason: 'Scheduled settlement batch run',
+    });
+
+    const aggregates = await getUnsettledPaymentsByMerchant(runAt);
 
     if (aggregates.length === 0) {
         const completedAt = new Date();
         console.log(
             "[SettlementBatch] No unsettled payments found. Batch complete.",
         );
+
+        // Update audit log with completion
+        if (auditLog) {
+            await updateSettlementBatchCompletion({
+                auditLogId: auditLog.id,
+                status: 'completed',
+                transactionCount: 0,
+                totalAmount: 0,
+                currency: 'USD',
+            });
+        }
+
         return {
             batchId,
             startedAt,
@@ -415,6 +459,7 @@ export async function runSettlementBatch(
             totalMerchantsProcessed: 0,
             totalMerchantsSucceeded: 0,
             totalMerchantsFailed: 0,
+            totalMerchantsSkipped: 0,
         };
     }
 
@@ -442,6 +487,23 @@ export async function runSettlementBatch(
         `Duration: ${completedAt.getTime() - startedAt.getTime()}ms`,
     );
 
+    // Calculate total amount settled
+    const totalAmount = merchantResults
+        .filter(r => r.status === 'succeeded')
+        .reduce((sum, r) => sum + (r.netAmount ? parseFloat(r.netAmount.toString()) : 0), 0);
+
+    // Update audit log with completion
+    if (auditLog) {
+        await updateSettlementBatchCompletion({
+            auditLogId: auditLog.id,
+            status: failed > 0 ? 'failed' : 'completed',
+            transactionCount: succeeded,
+            totalAmount,
+            currency: 'USD',
+            failureReason: failed > 0 ? `${failed} merchant settlements failed` : undefined,
+        });
+    }
+
     return {
         batchId,
         startedAt,
@@ -450,5 +512,6 @@ export async function runSettlementBatch(
         totalMerchantsProcessed: merchantResults.length,
         totalMerchantsSucceeded: succeeded,
         totalMerchantsFailed: failed,
+        totalMerchantsSkipped: skipped,
     };
 }

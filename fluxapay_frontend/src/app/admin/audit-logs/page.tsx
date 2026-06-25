@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
     Search,
     Filter,
@@ -9,94 +9,122 @@ import {
     CheckCircle,
     Activity,
     XCircle,
-    AlertCircle
+    AlertCircle,
+    ChevronLeft,
+    ChevronRight,
+    Loader2,
+    Eye,
+    X,
+    Clock
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import EmptyState from '@/components/EmptyState';
+import { api } from '@/lib/api';
 
-// -- Type Definitions --
+// -- Enums & Constants --
+
+const ACTION_MAP: Record<string, string> = {
+    'kyc_approve': 'KYC Approval',
+    'kyc_reject': 'KYC Rejection',
+    'config_change': 'Config Change',
+    'sweep_trigger': 'Sweep Trigger',
+    'sweep_complete': 'Sweep Complete',
+    'sweep_fail': 'Sweep Failure',
+    'settlement_batch_initiate': 'Settlement Start',
+    'settlement_batch_complete': 'Settlement Complete',
+    'settlement_batch_fail': 'Settlement Failure'
+};
+
+const STATUS_MAP: Record<string, 'success' | 'failure' | 'warning'> = {
+    'kyc_approve': 'success',
+    'kyc_reject': 'failure',
+    'config_change': 'warning',
+    'sweep_trigger': 'warning',
+    'sweep_complete': 'success',
+    'sweep_fail': 'failure',
+    'settlement_batch_initiate': 'warning',
+    'settlement_batch_complete': 'success',
+    'settlement_batch_fail': 'failure'
+};
 
 interface AuditLogEntry {
     id: string;
-    adminUser: string;
-    email: string;
-    action: 'USER_UPDATE' | 'SETTINGS_CHANGE' | 'PAYMENT_REFUND' | 'MERCHANT_APPROVAL' | 'SYSTEM_CONFIG';
-    targetResource: string;
-    timestamp: string;
-    status: 'success' | 'failure' | 'warning';
-    details: string;
-    ipAddress: string;
+    created_at: string;
+    admin_id: string;
+    action_type: string;
+    entity_type: string | null;
+    entity_id: string | null;
+    details: unknown;
 }
 
-// -- Mock Data --
+// -- Components --
 
-const MOCK_LOGS: AuditLogEntry[] = [
-    {
-        id: 'LOG-001',
-        adminUser: 'Sarah Connor',
-        email: 'sarah.connor@fluxapay.com',
-        action: 'MERCHANT_APPROVAL',
-        targetResource: 'Merchant: TechStore Inc (M001)',
-        timestamp: '2024-03-25T14:30:00Z',
-        status: 'success',
-        details: 'Approved KYC application for TechStore Inc.',
-        ipAddress: '192.168.1.10'
-    },
-    {
-        id: 'LOG-002',
-        adminUser: 'John Wick',
-        email: 'john.wick@fluxapay.com',
-        action: 'PAYMENT_REFUND',
-        targetResource: 'Tx: TXN-998877',
-        timestamp: '2024-03-25T13:15:00Z',
-        status: 'success',
-        details: 'Processed refund of $500.00 for disputed transaction.',
-        ipAddress: '10.0.0.5'
-    },
-    {
-        id: 'LOG-003',
-        adminUser: 'Sarah Connor',
-        email: 'sarah.connor@fluxapay.com',
-        action: 'USER_UPDATE',
-        targetResource: 'User: User-555',
-        timestamp: '2024-03-24T09:45:00Z',
-        status: 'success',
-        details: 'Updated profile information for user request.',
-        ipAddress: '192.168.1.10'
-    },
-    {
-        id: 'LOG-004',
-        adminUser: 'System Admin',
-        email: 'root@fluxapay.com',
-        action: 'SYSTEM_CONFIG',
-        targetResource: 'System Settings',
-        timestamp: '2024-03-24T02:00:00Z',
-        status: 'warning',
-        details: 'Automated system backup completed with warnings.',
-        ipAddress: '127.0.0.1'
-    },
-    {
-        id: 'LOG-005',
-        adminUser: 'Mike Ross',
-        email: 'mike.ross@fluxapay.com',
-        action: 'SETTINGS_CHANGE',
-        targetResource: 'Global Fee Config',
-        timestamp: '2024-03-23T16:20:00Z',
-        status: 'failure',
-        details: 'Failed attempt to update global transaction fee rate.',
-        ipAddress: '172.16.0.22'
-    }
-];
+const DetailsModal = ({ log, onClose }: { log: AuditLogEntry; onClose: () => void }) => {
+    if (!log) return null;
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col animate-in fade-in zoom-in duration-200">
+                <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+                    <h3 className="font-bold text-slate-900 flex items-center gap-2">
+                        <Activity className="w-5 h-5 text-slate-500" />
+                        Action Details
+                    </h3>
+                    <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
+                        <X className="w-5 h-5 text-slate-500" />
+                    </button>
+                </div>
+                <div className="p-6 overflow-y-auto space-y-6">
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Timestamp</p>
+                            <p className="text-sm font-medium text-slate-700">{new Date(log.created_at).toLocaleString()}</p>
+                        </div>
+                        <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Admin ID</p>
+                            <p className="text-sm font-mono text-slate-700 truncate" title={log.admin_id}>{log.admin_id}</p>
+                        </div>
+                        <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Action Type</p>
+                            <p className="text-sm font-medium text-slate-700">{ACTION_MAP[log.action_type] || log.action_type}</p>
+                        </div>
+                        <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Resource</p>
+                            <p className="text-sm font-medium text-slate-700">{log.entity_type || 'N/A'}: {log.entity_id || 'N/A'}</p>
+                        </div>
+                    </div>
+
+                    <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Raw Payload / Details</p>
+                        <pre className="bg-slate-900 text-slate-100 p-4 rounded-xl text-xs font-mono overflow-x-auto whitespace-pre-wrap">
+                            {JSON.stringify(log.details, null, 2)}
+                        </pre>
+                    </div>
+                </div>
+                <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 text-right">
+                    <button 
+                        onClick={onClose}
+                        className="px-6 py-2 bg-slate-900 text-white rounded-lg font-medium hover:bg-slate-800 transition-colors"
+                    >
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 // -- Helper Functions --
 
-const getStatusConfig = (status: AuditLogEntry['status']) => {
+const getStatusConfig = (actionType: string) => {
+    const status = STATUS_MAP[actionType] || 'success';
     switch (status) {
         case 'success':
             return {
                 color: 'text-emerald-700',
                 bg: 'bg-emerald-50',
                 border: 'border-emerald-200',
+                label: 'Success',
                 icon: <CheckCircle className="w-3 h-3" />
             };
         case 'failure':
@@ -104,6 +132,7 @@ const getStatusConfig = (status: AuditLogEntry['status']) => {
                 color: 'text-rose-700',
                 bg: 'bg-rose-50',
                 border: 'border-rose-200',
+                label: 'Failure',
                 icon: <XCircle className="w-3 h-3" />
             };
         case 'warning':
@@ -111,6 +140,7 @@ const getStatusConfig = (status: AuditLogEntry['status']) => {
                 color: 'text-amber-700',
                 bg: 'bg-amber-50',
                 border: 'border-amber-200',
+                label: 'Warning',
                 icon: <AlertCircle className="w-3 h-3" />
             };
     }
@@ -128,25 +158,65 @@ const formatDate = (dateString: string) => {
 // -- Main Component --
 
 export default function AdminAuditLogsPage() {
-    
-    const [searchTerm, setSearchTerm] = useState('');
+    const [logs, setLogs] = useState<AuditLogEntry[]>([]);
+    const [loading, setLoading] = useState(true);
     const [actionFilter, setActionFilter] = useState('all');
-    
-    // Filter Logic
-    const filteredLogs = MOCK_LOGS.filter(log => {
-        const matchesSearch = 
-            log.adminUser.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            log.targetResource.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            log.id.toLowerCase().includes(searchTerm.toLowerCase());
-            
-        const matchesAction = actionFilter === 'all' || log.action === actionFilter;
+    const [adminIdFilter, setAdminIdFilter] = useState('');
+    const [dateFrom, setDateFrom] = useState('');
+    const [dateTo, setDateTo] = useState('');
+    const [selectedLog, setSelectedLog] = useState<AuditLogEntry | null>(null);
+    const [page, setPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
+    const limit = 20;
 
-        return matchesSearch && matchesAction;
-    });
+    const fetchLogs = useCallback(async () => {
+        try {
+            setLoading(true);
+            const response = await api.admin.auditLogs.list({
+                page,
+                limit,
+                action_type: actionFilter === 'all' ? undefined : actionFilter,
+                admin_id: adminIdFilter || undefined,
+                date_from: dateFrom || undefined,
+                date_to: dateTo || undefined,
+            });
+
+            if (response.success) {
+                setLogs(response.data);
+                setTotalPages(response.pagination.totalPages);
+            }
+        } catch (error) {
+            console.error('Failed to fetch audit logs:', error);
+            toast.error('Failed to load audit logs');
+        } finally {
+            setLoading(false);
+        }
+    }, [page, actionFilter, adminIdFilter, dateFrom, dateTo]);
+
+    useEffect(() => {
+        fetchLogs();
+    }, [fetchLogs]);
 
     const exportLogs = () => {
-        // Simple mock export
-        toast.success(`Exporting ${filteredLogs.length} logs...`);
+        if (logs.length === 0) {
+            toast.error('No logs to export');
+            return;
+        }
+        const headers = ['ID', 'Timestamp', 'Admin ID', 'Action', 'Entity Type', 'Entity ID', 'Details'];
+        const rows = logs.map(l => [
+            l.id, l.created_at, l.admin_id, l.action_type, l.entity_type, l.entity_id, JSON.stringify(l.details)
+        ]);
+        const csv = [headers, ...rows]
+            .map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
+            .join('\n');
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `audit_logs_${new Date().toISOString().split('T')[0]}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+        toast.success(`Exported current page (${logs.length} logs)`);
     };
 
     return (
@@ -165,7 +235,7 @@ export default function AdminAuditLogsPage() {
                                 className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors flex items-center gap-2"
                              >
                                 <Download className="w-4 h-4" />
-                                Export
+                                Export CSV
                              </button>
                         </div>
                     </div>
@@ -176,35 +246,75 @@ export default function AdminAuditLogsPage() {
                 
                 {/* Filters */}
                 <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 mb-6">
-                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                        <div className="flex-1">
+                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-end">
+                        <div className="lg:col-span-1">
+                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Search Admin</label>
                             <div className="relative">
                                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-5 h-5" />
                                 <input
                                     type="text"
-                                    placeholder="Search by Admin, Resource ID, or Log ID..."
-                                    className="w-full pl-10 pr-4 py-3 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-300 focus:border-transparent transition-shadow"
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    placeholder="Admin ID or Email..."
+                                    className="w-full pl-10 pr-4 py-2.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900/5 focus:border-slate-900 transition-all shadow-sm"
+                                    value={adminIdFilter}
+                                    onChange={(e) => {
+                                        setAdminIdFilter(e.target.value);
+                                        setPage(1);
+                                    }}
                                 />
                             </div>
                         </div>
 
-                        <div className="flex items-center gap-3">
-                            <div className="flex items-center gap-2">
-                                <Filter className="w-4 h-4 text-slate-500" />
+                        <div className="lg:col-span-1">
+                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Action Type</label>
+                            <div className="relative">
+                                <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none" />
                                 <select
-                                    className="px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-300 focus:border-transparent bg-white"
+                                    className="w-full pl-10 pr-4 py-2.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900/5 focus:border-slate-900 bg-white appearance-none"
                                     value={actionFilter}
-                                    onChange={(e) => setActionFilter(e.target.value)}
+                                    onChange={(e) => {
+                                        setActionFilter(e.target.value);
+                                        setPage(1);
+                                    }}
                                 >
                                     <option value="all">All Actions</option>
-                                    <option value="USER_UPDATE">User Update</option>
-                                    <option value="SETTINGS_CHANGE">Settings Change</option>
-                                    <option value="PAYMENT_REFUND">Payment Refund</option>
-                                    <option value="MERCHANT_APPROVAL">Merchant Approval</option>
-                                    <option value="SYSTEM_CONFIG">System Config</option>
+                                    {Object.entries(ACTION_MAP).map(([val, label]) => (
+                                        <option key={val} value={val}>{label}</option>
+                                    ))}
                                 </select>
+                            </div>
+                        </div>
+
+                        <div className="lg:col-span-1">
+                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">From Date</label>
+                            <div className="relative">
+                                <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none" />
+                                <input
+                                    type="date"
+                                    className="w-full pl-10 pr-4 py-2.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900/5 focus:border-slate-900"
+                                    value={dateFrom}
+                                    max={dateTo}
+                                    onChange={(e) => {
+                                        setDateFrom(e.target.value);
+                                        setPage(1);
+                                    }}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="lg:col-span-1">
+                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">To Date</label>
+                            <div className="relative">
+                                <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none" />
+                                <input
+                                    type="date"
+                                    className="w-full pl-10 pr-4 py-2.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900/5 focus:border-slate-900"
+                                    value={dateTo}
+                                    min={dateFrom}
+                                    onChange={(e) => {
+                                        setDateTo(e.target.value);
+                                        setPage(1);
+                                    }}
+                                />
                             </div>
                         </div>
                     </div>
@@ -231,62 +341,78 @@ export default function AdminAuditLogsPage() {
                                     <th className="px-6 py-4 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
                                         Status
                                     </th>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                                        Details
+                                    <th className="px-6 py-4 text-right text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                                        Action
                                     </th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-200">
-                                {filteredLogs.length === 0 ? (
+                                {loading ? (
+                                    <tr>
+                                        <td colSpan={6} className="py-20 text-center">
+                                            <div className="flex flex-col items-center justify-center gap-3">
+                                                <Loader2 className="w-8 h-8 text-slate-400 animate-spin" />
+                                                <p className="text-sm text-slate-500 font-medium">Fetching audit trail...</p>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ) : logs.length === 0 ? (
                                     <EmptyState colSpan={6} className="py-12" message="No audit logs found. Try adjusting your search or filter criteria." />
                                 ) : (
-                                    filteredLogs.map((log) => {
-                                        const statusConfig = getStatusConfig(log.status);
+                                    logs.map((log) => {
+                                        const statusConfig = getStatusConfig(log.action_type);
 
                                         return (
                                             <tr key={log.id} className="hover:bg-slate-50/50 transition-colors">
                                                 <td className="px-6 py-4 whitespace-nowrap">
                                                     <div className="flex items-center gap-2 text-sm text-slate-600">
-                                                        <Calendar className="w-4 h-4 text-slate-400" />
-                                                        {formatDate(log.timestamp)}
+                                                        <Clock className="w-4 h-4 text-slate-400" />
+                                                        {formatDate(log.created_at)}
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
                                                     <div className="flex items-center gap-3">
                                                         <div
-                                                            className="w-8 h-8 rounded-full flex items-center justify-center bg-slate-100 text-slate-600 font-medium text-xs"
+                                                            className="w-8 h-8 rounded-full flex items-center justify-center bg-slate-900 text-white font-bold text-[10px]"
                                                         >
-                                                            {log.adminUser.charAt(0)}
+                                                            {log.admin_id.charAt(0).toUpperCase()}
                                                         </div>
                                                         <div>
-                                                            <p className="text-sm font-medium text-slate-900">{log.adminUser}</p>
-                                                            <p className="text-xs text-slate-500">{log.email}</p>
+                                                            <p className="text-sm font-medium text-slate-900 truncate w-32" title={log.admin_id}>{log.admin_id}</p>
                                                         </div>
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
                                                     <div className="flex items-center gap-2">
                                                         <Activity className="w-4 h-4 text-slate-400" />
-                                                        <span className="text-sm text-slate-700 font-medium">{log.action.replace('_', ' ')}</span>
+                                                        <span className="text-sm text-slate-700 font-medium">{ACTION_MAP[log.action_type] || log.action_type}</span>
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
-                                                    <span className="font-mono text-xs text-slate-600 bg-slate-100 px-2 py-1 rounded">
-                                                        {log.targetResource}
-                                                    </span>
+                                                    {log.entity_type ? (
+                                                        <span className="font-mono text-[10px] text-slate-600 bg-slate-100 px-2 py-1 rounded">
+                                                            {log.entity_type}: {log.entity_id}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-slate-400 text-xs">—</span>
+                                                    )}
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
                                                     <span
-                                                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium ${statusConfig.bg} ${statusConfig.color} ${statusConfig.border}`}
+                                                        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${statusConfig.bg} ${statusConfig.color} border ${statusConfig.border}`}
                                                     >
                                                         {statusConfig.icon}
-                                                        {log.status.charAt(0).toUpperCase() + log.status.slice(1)}
+                                                        {statusConfig.label}
                                                     </span>
                                                 </td>
-                                                <td className="px-6 py-4">
-                                                    <p className="text-sm text-slate-600 max-w-xs truncate" title={log.details}>
-                                                        {log.details}
-                                                    </p>
+                                                <td className="px-6 py-4 text-right">
+                                                    <button 
+                                                        onClick={() => setSelectedLog(log)}
+                                                        className="p-2 text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-all"
+                                                        title="View Details"
+                                                    >
+                                                        <Eye className="w-5 h-5" />
+                                                    </button>
                                                 </td>
                                             </tr>
                                         );
@@ -296,7 +422,40 @@ export default function AdminAuditLogsPage() {
                         </table>
                     </div>
                 </div>
+
+                {/* Pagination */}
+                <div className="mt-6 flex items-center justify-between">
+                    <p className="text-sm text-slate-500">
+                        Showing page <span className="font-bold text-slate-900">{page}</span> of <span className="font-bold text-slate-900">{totalPages}</span>
+                    </p>
+                    <div className="flex items-center gap-2">
+                        <button
+                            disabled={page === 1 || loading}
+                            onClick={() => setPage(prev => prev - 1)}
+                            className="flex items-center gap-2 px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors text-sm font-medium"
+                        >
+                            <ChevronLeft className="w-4 h-4" />
+                            Previous
+                        </button>
+                        <button
+                            disabled={page === totalPages || loading}
+                            onClick={() => setPage(prev => prev + 1)}
+                            className="flex items-center gap-2 px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors text-sm font-medium"
+                        >
+                            Next
+                            <ChevronRight className="w-4 h-4" />
+                        </button>
+                    </div>
+                </div>
             </div>
+
+            {/* Details Modal */}
+            {selectedLog && (
+                <DetailsModal 
+                    log={selectedLog} 
+                    onClose={() => setSelectedLog(null)} 
+                />
+            )}
         </div>
     );
 }

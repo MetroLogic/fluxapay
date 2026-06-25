@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import toast from "react-hot-toast";
 import EmptyState from "@/components/EmptyState";
 import {
@@ -123,17 +123,17 @@ export default function WebhooksPage() {
     return { successRate, avgDeliveryTime };
   }, []);
 
-  const handleRetry = (logId: string) => {
+  const handleRetry = useCallback((logId: string) => {
     // Mock retry action
     console.log(`Retrying webhook delivery for log ${logId}`);
     toast.success(`Retrying delivery for webhook ${logId}`);
-  };
+  }, []);
 
-  const handleDisable = (merchant: string) => {
+  const handleDisable = useCallback((merchant: string) => {
     // Mock disable action
     console.log(`Disabling webhooks for merchant ${merchant}`);
     toast.error(`Disabling webhooks for ${merchant}`);
-  };
+  }, []);
 
   return (
     <div className="container mx-auto p-6 space-y-6">

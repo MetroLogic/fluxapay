@@ -45,3 +45,7 @@ fluxapay_backend/prisma/*.db-journal
 # Misc
 .cache/
 .vercel/
+
+
+issue.md
+pr.md

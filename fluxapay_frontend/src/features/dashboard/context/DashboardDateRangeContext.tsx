@@ -8,20 +8,24 @@ const PRESETS = {
   "7d": { label: "Last 7 days", days: 7 },
   "30d": { label: "Last 30 days", days: 30 },
   "90d": { label: "Last 90 days", days: 90 },
+  "all": { label: "All time", days: 0 },
 } as const;
 
 function toISO(date: Date) {
   return date.toISOString().slice(0, 10);
 }
 
-function getPresetRange(days: number): DateRange {
+function getPresetRange(key: keyof typeof PRESETS): DateRange {
   const to = new Date();
+  if (key === "all") {
+    return { from: "2020-01-01", to: toISO(to) };
+  }
   const from = new Date();
-  from.setDate(from.getDate() - days);
+  from.setDate(from.getDate() - PRESETS[key].days);
   return { from: toISO(from), to: toISO(to) };
 }
 
-const defaultRange = getPresetRange(30);
+const defaultRange = getPresetRange("30d");
 
 interface DashboardDateRangeContextValue {
   dateRange: DateRange;
@@ -40,8 +44,7 @@ export function DashboardDateRangeProvider({ children }: { children: React.React
   }, []);
 
   const setPreset = useCallback((key: keyof typeof PRESETS) => {
-    const { days } = PRESETS[key];
-    setDateRangeState(getPresetRange(days));
+    setDateRangeState(getPresetRange(key));
   }, []);
 
   const value = useMemo(

@@ -30,7 +30,7 @@ export class KMSFactory {
         break;
     }
 
-    return this.instance;
+    return this.instance!;
   }
 
   /**

@@ -2,12 +2,29 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import jsPDF from "jspdf";
 import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
-import { Link, FileText, Download } from "lucide-react";
+import { Link, FileText, Download, Loader2 } from "lucide-react";
 import { DOCS_URLS } from "@/lib/docs";
-import { MOCK_SETTLEMENTS } from "../settlements/mockSettlements";
+import { api } from "@/lib/api";
+import toast from "react-hot-toast";
+import { toastApiError } from "@/lib/toastApiError";
+import { exportSettlementReportPDF } from "@/utils/exportHelpers";
+
+const WEBHOOK_EVENT_TYPES = [
+  "all",
+  "payment_completed",
+  "payment_confirmed",
+  "payment_failed",
+  "payment_pending",
+  "refund_completed",
+  "refund_failed",
+  "subscription_created",
+  "subscription_cancelled",
+  "subscription_renewed",
+] as const;
+
+const WEBHOOK_STATUSES = ["all", "pending", "delivered", "failed", "retrying"] as const;
 
 function toIsoDate(value: Date) {
   return value.toISOString().split("T")[0];
@@ -23,77 +40,127 @@ export const QuickActions = () => {
   }, [today]);
 
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [isWebhookModalOpen, setIsWebhookModalOpen] = useState(false);
   const [fromDate, setFromDate] = useState(toIsoDate(thirtyDaysAgo));
   const [toDate, setToDate] = useState(toIsoDate(today));
+  const [paymentFromDate, setPaymentFromDate] = useState(toIsoDate(thirtyDaysAgo));
+  const [paymentToDate, setPaymentToDate] = useState(toIsoDate(today));
+  const [webhookFromDate, setWebhookFromDate] = useState(toIsoDate(thirtyDaysAgo));
+  const [webhookToDate, setWebhookToDate] = useState(toIsoDate(today));
+  const [webhookEventType, setWebhookEventType] = useState<string>("all");
+  const [webhookStatus, setWebhookStatus] = useState<string>("all");
+  const [webhookSearch, setWebhookSearch] = useState("");
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [isDownloadingPayments, setIsDownloadingPayments] = useState(false);
+  const [isDownloadingWebhooks, setIsDownloadingWebhooks] = useState(false);
 
-  const filteredSettlements = useMemo(() => {
-    return MOCK_SETTLEMENTS.filter((settlement) => {
-      if (fromDate && settlement.date < fromDate) return false;
-      if (toDate && settlement.date > toDate) return false;
-      return true;
-    });
-  }, [fromDate, toDate]);
+  const handleDownloadReport = async (format: "csv" | "pdf") => {
+    if (!fromDate || !toDate) {
+      toast.error("Please select both start and end dates");
+      return;
+    }
 
-  const downloadReportCsv = () => {
-    if (filteredSettlements.length === 0) return;
+    setIsDownloading(true);
+    try {
+      const result = await api.settlements.exportRange({
+        date_from: fromDate,
+        date_to: toDate,
+        format,
+      });
 
-    const headers = [
-      "Settlement ID",
-      "Date",
-      "Status",
-      "Payments",
-      "Fiat Amount",
-      "Currency",
-      "Fees",
-    ];
-    const rows = filteredSettlements.map((s) => [
-      s.id,
-      s.date,
-      s.status,
-      String(s.paymentsCount),
-      String(s.fiatAmount),
-      s.currency,
-      String(s.fees),
-    ]);
-
-    const csv = [headers, ...rows].map((row) => row.join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `settlement_report_${fromDate || "start"}_${toDate || "end"}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const downloadReportPdf = () => {
-    if (filteredSettlements.length === 0) return;
-
-    const doc = new jsPDF();
-    doc.text("Settlement Report", 14, 14);
-    doc.text(`Period: ${fromDate || "Start"} - ${toDate || "End"}`, 14, 22);
-
-    let y = 34;
-    filteredSettlements.forEach((s) => {
-      doc.text(
-        `${s.id} | ${s.date} | ${s.status} | ${s.currency} ${s.fiatAmount}`,
-        14,
-        y,
-      );
-      y += 8;
-      if (y > 280) {
-        doc.addPage();
-        y = 14;
+      if (format === "pdf") {
+        exportSettlementReportPDF(result.content, `settlement_report_${fromDate}_${toDate}.pdf`);
+      } else {
+        const blob = result as Blob;
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `settlement_report_${fromDate}_${toDate}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
       }
-    });
 
-    doc.save(`settlement_report_${fromDate || "start"}_${toDate || "end"}.pdf`);
+      toast.success(`Settlement report downloaded as ${format.toUpperCase()}`);
+      setIsReportModalOpen(false);
+    } catch (error) {
+      console.error("Error downloading settlement report:", error);
+      toastApiError(error);
+    } finally {
+      setIsDownloading(false);
+    }
   };
 
-  const handleDownloadReport = (format: "csv" | "pdf") => {
-    if (format === "csv") downloadReportCsv();
-    if (format === "pdf") downloadReportPdf();
-    setIsReportModalOpen(false);
+  const handleExportPayments = async () => {
+    if (!paymentFromDate || !paymentToDate) {
+      toast.error("Please select both start and end dates");
+      return;
+    }
+
+    setIsDownloadingPayments(true);
+    try {
+      const blob = await api.payments.export({
+        date_from: paymentFromDate,
+        date_to: paymentToDate,
+      });
+
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `payments_export_${paymentFromDate}_${paymentToDate}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      toast.success("Payment export downloaded successfully");
+      setIsPaymentModalOpen(false);
+    } catch (error) {
+      console.error("Error exporting payments:", error);
+      toastApiError(error);
+    } finally {
+      setIsDownloadingPayments(false);
+    }
+  };
+
+  const handleExportWebhookLogs = async () => {
+    setIsDownloadingWebhooks(true);
+    try {
+      const blob = await api.webhooks.export({
+        event_type: webhookEventType !== "all" ? webhookEventType : undefined,
+        status: webhookStatus !== "all" ? webhookStatus : undefined,
+        date_from: webhookFromDate,
+        date_to: webhookToDate,
+        search: webhookSearch || undefined,
+      });
+
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `webhook_logs_export_${webhookFromDate}_${webhookToDate}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      toast.success("Webhook logs export downloaded successfully");
+      setIsWebhookModalOpen(false);
+    } catch (error) {
+      console.error("Error exporting webhook logs:", error);
+      toastApiError(error);
+    } finally {
+      setIsDownloadingWebhooks(false);
+    }
+  };
+
+  const handleCreatePaymentLink = () => {
+    router.push("/dashboard/payments?action=create-payment");
+  };
+
+  const handleViewDocs = () => {
+    window.open(DOCS_URLS.FULL_DOCS, "_blank", "noopener,noreferrer");
   };
 
   return (
@@ -111,18 +178,34 @@ export const QuickActions = () => {
           <Button
             className="w-full justify-start h-12"
             variant="default"
-            onClick={() => router.push("/dashboard/payments?action=create-payment-link")}
+            onClick={handleCreatePaymentLink}
           >
             <Link className="mr-2 h-4 w-4" />
-            Create Payment Link
+            Create Payment
           </Button>
           <Button
             className="w-full justify-start h-12"
             variant="outline"
-            onClick={() => router.push(DOCS_URLS.FULL_DOCS)}
+            onClick={() => setIsPaymentModalOpen(true)}
+          >
+            <Download className="mr-2 h-4 w-4" />
+            Export Payments
+          </Button>
+          <Button
+            className="w-full justify-start h-12"
+            variant="outline"
+            onClick={handleViewDocs}
           >
             <FileText className="mr-2 h-4 w-4" />
             View API Documentation
+          </Button>
+          <Button
+            className="w-full justify-start h-12"
+            variant="outline"
+            onClick={() => setIsWebhookModalOpen(true)}
+          >
+            <Download className="mr-2 h-4 w-4" />
+            Export Webhook Logs
           </Button>
           <Button
             className="w-full justify-start h-12"
@@ -141,6 +224,9 @@ export const QuickActions = () => {
         title="Download Settlement Report"
       >
         <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Select a date range to export your settlement data.
+          </p>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-sm font-medium">From</label>
@@ -148,6 +234,7 @@ export const QuickActions = () => {
                 type="date"
                 value={fromDate}
                 onChange={(e) => setFromDate(e.target.value)}
+                max={toDate}
                 className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
               />
             </div>
@@ -157,30 +244,181 @@ export const QuickActions = () => {
                 type="date"
                 value={toDate}
                 onChange={(e) => setToDate(e.target.value)}
+                min={fromDate}
+                max={toIsoDate(today)}
                 className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
               />
             </div>
           </div>
-          <p className="text-sm text-muted-foreground">
-            {filteredSettlements.length} settlements in selected period.
-          </p>
           <div className="flex gap-2">
             <Button
               variant="secondary"
               className="flex-1"
               onClick={() => handleDownloadReport("csv")}
-              disabled={filteredSettlements.length === 0}
+              disabled={isDownloading || !fromDate || !toDate}
             >
-              Download CSV
+              {isDownloading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Downloading...
+                </>
+              ) : (
+                "Download CSV"
+              )}
             </Button>
             <Button
               className="flex-1"
               onClick={() => handleDownloadReport("pdf")}
-              disabled={filteredSettlements.length === 0}
+              disabled={isDownloading || !fromDate || !toDate}
             >
-              Download PDF
+              {isDownloading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Downloading...
+                </>
+              ) : (
+                "Download PDF"
+              )}
             </Button>
           </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={isPaymentModalOpen}
+        onClose={() => setIsPaymentModalOpen(false)}
+        title="Export Payments"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Export payments as CSV for the selected date range.
+          </p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-sm font-medium">From</label>
+              <input
+                type="date"
+                value={paymentFromDate}
+                onChange={(e) => setPaymentFromDate(e.target.value)}
+                max={paymentToDate}
+                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium">To</label>
+              <input
+                type="date"
+                value={paymentToDate}
+                onChange={(e) => setPaymentToDate(e.target.value)}
+                min={paymentFromDate}
+                max={toIsoDate(today)}
+                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              />
+            </div>
+          </div>
+          <Button
+            className="w-full"
+            onClick={handleExportPayments}
+            disabled={isDownloadingPayments || !paymentFromDate || !paymentToDate}
+          >
+            {isDownloadingPayments ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Exporting...
+              </>
+            ) : (
+              "Download Payments CSV"
+            )}
+          </Button>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={isWebhookModalOpen}
+        onClose={() => setIsWebhookModalOpen(false)}
+        title="Export Webhook Logs"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Export webhook delivery logs with optional filters.
+          </p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-sm font-medium">From</label>
+              <input
+                type="date"
+                value={webhookFromDate}
+                onChange={(e) => setWebhookFromDate(e.target.value)}
+                max={webhookToDate}
+                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium">To</label>
+              <input
+                type="date"
+                value={webhookToDate}
+                onChange={(e) => setWebhookToDate(e.target.value)}
+                min={webhookFromDate}
+                max={toIsoDate(today)}
+                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-sm font-medium">Event type</label>
+              <select
+                value={webhookEventType}
+                onChange={(e) => setWebhookEventType(e.target.value)}
+                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              >
+                {WEBHOOK_EVENT_TYPES.map((type) => (
+                  <option key={type} value={type}>
+                    {type === "all" ? "All" : type}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium">Status</label>
+              <select
+                value={webhookStatus}
+                onChange={(e) => setWebhookStatus(e.target.value)}
+                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              >
+                {WEBHOOK_STATUSES.map((status) => (
+                  <option key={status} value={status}>
+                    {status === "all" ? "All" : status}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium">Search</label>
+            <input
+              type="text"
+              value={webhookSearch}
+              onChange={(e) => setWebhookSearch(e.target.value)}
+              placeholder="Search ID or payment ID"
+              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+            />
+          </div>
+          <Button
+            className="w-full"
+            onClick={handleExportWebhookLogs}
+            disabled={isDownloadingWebhooks}
+          >
+            {isDownloadingWebhooks ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Exporting...
+              </>
+            ) : (
+              "Download Webhook Logs CSV"
+            )}
+          </Button>
         </div>
       </Modal>
     </>

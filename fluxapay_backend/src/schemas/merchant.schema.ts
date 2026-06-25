@@ -17,6 +17,11 @@ export const signupSchema = z.object({
     .min(0, 'settlement_day must be 0–6 (Sun–Sat)')
     .max(6, 'settlement_day must be 0–6 (Sun–Sat)')
     .optional(),
+  // Optional bank details during signup
+  account_name: z.string().min(2, 'Account name is required').optional(),
+  account_number: z.string().min(5, 'Account number is required').optional(),
+  bank_name: z.string().min(2, 'Bank name is required').optional(),
+  bank_code: z.string().optional(),
 })
   .refine(
     (data) =>
@@ -69,3 +74,104 @@ export const settlementScheduleSchema = z
 export const updateSettlementScheduleSchema = settlementScheduleSchema.required({
   settlement_schedule: true,
 });
+
+export const bankAccountSchema = z.object({
+  account_name: z.string().min(2, 'Account name is required'),
+  account_number: z.string().min(5, 'Account number is required'),
+  bank_name: z.string().min(2, 'Bank name is required'),
+  bank_code: z.string().optional(),
+  currency: z.string().min(3, 'Currency is required'),
+  country: z.string().min(2, 'Country is required'),
+});
+
+const bankAccountBaseFields = z.object({
+  account_name: z.string().min(2, 'Account name is required').optional(),
+  account_number: z.string().min(5, 'Account number is required').optional(),
+  bank_name: z.string().min(2, 'Bank name is required').optional(),
+  bank_code: z.string().optional(),
+  currency: z.string().min(3, 'Currency is required').optional(),
+  country: z.string().min(2, 'Country is required').optional().refine(
+    val => val === undefined || allowedCountryCodes.includes(val),
+    { message: 'Invalid country code' },
+  ),
+});
+
+export const updateBankAccountSchema = bankAccountBaseFields
+  .refine(data => Object.keys(data).some(k => (data as any)[k] !== undefined), {
+    message: 'At least one field must be provided',
+  })
+  .superRefine((data, ctx) => {
+    if (data.country && data.currency) {
+      const entry = countryMap.find(x => x.countryCode === data.country);
+      if (entry && entry.currencyCode !== data.currency) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Currency ${data.currency} is not valid for country ${data.country}. Expected ${entry.currencyCode}.`,
+          path: ['currency'],
+        });
+      }
+    }
+  });
+
+const checkoutLogoUrlField = z
+  .union([z.string().max(2048), z.literal(''), z.null()])
+  .optional()
+  .superRefine((val, ctx) => {
+    if (val == null || val === '') return;
+    try {
+      const u = new URL(val);
+      if (u.protocol !== 'https:') {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Logo URL must use https://',
+        });
+      }
+    } catch {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Invalid logo URL',
+      });
+    }
+  });
+
+const checkoutAccentField = z
+  .union([z.string().max(16), z.literal(''), z.null()])
+  .optional()
+  .superRefine((val, ctx) => {
+    if (val == null || val === '') return;
+    if (!/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(val.trim())) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Accent must be a hex color like #RRGGBB or #RGB',
+      });
+    }
+  });
+
+/**
+ * PATCH /merchants/me — validation middleware merges `params` and `query` into the payload.
+ */
+export const updateMerchantProfileSchema = z
+  .object({
+    business_name: z.string().min(1).optional(),
+    email: z.email().optional(),
+    checkout_logo_url: checkoutLogoUrlField,
+    checkout_accent_color: checkoutAccentField,
+    settlement_schedule: z.enum(['daily', 'weekly']).optional(),
+    settlement_day: z
+      .number()
+      .int()
+      .min(0, 'settlement_day must be 0–6 (Sun–Sat)')
+      .max(6, 'settlement_day must be 0–6 (Sun–Sat)')
+      .optional(),
+    params: z.any(),
+    query: z.any(),
+  })
+  .refine(
+    (data) =>
+      data.settlement_schedule !== 'weekly' ||
+      data.settlement_day !== undefined,
+    {
+      message: 'settlement_day is required when settlement_schedule is "weekly"',
+      path: ['settlement_day'],
+    },
+  );

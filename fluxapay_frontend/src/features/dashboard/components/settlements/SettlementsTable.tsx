@@ -1,17 +1,30 @@
 'use client';
 
 import { FileText } from 'lucide-react';
-import EmptyState from '@/components/EmptyState';
-import { Settlement } from '../types';
+import { DataTableBodyState } from '@/components/data-table';
+import type { MerchantSettlement } from '@/hooks/useSettlements';
+import { Badge } from '@/components/Badge';
 
 type Props = {
-    settlements: Settlement[];
-    onSelect: (settlement: Settlement) => void;
+    settlements: MerchantSettlement[];
+    onSelect: (settlement: MerchantSettlement) => void;
+    isLoading?: boolean;
+    error?: string | null;
 };
 
-export function SettlementsTable({ settlements, onSelect }: Props) {
+export function SettlementsTable({ settlements, onSelect, isLoading = false, error = null }: Props) {
+    const getStatusBadge = (status: string) => {
+        switch (status) {
+            case 'completed': return <Badge variant="success">Completed</Badge>;
+            case 'pending': return <Badge variant="warning">Pending</Badge>;
+            case 'processing': return <Badge variant="info">Processing</Badge>;
+            case 'failed': return <Badge variant="error">Failed</Badge>;
+            default: return <Badge>{status}</Badge>;
+        }
+    };
+
     return (
-        <div className="rounded-xl border bg-card shadow overflow-hidden">
+        <div className="bg-card shadow overflow-hidden">
             <div className="overflow-x-auto">
                 <table className="w-full">
                     <thead className="bg-muted/50 border-b">
@@ -44,14 +57,21 @@ export function SettlementsTable({ settlements, onSelect }: Props) {
                     </thead>
 
                     <tbody className="divide-y">
-                        {settlements.length === 0 ? (
-                            <EmptyState
-                                colSpan={8}
-                                className="py-12 text-muted-foreground"
-                                message="No settlements found matching your filters."
-                            />
-                        ) : (
-                            settlements.map((settlement) => (
+                        <DataTableBodyState
+                            colSpan={8}
+                            state={
+                                error
+                                    ? 'error'
+                                    : isLoading
+                                        ? 'loading'
+                                        : settlements.length === 0
+                                            ? 'empty'
+                                            : 'ready'
+                            }
+                            errorMessage={error ?? undefined}
+                            emptyMessage="No settlements found matching your filters."
+                        >
+                            {settlements.map((settlement) => (
                                 <tr
                                     key={settlement.id}
                                     onClick={() => onSelect(settlement)}
@@ -60,24 +80,26 @@ export function SettlementsTable({ settlements, onSelect }: Props) {
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <div className="flex items-center gap-2">
                                             <FileText className="w-4 h-4 text-muted-foreground" />
-                                            <span className="font-medium">{settlement.id}</span>
+                                            <span className="font-mono text-sm">{settlement.id.slice(0, 12)}…</span>
                                         </div>
                                     </td>
 
                                     <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                        {new Date(settlement.date).toLocaleDateString()}
+                                        {settlement.date
+                                            ? new Date(settlement.date).toLocaleDateString()
+                                            : '—'}
                                     </td>
 
                                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                                         {settlement.paymentsCount}
                                     </td>
 
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                        ${settlement.usdcAmount.toLocaleString()}
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium font-mono">
+                                        ${settlement.usdcAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                     </td>
 
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                        ${settlement.fiatAmount.toLocaleString()}
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium font-mono">
+                                        ${settlement.fiatAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                     </td>
 
                                     <td className="px-6 py-4 whitespace-nowrap text-sm">
@@ -85,24 +107,15 @@ export function SettlementsTable({ settlements, onSelect }: Props) {
                                     </td>
 
                                     <td className="px-6 py-4 whitespace-nowrap">
-                                        <span
-                                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${settlement.status === 'completed'
-                                                ? 'bg-green-100 text-green-800'
-                                                : settlement.status === 'pending'
-                                                    ? 'bg-yellow-100 text-yellow-800'
-                                                    : 'bg-red-100 text-red-800'
-                                                }`}
-                                        >
-                                            {settlement.status}
-                                        </span>
+                                        {getStatusBadge(settlement.status)}
                                     </td>
 
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
-                                        {settlement.bankReference}
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground font-mono">
+                                        {settlement.bankReference || '—'}
                                     </td>
                                 </tr>
-                            ))
-                        )}
+                            ))}
+                        </DataTableBodyState>
                     </tbody>
                 </table>
             </div>
