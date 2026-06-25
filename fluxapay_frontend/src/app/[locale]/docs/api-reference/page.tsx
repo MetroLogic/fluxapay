@@ -3,6 +3,8 @@ import { DocsLayout } from "@/components/docs/DocsLayout";
 import { EndpointCard } from "@/components/docs/EndpointCard";
 import { EditOnGitHub } from "@/components/docs/EditOnGitHub";
 import { generatePageMetadata } from "@/lib/seo";
+import { ApiSandboxProvider } from "@/components/docs/ApiSandboxContext";
+import { ApiKeyInput } from "@/components/docs/ApiKeyInput";
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
   const { locale } = await params;
@@ -474,8 +476,9 @@ refunds = response.json()`,
 export default function LocalizedApiReferencePage() {
   return (
     <DocsLayout>
-      <div className="space-y-8">
-        {/* Header */}
+      <ApiSandboxProvider>
+        <div className="space-y-8">
+          {/* Header */}
         <div>
           <p className="text-sm font-semibold text-zinc-500 uppercase tracking-wider mb-2">
             API Reference
@@ -488,6 +491,8 @@ export default function LocalizedApiReferencePage() {
             via Bearer token unless otherwise noted.
           </p>
         </div>
+
+        <ApiKeyInput />
 
         {/* Base URL */}
         <div className="p-4 rounded-xl border border-slate-200 bg-slate-50">
@@ -612,6 +617,7 @@ export default function LocalizedApiReferencePage() {
           <EditOnGitHub filePath="fluxapay_frontend/src/app/[locale]/docs/api-reference/page.tsx" />
         </div>
       </div>
+      </ApiSandboxProvider>
     </DocsLayout>
   );
 }
