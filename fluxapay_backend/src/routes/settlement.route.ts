@@ -4,6 +4,7 @@ import {
     getSettlementDetails,
     getSettlementSummary,
     exportSettlement,
+    exportSettlementsRange,
 } from "../controllers/settlement.controller";
 import { authenticateToken } from "../middleware/auth.middleware";
 import { validate } from "../middleware/validation.middleware";
@@ -100,6 +101,8 @@ router.get("/summary", validate(settlementSchema.settlementSummarySchema), getSe
  *       404:
  *         description: Settlement not found
  */
+router.get("/export", validate(settlementSchema.exportSettlementsRangeSchema), exportSettlementsRange);
+
 router.get("/:settlement_id", validate(settlementSchema.settlementDetailsSchema), getSettlementDetails);
 
 /**

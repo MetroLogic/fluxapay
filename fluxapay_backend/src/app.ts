@@ -28,6 +28,7 @@ app.use("/api/merchants", merchantRoutes);
 app.use("/api/v1/merchants", merchantRoutes); // Alias for frontend consistency
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/settlements", settlementRoutes);
+app.use("/api/v1/settlements", settlementRoutes); // Alias for frontend consistency
 app.use("/api/merchants/kyc", kycRoutes);
 app.use("/api/webhooks", webhookRoutes);
 app.use("/api/reconciliation", reconciliationRoutes);

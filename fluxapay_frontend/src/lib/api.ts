@@ -41,6 +41,25 @@ async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
   return response.json();
 }
 
+async function fetchBlobWithAuth(endpoint: string, options: RequestInit = {}) {
+  const token = localStorage.getItem("token");
+
+  const headers: Record<string, string> = {};
+
+  if (options.headers) {
+    Object.assign(headers, options.headers);
+  }
+
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  return fetch(`${API_BASE_URL}${endpoint}`, {
+    ...options,
+    headers,
+  });
+}
+
 /** Build headers including the optional admin secret for internal endpoints. */
 function adminHeaders(): Record<string, string> {
   const headers: Record<string, string> = {
@@ -119,6 +138,24 @@ export const api = {
     },
     summary: () => fetchWithAuth("/api/settlements/summary"),
     getById: (id: string) => fetchWithAuth(`/api/settlements/${id}`),
+    export: (settlementId: string, format: "pdf" | "csv") => {
+      return fetchBlobWithAuth(`/api/v1/settlements/${settlementId}/export?format=${format}`);
+    },
+    exportRange: (params: {
+      date_from?: string;
+      date_to?: string;
+      asset?: "USDC" | "XLM" | "all";
+      min_discrepancy?: number;
+      format: "pdf" | "csv";
+    }) => {
+      const sp = new URLSearchParams();
+      if (params.date_from) sp.set("date_from", params.date_from);
+      if (params.date_to) sp.set("date_to", params.date_to);
+      if (params.asset) sp.set("asset", params.asset);
+      if (params.min_discrepancy != null) sp.set("min_discrepancy", String(params.min_discrepancy));
+      sp.set("format", params.format);
+      return fetchBlobWithAuth(`/api/v1/settlements/export?${sp.toString()}`);
+    },
   },
 
   // KYC admin

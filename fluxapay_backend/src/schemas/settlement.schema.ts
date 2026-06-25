@@ -32,3 +32,14 @@ export const exportSettlementSchema = z.object({
         format: z.enum(["pdf", "csv"]).default("pdf"),
     }),
 });
+
+export const exportSettlementsRangeSchema = z.object({
+    query: z.object({
+        date_from: z.string().optional(),
+        date_to: z.string().optional(),
+        asset: z.enum(["USDC", "XLM", "all"]).default("all"),
+        min_discrepancy: z.string().optional().default("0"),
+        format: z.enum(["pdf", "csv"]).default("pdf"),
+    }),
+});
+
