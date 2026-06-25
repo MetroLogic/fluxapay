@@ -12,6 +12,7 @@ import { PaymentQRCode } from '@/components/checkout/PaymentQRCode';
 import { PaymentTimer } from '@/components/checkout/PaymentTimer';
 import { PaymentStatus } from '@/components/checkout/PaymentStatus';
 import { StellarPayButton } from '@/components/checkout/StellarPayButton';
+import { BrowserWalletButtons } from '@/components/checkout/BrowserWalletButtons';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import {
   CheckoutBrandingShell,
@@ -516,6 +517,17 @@ export default function CheckoutPage() {
 
             <div className="flex justify-center">
               <PaymentStatus status="pending" />
+            </div>
+
+            <div className="mt-4">
+              <BrowserWalletButtons
+                address={payment.address}
+                amount={payment.amount}
+                memo={payment.memo}
+                memoType={payment.memoType}
+                paymentId={paymentId}
+                onPaymentConfirmed={() => { /* status hook will detect confirmed state */ }}
+              />
             </div>
 
             {/* Footer links (merged from upstream/main) */}

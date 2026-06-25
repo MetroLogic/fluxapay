@@ -143,7 +143,19 @@ export const PaymentDetails = ({
             {payment.status === "confirmed" && (
               <Badge variant="success">Confirmed</Badge>
             )}
+            {payment.status === "paid" && (
+              <Badge variant="success">Paid</Badge>
+            )}
+            {payment.status === "completed" && (
+              <Badge variant="success">Completed</Badge>
+            )}
             {payment.status === "pending" && <Badge variant="warning">Pending</Badge>}
+            {payment.status === "partially_paid" && (
+              <Badge className="border-transparent bg-orange-500/10 text-orange-500 hover:bg-orange-500/20">
+                Partially Paid
+              </Badge>
+            )}
+            {payment.status === "overpaid" && <Badge variant="info">Overpaid</Badge>}
             {payment.status === "failed" && <Badge variant="error">Failed</Badge>}
             {payment.status === "expired" && (
               <Badge variant="secondary">Expired</Badge>

@@ -1,8 +1,16 @@
+/**
+ * Payment status — aligned with backend Prisma PaymentStatus enum.
+ * Values match: pending, partially_paid, confirmed, overpaid, expired, failed, paid, completed
+ */
 export type PaymentStatus =
   | "pending"
+  | "partially_paid"
   | "confirmed"
+  | "overpaid"
   | "expired"
-  | "failed";
+  | "failed"
+  | "paid"
+  | "completed";
 
 export interface Payment {
   id: string;
