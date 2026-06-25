@@ -314,6 +314,8 @@ model Payment {
   merchantId         String
   amount             Decimal
   currency           String
+  usdc_amount        Decimal?
+  fx_rate            Decimal?
   customer_email     String
   description        String?
   metadata           Json
@@ -360,6 +362,7 @@ model Payment {
   customerId         String?
   customer           Customer?   @relation(fields: [customerId], references: [id], onDelete: SetNull)
   paymentLink        PaymentLink? @relation(fields: [paymentLinkId], references: [id])
+  depositAddress     DepositAddress?
 
   @@index([swept, status])
   @@index([customerId])
@@ -748,6 +751,8 @@ enum ApiKeyEnvironment {
 enum ApiKeyStatus {
   active
   revoked
+}
+
 enum EscrowStatus {
   pending
   active
@@ -817,4 +822,25 @@ model RateLimitLog {
   @@index([ip_address])
   @@index([timestamp])
   @@index([limit_type])
+}
+
+enum DepositAddressStatus {
+  available
+  assigned
+  cooldown
+}
+
+model DepositAddress {
+  id                 String               @id @default(cuid())
+  public_key         String               @unique
+  secret_key         String               // encrypted
+  derivation_path    String
+  status             DepositAddressStatus @default(available)
+  assigned_payment_id String?             @unique
+  payment            Payment?             @relation(fields: [assigned_payment_id], references: [id])
+  cooldown_until     DateTime?
+  created_at         DateTime             @default(now())
+  updated_at         DateTime             @updatedAt
+
+  @@index([status, cooldown_until])
 }

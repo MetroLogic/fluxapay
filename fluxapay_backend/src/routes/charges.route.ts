@@ -4,6 +4,9 @@ import { validatePayment } from "../validators/payment.validator";
 import { authenticateApiKey } from "../middleware/apiKeyAuth.middleware";
 import { merchantApiKeyRateLimit } from "../middleware/rateLimit.middleware";
 import { redisIdempotencyMiddleware } from "../middleware/redisIdempotency.middleware";
+import { createRefund, listRefunds } from "../controllers/refund.controller";
+import { validate, validateQuery } from "../middleware/validation.middleware";
+import { createRefundSchema, listRefundsQuerySchema } from "../schemas/refund.schema";
 
 const router = Router();
 
@@ -48,6 +51,74 @@ router.post(
   redisIdempotencyMiddleware,
   validatePayment,
   createPayment
+);
+
+/**
+ * @swagger
+ * /api/v1/charges/{id}/refunds:
+ *   post:
+ *     summary: Create a refund for a charge
+ *     tags: [Charges]
+ *     security:
+ *       - apiKeyAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               amount:
+ *                 type: number
+ *               reason:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: Refund created
+ */
+router.post(
+  "/:id/refunds",
+  authenticateApiKey,
+  merchantApiKeyRateLimit(),
+  redisIdempotencyMiddleware,
+  (req, res, next) => {
+    req.body.payment_id = req.params.id;
+    next();
+  },
+  validate(createRefundSchema),
+  createRefund
+);
+
+/**
+ * @swagger
+ * /api/v1/charges/{id}/refunds:
+ *   get:
+ *     summary: List refunds for a charge
+ *     tags: [Charges]
+ *     security:
+ *       - apiKeyAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: List of refunds
+ */
+router.get(
+  "/:id/refunds",
+  authenticateApiKey,
+  merchantApiKeyRateLimit(),
+  validateQuery(listRefundsQuerySchema),
+  listRefunds
 );
 
 export default router;

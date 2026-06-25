@@ -7,6 +7,8 @@ import { eventBus, AppEvents } from "./EventService";
 import { validateAndSanitizeMetadata } from "../utils/metadata.util";
 import { PaymentStatus } from "../types/payment";
 import { trackPaymentCreated } from "../middleware/metrics.middleware";
+import { FxService } from "./fx.service";
+import { DepositAddressService } from "./depositAddress.service";
 
 const prisma = new PrismaClient();
 
@@ -72,20 +74,31 @@ export class PaymentService {
     const checkoutBase = PaymentService.getCheckoutBaseUrl();
     const checkout_url = `${checkoutBase}/pay/${paymentId}`;
 
-    // Derive the Stellar address using BIP44 HD derivation.
-    // This atomically assigns merchant_index and payment_index counters in the DB.
-    const hdWalletService = new HDWalletService();
-    const derived = await hdWalletService.derivePaymentAddress(
-      merchantId,
-      paymentId,
-    );
+    // FX conversion
+    const fxRate = await FxService.getUSDCExchangeRate(currency);
+    const usdcAmount = amount * fxRate;
 
-    // Encrypt the derivation indices for secure storage on the Payment row.
-    // These are used by SweepService to reconstruct the keypair without DB index lookup.
-    const encryptedKeyData = await hdWalletService.encryptKeyData(
-      derived.merchantIndex,
-      derived.paymentIndex,
-    );
+    // Try to allocate an address from the pool
+    let stellarAddress = await DepositAddressService.allocateAddress(paymentId);
+    let paymentIndex = null;
+    let derivationPath = null;
+    let encryptedKeyData = null;
+
+    if (!stellarAddress) {
+      // Fallback to deterministic HD derivation if pool is empty
+      const hdWalletService = new HDWalletService();
+      const derived = await hdWalletService.derivePaymentAddress(
+        merchantId,
+        paymentId,
+      );
+      encryptedKeyData = await hdWalletService.encryptKeyData(
+        derived.merchantIndex,
+        derived.paymentIndex,
+      );
+      stellarAddress = derived.publicKey;
+      paymentIndex = derived.paymentIndex;
+      derivationPath = derived.derivationPath;
+    }
 
     // Create payment with the derived Stellar address and derivation metadata
     const payment = await prisma.payment.create({
@@ -93,6 +106,8 @@ export class PaymentService {
         id: paymentId,
         amount,
         currency,
+        usdc_amount: usdcAmount,
+        fx_rate: fxRate,
         customer_email,
         description: description ?? null,
         merchantId,
@@ -103,10 +118,10 @@ export class PaymentService {
         success_url: success_url ?? null,
         cancel_url: cancel_url ?? null,
         ...(customerId ? { customerId } : {}),
-        stellar_address: derived.publicKey,
-        // HD wallet derivation fields — stored for sweep key recovery
-        payment_index: derived.paymentIndex,
-        derivation_path: derived.derivationPath,
+        stellar_address: stellarAddress,
+        // HD wallet derivation fields (null if from pool, as pool handles its own)
+        payment_index: paymentIndex,
+        derivation_path: derivationPath,
         encrypted_key_data: encryptedKeyData,
       },
     });
