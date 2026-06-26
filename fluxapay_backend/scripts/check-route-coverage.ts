@@ -39,6 +39,11 @@ const ROUTE_FILE_MOUNT_PREFIX: Record<string, string> = {
     'webhook.route.ts': '/webhooks',
 };
 
+/** Routes mounted outside `/api/v1` (full path prefix). */
+const ROUTE_FILE_FULL_MOUNT_PREFIX: Record<string, string> = {
+    'health.route.ts': '/health',
+};
+
 interface RouteInfo {
   method: string;
   path: string;
@@ -93,6 +98,11 @@ class RouteCoverageChecker {
 
   /** Full documented path as in OpenAPI (includes `/api/v1` prefix). */
   private expressRouteToOpenApiPath(file: string, routePath: string): string {
+    if (ROUTE_FILE_FULL_MOUNT_PREFIX[file]) {
+      const mount = ROUTE_FILE_FULL_MOUNT_PREFIX[file];
+      const suffix = routePath === '/' ? '' : routePath;
+      return `${mount}${suffix}`;
+    }
     const mount = ROUTE_FILE_MOUNT_PREFIX[file] ?? '';
     const suffix = routePath === '/' ? '' : routePath;
     return `/api/v1${mount}${suffix}`;

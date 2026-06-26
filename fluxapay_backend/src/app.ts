@@ -15,6 +15,7 @@ import { corsMiddleware } from "./middleware/cors.middleware";
 import { globalRateLimit, merchantRateLimit, authRateLimit } from "./middleware/rateLimit.middleware";
 
 import merchantRoutes from "./routes/merchant.route";
+import { createHealthRouter } from "./routes/health.route";
 import settlementRoutes from "./routes/settlement.route";
 import addressPoolRoutes from "./routes/addressPool.route";
 import fxRoutes from "./routes/fx.route";
@@ -171,6 +172,8 @@ app.use("/api/v1/admin/sweep", sweepRoutes);
 app.use("/api/v1/admin", auditRoutes);
 app.use("/api/v1", oracleRoutes);
 
+// Health probes (no auth, not rate-limited)
+app.use("/health", createHealthRouter(prisma));
 // Basic health check
 app.get("/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date() });
