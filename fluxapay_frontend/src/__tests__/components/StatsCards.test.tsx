@@ -28,20 +28,19 @@ vi.mock('@/hooks/useDashboardStats', () => ({
 describe('StatsCards', () => {
   it('renders all metric cards', () => {
     render(<StatsCards />);
-    expect(screen.getByText('Total Revenue')).toBeInTheDocument();
+    expect(screen.getByText('Total Volume (USDC)')).toBeInTheDocument();
     expect(screen.getByText('Total Payments')).toBeInTheDocument();
-    expect(screen.getByText('Pending Payments')).toBeInTheDocument();
+    expect(screen.getByText('Pending')).toBeInTheDocument();
     expect(screen.getByText('Success Rate')).toBeInTheDocument();
   });
 
   it('displays revenue value', () => {
     render(<StatsCards />);
-    expect(screen.getByText('$45,231.89')).toBeInTheDocument();
+    expect(screen.getByText('45,231.89 USDC')).toBeInTheDocument();
   });
 
   it('shows trend indicators', () => {
     render(<StatsCards />);
-    // success rate trend text
     expect(screen.getByText('94.5%')).toBeInTheDocument();
   });
 });
