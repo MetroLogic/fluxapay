@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import React from "react";
 import GlobalErrorBoundary from "@/components/GlobalErrorBoundary";
@@ -13,7 +13,7 @@ afterEach(() => {
 });
 
 // A component that throws during render
-function ThrowingChild({ message }: { message: string }) {
+function ThrowingChild({ message }: { message: string }): React.ReactNode {
   throw new Error(message);
 }
 
@@ -35,7 +35,7 @@ describe("Example 1.4+1.5: reset via Try again button", () => {
   it("remounts children after clicking Try again", () => {
     let shouldThrow = true;
 
-    function MaybeThrow() {
+    function MaybeThrow(): React.ReactNode {
       if (shouldThrow) throw new Error("initial error");
       return <div>recovered content</div>;
     }
@@ -65,7 +65,7 @@ describe("Example 1.6: console.error called with error and info", () => {
   it("calls console.error with the error and component stack", () => {
     const err = new Error("test error");
 
-    function AlwaysThrow() {
+    function AlwaysThrow(): React.ReactNode {
       throw err;
     }
 
