@@ -104,6 +104,7 @@ describe("exportInvoice controller", () => {
     (validateUserId as jest.Mock).mockResolvedValue("merchant_1");
     exportInvoiceServiceMock.mockRejectedValue({
       status: 404,
+      code: "INVOICE_NOT_FOUND",
       message: "Invoice not found",
     });
 
@@ -120,13 +121,17 @@ describe("exportInvoice controller", () => {
     await exportInvoice(req, res);
 
     expect(res.status).toHaveBeenCalledWith(404);
-    expect(res.json).toHaveBeenCalledWith({ message: "Invoice not found" });
+    expect(res.json).toHaveBeenCalledWith({
+      code: "INVOICE_NOT_FOUND",
+      message: "Invoice not found",
+    });
   });
 
   it("should enforce merchant ownership (authorization)", async () => {
     (validateUserId as jest.Mock).mockResolvedValue("merchant_1");
     exportInvoiceServiceMock.mockRejectedValue({
       status: 404,
+      code: "INVOICE_NOT_FOUND",
       message: "Invoice not found",
     });
 

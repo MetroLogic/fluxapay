@@ -1,3 +1,5 @@
+import { ErrorCode } from "../types/errors";
+import { apiError, sendApiError } from "../helpers/apiError.helper";
 import { Request, Response } from "express";
 import { validateUserId } from "../helpers/request.helper";
 import { AuthRequest } from "../types/express";
@@ -28,7 +30,7 @@ export async function createInvoice(req: AuthRequest, res: Response) {
     });
     res.status(201).json(result);
   } catch (err: any) {
-    res.status(err.status || 500).json({ message: err.message || "Server error" });
+    sendApiError(res, err);
   }
 }
 
@@ -40,7 +42,7 @@ export async function getInvoiceById(req: AuthRequest, res: Response) {
     const result = await getInvoiceByIdService(merchantId, invoiceId);
     res.status(200).json(result);
   } catch (err: any) {
-    res.status(err.status || 500).json({ message: err.message || "Server error" });
+    sendApiError(res, err);
   }
 }
 
@@ -62,7 +64,7 @@ export async function listInvoices(req: Request, res: Response) {
     });
     res.status(200).json(result);
   } catch (err: any) {
-    res.status(err.status || 500).json({ message: err.message || "Server error" });
+    sendApiError(res, err);
   }
 }
 
@@ -76,11 +78,11 @@ export async function updateInvoiceStatus(req: AuthRequest, res: Response) {
     res.status(200).json(result);
   } catch (err: any) {
     if (err.message === "Invoice not found") {
-      res.status(404).json({ message: "Invoice not found" });
+      sendApiError(res, apiError(404, ErrorCode.INVOICE_NOT_FOUND, "Invoice not found"));
     } else if (err.message === "Invalid status transition" || err.message === "Invalid status") {
-      res.status(400).json({ message: err.message });
+      sendApiError(res, apiError(400, ErrorCode.VALIDATION_ERROR, err.message));
     } else {
-      res.status(err.status || 500).json({ message: err.message || "Server error" });
+      sendApiError(res, err);
     }
   }
 }
@@ -93,7 +95,7 @@ export async function sendInvoice(req: AuthRequest, res: Response) {
     const result = await sendInvoiceService(merchantId, invoiceId);
     res.status(200).json(result);
   } catch (err: any) {
-    res.status(err.status || 500).json({ message: err.message || "Server error" });
+    sendApiError(res, err);
   }
 }
 
@@ -105,7 +107,7 @@ export async function voidInvoice(req: AuthRequest, res: Response) {
     const result = await voidInvoiceService(merchantId, invoiceId);
     res.status(200).json(result);
   } catch (err: any) {
-    res.status(err.status || 500).json({ message: err.message || "Server error" });
+    sendApiError(res, err);
   }
 }
 
@@ -123,7 +125,7 @@ export async function exportInvoice(req: AuthRequest, res: Response) {
       result.stream.pipe(res);
       result.stream.on("error", () => {
         if (!res.headersSent) {
-          res.status(500).json({ message: "Failed to generate PDF" });
+          sendApiError(res, apiError(500, ErrorCode.PDF_GENERATION_FAILED, "Failed to generate PDF"));
         }
       });
     } else if (typeof result.content === "string") {
@@ -133,7 +135,7 @@ export async function exportInvoice(req: AuthRequest, res: Response) {
     }
   } catch (err: any) {
     if (!res.headersSent) {
-      res.status(err.status || 500).json({ message: err.message || "Server error" });
+      sendApiError(res, err);
     }
   }
 }

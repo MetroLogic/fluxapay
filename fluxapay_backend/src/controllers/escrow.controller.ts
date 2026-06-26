@@ -1,3 +1,5 @@
+import { apiError } from "../helpers/apiError.helper";
+import { ErrorCode } from "../types/errors";
 import { createController } from "../helpers/controller.helper";
 import {
   initializeEscrowContract,
@@ -9,7 +11,7 @@ import { AuthRequest } from "../types/express";
 export const initializeEscrow = createController(async (body: any, req: AuthRequest) => {
   const merchantId = req.merchantId || req.user?.id;
   if (!merchantId) {
-    throw { status: 401, message: "Authentication required" };
+    throw apiError(401, ErrorCode.AUTHENTICATION_REQUIRED, "Authentication required");
   }
 
   return initializeEscrowContract({
@@ -23,7 +25,7 @@ export const initializeEscrow = createController(async (body: any, req: AuthRequ
 export const releaseEscrow = createController(async (body: any, req: AuthRequest) => {
   const merchantId = req.merchantId || req.user?.id;
   if (!merchantId) {
-    throw { status: 401, message: "Authentication required" };
+    throw apiError(401, ErrorCode.AUTHENTICATION_REQUIRED, "Authentication required");
   }
 
   return releaseEscrowFunds({

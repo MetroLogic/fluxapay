@@ -1,3 +1,5 @@
+import { apiError } from "../helpers/apiError.helper";
+import { ErrorCode } from "../types/errors";
 import { PrismaClient, Prisma } from "../generated/client/client";
 import {
   normalizeCheckoutAccentHex,
@@ -52,7 +54,7 @@ export async function signupMerchantService(data: {
     where: { OR: [{ email }, { phone_number }] },
   });
   if (existing)
-    throw { status: 400, message: "Email or phone already registered" };
+    throw apiError(400, ErrorCode.EMAIL_ALREADY_REGISTERED, "Email or phone already registered");
 
   // Hash password
   const hashedPassword = await bcrypt.hash(password, 10);
@@ -126,12 +128,12 @@ export async function loginMerchantService(data: {
   const { email, password } = data;
   const merchant = await prisma.merchant.findUnique({ where: { email } });
 
-  if (!merchant) throw { status: 400, message: "Invalid credentials" };
+  if (!merchant) throw apiError(400, ErrorCode.INVALID_CREDENTIALS, "Invalid credentials");
   if (merchant.status !== "active")
-    throw { status: 403, message: "Account not verified" };
+    throw apiError(403, ErrorCode.ACCOUNT_NOT_VERIFIED, "Account not verified");
 
   const match = await bcrypt.compare(password, merchant.password);
-  if (!match) throw { status: 400, message: "Invalid credentials" };
+  if (!match) throw apiError(400, ErrorCode.INVALID_CREDENTIALS, "Invalid credentials");
   //   jwt sign
   const { token } = generateToken(merchant.id, merchant.email);
   return { message: "Login successful", merchantId: merchant.id, token };
@@ -145,7 +147,7 @@ export async function verifyOtpMerchantService(data: {
   const { merchantId, channel, otp } = data;
 
   const { success, message } = await verifyOtpService(merchantId, channel, otp);
-  if (!success) throw { status: 400, message };
+  if (!success) throw apiError(400, ErrorCode.VALIDATION_ERROR, message ?? "Validation failed");
 
   // Activate merchant
   await prisma.merchant.update({
@@ -166,7 +168,7 @@ export async function resendOtpMerchantService(data: {
     where: { id: merchantId },
   });
 
-  if (!merchant) throw { status: 404, message: "Merchant not found" };
+  if (!merchant) throw apiError(404, ErrorCode.MERCHANT_NOT_FOUND, "Merchant not found");
 
 
   const otp = await createOtp(merchantId, channel);
@@ -188,7 +190,7 @@ export async function getMerchantUserService(data: {
     include: { bankAccount: true },
   });
 
-  if (!merchant) throw { status: 404, message: "Merchant not found" };
+  if (!merchant) throw apiError(404, ErrorCode.MERCHANT_NOT_FOUND, "Merchant not found");
 
   const { api_key_hashed, api_key_last_four, ...merchantData } = merchant;
   const apiKeyMasked = merchant.api_key_last_four ? `sk_live_****${merchant.api_key_last_four}` : null;
@@ -364,17 +366,18 @@ export async function updateBankAccountService(data: {
   const { merchantId, ...updates } = data;
 
   const existing = await prisma.bankAccount.findUnique({ where: { merchantId } });
-  if (!existing) throw { status: 404, message: 'No bank account found. Use POST /me/bank-account to create one.' };
+  if (!existing) throw apiError(404, ErrorCode.NO_BANK_ACCOUNT, 'No bank account found. Use POST /me/bank-account to create one.');
 
   // Cross-validate country/currency when both are present after merge
   const mergedCountry = updates.country ?? existing.country;
   const mergedCurrency = updates.currency ?? existing.currency;
   const entry = countryMap.find((x) => x.countryCode === mergedCountry);
   if (entry && entry.currencyCode !== mergedCurrency) {
-    throw {
-      status: 400,
-      message: `Currency ${mergedCurrency} is not valid for country ${mergedCountry}. Expected ${entry.currencyCode}.`,
-    };
+    throw apiError(
+      400,
+      ErrorCode.INVALID_CURRENCY,
+      `Currency ${mergedCurrency} is not valid for country ${mergedCountry}. Expected ${entry.currencyCode}.`,
+    );
   }
 
   const changedFields = Object.keys(updates).filter(

@@ -1,3 +1,5 @@
+import { apiError } from "../helpers/apiError.helper";
+import { ErrorCode } from "../types/errors";
 import {
   PrismaClient,
   RefundStatus,
@@ -37,29 +39,24 @@ async function validatePaymentForRefund(
     });
 
     if (!paymentExists) {
-      throw { status: 404, message: "Payment not found" };
+      throw apiError(404, ErrorCode.PAYMENT_NOT_FOUND, "Payment not found");
     }
-    throw {
-      status: 403,
-      message: "Payment does not belong to your merchant account",
-    };
+    throw apiError(403, ErrorCode.FORBIDDEN, "Payment does not belong to your merchant account");
   }
 
   // Validate payment status is refundable
   const refundableStatuses = getRefundableStatuses();
   if (!refundableStatuses.includes(payment.status as PaymentStatus)) {
-    throw {
-      status: 400,
-      message: `Payment cannot be refunded. Current status: ${payment.status}. Only ${refundableStatuses.join(' or ')} payments can be refunded.`,
-    };
+    throw apiError(
+      400,
+      ErrorCode.VALIDATION_ERROR,
+      `Payment cannot be refunded. Current status: ${payment.status}. Only ${refundableStatuses.join(" or ")} payments can be refunded.`,
+    );
   }
 
   // Check if payment has expired
   if (payment.expiration && new Date(payment.expiration) < new Date()) {
-    throw {
-      status: 400,
-      message: "Payment has expired and cannot be refunded",
-    };
+    throw apiError(400, ErrorCode.PAYMENT_EXPIRED, "Payment has expired and cannot be refunded");
   }
 
   return payment;
@@ -90,27 +87,26 @@ function validateRefundAmount(
   const remainingRefundable = paymentAmount - totalRefunded;
 
   if (refundAmount > paymentAmount) {
-    throw {
-      status: 400,
-      message: `Refund amount (${refundAmount}) cannot exceed original payment amount (${paymentAmount})`,
-    };
+    throw apiError(
+      400,
+      ErrorCode.INVALID_AMOUNT,
+      `Refund amount (${refundAmount}) cannot exceed original payment amount (${paymentAmount})`,
+    );
   }
 
   if (refundAmount > remainingRefundable) {
-    throw {
-      status: 400,
-      message: `Refund amount (${refundAmount}) exceeds remaining refundable amount (${remainingRefundable}). Already refunded: ${totalRefunded}`,
-    };
+    throw apiError(
+      400,
+      ErrorCode.INVALID_AMOUNT,
+      `Refund amount (${refundAmount}) exceeds remaining refundable amount (${remainingRefundable}). Already refunded: ${totalRefunded}`,
+    );
   }
 
   // Check if this would be a full refund
   const wouldBeFullRefund = totalRefunded + refundAmount >= paymentAmount;
 
   if (!isPartialRefundAllowed && !wouldBeFullRefund) {
-    throw {
-      status: 400,
-      message: "Only full refunds are allowed for this payment",
-    };
+    throw apiError(400, ErrorCode.VALIDATION_ERROR, "Only full refunds are allowed for this payment");
   }
 
   return {
@@ -131,7 +127,7 @@ export async function createRefundService(params: {
 
   // Validate amount is positive
   if (amount <= 0) {
-    throw { status: 400, message: "Refund amount must be positive" };
+    throw apiError(400, ErrorCode.INVALID_AMOUNT, "Refund amount must be positive");
   }
 
   // Use transaction to ensure atomicity of validation and creation
@@ -237,7 +233,7 @@ export async function updateRefundStatusService(params: {
   });
 
   if (!existing) {
-    throw { status: 404, message: "Refund not found" };
+    throw apiError(404, ErrorCode.REFUND_NOT_FOUND, "Refund not found");
   }
 
   const updated = await prisma.refund.update({

@@ -1,3 +1,5 @@
+import { ErrorCode } from "../types/errors";
+import { apiError, sendApiError } from "../helpers/apiError.helper";
 import { Request, Response } from "express";
 import { PrismaClient } from "../generated/client/client";
 import { PaymentService } from "../services/payment.service";
@@ -28,9 +30,10 @@ export const createPayment = async (req: Request, res: Response) => {
     const merchantId = authReq.merchantId;
 
     if (!merchantId) {
-      return res
-        .status(401)
-        .json({ error: "Unauthorized: Merchant ID missing" });
+      return sendApiError(
+        res,
+        apiError(401, ErrorCode.UNAUTHORIZED, "Unauthorized: Merchant ID missing"),
+      );
     }
 
     let linkedCustomerId: string | undefined;
@@ -45,9 +48,10 @@ export const createPayment = async (req: Request, res: Response) => {
         select: { id: true },
       });
       if (!customer) {
-        return res
-          .status(400)
-          .json({ error: "Invalid customer_id for this merchant" });
+        return sendApiError(
+          res,
+          apiError(400, ErrorCode.VALIDATION_ERROR, "Invalid customer_id for this merchant"),
+        );
       }
       linkedCustomerId = customer.id;
     }
@@ -56,9 +60,12 @@ export const createPayment = async (req: Request, res: Response) => {
     if (!isWithinRateLimit) {
       const retryAfterSeconds = PaymentService.getRateLimitWindowSeconds();
       res.setHeader("Retry-After", String(retryAfterSeconds));
-      return res
-        .status(429)
-        .json({ error: "Rate limit exceeded. Please try again later." });
+      return sendApiError(
+        res,
+        apiError(429, ErrorCode.PAYMENT_RATE_LIMIT, "Rate limit exceeded. Please try again later.", {
+          retryAfterSeconds,
+        }),
+      );
     }
 
     // Use PaymentService to create payment with derived Stellar address
@@ -84,7 +91,10 @@ export const createPayment = async (req: Request, res: Response) => {
     res.status(201).json(responseBody);
   } catch (error: unknown) {
     if (error instanceof MetadataValidationError) {
-      return res.status(400).json({ error: error.message });
+      return sendApiError(
+        res,
+        apiError(400, ErrorCode.INVALID_METADATA, error.message),
+      );
     }
 
     if (
@@ -93,16 +103,14 @@ export const createPayment = async (req: Request, res: Response) => {
       "status" in error &&
       (error as { status?: unknown }).status === 400
     ) {
-      const message =
-        "message" in error &&
-        typeof (error as { message?: unknown }).message === "string"
-          ? (error as { message: string }).message
-          : "Validation failed";
-      return res.status(400).json({ error: message });
+      return sendApiError(res, error);
     }
 
     console.error("Error creating payment:", error);
-    res.status(500).json({ error: "Failed to create payment" });
+    return sendApiError(
+      res,
+      apiError(500, ErrorCode.PAYMENT_CREATE_FAILED, "Failed to create payment"),
+    );
   }
 };
 
@@ -110,7 +118,7 @@ export const getPayments = async (req: Request, res: Response) => {
   try {
     const merchantId = await validateUserId(req as AuthRequest);
     if (!merchantId) {
-      return res.status(401).json({ error: "Unauthorized" });
+      return sendApiError(res, apiError(401, ErrorCode.UNAUTHORIZED, "Unauthorized"));
     }
 
     const query = req.query as Record<string, unknown>;
@@ -156,16 +164,7 @@ export const getPayments = async (req: Request, res: Response) => {
 
     return res.json({ data, meta: { total, page, limit } });
   } catch (error: unknown) {
-    if (
-      error &&
-      typeof error === "object" &&
-      "status" in error &&
-      typeof (error as { status?: unknown }).status === "number"
-    ) {
-      const e = error as { status: number; message?: string };
-      return res.status(e.status).json({ error: e.message || "Unauthorized" });
-    }
-    return res.status(500).json({ error: "Internal Server Error" });
+    return sendApiError(res, error);
   }
 };
 
@@ -173,7 +172,7 @@ export const exportPayments = async (req: Request, res: Response) => {
     try {
         const merchantId = await validateUserId(req as AuthRequest);
         if (!merchantId) {
-            return res.status(401).json({ error: "Unauthorized" });
+            return sendApiError(res, apiError(401, ErrorCode.UNAUTHORIZED, "Unauthorized"));
         }
 
         // 1. Destructure with explicit type casting immediately
@@ -233,7 +232,7 @@ export const exportPayments = async (req: Request, res: Response) => {
         res.attachment("payments_history.csv");
         return res.status(200).send(header + csv);
     } catch (error: unknown) {
-        res.status(500).json({ error: "Internal Server Error" });
+        return sendApiError(res, apiError(500, ErrorCode.INTERNAL_ERROR, "Internal Server Error"));
     }
 };
 
@@ -253,7 +252,9 @@ export const getPaymentById = async (req: Request, res: Response) => {
       include: { merchant: true },
     });
 
-    if (!payment) return res.status(404).json({ error: "Payment not found" });
+    if (!payment) {
+      return sendApiError(res, apiError(404, ErrorCode.PAYMENT_NOT_FOUND, "Payment not found"));
+    }
 
     // Add explorer link if transaction_hash exists (not present in current Payment model).
     const explorerBase = (process.env.STELLAR_HORIZON_URL || "").includes(
@@ -269,21 +270,7 @@ export const getPaymentById = async (req: Request, res: Response) => {
 
     res.json(responseData);
   } catch (error: unknown) {
-    if (
-      error &&
-      typeof error === "object" &&
-      "status" in error &&
-      typeof (error as { status?: unknown }).status === "number"
-    ) {
-      const status = (error as { status: number }).status;
-      const message =
-        "message" in error &&
-        typeof (error as { message?: unknown }).message === "string"
-          ? (error as { message: string }).message
-          : "Unauthorized";
-      return res.status(status).json({ error: message });
-    }
-    res.status(500).json({ error: "Error fetching details" });
+    return sendApiError(res, error);
   }
 };
 
@@ -312,7 +299,7 @@ export const getPaymentStatus = async (req: Request, res: Response) => {
     });
 
     if (!payment) {
-      return res.status(404).json({ error: "Payment not found" });
+      return sendApiError(res, apiError(404, ErrorCode.PAYMENT_NOT_FOUND, "Payment not found"));
     }
 
     // Return a minimal, PII-free DTO safe for unauthenticated callers.
@@ -326,7 +313,7 @@ export const getPaymentStatus = async (req: Request, res: Response) => {
     });
   } catch (error: unknown) {
     console.error("Error fetching payment status:", error);
-    res.status(500).json({ error: "Internal Server Error" });
+    return sendApiError(res, apiError(500, ErrorCode.INTERNAL_ERROR, "Internal Server Error"));
   }
 };
 
@@ -485,13 +472,13 @@ export const getPublicCheckoutPayment = async (req: Request, res: Response) => {
     });
 
     if (!payment?.stellar_address) {
-      return res.status(404).json({ error: "Payment not found" });
+      return sendApiError(res, apiError(404, ErrorCode.PAYMENT_NOT_FOUND, "Payment not found"));
     }
 
     res.json(buildPublicCheckoutDto(payment as any));
   } catch (error: unknown) {
     console.error("getPublicCheckoutPayment", error);
-    res.status(500).json({ error: "Failed to load payment" });
+    return sendApiError(res, apiError(500, ErrorCode.PAYMENT_FETCH_FAILED, "Failed to load payment"));
   }
 };
 
@@ -506,12 +493,12 @@ export const getPublicCheckoutPaymentStatus = async (
       select: { status: true },
     });
     if (!payment) {
-      return res.status(404).json({ error: "Payment not found" });
+      return sendApiError(res, apiError(404, ErrorCode.PAYMENT_NOT_FOUND, "Payment not found"));
     }
     res.json({ status: payment.status });
   } catch (error: unknown) {
     console.error("getPublicCheckoutPaymentStatus", error);
-    res.status(500).json({ error: "Failed to load status" });
+    return sendApiError(res, apiError(500, ErrorCode.PAYMENT_FETCH_FAILED, "Failed to load status"));
   }
 };
 
@@ -532,9 +519,9 @@ export const getPaymentSettlement = async (req: Request, res: Response) => {
     res.json(settlement);
   } catch (error: unknown) {
     if (error instanceof Error && error.message === "Payment not found") {
-      return res.status(404).json({ error: "Payment not found" });
+      return sendApiError(res, apiError(404, ErrorCode.PAYMENT_NOT_FOUND, "Payment not found"));
     }
     console.error("Error fetching payment settlement:", error);
-    res.status(500).json({ error: "Internal Server Error" });
+    return sendApiError(res, apiError(500, ErrorCode.INTERNAL_ERROR, "Internal Server Error"));
   }
 };

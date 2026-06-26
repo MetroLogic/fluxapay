@@ -1,3 +1,5 @@
+import { apiError } from "../helpers/apiError.helper";
+import { ErrorCode } from "../types/errors";
 import { PrismaClient, Prisma } from "../generated/client/client";
 import crypto from "crypto";
 
@@ -27,7 +29,7 @@ export async function createPaymentLinkService(params: {
 
   // Validate metadata max 10 pairs
   if (metadata && Object.keys(metadata).length > 10) {
-    throw { status: 400, message: "Metadata cannot exceed 10 key-value pairs" };
+    throw apiError(400, ErrorCode.INVALID_METADATA, "Metadata cannot exceed 10 key-value pairs");
   }
 
   // Generate unique slug
@@ -87,7 +89,7 @@ export async function getPaymentLinkByIdService(params: { merchantId: string; id
   });
 
   if (!paymentLink) {
-    throw { status: 404, message: "Payment link not found" };
+    throw apiError(404, ErrorCode.PAYMENT_LINK_NOT_FOUND, "Payment link not found");
   }
 
   // Check if expired
@@ -178,7 +180,7 @@ export async function updatePaymentLinkService(params: {
 
   // Validate metadata max 10 pairs
   if (metadata && Object.keys(metadata).length > 10) {
-    throw { status: 400, message: "Metadata cannot exceed 10 key-value pairs" };
+    throw apiError(400, ErrorCode.INVALID_METADATA, "Metadata cannot exceed 10 key-value pairs");
   }
 
   await getPaymentLinkByIdService({ merchantId, id });
@@ -240,17 +242,17 @@ export async function getPaymentLinkBySlugService(slug: string) {
   });
 
   if (!paymentLink) {
-    throw { status: 404, message: "Payment link not found" };
+    throw apiError(404, ErrorCode.PAYMENT_LINK_NOT_FOUND, "Payment link not found");
   }
 
   // Check if active
   if (!paymentLink.active) {
-    throw { status: 410, message: "Payment link is inactive" };
+    throw apiError(410, ErrorCode.PAYMENT_LINK_INACTIVE, "Payment link is inactive");
   }
 
   // Check if expired
   if (paymentLink.expiry && paymentLink.expiry < new Date()) {
-    throw { status: 410, message: "Payment link has expired" };
+    throw apiError(410, ErrorCode.PAYMENT_LINK_EXPIRED, "Payment link has expired");
   }
 
   return paymentLink;
@@ -269,21 +271,21 @@ export async function createChargeFromPaymentLinkService(params: {
   });
 
   if (!paymentLink) {
-    throw { status: 404, message: "Payment link not found" };
+    throw apiError(404, ErrorCode.PAYMENT_LINK_NOT_FOUND, "Payment link not found");
   }
 
   if (!paymentLink.active) {
-    throw { status: 410, message: "Payment link is inactive" };
+    throw apiError(410, ErrorCode.PAYMENT_LINK_INACTIVE, "Payment link is inactive");
   }
 
   if (paymentLink.expiry && paymentLink.expiry < new Date()) {
-    throw { status: 410, message: "Payment link has expired" };
+    throw apiError(410, ErrorCode.PAYMENT_LINK_EXPIRED, "Payment link has expired");
   }
 
   // Use provided amount or link's fixed amount
   const chargeAmount = amount ?? (paymentLink.amount ? Number(paymentLink.amount) / 100 : undefined);
   if (!chargeAmount) {
-    throw { status: 400, message: "Amount is required for open-amount links" };
+    throw apiError(400, ErrorCode.MISSING_REQUIRED_FIELD, "Amount is required for open-amount links");
   }
 
   // Create payment

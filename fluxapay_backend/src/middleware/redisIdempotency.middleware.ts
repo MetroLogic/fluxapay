@@ -1,3 +1,5 @@
+import { ErrorCode } from "../types/errors";
+import { apiError, sendApiError } from "../helpers/apiError.helper";
 import { Request, Response, NextFunction } from "express";
 import Redis from "ioredis";
 import { AuthRequest } from "../types/express";
@@ -15,18 +17,18 @@ export const redisIdempotencyMiddleware = async (
   const merchantId = (req as AuthRequest).merchantId;
 
   if (!idempotencyKey) {
-    res.status(400).json({ error: "Missing Idempotency-Key header." });
+    sendApiError(res, apiError(400, ErrorCode.MISSING_IDEMPOTENCY_KEY, "Missing Idempotency-Key header."));
     return;
   }
 
   // Validate UUID v4 and max length 64
   if (!validateUUID(idempotencyKey) || idempotencyKey.length > 64) {
-    res.status(400).json({ error: "Invalid Idempotency-Key format. Must be a UUID v4 and max 64 characters." });
+    sendApiError(res, apiError(400, ErrorCode.INVALID_IDEMPOTENCY_KEY, "Invalid Idempotency-Key format. Must be a UUID v4 and max 64 characters."));
     return;
   }
 
   if (!merchantId) {
-    res.status(401).json({ error: "Unauthorized" });
+    sendApiError(res, apiError(401, ErrorCode.UNAUTHORIZED, "Unauthorized"));
     return;
   }
 
@@ -62,7 +64,7 @@ export const redisIdempotencyMiddleware = async (
     const existingValue = await redisClient.get(redisKey);
 
     if (existingValue === "in-flight") {
-      res.status(409).json({ error: "idempotency_conflict", message: "A request with this idempotency key is already in progress." });
+      sendApiError(res, apiError(409, ErrorCode.IDEMPOTENCY_CONFLICT, "A request with this idempotency key is already in progress."));
       return;
     }
 
@@ -84,6 +86,6 @@ export const redisIdempotencyMiddleware = async (
   } catch (error) {
     console.error("Redis Idempotency error:", error);
     // Fail closed or open? Let's fail with 500 to be safe.
-    res.status(500).json({ error: "Internal Server Error during idempotency check.", details: error instanceof Error ? error.message : String(error) });
+    sendApiError(res, apiError(500, ErrorCode.IDEMPOTENCY_CHECK_FAILED, "Internal Server Error during idempotency check.", { details: { reason: error instanceof Error ? error.message : String(error) } }));
   }
 };

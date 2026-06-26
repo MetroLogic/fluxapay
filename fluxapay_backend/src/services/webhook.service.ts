@@ -1,3 +1,5 @@
+import { apiError } from "../helpers/apiError.helper";
+import { ErrorCode } from "../types/errors";
 import { PrismaClient, WebhookEventType, WebhookStatus, Payment, Merchant } from "../generated/client/client";
 import crypto from "crypto";
 import { webhookEventTypes } from "../schemas/webhook.schema";
@@ -298,7 +300,7 @@ export async function getWebhookLogDetailsService(params: WebhookLogDetailsParam
   });
 
   if (!log) {
-    throw { status: 404, message: "Webhook log not found" };
+    throw apiError(404, ErrorCode.WEBHOOK_LOG_NOT_FOUND, "Webhook log not found");
   }
 
   return {
@@ -340,17 +342,17 @@ export async function retryWebhookService(params: RetryWebhookParams) {
   });
 
   if (!log) {
-    throw { status: 404, message: "Webhook log not found" };
+    throw apiError(404, ErrorCode.WEBHOOK_LOG_NOT_FOUND, "Webhook log not found");
   }
 
   if (log.status === "delivered") {
-    throw { status: 400, message: "Webhook already delivered successfully" };
+    throw apiError(400, ErrorCode.WEBHOOK_ALREADY_DELIVERED, "Webhook already delivered successfully");
   }
 
   // Attempt to deliver the webhook using the original stored payload
   const merchant = await prisma.merchant.findUnique({ where: { id: merchantId } });
   if (!merchant?.webhook_secret) {
-    throw { status: 400, message: "Merchant webhook secret not configured" };
+    throw apiError(400, ErrorCode.WEBHOOK_SECRET_NOT_CONFIGURED, "Merchant webhook secret not configured");
   }
   const result = await deliverWebhook(
     log.endpoint_url,
@@ -505,11 +507,11 @@ export async function requeueWebhookService(params: RequeueWebhookParams) {
   });
 
   if (!log) {
-    throw { status: 404, message: "Webhook log not found" };
+    throw apiError(404, ErrorCode.WEBHOOK_LOG_NOT_FOUND, "Webhook log not found");
   }
 
   if (log.status !== "failed") {
-    throw { status: 400, message: "Only failed webhooks can be requeued" };
+    throw apiError(400, ErrorCode.WEBHOOK_REQUEUE_FAILED, "Only failed webhooks can be requeued");
   }
 
   const updatedLog = await prisma.webhookLog.update({
@@ -545,14 +547,14 @@ export async function sendTestWebhookService(params: SendTestWebhookParams) {
   });
 
   if (!merchant) {
-    throw { status: 404, message: "Merchant not found" };
+    throw apiError(404, ErrorCode.MERCHANT_NOT_FOUND, "Merchant not found");
   }
 
   // Generate test payload (event_id embedded so merchant can deduplicate test events too)
   const eventId = crypto.randomUUID();
   const testPayload = generateTestPayload(event_type, payload_override, eventId);
   if (!merchant.webhook_secret) {
-    throw { status: 400, message: "Merchant webhook secret not configured" };
+    throw apiError(400, ErrorCode.WEBHOOK_SECRET_NOT_CONFIGURED, "Merchant webhook secret not configured");
   }
 
   // Create webhook log for the test

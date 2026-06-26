@@ -57,9 +57,13 @@ describe("createPayment controller", () => {
     expect(PaymentService.getRateLimitWindowSeconds).toHaveBeenCalled();
     expect(res.setHeader).toHaveBeenCalledWith("Retry-After", "60");
     expect(res.status).toHaveBeenCalledWith(429);
-    expect(res.json).toHaveBeenCalledWith({
-      error: "Rate limit exceeded. Please try again later.",
-    });
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        code: "PAYMENT_RATE_LIMIT",
+        message: "Rate limit exceeded. Please try again later.",
+        retry_after_seconds: 60,
+      }),
+    );
     expect(PaymentService.createPayment).not.toHaveBeenCalled();
   });
 });
@@ -168,7 +172,10 @@ describe("getPaymentById controller — preservation tests", () => {
     await getPaymentById(req, res);
 
     expect(res.status).toHaveBeenCalledWith(404);
-    expect(res.json).toHaveBeenCalledWith({ error: "Payment not found" });
+    expect(res.json).toHaveBeenCalledWith({
+      code: "PAYMENT_NOT_FOUND",
+      message: "Payment not found",
+    });
   });
 
   it("should return 404 when payment belongs to a different merchant (cross-merchant access)", async () => {
@@ -187,7 +194,10 @@ describe("getPaymentById controller — preservation tests", () => {
     await getPaymentById(req, res);
 
     expect(res.status).toHaveBeenCalledWith(404);
-    expect(res.json).toHaveBeenCalledWith({ error: "Payment not found" });
+    expect(res.json).toHaveBeenCalledWith({
+      code: "PAYMENT_NOT_FOUND",
+      message: "Payment not found",
+    });
   });
 });
 

@@ -1,4 +1,6 @@
 import type { Request, Response, NextFunction, RequestHandler } from "express";
+import { apiError, sendApiError } from "../helpers/apiError.helper";
+import { ErrorCode } from "../types/errors";
 
 type RateLimitOptions = {
   /**
@@ -48,10 +50,12 @@ export function simpleRateLimit(options: RateLimitOptions): RequestHandler {
     if (existing.count > max) {
       const retryAfterSeconds = Math.max(1, Math.ceil((existing.resetAt - t) / 1000));
       res.setHeader("Retry-After", String(retryAfterSeconds));
-      return res.status(429).json({
-        message: "Rate limit exceeded",
-        retry_after_seconds: retryAfterSeconds,
-      });
+      return sendApiError(
+        res,
+        apiError(429, ErrorCode.RATE_LIMIT_EXCEEDED, "Rate limit exceeded", {
+          retryAfterSeconds,
+        }),
+      );
     }
 
     return next();

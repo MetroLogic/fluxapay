@@ -1,3 +1,5 @@
+import { apiError } from "../helpers/apiError.helper";
+import { ErrorCode } from "../types/errors";
 import { createController } from "../helpers/controller.helper";
 import {
   loginWithEmailPassword,
@@ -42,7 +44,7 @@ export const logoutAll = createController(async (_: any, req: AuthRequest) => {
   // This endpoint requires authentication
   const merchantId = req.merchantId || req.user?.id;
   if (!merchantId) {
-    throw { status: 401, message: "Authentication required" };
+    throw apiError(401, ErrorCode.AUTHENTICATION_REQUIRED, "Authentication required");
   }
   
   return logoutAllService({ merchantId });

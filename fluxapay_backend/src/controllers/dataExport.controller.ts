@@ -1,3 +1,5 @@
+import { apiError, sendApiError } from "../helpers/apiError.helper";
+import { ErrorCode } from "../types/errors";
 import { Response } from "express";
 import { AuthRequest } from "../types/express";
 import { validateUserId } from "../helpers/request.helper";
@@ -20,7 +22,7 @@ export async function requestExport(req: AuthRequest, res: Response) {
       ...result,
     });
   } catch (err: any) {
-    res.status(err.status || 500).json({ message: err.message || "Server error" });
+    sendApiError(res, err);
   }
 }
 
@@ -39,7 +41,7 @@ export async function getExportStatus(req: AuthRequest, res: Response) {
       error: job.error ?? undefined,
     });
   } catch (err: any) {
-    res.status(err.status || 500).json({ message: err.message || "Server error" });
+    sendApiError(res, err);
   }
 }
 
@@ -54,7 +56,7 @@ export async function downloadExportHandler(req: AuthRequest, res: Response) {
     res.setHeader("Content-Disposition", `attachment; filename="export-${req.params.jobId as string}.json"`);
     res.json(data);
   } catch (err: any) {
-    res.status(err.status || 500).json({ message: err.message || "Server error" });
+    sendApiError(res, err);
   }
 }
 
@@ -72,7 +74,7 @@ export async function adminRequestExport(req: AuthRequest, res: Response) {
       ...result,
     });
   } catch (err: any) {
-    res.status(err.status || 500).json({ message: err.message || "Server error" });
+    sendApiError(res, err);
   }
 }
 
@@ -87,6 +89,6 @@ export async function adminDownloadExport(req: AuthRequest, res: Response) {
     res.setHeader("Content-Disposition", `attachment; filename="export-${jobId}.json"`);
     res.json(data);
   } catch (err: any) {
-    res.status(err.status || 500).json({ message: err.message || "Server error" });
+    sendApiError(res, err);
   }
 }

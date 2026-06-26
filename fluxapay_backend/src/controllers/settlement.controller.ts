@@ -1,3 +1,5 @@
+import { apiError, sendApiError } from "../helpers/apiError.helper";
+import { ErrorCode } from "../types/errors";
 import { Request, Response } from "express";
 import z from "zod";
 import { createController } from "../helpers/controller.helper";
@@ -80,7 +82,7 @@ export const exportSettlementRange = async (req: Request, res: Response) => {
         return res.status(200).json(result);
     } catch (err: any) {
         console.error(err);
-        res.status(err.status || 500).json({ message: err.message || "Server error" });
+        sendApiError(res, err);
     }
 };
 

@@ -1,6 +1,8 @@
 import { body } from 'express-validator';
 import { validationResult } from 'express-validator';
 import { Request, Response, NextFunction } from 'express';
+import { apiError, sendApiError } from '../helpers/apiError.helper';
+import { ErrorCode } from '../types/errors';
 import {
   DEFAULT_METADATA_MAX_BYTES,
   DEFAULT_METADATA_MAX_DEPTH,
@@ -9,10 +11,12 @@ import {
 const validate = (req: Request, res: Response, next: NextFunction) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    return res.status(400).json({
-      error: 'Validation failed',
-      errors: errors.array(),
-    });
+    return sendApiError(
+      res,
+      apiError(400, ErrorCode.VALIDATION_ERROR, 'Validation failed', {
+        errors: errors.array(),
+      }),
+    );
   }
   next();
 };

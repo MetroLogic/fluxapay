@@ -2,6 +2,8 @@ import express, { Router } from "express";
 import helmet from "helmet";
 import swaggerUi from "swagger-ui-express";
 import { specs } from "./docs/swagger";
+import { apiError, sendApiError } from "./helpers/apiError.helper";
+import { ErrorCode } from "./types/errors";
 import { PrismaClient } from "./generated/client/client";
 import { requestIdMiddleware } from "./middleware/requestId.middleware";
 import {
@@ -75,11 +77,15 @@ app.use(
     next: express.NextFunction,
   ) => {
     if (err.type === "entity.too.large" || err.status === 413) {
-      return res.status(413).json({
-        error: "Payload Too Large",
-        message: `Request body exceeds the ${bodyLimit} limit. Reduce the payload size and try again.`,
-        limit: bodyLimit,
-      });
+      return sendApiError(
+        res,
+        apiError(
+          413,
+          ErrorCode.PAYLOAD_TOO_LARGE,
+          `Request body exceeds the ${bodyLimit} limit. Reduce the payload size and try again.`,
+          { details: { limit: bodyLimit } },
+        ),
+      );
     }
     next(err);
   },
@@ -166,23 +172,11 @@ app.use("/api/v1/admin", auditRoutes);
 app.use("/api/v1", oracleRoutes);
 
 // Basic health check
-app.get("/health", (req, res) => {
+app.get("/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date() });
 });
 
 // Error logging middleware (must be last)
 app.use(errorLoggingMiddleware);
-
-// Example route
-/**
- * @swagger
- * /health:
- *   get:
- *     summary: Health check
- *     description: Check if the server is running
- *     responses:
- *       200:
- *         description: Server is up
- */
 
 export { app, prisma };
