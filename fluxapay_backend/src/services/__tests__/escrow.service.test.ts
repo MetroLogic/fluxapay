@@ -9,7 +9,7 @@ import { PrismaClient } from "../../generated/client/client";
 const prisma = new PrismaClient();
 
 function uniquePhone(): string {
-  return `+1999${Date.now()}${Math.floor(Math.random() * 10000)}`;
+  return `+188802${Date.now()}${Math.floor(Math.random() * 10000)}`;
 }
 
 describe("Escrow Service", () => {
@@ -30,7 +30,7 @@ describe("Escrow Service", () => {
       where: {
         OR: [
           { email: { contains: "test-escrow" } },
-          { phone_number: { startsWith: "+1999" } },
+          { phone_number: { startsWith: "+188802" } },
         ],
       },
     });

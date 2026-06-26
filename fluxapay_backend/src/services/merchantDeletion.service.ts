@@ -1,3 +1,5 @@
+import { apiError } from "../helpers/apiError.helper";
+import { ErrorCode } from "../types/errors";
 /**
  * Merchant account deletion / anonymization service.
  *
@@ -28,8 +30,8 @@ export async function requestDeletion(
   reason?: string,
 ): Promise<{ requestId: string }> {
   const merchant = await prisma.merchant.findUnique({ where: { id: merchantId } });
-  if (!merchant) throw { status: 404, message: "Merchant not found" };
-  if (merchant.anonymized_at) throw { status: 409, message: "Account already anonymized" };
+  if (!merchant) throw apiError(404, ErrorCode.MERCHANT_NOT_FOUND, "Merchant not found");
+  if (merchant.anonymized_at) throw apiError(409, ErrorCode.ACCOUNT_ALREADY_ANONYMIZED, "Account already anonymized");
 
   // Upsert so re-requests are idempotent
   const req = await prisma.merchantDeletionRequest.upsert({
@@ -73,13 +75,13 @@ export async function executeDeletion(
   adminId: string,
 ): Promise<void> {
   const merchant = await prisma.merchant.findUnique({ where: { id: merchantId } });
-  if (!merchant) throw { status: 404, message: "Merchant not found" };
-  if (merchant.anonymized_at) throw { status: 409, message: "Account already anonymized" };
+  if (!merchant) throw apiError(404, ErrorCode.MERCHANT_NOT_FOUND, "Merchant not found");
+  if (merchant.anonymized_at) throw apiError(409, ErrorCode.ACCOUNT_ALREADY_ANONYMIZED, "Account already anonymized");
 
   const deletionReq = await prisma.merchantDeletionRequest.findUnique({
     where: { merchantId },
   });
-  if (!deletionReq) throw { status: 400, message: "No deletion request found for this merchant" };
+  if (!deletionReq) throw apiError(400, ErrorCode.NO_DELETION_REQUEST, "No deletion request found for this merchant");
 
   await prisma.$transaction(async (tx) => {
     // 1. Anonymize Merchant PII
@@ -156,6 +158,6 @@ export async function executeDeletion(
 
 export async function getDeletionRequest(merchantId: string) {
   const req = await prisma.merchantDeletionRequest.findUnique({ where: { merchantId } });
-  if (!req) throw { status: 404, message: "No deletion request found" };
+  if (!req) throw apiError(404, ErrorCode.DELETION_REQUEST_NOT_FOUND, "No deletion request found");
   return req;
 }

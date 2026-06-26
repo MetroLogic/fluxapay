@@ -1,3 +1,5 @@
+import { apiError, sendApiError } from "../helpers/apiError.helper";
+import { ErrorCode } from "../types/errors";
 import { Request, Response } from "express";
 import { validateUserId } from "../helpers/request.helper";
 import { AuthRequest } from "../types/express";
@@ -19,7 +21,7 @@ export async function generateDailyReconciliationReport(req: AuthRequest, res: R
     res.status(201).json(result);
   } catch (err: unknown) {
     const e = err as { status?: number; message?: string };
-    res.status(e.status || 500).json({ message: e.message || "Server error" });
+    sendApiError(res, err);
   }
 }
 
@@ -37,7 +39,7 @@ export async function listDailyReconciliationReports(req: Request, res: Response
     res.status(200).json(result);
   } catch (err: unknown) {
     const e = err as { status?: number; message?: string };
-    res.status(e.status || 500).json({ message: e.message || "Server error" });
+    sendApiError(res, err);
   }
 }
 
@@ -51,7 +53,7 @@ export async function getDailyReconciliationReport(req: AuthRequest, res: Respon
     res.status(200).json(result);
   } catch (err: unknown) {
     const e = err as { status?: number; message?: string };
-    res.status(e.status || 500).json({ message: e.message || "Server error" });
+    sendApiError(res, err);
   }
 }
 
@@ -68,7 +70,7 @@ export async function getDailyReconciliationReportCsv(req: AuthRequest, res: Res
     res.send(result.content);
   } catch (err: unknown) {
     const e = err as { status?: number; message?: string };
-    res.status(e.status || 500).json({ message: e.message || "Server error" });
+    sendApiError(res, err);
   }
 }
 
@@ -82,6 +84,6 @@ export async function emailDailyReconciliationReport(req: AuthRequest, res: Resp
     res.status(200).json(result);
   } catch (err: unknown) {
     const e = err as { status?: number; message?: string };
-    res.status(e.status || 500).json({ message: e.message || "Server error" });
+    sendApiError(res, err);
   }
 }

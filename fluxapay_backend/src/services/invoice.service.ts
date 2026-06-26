@@ -1,3 +1,5 @@
+import { apiError } from "../helpers/apiError.helper";
+import { ErrorCode } from "../types/errors";
 import { PrismaClient, Prisma, InvoiceStatus } from "../generated/client/client";
 import crypto from "crypto";
 import { createAndDeliverWebhook } from "./webhook.service";
@@ -113,7 +115,7 @@ export async function getInvoiceByIdService(merchantId: string, invoiceId: strin
   });
 
   if (!invoice) {
-    throw { status: 404, message: "Invoice not found" };
+    throw apiError(404, ErrorCode.INVOICE_NOT_FOUND, "Invoice not found");
   }
 
   return {
@@ -267,11 +269,11 @@ export async function sendInvoiceService(merchantId: string, invoiceId: string) 
   });
 
   if (!invoice) {
-    throw { status: 404, message: "Invoice not found" };
+    throw apiError(404, ErrorCode.INVOICE_NOT_FOUND, "Invoice not found");
   }
 
   if (invoice.status !== "draft") {
-    throw { status: 400, message: "Only draft invoices can be sent" };
+    throw apiError(400, ErrorCode.INVOICE_NOT_DRAFT, "Only draft invoices can be sent");
   }
 
   // Create payment link if not exists
@@ -350,15 +352,15 @@ export async function voidInvoiceService(merchantId: string, invoiceId: string) 
   });
 
   if (!invoice) {
-    throw { status: 404, message: "Invoice not found" };
+    throw apiError(404, ErrorCode.INVOICE_NOT_FOUND, "Invoice not found");
   }
 
   if (invoice.status === "paid") {
-    throw { status: 422, message: "Cannot void a paid invoice" };
+    throw apiError(422, ErrorCode.CANNOT_VOID_PAID_INVOICE, "Cannot void a paid invoice");
   }
 
   if (invoice.status === "voided") {
-    throw { status: 400, message: "Invoice is already voided" };
+    throw apiError(400, ErrorCode.INVOICE_ALREADY_VOIDED, "Invoice is already voided");
   }
 
   const updatedInvoice = await prisma.invoice.update({
@@ -402,7 +404,7 @@ export async function exportInvoiceService(
   });
 
   if (!invoice) {
-    throw { status: 404, message: "Invoice not found" };
+    throw apiError(404, ErrorCode.INVOICE_NOT_FOUND, "Invoice not found");
   }
 
   const payment = invoice.payment;

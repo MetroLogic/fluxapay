@@ -1,3 +1,5 @@
+import { apiError } from "../helpers/apiError.helper";
+import { ErrorCode } from "../types/errors";
 import { PrismaClient, DataExportStatus } from "../generated/client/client";
 
 const prisma = new PrismaClient();
@@ -34,7 +36,7 @@ export async function getExportJob(jobId: string, merchantId: string) {
   const job = await prisma.dataExportJob.findFirst({
     where: { id: jobId, merchantId },
   });
-  if (!job) throw { status: 404, message: "Export job not found" };
+  if (!job) throw apiError(404, ErrorCode.EXPORT_JOB_NOT_FOUND, "Export job not found");
   return job;
 }
 
@@ -49,12 +51,12 @@ export async function downloadExport(
   const job = await prisma.dataExportJob.findFirst({
     where: { id: jobId, merchantId },
   });
-  if (!job) throw { status: 404, message: "Export job not found" };
+  if (!job) throw apiError(404, ErrorCode.EXPORT_JOB_NOT_FOUND, "Export job not found");
   if (job.status !== DataExportStatus.completed)
-    throw { status: 409, message: `Export is not ready (status: ${job.status})` };
+    throw apiError(409, ErrorCode.EXPORT_NOT_READY, `Export is not ready (status: ${job.status})`);
   if (job.expires_at < new Date())
-    throw { status: 410, message: "Export link has expired" };
-  if (!job.payload) throw { status: 500, message: "Export payload missing" };
+    throw apiError(410, ErrorCode.EXPORT_EXPIRED, "Export link has expired");
+  if (!job.payload) throw apiError(500, ErrorCode.EXPORT_PAYLOAD_MISSING, "Export payload missing");
 
   return JSON.parse(Buffer.from(job.payload, "base64").toString("utf8"));
 }

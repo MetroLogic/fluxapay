@@ -1,3 +1,5 @@
+import { ErrorCode } from "../types/errors";
+import { apiError, sendApiError } from "../helpers/apiError.helper";
 import { Response, NextFunction } from "express";
 import { AuthRequest } from "../types/express";
 import { AdminRole } from "../generated/client/client";
@@ -59,7 +61,7 @@ export function authenticateAdmin(
 ) {
   const authHeader = req.headers["authorization"];
   if (!authHeader?.toLowerCase().startsWith("bearer ")) {
-    return res.status(401).json({ message: "Admin token required" });
+    return sendApiError(res, apiError(401, ErrorCode.ADMIN_TOKEN_REQUIRED, "Admin token required"));
   }
 
   const token = authHeader.split(" ")[1];
@@ -68,7 +70,7 @@ export function authenticateAdmin(
     req.adminUser = { id: payload.sub, email: payload.email, role: payload.role };
     next();
   } catch {
-    return res.status(401).json({ message: "Invalid or expired admin token" });
+    return sendApiError(res, apiError(401, ErrorCode.INVALID_ADMIN_TOKEN, "Invalid or expired admin token"));
   }
 }
 
@@ -83,12 +85,13 @@ export function requireAdminRole(permission: string) {
   return (req: AuthRequest, res: Response, next: NextFunction) => {
     const role = req.adminUser?.role;
     if (!role) {
-      return res.status(401).json({ message: "Admin authentication required" });
+      return sendApiError(res, apiError(401, ErrorCode.ADMIN_AUTH_REQUIRED, "Admin authentication required"));
     }
     if (!hasPermission(role, permission)) {
-      return res.status(403).json({
-        message: `Forbidden. Role '${role}' lacks permission '${permission}'.`,
-      });
+      return sendApiError(
+        res,
+        apiError(403, ErrorCode.FORBIDDEN, `Forbidden. Role '${role}' lacks permission '${permission}'.`),
+      );
     }
     next();
   };

@@ -1,4 +1,6 @@
 import { Response } from "express";
+import { apiError, sendApiError } from "../helpers/apiError.helper";
+import { ErrorCode } from "../types/errors";
 import { AuthRequest } from "../types/express";
 import { queryAuditLogs, getAuditLogById } from "../services/audit.service";
 import { AuditActionType } from "../types/audit.types";
@@ -29,38 +31,20 @@ export async function getAuditLogs(req: AuthRequest, res: Response) {
     if (date_from) {
       dateFrom = new Date(date_from as string);
       if (isNaN(dateFrom.getTime())) {
-        return res.status(400).json({
-          success: false,
-          error: {
-            code: "VALIDATION_ERROR",
-            message: "Invalid date_from format",
-          },
-        });
+        return sendApiError(res, apiError(400, ErrorCode.VALIDATION_ERROR, "Invalid date_from format"));
       }
     }
 
     if (date_to) {
       dateTo = new Date(date_to as string);
       if (isNaN(dateTo.getTime())) {
-        return res.status(400).json({
-          success: false,
-          error: {
-            code: "VALIDATION_ERROR",
-            message: "Invalid date_to format",
-          },
-        });
+        return sendApiError(res, apiError(400, ErrorCode.VALIDATION_ERROR, "Invalid date_to format"));
       }
     }
 
     // Validate date range
     if (dateFrom && dateTo && dateFrom > dateTo) {
-      return res.status(400).json({
-        success: false,
-        error: {
-          code: "VALIDATION_ERROR",
-          message: "date_from must be before date_to",
-        },
-      });
+      return sendApiError(res, apiError(400, ErrorCode.VALIDATION_ERROR, "date_from must be before date_to"));
     }
 
     // Parse pagination parameters
@@ -68,23 +52,11 @@ export async function getAuditLogs(req: AuthRequest, res: Response) {
     const limitNum = limit ? parseInt(limit as string, 10) : 50;
 
     if (isNaN(pageNum) || pageNum < 1) {
-      return res.status(400).json({
-        success: false,
-        error: {
-          code: "VALIDATION_ERROR",
-          message: "page must be a positive integer",
-        },
-      });
+      return sendApiError(res, apiError(400, ErrorCode.VALIDATION_ERROR, "page must be a positive integer"));
     }
 
     if (isNaN(limitNum) || limitNum < 1 || limitNum > 100) {
-      return res.status(400).json({
-        success: false,
-        error: {
-          code: "VALIDATION_ERROR",
-          message: "limit must be between 1 and 100",
-        },
-      });
+      return sendApiError(res, apiError(400, ErrorCode.VALIDATION_ERROR, "limit must be between 1 and 100"));
     }
 
     // Validate action_type if provided
@@ -93,13 +65,7 @@ export async function getAuditLogs(req: AuthRequest, res: Response) {
       if (
         !Object.values(AuditActionType).includes(action_type as AuditActionType)
       ) {
-        return res.status(400).json({
-          success: false,
-          error: {
-            code: "VALIDATION_ERROR",
-            message: "Invalid action_type",
-          },
-        });
+        return sendApiError(res, apiError(400, ErrorCode.VALIDATION_ERROR, "Invalid action_type"));
       }
       actionType = action_type as AuditActionType;
     }
@@ -122,13 +88,7 @@ export async function getAuditLogs(req: AuthRequest, res: Response) {
     });
   } catch (error: any) {
     console.error("Error querying audit logs:", error);
-    return res.status(500).json({
-      success: false,
-      error: {
-        code: "INTERNAL_ERROR",
-        message: "Failed to query audit logs",
-      },
-    });
+    return sendApiError(res, apiError(500, ErrorCode.INTERNAL_ERROR, "Failed to query audit logs"));
   }
 }
 
@@ -141,25 +101,13 @@ export async function getAuditLogByIdHandler(req: AuthRequest, res: Response) {
     const { id } = req.params;
 
     if (!id || typeof id !== "string") {
-      return res.status(400).json({
-        success: false,
-        error: {
-          code: "VALIDATION_ERROR",
-          message: "Audit log ID is required",
-        },
-      });
+      return sendApiError(res, apiError(400, ErrorCode.VALIDATION_ERROR, "Audit log ID is required"));
     }
 
     const auditLog = await getAuditLogById(id);
 
     if (!auditLog) {
-      return res.status(404).json({
-        success: false,
-        error: {
-          code: "NOT_FOUND",
-          message: "Audit log not found",
-        },
-      });
+      return sendApiError(res, apiError(404, ErrorCode.NOT_FOUND, "Audit log not found"));
     }
 
     return res.status(200).json({
@@ -168,13 +116,7 @@ export async function getAuditLogByIdHandler(req: AuthRequest, res: Response) {
     });
   } catch (error: any) {
     console.error("Error fetching audit log:", error);
-    return res.status(500).json({
-      success: false,
-      error: {
-        code: "INTERNAL_ERROR",
-        message: "Failed to fetch audit log",
-      },
-    });
+    return sendApiError(res, apiError(500, ErrorCode.INTERNAL_ERROR, "Failed to fetch audit log"));
   }
 }
 
@@ -187,13 +129,7 @@ export async function getSettlementPayoutPayload(req: AuthRequest, res: Response
     const { settlement_id } = req.params;
 
     if (!settlement_id || typeof settlement_id !== "string") {
-      return res.status(400).json({
-        success: false,
-        error: {
-          code: "VALIDATION_ERROR",
-          message: "Settlement ID is required",
-        },
-      });
+      return sendApiError(res, apiError(400, ErrorCode.VALIDATION_ERROR, "Settlement ID is required"));
     }
 
     const settlement = await prisma.settlement.findUnique({
@@ -209,23 +145,11 @@ export async function getSettlementPayoutPayload(req: AuthRequest, res: Response
     });
 
     if (!settlement) {
-      return res.status(404).json({
-        success: false,
-        error: {
-          code: "NOT_FOUND",
-          message: "Settlement not found",
-        },
-      });
+      return sendApiError(res, apiError(404, ErrorCode.SETTLEMENT_NOT_FOUND, "Settlement not found"));
     }
 
     if (!settlement.payout_partner_payload) {
-      return res.status(404).json({
-        success: false,
-        error: {
-          code: "NOT_FOUND",
-          message: "No payout payload available for this settlement",
-        },
-      });
+      return sendApiError(res, apiError(404, ErrorCode.NOT_FOUND, "No payout payload available for this settlement"));
     }
 
     return res.status(200).json({
@@ -241,12 +165,6 @@ export async function getSettlementPayoutPayload(req: AuthRequest, res: Response
     });
   } catch (error: any) {
     console.error("Error fetching settlement payout payload:", error);
-    return res.status(500).json({
-      success: false,
-      error: {
-        code: "INTERNAL_ERROR",
-        message: "Failed to fetch payout payload",
-      },
-    });
+    return sendApiError(res, apiError(500, ErrorCode.INTERNAL_ERROR, "Failed to fetch payout payload"));
   }
 }

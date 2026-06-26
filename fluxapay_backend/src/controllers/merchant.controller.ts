@@ -1,3 +1,5 @@
+import { ErrorCode } from "../types/errors";
+import { apiError, sendApiError } from "../helpers/apiError.helper";
 import z from "zod";
 import { MerchantStatus } from "../generated/client/client";
 import { createController } from "../helpers/controller.helper";
@@ -140,7 +142,7 @@ export async function adminListMerchants(req: Request, res: Response) {
 
     res.json({ merchants, total, page, limit });
   } catch (err: any) {
-    res.status(500).json({ message: err.message || "Server error" });
+    sendApiError(res, err);
   }
 }
 
@@ -156,10 +158,10 @@ export async function adminGetMerchant(req: Request, res: Response) {
       },
     });
 
-    if (!merchant) return res.status(404).json({ message: "Merchant not found" });
+    if (!merchant) return sendApiError(res, apiError(404, ErrorCode.MERCHANT_NOT_FOUND, "Merchant not found"));
     res.json({ merchant });
   } catch (err: any) {
-    res.status(500).json({ message: err.message || "Server error" });
+    sendApiError(res, err);
   }
 }
 
@@ -170,7 +172,7 @@ export async function adminUpdateMerchantStatus(req: Request, res: Response) {
     const { status } = req.body as { status: MerchantStatus };
 
     if (!["active", "pending_verification"].includes(status)) {
-      return res.status(400).json({ message: "Invalid status value" });
+      return sendApiError(res, apiError(400, ErrorCode.INVALID_STATUS_VALUE, "Invalid status value"));
     }
 
     const merchant = await adminPrisma.merchant.update({
@@ -181,7 +183,7 @@ export async function adminUpdateMerchantStatus(req: Request, res: Response) {
 
     res.json({ message: "Merchant status updated", merchant });
   } catch (err: any) {
-    res.status(500).json({ message: err.message || "Server error" });
+    sendApiError(res, err);
   }
 }
 
@@ -195,13 +197,13 @@ export async function adminBulkUpdateMerchantStatus(req: Request, res: Response)
     };
 
     if (!Array.isArray(merchantIds) || merchantIds.length === 0) {
-      return res.status(400).json({ message: "merchantIds must be a non-empty array" });
+      return sendApiError(res, apiError(400, ErrorCode.INVALID_MERCHANT_IDS, "merchantIds must be a non-empty array"));
     }
     if (!["active", "suspended"].includes(status)) {
-      return res.status(400).json({ message: "status must be active or suspended" });
+      return sendApiError(res, apiError(400, ErrorCode.INVALID_STATUS_VALUE, "status must be active or suspended"));
     }
     if (!reason || reason.trim().length < 3) {
-      return res.status(400).json({ message: "reason is required" });
+      return sendApiError(res, apiError(400, ErrorCode.REASON_REQUIRED, "reason is required"));
     }
 
     const results: { id: string; success: boolean; error?: string }[] = [];
@@ -229,7 +231,7 @@ export async function adminBulkUpdateMerchantStatus(req: Request, res: Response)
       failed,
     });
   } catch (err: any) {
-    res.status(500).json({ message: err.message || "Server error" });
+    sendApiError(res, err);
   }
 }
 export const updateSettlementSchedule = createController(

@@ -21,13 +21,19 @@ beforeEach(() => {
 
 // Feature: global-error-boundary-toast-standardization, Property 3: Defined status codes map to exact messages
 describe("Property 3: Defined status codes map to exact messages", () => {
-  it("maps 401 to session expired message (suppressed — handled globally)", () => {
+  it("maps known error codes to user-friendly messages", () => {
+    toastApiError(new ApiError(400, "raw message", "INVALID_CREDENTIALS"));
+    expect(toast.error).toHaveBeenCalledWith("Invalid email or password.");
+    vi.clearAllMocks();
+  });
+
+  it("suppresses toast for 401 auth errors", () => {
     toastApiError(new ApiError(401, "ignored"));
     expect(toast.error).not.toHaveBeenCalled();
     vi.clearAllMocks();
   });
 
-  it("maps 403 to permission denied message (suppressed — handled globally)", () => {
+  it("suppresses toast for 403 permission errors", () => {
     toastApiError(new ApiError(403, "ignored"));
     expect(toast.error).not.toHaveBeenCalled();
     vi.clearAllMocks();

@@ -19,7 +19,7 @@ process.env.JWT_SECRET = process.env.JWT_SECRET || "ci-test-jwt-secret-key";
 const prisma = new PrismaClient();
 
 function uniquePhone(): string {
-  return `+1999${Date.now()}${Math.floor(Math.random() * 10000)}`;
+  return `+188801${Date.now()}${Math.floor(Math.random() * 10000)}`;
 }
 
 describe("Auth Service", () => {
@@ -33,20 +33,39 @@ describe("Auth Service", () => {
   });
 
   beforeEach(async () => {
-    // Clean up test data
-    await prisma.refreshToken.deleteMany({});
-    await prisma.loginAttempt.deleteMany({});
-    await prisma.merchant.deleteMany({
+    const merchantFilter = {
+      OR: [
+        { email: { contains: "test-auth" } },
+        { email: { contains: "test-lockout" } },
+        { email: { contains: "test-notlocked" } },
+        { email: { contains: "test-cleanup" } },
+        { phone_number: { startsWith: "+188801" } },
+      ],
+    };
+
+    const merchants = await prisma.merchant.findMany({
+      where: merchantFilter,
+      select: { id: true },
+    });
+    const merchantIds = merchants.map((m) => m.id);
+
+    if (merchantIds.length > 0) {
+      await prisma.refund.deleteMany({ where: { merchantId: { in: merchantIds } } });
+      await prisma.payment.deleteMany({ where: { merchantId: { in: merchantIds } } });
+      await prisma.refreshToken.deleteMany({ where: { merchantId: { in: merchantIds } } });
+    }
+
+    await prisma.loginAttempt.deleteMany({
       where: {
         OR: [
           { email: { contains: "test-auth" } },
           { email: { contains: "test-lockout" } },
           { email: { contains: "test-notlocked" } },
           { email: { contains: "test-cleanup" } },
-          { phone_number: { startsWith: "+1999" } },
         ],
       },
     });
+    await prisma.merchant.deleteMany({ where: merchantFilter });
   });
 
   describe("loginWithEmailPassword", () => {
@@ -440,7 +459,7 @@ describe("Auth Service", () => {
       const merchant = await prisma.merchant.create({
         data: {
           business_name: "Test Auth Merchant",
-          email: "test-auth-cleanup@example.com",
+          email: `test-auth-cleanup-${Date.now()}@example.com`,
           phone_number: uniquePhone(),
           country: "US",
           settlement_currency: "USD",

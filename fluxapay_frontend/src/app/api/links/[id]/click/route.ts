@@ -3,10 +3,10 @@ import { incrementClicks } from "@/lib/links";
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: Promise<{ slug: string }> }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const { slug } = await params;
-  const link = incrementClicks(slug);
+  const { id } = await params;
+  const link = incrementClicks(id);
   if (!link) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  return NextResponse.redirect(new URL(`/pay/${slug}`, req.url));
+  return NextResponse.redirect(new URL(`/pay/${id}`, req.url));
 }

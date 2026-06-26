@@ -25,6 +25,8 @@
  */
 
 import Redis from "ioredis";
+import { apiError } from "../helpers/apiError.helper";
+import { ErrorCode } from "../types/errors";
 
 // ── Redis singleton ────────────────────────────────────────────────────────────
 
@@ -158,11 +160,12 @@ export async function assertOtpSmsRateLimits(
         retryAfterSeconds,
       });
 
-      throw {
-        status: 429,
-        message: "Too many OTP requests for this phone number. Please try again later.",
-        retryAfterSeconds,
-      };
+      throw apiError(
+        429,
+        ErrorCode.OTP_SMS_RATE_LIMIT,
+        "Too many OTP requests for this phone number. Please try again later.",
+        { retryAfterSeconds },
+      );
     }
   } catch (err: any) {
     // If it's our own 429, re-throw. Otherwise Redis is unavailable — fail open
@@ -210,12 +213,12 @@ export async function assertOtpSmsRateLimits(
       // Also roll back the phone counter increment to keep counts accurate
       await redis.decr(phoneKey).catch(() => {/* best-effort */});
 
-      throw {
-        status: 429,
-        message:
-          "Too many phone numbers targeted from this IP address. Please try again later.",
-        retryAfterSeconds,
-      };
+      throw apiError(
+        429,
+        ErrorCode.OTP_SMS_RATE_LIMIT,
+        "Too many phone numbers targeted from this IP address. Please try again later.",
+        { retryAfterSeconds },
+      );
     }
   } catch (err: any) {
     if (err?.status === 429) throw err;
@@ -258,12 +261,12 @@ export function assertOtpSmsRateLimit(
   const window = prev.filter((t) => t > cutoff);
 
   if (window.length >= maxPerHour) {
-    throw {
-      status: 429,
-      message:
-        "Too many SMS verification requests. Please try again later or use email.",
-      retryAfterSeconds: Math.ceil(HOUR_MS / 1000),
-    };
+    throw apiError(
+      429,
+      ErrorCode.OTP_SMS_RATE_LIMIT,
+      "Too many SMS verification requests. Please try again later or use email.",
+      { retryAfterSeconds: Math.ceil(HOUR_MS / 1000) },
+    );
   }
 
   window.push(now);

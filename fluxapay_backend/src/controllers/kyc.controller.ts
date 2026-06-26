@@ -1,3 +1,5 @@
+import { ErrorCode } from "../types/errors";
+import { apiError, sendApiError } from "../helpers/apiError.helper";
 import { Response } from "express";
 import { KYCStatus } from "../generated/client/client";
 import { AuthRequest } from "../types/express";
@@ -22,7 +24,7 @@ export async function submitKyc(req: AuthRequest, res: Response) {
   } catch (err: unknown) {
     console.error(err);
     const error = err as { status?: number; message?: string };
-    res.status(error.status || 500).json({ message: error.message || "Server error" });
+    sendApiError(res, err);
   }
 }
 
@@ -35,7 +37,7 @@ export async function uploadKycDocument(req: AuthRequest, res: Response) {
     const { document_type } = (req as unknown as any).body;
 
     if (!(req as unknown as any).file) {
-      return res.status(400).json({ message: "No file uploaded" });
+      return sendApiError(res, apiError(400, ErrorCode.NO_FILE_UPLOADED, "No file uploaded"));
     }
 
     const result = await uploadKycDocumentService(
@@ -52,7 +54,7 @@ export async function uploadKycDocument(req: AuthRequest, res: Response) {
   } catch (err: unknown) {
     console.error(err);
     const error = err as { status?: number; message?: string };
-    res.status(error.status || 500).json({ message: error.message || "Server error" });
+    sendApiError(res, err);
   }
 }
 
@@ -67,7 +69,7 @@ export async function getKycStatus(req: AuthRequest, res: Response) {
   } catch (err: unknown) {
     console.error(err);
     const error = err as { status?: number; message?: string };
-    res.status(error.status || 500).json({ message: error.message || "Server error" });
+    sendApiError(res, err);
   }
 }
 
@@ -79,14 +81,14 @@ export async function updateKycStatus(req: AuthRequest, res: Response) {
     const reviewerId = await validateUserId(req);
     const { merchantId } = (req as unknown as any).params;
     if (!merchantId || typeof merchantId !== "string") {
-      return res.status(400).json({ message: "Invalid merchant ID" });
+      return sendApiError(res, apiError(400, ErrorCode.INVALID_MERCHANT_ID, "Invalid merchant ID"));
     }
     const result = await updateKycStatusService(merchantId, (req as unknown as any).body, reviewerId);
     res.status(200).json(result);
   } catch (err: unknown) {
     console.error(err);
     const error = err as { status?: number; message?: string };
-    res.status(error.status || 500).json({ message: error.message || "Server error" });
+    sendApiError(res, err);
   }
 }
 
@@ -105,7 +107,7 @@ export async function getAllKycSubmissions(req: AuthRequest, res: Response) {
   } catch (err: unknown) {
     console.error(err);
     const error = err as { status?: number; message?: string };
-    res.status(error.status || 500).json({ message: error.message || "Server error" });
+    sendApiError(res, err);
   }
 }
 
@@ -116,13 +118,13 @@ export async function getKycDetailsByMerchantId(req: AuthRequest, res: Response)
   try {
     const { merchantId } = (req as unknown as any).params;
     if (!merchantId || typeof merchantId !== "string") {
-      return res.status(400).json({ message: "Invalid merchant ID" });
+      return sendApiError(res, apiError(400, ErrorCode.INVALID_MERCHANT_ID, "Invalid merchant ID"));
     }
     const result = await getKycDetailsByMerchantIdService(merchantId);
     res.status(200).json(result);
   } catch (err: unknown) {
     console.error(err);
     const error = err as { status?: number; message?: string };
-    res.status(error.status || 500).json({ message: error.message || "Server error" });
+    sendApiError(res, err);
   }
 }

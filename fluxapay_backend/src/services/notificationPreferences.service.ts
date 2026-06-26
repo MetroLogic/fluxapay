@@ -1,3 +1,5 @@
+import { apiError } from "../helpers/apiError.helper";
+import { ErrorCode } from "../types/errors";
 /**
  * notificationPreferences.service.ts
  *
@@ -68,7 +70,7 @@ export async function updateNotificationPreferences(
     updates.reminder_minutes_before !== undefined &&
     updates.reminder_minutes_before < 1
   ) {
-    throw { status: 400, message: "reminder_minutes_before must be at least 1" };
+    throw apiError(400, ErrorCode.INVALID_REMINDER_MINUTES, "reminder_minutes_before must be at least 1");
   }
 
   const existing = await prisma.merchantNotificationPreferences.findUnique({

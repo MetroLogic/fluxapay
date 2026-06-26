@@ -72,7 +72,8 @@ describe("Idempotency Middleware", () => {
 
       expect(mockRes.status).toHaveBeenCalledWith(400);
       expect(mockRes.json).toHaveBeenCalledWith({
-        error: expect.stringContaining("Invalid Idempotency-Key"),
+        code: "INVALID_IDEMPOTENCY_KEY",
+        message: expect.stringContaining("Invalid Idempotency-Key"),
       });
       expect(mockNext).not.toHaveBeenCalled();
     });
@@ -126,7 +127,8 @@ describe("Idempotency Middleware", () => {
 
       expect(mockRes.status).toHaveBeenCalledWith(422);
       expect(mockRes.json).toHaveBeenCalledWith({
-        error: expect.stringContaining("Idempotency key conflict"),
+        code: "IDEMPOTENCY_CONFLICT",
+        message: expect.stringContaining("Idempotency key conflict"),
       });
       expect(mockNext).not.toHaveBeenCalled();
     });

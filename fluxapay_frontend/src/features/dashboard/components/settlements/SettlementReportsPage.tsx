@@ -14,6 +14,7 @@ import {
   type MerchantSettlement,
 } from "@/hooks/useSettlements";
 import toast from "react-hot-toast";
+import { exportSettlementReportPDF } from "@/utils/exportHelpers";
 
 export function SettlementReportsPage() {
   const [dateFrom, setDateFrom] = useState("");
@@ -55,12 +56,12 @@ export function SettlementReportsPage() {
   const handleDownloadCSV = async () => {
     try {
       setIsExporting(true);
-      const blob = await api.settlements.exportRange({
+      const blob = (await api.settlements.exportRange({
         date_from: dateFrom || undefined,
         date_to: dateTo || undefined,
         currency: currencyFilter !== "all" ? currencyFilter : undefined,
         format: "csv",
-      });
+      })) as Blob;
 
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -82,21 +83,18 @@ export function SettlementReportsPage() {
   const handleDownloadPDF = async () => {
     try {
       setIsExporting(true);
-      const blob = await api.settlements.exportRange({
+      const result = await api.settlements.exportRange({
         date_from: dateFrom || undefined,
         date_to: dateTo || undefined,
         currency: currencyFilter !== "all" ? currencyFilter : undefined,
         format: "pdf",
       });
 
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `settlements-report${dateFrom ? `-from-${dateFrom}` : ""}${dateTo ? `-to-${dateTo}` : ""}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
+      const pdfResult = result as { content: Parameters<typeof exportSettlementReportPDF>[0] };
+      exportSettlementReportPDF(
+        pdfResult.content,
+        `settlements-report${dateFrom ? `-from-${dateFrom}` : ""}${dateTo ? `-to-${dateTo}` : ""}.pdf`,
+      );
 
       toast.success("PDF downloaded successfully");
     } catch {

@@ -1,3 +1,5 @@
+import { apiError } from "../helpers/apiError.helper";
+import { ErrorCode } from "../types/errors";
 import {
   PrismaClient,
   KYCStatus as PrismaKYCStatus,
@@ -27,14 +29,14 @@ export async function submitKycService(
   });
 
   if (!merchant) {
-    throw { status: 404, message: "Merchant not found" };
+    throw apiError(404, ErrorCode.MERCHANT_NOT_FOUND, "Merchant not found");
   }
 
   // Check if KYC already exists
   if (merchant.kyc) {
     // If KYC is approved, don't allow resubmission
     if (merchant.kyc.kyc_status === "approved") {
-      throw { status: 400, message: "KYC already approved. Cannot resubmit." };
+      throw apiError(400, ErrorCode.KYC_ALREADY_APPROVED, "KYC already approved. Cannot resubmit.");
     }
 
     // Update existing KYC
@@ -107,16 +109,17 @@ export async function uploadKycDocumentService(
     "application/pdf",
   ];
   if (!allowedMimeTypes.includes(file.mimetype)) {
-    throw {
-      status: 400,
-      message: "Invalid file type. Only JPEG, PNG, GIF, and PDF are allowed.",
-    };
+    throw apiError(
+      400,
+      ErrorCode.VALIDATION_ERROR,
+      "Invalid file type. Only JPEG, PNG, GIF, and PDF are allowed.",
+    );
   }
 
   // Validate file size (max 10MB)
   const maxSize = 10 * 1024 * 1024;
   if (file.size > maxSize) {
-    throw { status: 400, message: "File size exceeds 10MB limit" };
+    throw apiError(400, ErrorCode.FILE_TOO_LARGE, "File size exceeds 10MB limit");
   }
 
   // Get merchant KYC
@@ -126,14 +129,15 @@ export async function uploadKycDocumentService(
   });
 
   if (!kyc) {
-    throw {
-      status: 400,
-      message: "Please submit KYC information before uploading documents",
-    };
+    throw apiError(
+      400,
+      ErrorCode.VALIDATION_ERROR,
+      "Please submit KYC information before uploading documents",
+    );
   }
 
   if (kyc.kyc_status === "approved") {
-    throw { status: 400, message: "KYC already approved. Cannot upload documents." };
+    throw apiError(400, ErrorCode.KYC_ALREADY_APPROVED, "KYC already approved. Cannot upload documents.");
   }
 
   // Check if document type already exists
@@ -290,7 +294,7 @@ export async function updateKycStatusService(
   });
 
   if (!kyc) {
-    throw { status: 404, message: "KYC not found for this merchant" };
+    throw apiError(404, ErrorCode.KYC_NOT_FOUND, "KYC not found for this merchant");
   }
 
   const currentStatus = kyc.kyc_status as PrismaKYCStatus;
@@ -299,23 +303,25 @@ export async function updateKycStatusService(
   // Validate transition using the explicit allowlist.
   const allowedNext = ALLOWED_ADMIN_TRANSITIONS[currentStatus] ?? [];
   if (!allowedNext.includes(newStatus)) {
-    throw {
-      status: 400,
-      message: `Invalid status transition: '${currentStatus}' → '${newStatus}'. Allowed transitions from '${currentStatus}': ${
+    throw apiError(
+      400,
+      ErrorCode.VALIDATION_ERROR,
+      `Invalid status transition: '${currentStatus}' → '${newStatus}'. Allowed transitions from '${currentStatus}': ${
         allowedNext.length > 0
           ? allowedNext.join(", ")
           : "none (only pending_review submissions can be reviewed)"
       }.`,
-    };
+    );
   }
 
   // Reject without a reason is a client error — enforce here in addition to
   // the schema-level check so the service is self-consistent.
   if (newStatus === PrismaKYCStatus.rejected && !data.rejection_reason?.trim()) {
-    throw {
-      status: 400,
-      message: "rejection_reason is required when rejecting a KYC submission.",
-    };
+    throw apiError(
+      400,
+      ErrorCode.VALIDATION_ERROR,
+      "rejection_reason is required when rejecting a KYC submission.",
+    );
   }
 
   const previousStatus = currentStatus;
@@ -433,7 +439,7 @@ export async function getKycDetailsByMerchantIdService(merchantId: string) {
   });
 
   if (!kyc) {
-    throw { status: 404, message: "KYC not found for this merchant" };
+    throw apiError(404, ErrorCode.KYC_NOT_FOUND, "KYC not found for this merchant");
   }
 
   return {

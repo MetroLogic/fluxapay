@@ -13,6 +13,8 @@
 import { Router, Request, Response } from "express";
 import { runSettlementBatch } from "../services/settlementBatch.service";
 import { adminAuth } from "../middleware/adminAuth.middleware";
+import { apiError, sendApiError } from "../helpers/apiError.helper";
+import { ErrorCode } from "../types/errors";
 
 const router = Router();
 
@@ -66,7 +68,7 @@ router.post("/run", adminAuth, async (_req: Request, res: Response) => {
     } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
         console.error("[SettlementBatch Route] Unhandled error:", msg);
-        res.status(500).json({ message: "Settlement batch failed", error: msg });
+        sendApiError(res, apiError(500, ErrorCode.SETTLEMENT_FAILED, `Settlement batch failed: ${msg}`));
     }
 });
 

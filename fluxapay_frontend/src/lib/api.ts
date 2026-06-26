@@ -52,6 +52,7 @@ class ApiError extends Error {
   constructor(
     public status: number,
     message: string,
+    public code?: string,
   ) {
     super(message);
     this.name = "ApiError";
@@ -128,7 +129,12 @@ async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
     const error = await response
       .json()
       .catch(() => ({ message: "An error occurred" }));
-    throw new ApiError(response.status, error.message || "Request failed");
+    const body = error as { message?: string; code?: string };
+    throw new ApiError(
+      response.status,
+      body.message || "Request failed",
+      body.code,
+    );
   }
 
   return response.json();
@@ -785,11 +791,6 @@ export const api = {
     addressPool: {
       stats: () => fetchWithAuth("/api/v1/admin/address-pool/stats"),
     },
-  },
-  
-  // FX Rates
-  fx: {
-    getRate: (currency: string) => fetchWithAuth(`/api/v1/fx-rates?currency=${currency}`),
   },
 };
 
