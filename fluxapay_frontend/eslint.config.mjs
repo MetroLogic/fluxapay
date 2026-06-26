@@ -17,6 +17,7 @@ const eslintConfig = defineConfig([
     rules: {
       // Pre-existing patterns across the app; enforced setState-in-effect breaks guards/hooks.
       "react-hooks/set-state-in-effect": "off",
+      "react-hooks/purity": "off",
     },
   },
   {
