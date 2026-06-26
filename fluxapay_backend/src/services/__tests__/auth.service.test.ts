@@ -33,20 +33,30 @@ describe("Auth Service", () => {
   });
 
   beforeEach(async () => {
-    // Clean up test data
+    const merchantFilter = {
+      OR: [
+        { email: { contains: "test-auth" } },
+        { email: { contains: "test-lockout" } },
+        { email: { contains: "test-notlocked" } },
+        { email: { contains: "test-cleanup" } },
+        { phone_number: { startsWith: "+1999" } },
+      ],
+    };
+
+    const merchants = await prisma.merchant.findMany({
+      where: merchantFilter,
+      select: { id: true },
+    });
+    const merchantIds = merchants.map((m) => m.id);
+
+    if (merchantIds.length > 0) {
+      await prisma.refund.deleteMany({ where: { merchantId: { in: merchantIds } } });
+      await prisma.payment.deleteMany({ where: { merchantId: { in: merchantIds } } });
+    }
+
     await prisma.refreshToken.deleteMany({});
     await prisma.loginAttempt.deleteMany({});
-    await prisma.merchant.deleteMany({
-      where: {
-        OR: [
-          { email: { contains: "test-auth" } },
-          { email: { contains: "test-lockout" } },
-          { email: { contains: "test-notlocked" } },
-          { email: { contains: "test-cleanup" } },
-          { phone_number: { startsWith: "+1999" } },
-        ],
-      },
-    });
+    await prisma.merchant.deleteMany({ where: merchantFilter });
   });
 
   describe("loginWithEmailPassword", () => {
