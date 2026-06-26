@@ -169,6 +169,8 @@ jobs:
           npx --yes wait-on@9.0.4 http://localhost:3075 --timeout 120000 --interval 2000
           echo "Running E2E smoke tests..."
           npm run test:e2e:smoke
+          echo "Verifying new E2E spec files: invoices.spec.ts, payment-links.spec.ts"
+          npx playwright test e2e/invoices.spec.ts e2e/payment-links.spec.ts --config=playwright.smoke.config.ts
         env:
           PLAYWRIGHT_BASE_URL: http://localhost:3075
           NEXT_PUBLIC_API_URL: http://localhost:3000
