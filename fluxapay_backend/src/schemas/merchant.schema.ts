@@ -175,3 +175,20 @@ export const updateMerchantProfileSchema = z
       path: ['settlement_day'],
     },
   );
+
+export const updateNotificationPreferencesSchema = z
+  .object({
+    payment_expiry_reminder: z.boolean().optional(),
+    reminder_minutes_before: z
+      .number()
+      .int("reminder_minutes_before must be an integer")
+      .min(1, "reminder_minutes_before must be at least 1")
+      .max(1440, "reminder_minutes_before must be at most 1440 (24 h)")
+      .optional(),
+  })
+  .refine(
+    (data) =>
+      data.payment_expiry_reminder !== undefined ||
+      data.reminder_minutes_before !== undefined,
+    { message: "At least one preference field must be provided" },
+  );

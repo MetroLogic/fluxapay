@@ -700,6 +700,29 @@ export const api = {
     },
   },
 
+  // FX Rates — public, no auth required
+  fx: {
+    /**
+     * Fetch the live USDC exchange rate for a given fiat currency.
+     * Returns the number of fiat units per 1 USDC, or null on error.
+     *
+     * Example: getRate("USD") → { base_currency: "USD", target_currency: "USDC", rate: 1.0002 }
+     */
+    getRate: async (currency: string): Promise<{ base_currency: string; target_currency: string; rate: number } | null> => {
+      try {
+        const res = await fetch(
+          `${API_BASE_URL}/api/v1/fx-rates?currency=${encodeURIComponent(currency.toUpperCase())}`,
+          { headers: { "Content-Type": "application/json" } },
+        );
+        if (!res.ok) return null;
+        const json = await res.json() as { data?: { base_currency: string; target_currency: string; rate: number } };
+        return json.data ?? null;
+      } catch {
+        return null;
+      }
+    },
+  },
+
   // Admin: merchants & settlements
   admin: {
     merchants: {

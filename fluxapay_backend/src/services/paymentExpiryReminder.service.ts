@@ -4,9 +4,18 @@
  * Scheduled job: find pending payments whose expiration falls within the
  * configurable reminder window and notify the merchant via webhook and/or email.
  *
+ * Notification preference behaviour:
+ *   - Before sending any notification, the merchant's
+ *     MerchantNotificationPreferences.payment_expiry_reminder flag is checked.
+ *   - If false (opted out), reminder is skipped for that merchant.
+ *   - The per-merchant reminder_minutes_before value overrides the global
+ *     CHECKOUT_REMINDER_MINUTES env var when present.
+ *   - Default preference: reminders enabled, 5 minutes before expiry.
+ *   - Preferences are settable via PATCH /v1/merchants/me/notification-preferences.
+ *
  * Feature flags (env vars):
  *   CHECKOUT_REMINDER_ENABLED        – "true" | "false"  (default: "false")
- *   CHECKOUT_REMINDER_MINUTES        – minutes before expiry to send (default: 5)
+ *   CHECKOUT_REMINDER_MINUTES        – global fallback minutes before expiry (default: 5)
  *   CHECKOUT_REMINDER_SEND_WEBHOOK   – "true" | "false"  (default: "true")
  *   CHECKOUT_REMINDER_SEND_EMAIL     – "true" | "false"  (default: "true")
  *
@@ -20,13 +29,14 @@
 import { PrismaClient } from "../generated/client/client";
 import { createAndDeliverWebhook } from "./webhook.service";
 import { sendCheckoutExpiryReminderEmail } from "./email.service";
+import { getNotificationPreferences } from "./notificationPreferences.service";
 
 const prisma = new PrismaClient();
 
 const LOCK_NAME = "payment_expiry_reminder";
 const LOCK_TTL_MS = 5 * 60 * 1000;
 
-function getReminderConfig() {
+function getGlobalReminderConfig() {
   return {
     enabled: process.env.CHECKOUT_REMINDER_ENABLED === "true",
     minutesBefore: Math.max(
@@ -71,37 +81,43 @@ async function releaseLock(): Promise<void> {
 export interface ReminderResult {
   processed: number;
   notified: number;
+  skippedOptOut: number;
   errors: { paymentId: string; error: string }[];
 }
 
 export async function runPaymentExpiryReminderJob(): Promise<ReminderResult> {
-  const config = getReminderConfig();
+  const config = getGlobalReminderConfig();
 
   if (!config.enabled) {
-    return { processed: 0, notified: 0, errors: [] };
+    return { processed: 0, notified: 0, skippedOptOut: 0, errors: [] };
   }
 
   const lockedBy = `${process.env.HOSTNAME ?? "app"}:${process.pid}`;
   const acquired = await acquireLock(lockedBy);
   if (!acquired) {
     console.log("[ExpiryReminder] Lock held by another instance — skipping.");
-    return { processed: 0, notified: 0, errors: [] };
+    return { processed: 0, notified: 0, skippedOptOut: 0, errors: [] };
   }
 
-  const result: ReminderResult = { processed: 0, notified: 0, errors: [] };
+  const result: ReminderResult = { processed: 0, notified: 0, skippedOptOut: 0, errors: [] };
 
   try {
     const now = new Date();
-    const windowEnd = new Date(now.getTime() + config.minutesBefore * 60 * 1000);
+
+    // The query window must be wide enough to cover the largest possible
+    // per-merchant reminder_minutes_before value.  We use the global fallback
+    // as the upper bound; payments outside that window are simply not fetched.
+    // Individual payments are later re-filtered by the merchant's own preference.
+    const maxWindowEnd = new Date(now.getTime() + config.minutesBefore * 60 * 1000);
 
     // Payments that are:
     //  - still pending
-    //  - expiring within the reminder window
+    //  - expiring within the broadest reminder window
     //  - not yet reminded (reminder_sent_at is null)
     const payments = await prisma.payment.findMany({
       where: {
         status: "pending",
-        expiration: { gt: now, lte: windowEnd },
+        expiration: { gt: now, lte: maxWindowEnd },
         reminder_sent_at: null,
       },
       select: {
@@ -121,10 +137,76 @@ export async function runPaymentExpiryReminderJob(): Promise<ReminderResult> {
       return result;
     }
 
-    console.log(`[ExpiryReminder] ${payments.length} payment(s) approaching expiry. Notifying merchants...`);
+    console.log(`[ExpiryReminder] ${payments.length} payment(s) approaching expiry. Checking preferences...`);
 
+    // ── Batch-load notification preferences for all distinct merchants ─────
+    // This avoids one DB round-trip per payment (N+1).
+    const merchantIds = [...new Set(payments.map((p) => p.merchantId))];
+    const prefsMap = new Map<
+      string,
+      { payment_expiry_reminder: boolean; reminder_minutes_before: number }
+    >();
+
+    await Promise.all(
+      merchantIds.map(async (merchantId) => {
+        const prefs = await getNotificationPreferences(merchantId);
+        prefsMap.set(merchantId, prefs);
+      }),
+    );
+
+    // ── Batch-load merchant email details for all opted-in merchants ───────
+    const optedInMerchantIds = merchantIds.filter(
+      (id) => prefsMap.get(id)?.payment_expiry_reminder !== false,
+    );
+
+    const merchantEmailMap = new Map<
+      string,
+      { email: string; business_name: string; email_notifications_enabled: boolean; notify_on_payment: boolean }
+    >();
+
+    if (config.sendEmail && optedInMerchantIds.length > 0) {
+      const merchants = await prisma.merchant.findMany({
+        where: { id: { in: optedInMerchantIds } },
+        select: {
+          id: true,
+          email: true,
+          business_name: true,
+          email_notifications_enabled: true,
+          notify_on_payment: true,
+        },
+      });
+      for (const m of merchants) {
+        merchantEmailMap.set(m.id, m);
+      }
+    }
+
+    // ── Process each payment ───────────────────────────────────────────────
     for (const payment of payments) {
-      // Mark as reminded first (idempotent guard) — only proceed if this succeeds
+      const prefs = prefsMap.get(payment.merchantId) ?? {
+        payment_expiry_reminder: true,
+        reminder_minutes_before: config.minutesBefore,
+      };
+
+      // ── 1. Check opt-out ───────────────────────────────────────────────
+      if (!prefs.payment_expiry_reminder) {
+        result.skippedOptOut++;
+        console.log(
+          `[ExpiryReminder] Merchant ${payment.merchantId} opted out — skipping payment ${payment.id}`,
+        );
+        continue;
+      }
+
+      // ── 2. Check per-merchant timing window ───────────────────────────
+      // The payment must still be within this merchant's reminder window.
+      const merchantWindowEnd = new Date(
+        now.getTime() + prefs.reminder_minutes_before * 60 * 1000,
+      );
+      if (payment.expiration > merchantWindowEnd) {
+        // Too early for this merchant's preference; will be picked up on a future tick.
+        continue;
+      }
+
+      // ── 3. Mark as reminded (idempotent guard) ────────────────────────
       const marked = await prisma.payment.updateMany({
         where: { id: payment.id, status: "pending", reminder_sent_at: null },
         data: { reminder_sent_at: now },
@@ -155,7 +237,7 @@ export async function runPaymentExpiryReminderJob(): Promise<ReminderResult> {
 
       let hadError = false;
 
-      // ── Webhook notification ──────────────────────────────────────────────
+      // ── 4. Webhook notification ──────────────────────────────────────
       if (config.sendWebhook) {
         try {
           await createAndDeliverWebhook(
@@ -174,18 +256,10 @@ export async function runPaymentExpiryReminderJob(): Promise<ReminderResult> {
         }
       }
 
-      // ── Email notification (merchant only) ───────────────────────────────
+      // ── 5. Email notification (merchant) ─────────────────────────────
       if (config.sendEmail) {
         try {
-          const merchant = await prisma.merchant.findUnique({
-            where: { id: payment.merchantId },
-            select: {
-              email: true,
-              business_name: true,
-              email_notifications_enabled: true,
-              notify_on_payment: true,
-            },
-          });
+          const merchant = merchantEmailMap.get(payment.merchantId);
 
           if (
             merchant &&
@@ -219,7 +293,7 @@ export async function runPaymentExpiryReminderJob(): Promise<ReminderResult> {
 
     console.log(
       `[ExpiryReminder] Done — ${result.notified}/${result.processed} notified, ` +
-      `${result.errors.length} error(s).`,
+      `${result.skippedOptOut} opted-out, ${result.errors.length} error(s).`,
     );
   } finally {
     await releaseLock();
