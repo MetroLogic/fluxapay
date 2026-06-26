@@ -22,6 +22,17 @@ services:
     tmpfs:
       - /var/lib/postgresql/data
 
+  redis:
+    image: redis:7-alpine
+    container_name: fluxapay-ci-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   backend:
     build:
       context: ./fluxapay_backend
@@ -31,6 +42,7 @@ services:
       NODE_ENV: test
       PORT: 3000
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/fluxapay_test?schema=public
+      REDIS_URL: redis://redis:6379
       JWT_SECRET: ci-test-jwt-secret-key-for-integration-testing-only
       WEBHOOK_SECRET: ci-test-webhook-secret
       CLOUDINARY_CLOUD_NAME: test
@@ -53,9 +65,11 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     command: ["sh", "-c", "npx prisma db push --skip-generate && npm start"]
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health/ready"]
       interval: 10s
       timeout: 5s
       retries: 5
