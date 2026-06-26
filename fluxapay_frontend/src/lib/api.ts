@@ -786,11 +786,6 @@ export const api = {
       stats: () => fetchWithAuth("/api/v1/admin/address-pool/stats"),
     },
   },
-  
-  // FX Rates
-  fx: {
-    getRate: (currency: string) => fetchWithAuth(`/api/v1/fx-rates?currency=${currency}`),
-  },
 };
 
 export { ApiError };
