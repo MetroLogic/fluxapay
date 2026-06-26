@@ -352,6 +352,19 @@ export const api = {
       }),
   },
 
+  // FX rates
+  fx: {
+    getRate: (currency: string) =>
+      fetch(`${API_BASE_URL}/api/v1/fx-rates?currency=${encodeURIComponent(currency)}`).then(
+        async (res) => {
+          if (!res.ok) {
+            throw new ApiError(res.status, "Failed to fetch FX rate");
+          }
+          return res.json();
+        },
+      ),
+  },
+
   // Health / readiness
   health: {
     check: () => fetch(`${API_BASE_URL}/health`),
