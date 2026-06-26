@@ -35,6 +35,7 @@ export default function PricingGrid({ plans }: PricingGridProps) {
           features={plan.features}
           featured={plan.featured}
           badge={plan.badge}
+          planId={plan.id}
         />
       ))}
     </div>

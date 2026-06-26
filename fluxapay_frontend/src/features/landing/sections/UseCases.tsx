@@ -1,6 +1,8 @@
 "use client";
 
 import Image from "next/image";
+import { Link } from "@/i18n/routing";
+import { track } from "@/lib/analytics";
 
 interface UseCase {
   title: string;
@@ -81,6 +83,10 @@ export const UseCases = () => {
     }
   ];
 
+  const handleGetOnboardedClick = () => {
+    track("cta_clicked", { location: "use_cases", action: "get_onboarded" });
+  };
+
   return (
     <section className="py-28 bg-gradient-to-b from-[#0F1117] via-[#121521] to-[#0F1117]">
       <div className="mx-auto max-w-7xl px-4">
@@ -122,9 +128,14 @@ export const UseCases = () => {
         </div>
 
         <div className="flex justify-center">
-          <button className="px-10 py-3 rounded-xl bg-white text-[#121521] font-semibold shadow-md transition-all duration-300 hover:scale-105 hover:shadow-xl">
-            Get onboarded
-          </button>
+          <Link href="/signup">
+            <button 
+              onClick={handleGetOnboardedClick}
+              className="px-10 py-3 rounded-xl bg-white text-[#121521] font-semibold shadow-md transition-all duration-300 hover:scale-105 hover:shadow-xl"
+            >
+              Get onboarded
+            </button>
+          </Link>
         </div>
       </div>
     </section>

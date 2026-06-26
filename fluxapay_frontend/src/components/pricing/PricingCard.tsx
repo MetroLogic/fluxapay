@@ -1,6 +1,9 @@
+"use client";
+
 import { Link } from "@/i18n/routing";
 import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { track } from "@/lib/analytics";
 
 export type PricingCardProps = {
   name: string;
@@ -14,6 +17,7 @@ export type PricingCardProps = {
   };
   featured?: boolean;
   badge?: string;
+  planId: string;
 };
 
 export default function PricingCard({
@@ -25,8 +29,18 @@ export default function PricingCard({
   cta,
   featured = false,
   badge,
+  planId,
 }: PricingCardProps) {
   const isExternal = cta.href.startsWith("http");
+
+  const handleCtaClick = () => {
+    track("cta_clicked", { 
+      location: "pricing", 
+      planId,
+      planName: name,
+      action: cta.label.toLowerCase().replace(/\s+/g, "_")
+    });
+  };
 
   return (
     <div
@@ -64,6 +78,7 @@ export default function PricingCard({
           href={cta.href}
           target="_blank"
           rel="noopener noreferrer"
+          onClick={handleCtaClick}
           className={cn(
             "mb-8 block w-full rounded-lg px-4 py-3 text-center font-medium transition",
             featured
@@ -76,6 +91,7 @@ export default function PricingCard({
       ) : (
         <Link
           href={cta.href}
+          onClick={handleCtaClick}
           className={cn(
             "mb-8 block w-full rounded-lg px-4 py-3 text-center font-medium transition",
             featured

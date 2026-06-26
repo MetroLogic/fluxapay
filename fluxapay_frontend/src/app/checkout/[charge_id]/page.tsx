@@ -229,8 +229,8 @@ export default function CheckoutPage() {
         </div>
       )}
 
-      {/* Underpaid / Partially Paid */}
-      {!loading && payment && (payment.status === 'partially_paid' || payment.status === 'underpaid') && (
+      {/* Partially Paid */}
+      {!loading && payment && payment.status === 'partially_paid' && (
         <div className="flex flex-1 items-center justify-center p-4" role="alert">
           <div className="w-full max-w-2xl rounded-2xl bg-white p-8 text-center shadow-xl">
             <AlertCircle aria-hidden="true" className="mx-auto mb-6 h-20 w-20 text-orange-500" />

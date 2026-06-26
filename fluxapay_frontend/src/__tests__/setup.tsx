@@ -1,6 +1,7 @@
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 import en from '../../messages/en.json';
+import React from 'react';
 
 // Global mocks
 vi.mock('next/navigation', () => ({
@@ -16,7 +17,7 @@ vi.mock('next/navigation', () => ({
 }));
 
 vi.mock('@/i18n/routing', () => ({
-  Link: ({ children, href }) => children,
+  Link: ({ children, href }: { children: React.ReactNode; href: string }) => children,
   useRouter: () => ({
     push: vi.fn(),
     replace: vi.fn(),
@@ -27,8 +28,8 @@ vi.mock('@/i18n/routing', () => ({
 }));
 
 vi.mock('next-intl', () => ({
-  useTranslations: (ns) => (key, params) => {
-    let result = ns ? en[ns] : en;
+  useTranslations: (ns?: string) => (key: string, params?: Record<string, string | number>) => {
+    let result: any = ns ? en[ns as keyof typeof en] : en;
     if (!result) return key;
     const keys = key.split('.');
     for (const k of keys) {
@@ -61,7 +62,7 @@ vi.mock('react-hot-toast', () => ({
 
 vi.mock('next/image', () => ({
   __esModule: true,
-  default: (props) => {
+  default: (props: React.ImgHTMLAttributes<HTMLImageElement>) => {
     // eslint-disable-next-line @next/next/no-img-element
     return <img {...props} />;
   },

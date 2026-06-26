@@ -290,7 +290,7 @@ export default function AdminSystemPage() {
                 </defs>
                 <XAxis dataKey="time" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
                 <YAxis tick={{ fontSize: 10 }} unit="ms" />
-                <Tooltip formatter={(v: number) => [`${v}ms`, 'Latency']} />
+                <Tooltip formatter={(v: number | undefined) => v != null ? [`${v}ms`, 'Latency'] : ['—', 'Latency']} />
                 <Area type="monotone" dataKey="latency" stroke="#6366f1" fill="url(#latencyGrad)" strokeWidth={2} dot={false} />
               </AreaChart>
             </ResponsiveContainer>
