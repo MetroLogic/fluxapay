@@ -116,22 +116,54 @@ app.use((req, res, next) => {
 app.use("/api/v1", globalRateLimit());
 
 // Swagger UI
-app.use(
-  "/api-docs",
-  helmet.contentSecurityPolicy({
-    useDefaults: true,
-    directives: {
-      defaultSrc: ["'self'"],
-      imgSrc: ["'self'", "data:"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      scriptSrc: ["'self'", "'unsafe-inline'"],
-      connectSrc: ["'self'"],
-      frameAncestors: ["'none'"],
-    },
-  }),
-  swaggerUi.serve,
-  swaggerUi.setup(specs),
-);
+if (process.env.NODE_ENV !== "production") {
+  app.use(
+    "/api-docs",
+    helmet.contentSecurityPolicy({
+      useDefaults: true,
+      directives: {
+        defaultSrc: ["'self'"],
+        imgSrc: ["'self'", "data:"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        scriptSrc: ["'self'", "'unsafe-inline'"],
+        connectSrc: ["'self'"],
+        frameAncestors: ["'none'"],
+      },
+    }),
+    swaggerUi.serve,
+    swaggerUi.setup(specs),
+  );
+
+  // Also expose a more human-friendly path for local/non-production environments
+  app.use(
+    "/api/docs",
+    helmet.contentSecurityPolicy({
+      useDefaults: true,
+      directives: {
+        defaultSrc: ["'self'"],
+        imgSrc: ["'self'", "data:"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        scriptSrc: ["'self'", "'unsafe-inline'"],
+        connectSrc: ["'self'"],
+        frameAncestors: ["'none'"],
+      },
+    }),
+    swaggerUi.serve,
+    swaggerUi.setup(specs),
+  );
+
+  // Serve JSON spec for non-production as well
+  app.get("/api-docs.json", (_req, res) => {
+    res.setHeader("Content-Type", "application/json");
+    res.send(specs);
+  });
+} else {
+  // In production, still serve the JSON spec at /api-docs.json for automated tooling if desired
+  app.get("/api-docs.json", (_req, res) => {
+    res.setHeader("Content-Type", "application/json");
+    res.send(specs);
+  });
+}
 
 // ── Merchants (single canonical mount) ────────────────────────────────────────
 // All merchant-scoped sub-routers are combined here so that
@@ -144,11 +176,6 @@ merchantRouter.use("/", merchantRoutes);
 app.use("/api/v1/merchants", merchantRouter);
 
 // ── Core resource routes ───────────────────────────────────────────────────────
-// Swagger JSON spec
-app.get("/api-docs.json", (req, res) => {
-  res.setHeader("Content-Type", "application/json");
-  res.send(specs);
-});
 app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1", escrowRoutes);
 app.use("/api/v1/settlements", settlementRoutes);
