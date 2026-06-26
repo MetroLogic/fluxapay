@@ -59,7 +59,7 @@ export default function PaymentDetailsPage() {
     setError(null);
     try {
       const response = (await api.payments.getById(id as string)) as Record<string, unknown>;
-      const data = (response.payment || response.data || response) as Record<string, unknown>;
+      const data = (response.payment || response.data || response) as unknown as BackendPayment;
       setPayment(mapBackendPayment(data));
       
       // Fetch refunds for this payment if available
