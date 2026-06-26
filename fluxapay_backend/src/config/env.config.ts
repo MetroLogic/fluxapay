@@ -35,8 +35,11 @@ const envSchema = z.object({
     // Email (optional)
     RESEND_API_KEY: z.string().optional(),
 
-    // SMS OTP (optional) — SMS_PROVIDER: none | mock | twilio | messagebird
+    // SMS OTP (optional) — SMS_PROVIDER / SMS_FALLBACK_PROVIDER: none | mock | twilio | messagebird
     SMS_PROVIDER: z
+        .enum(['none', 'mock', 'twilio', 'messagebird'])
+        .default('none'),
+    SMS_FALLBACK_PROVIDER: z
         .enum(['none', 'mock', 'twilio', 'messagebird'])
         .default('none'),
     TWILIO_ACCOUNT_SID: z.string().optional(),
@@ -192,21 +195,27 @@ export function validateEnv(): EnvConfig {
         conditionalErrors.push('  • ANCHOR_API_KEY is required when EXCHANGE_PARTNER=anchor');
     }
 
-    if (config.SMS_PROVIDER === 'twilio') {
+    const smsDrivers = new Set(
+        [config.SMS_PROVIDER, config.SMS_FALLBACK_PROVIDER].filter(
+            (driver) => driver !== 'none',
+        ),
+    );
+
+    if (smsDrivers.has('twilio')) {
         if (!config.TWILIO_ACCOUNT_SID) {
-            conditionalErrors.push('  • TWILIO_ACCOUNT_SID is required when SMS_PROVIDER=twilio');
+            conditionalErrors.push('  • TWILIO_ACCOUNT_SID is required when SMS_PROVIDER or SMS_FALLBACK_PROVIDER=twilio');
         }
         if (!config.TWILIO_AUTH_TOKEN) {
-            conditionalErrors.push('  • TWILIO_AUTH_TOKEN is required when SMS_PROVIDER=twilio');
+            conditionalErrors.push('  • TWILIO_AUTH_TOKEN is required when SMS_PROVIDER or SMS_FALLBACK_PROVIDER=twilio');
         }
         if (!config.TWILIO_FROM_NUMBER) {
-            conditionalErrors.push('  • TWILIO_FROM_NUMBER is required when SMS_PROVIDER=twilio');
+            conditionalErrors.push('  • TWILIO_FROM_NUMBER is required when SMS_PROVIDER or SMS_FALLBACK_PROVIDER=twilio');
         }
     }
 
-    if (config.SMS_PROVIDER === 'messagebird') {
+    if (smsDrivers.has('messagebird')) {
         if (!config.MESSAGEBIRD_API_KEY) {
-            conditionalErrors.push('  • MESSAGEBIRD_API_KEY is required when SMS_PROVIDER=messagebird');
+            conditionalErrors.push('  • MESSAGEBIRD_API_KEY is required when SMS_PROVIDER or SMS_FALLBACK_PROVIDER=messagebird');
         }
     }
 
