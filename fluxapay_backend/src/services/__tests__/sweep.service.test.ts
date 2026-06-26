@@ -5,7 +5,18 @@
  * to the master vault and optionally merges accounts to reclaim XLM.
  */
 
-import { Horizon } from "@stellar/stellar-sdk";
+jest.mock("@stellar/stellar-sdk", () => {
+  const actual = jest.requireActual("@stellar/stellar-sdk");
+  return {
+    ...actual,
+    Horizon: {
+      Server: jest.fn().mockImplementation(() => ({
+        loadAccount: jest.fn(),
+        submitTransaction: jest.fn(),
+      })),
+    },
+  };
+});
 
 // Mock dependencies before imports
 const mockPrisma = {
@@ -40,15 +51,21 @@ jest.mock("../HDWalletService", () => ({
 }));
 
 // Import after mocks
+import { Horizon, Keypair } from "@stellar/stellar-sdk";
 import { SweepService } from "../sweep.service";
 
 describe("SweepService", () => {
   let sweepService: SweepService;
   let mockServer: any;
   let mockHDWalletService: any;
+  let issuerPublicKey: string;
 
   beforeEach(() => {
     jest.clearAllMocks();
+
+    const issuerKeypair = Keypair.random();
+    const vaultKeypair = Keypair.random();
+    issuerPublicKey = issuerKeypair.publicKey();
 
     // Mock environment variables
     process.env.STELLAR_HORIZON_URL = "https://horizon-testnet.stellar.org";
@@ -57,9 +74,9 @@ describe("SweepService", () => {
     process.env.STELLAR_MAX_FEE = "2000";
     process.env.STELLAR_FEE_BUMP_MULTIPLIER = "2";
     process.env.STELLAR_TX_MAX_RETRIES = "3";
-    process.env.USDC_ISSUER_PUBLIC_KEY = "GBBD47IF6LWK7P7MDEVSCWT73IQIGCEZHR7OMXMBZQ3ZONN2T4U6W23Y";
-    process.env.MASTER_VAULT_SECRET_KEY = "SBBD47IF6LWK7P7MDEVSCWT73IQIGCEZHR7OMXMBZQ3ZONN2T4U6W23Y";
-    process.env.FUNDER_PUBLIC_KEY = "GBFUNDER123456789";
+    process.env.USDC_ISSUER_PUBLIC_KEY = issuerPublicKey;
+    process.env.MASTER_VAULT_SECRET_KEY = vaultKeypair.secret();
+    process.env.FUNDER_PUBLIC_KEY = Keypair.random().publicKey();
     process.env.SWEEP_BATCH_LIMIT = "200";
 
     // Mock Stellar Server
@@ -109,7 +126,7 @@ describe("SweepService", () => {
           {
             asset_type: "credit_alphanum4",
             asset_code: "USDC",
-            asset_issuer: "GBBD47IF6LWK7P7MDEVSCWT73IQIGCEZHR7OMXMBZQ3ZONN2T4U6W23Y",
+            asset_issuer: issuerPublicKey,
             balance: "100.0000000",
           },
         ],
@@ -202,7 +219,7 @@ describe("SweepService", () => {
           {
             asset_type: "credit_alphanum4",
             asset_code: "USDC",
-            asset_issuer: "GBBD47IF6LWK7P7MDEVSCWT73IQIGCEZHR7OMXMBZQ3ZONN2T4U6W23Y",
+            asset_issuer: issuerPublicKey,
             balance: "0.3000000",
           },
         ],
@@ -274,7 +291,7 @@ describe("SweepService", () => {
           {
             asset_type: "credit_alphanum4",
             asset_code: "USDC",
-            asset_issuer: "GBBD47IF6LWK7P7MDEVSCWT73IQIGCEZHR7OMXMBZQ3ZONN2T4U6W23Y",
+            asset_issuer: issuerPublicKey,
             balance: "100.0000000",
           },
         ],
@@ -344,7 +361,7 @@ describe("SweepService", () => {
           {
             asset_type: "credit_alphanum4",
             asset_code: "USDC",
-            asset_issuer: "GBBD47IF6LWK7P7MDEVSCWT73IQIGCEZHR7OMXMBZQ3ZONN2T4U6W23Y",
+            asset_issuer: issuerPublicKey,
             balance: "100.0000000",
           },
         ],
@@ -390,7 +407,7 @@ describe("SweepService", () => {
           {
             asset_type: "credit_alphanum4",
             asset_code: "USDC",
-            asset_issuer: "GBBD47IF6LWK7P7MDEVSCWT73IQIGCEZHR7OMXMBZQ3ZONN2T4U6W23Y",
+            asset_issuer: issuerPublicKey,
             balance: "100.0000000",
           },
         ],
@@ -453,7 +470,7 @@ describe("SweepService", () => {
           {
             asset_type: "credit_alphanum4",
             asset_code: "USDC",
-            asset_issuer: "GBBD47IF6LWK7P7MDEVSCWT73IQIGCEZHR7OMXMBZQ3ZONN2T4U6W23Y",
+            asset_issuer: issuerPublicKey,
             balance: "100.0000000",
           },
         ],
@@ -500,7 +517,7 @@ describe("SweepService", () => {
           {
             asset_type: "credit_alphanum4",
             asset_code: "USDC",
-            asset_issuer: "GBBD47IF6LWK7P7MDEVSCWT73IQIGCEZHR7OMXMBZQ3ZONN2T4U6W23Y",
+            asset_issuer: issuerPublicKey,
             balance: "100.0000000",
           },
         ],
@@ -547,7 +564,7 @@ describe("SweepService", () => {
           {
             asset_type: "credit_alphanum4",
             asset_code: "USDC",
-            asset_issuer: "GBBD47IF6LWK7P7MDEVSCWT73IQIGCEZHR7OMXMBZQ3ZONN2T4U6W23Y",
+            asset_issuer: issuerPublicKey,
             balance: "100.0000000",
           },
         ],
@@ -594,7 +611,7 @@ describe("SweepService", () => {
           {
             asset_type: "credit_alphanum4",
             asset_code: "USDC",
-            asset_issuer: "GBBD47IF6LWK7P7MDEVSCWT73IQIGCEZHR7OMXMBZQ3ZONN2T4U6W23Y",
+            asset_issuer: issuerPublicKey,
             balance: "100.0000000",
           },
         ],
