@@ -173,7 +173,7 @@ describe('PaymentMonitor Service Logic', () => {
           .limit(10)
           .call();
 
-        let latestPagingToken = payment.last_paging_token;
+        let latestPagingToken: string | null = payment.last_paging_token;
         let latestTxHash: string | undefined;
 
         for (const record of transactions.records) {
@@ -229,7 +229,7 @@ describe('PaymentMonitor Service Logic', () => {
         },
       ];
 
-      let latestPagingToken = payment.last_paging_token;
+      let latestPagingToken: string | null = payment.last_paging_token;
       let latestTxHash: string | undefined;
 
       for (const record of records) {
@@ -271,7 +271,7 @@ describe('PaymentMonitor Service Logic', () => {
         },
       ];
 
-      let latestPagingToken = payment.last_paging_token;
+      let latestPagingToken: string | null = payment.last_paging_token;
       let latestTxHash: string | undefined;
 
       for (const record of records) {
@@ -324,7 +324,7 @@ describe('PaymentMonitor Service Logic', () => {
         void account;
         const transactions = await mockServer.payments().forAccount(payment.stellar_address).order('desc').limit(10).call();
 
-        let latestPagingToken = payment.last_paging_token;
+        let latestPagingToken: string | null = payment.last_paging_token;
         let latestTxHash: string | undefined;
 
         for (const record of transactions.records) {

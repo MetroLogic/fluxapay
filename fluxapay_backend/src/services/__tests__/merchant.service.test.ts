@@ -8,8 +8,24 @@ const mockMerchant = {
   update: jest.fn(),
 };
 
+const mockBankAccount = {
+  create: jest.fn(),
+};
+
+const mockTransaction = jest.fn(async (callback: (tx: typeof mockTx) => Promise<unknown>) =>
+  callback(mockTx),
+);
+
+const mockTx = {
+  merchant: mockMerchant,
+  bankAccount: mockBankAccount,
+};
+
 jest.mock("../../generated/client/client", () => ({
-  PrismaClient: jest.fn(() => ({ merchant: mockMerchant })),
+  PrismaClient: jest.fn(() => ({
+    merchant: mockMerchant,
+    $transaction: mockTransaction,
+  })),
 }));
 
 jest.mock("../otp.service", () => ({
@@ -56,6 +72,7 @@ describe("merchant.service API key handling", () => {
 
       const result = await signupMerchantService(signupData);
 
+      expect(mockTransaction).toHaveBeenCalled();
       expect(mockMerchant.create).toHaveBeenCalled();
       const createData = mockMerchant.create.mock.calls[0][0].data;
       expect(createData.api_key_hashed).toBeDefined();
@@ -80,8 +97,8 @@ describe("merchant.service API key handling", () => {
       const result = await getMerchantUserService({ merchantId: "m1" });
 
       expect(result.merchant.api_key_masked).toBe("sk_live_****abcd");
+      expect(result.merchant.api_key_last_four).toBe("abcd");
       expect(result.merchant).not.toHaveProperty("api_key_hashed");
-      expect(result.merchant).not.toHaveProperty("api_key_last_four");
     });
 
     it("returns null mask if no key", async () => {

@@ -245,7 +245,7 @@ describe("buildPublicCheckoutDto — DTO shape and PII safety", () => {
       customer_email: "buyer@private.com",
     } as any;
 
-    const dto = buildPublicCheckoutDto(paymentWithPii) as Record<string, unknown>;
+    const dto = buildPublicCheckoutDto(paymentWithPii) as unknown as Record<string, unknown>;
 
     expect(dto).not.toHaveProperty("merchantId");
     expect(dto).not.toHaveProperty("customerId");
@@ -261,7 +261,7 @@ describe("buildPublicCheckoutDto — DTO shape and PII safety", () => {
       order_id: "internal-order-99",
     } as any;
 
-    const dto = buildPublicCheckoutDto(paymentWithInternal) as Record<string, unknown>;
+    const dto = buildPublicCheckoutDto(paymentWithInternal) as unknown as Record<string, unknown>;
 
     expect(dto).not.toHaveProperty("encrypted_key_data");
     expect(dto).not.toHaveProperty("payment_index");

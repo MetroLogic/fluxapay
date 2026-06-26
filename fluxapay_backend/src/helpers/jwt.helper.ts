@@ -5,8 +5,6 @@ export interface AccessTokenPayload extends JwtPayload {
   id: string;
   email: string;
   role?: string;
-  iat: number;
-  exp: number;
 }
 
 /**
@@ -20,8 +18,6 @@ export const generateAccessToken = (merchantId: string, email: string, role: str
     id: merchantId,
     email,
     role,
-    iat: Math.floor(Date.now() / 1000),
-    exp: Math.floor(Date.now() / 1000) + (15 * 60), // 15 minutes from now
   };
   return jwt.sign(payload, process.env.JWT_SECRET!, options);
 };

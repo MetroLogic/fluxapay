@@ -32,13 +32,13 @@ jest.mock("../../generated/client/client", () => ({
 }));
 
 jest.mock("../audit.service", () => ({
-  logSweepTrigger: jest.fn(),
-  updateSweepCompletion: jest.fn(),
+  logSweepTrigger: jest.fn().mockResolvedValue({ id: "audit_test" }),
+  updateSweepCompletion: jest.fn().mockResolvedValue(undefined),
 }));
 
 jest.mock("../sweepQueue.service", () => ({
   sweepQueue: {
-    enqueue: jest.fn((id, fn) => fn()),
+    enqueue: jest.fn(async (_id, fn) => fn()),
   },
 }));
 
@@ -51,7 +51,7 @@ jest.mock("../HDWalletService", () => ({
 }));
 
 // Import after mocks
-import { Horizon, Keypair } from "@stellar/stellar-sdk";
+import { Horizon, Keypair, Account } from "@stellar/stellar-sdk";
 import { SweepService } from "../sweep.service";
 
 describe("SweepService", () => {
@@ -59,6 +59,39 @@ describe("SweepService", () => {
   let mockServer: any;
   let mockHDWalletService: any;
   let issuerPublicKey: string;
+
+  function createSweepFixture(
+    paymentOverrides: Record<string, unknown> = {},
+    balance = "100.0000000",
+  ) {
+    const source = Keypair.random();
+    const keypair = {
+      publicKey: source.publicKey(),
+      secretKey: source.secret(),
+    };
+    const payment = {
+      id: "payment_1",
+      merchantId: "merchant_1",
+      amount: "100.00",
+      status: "confirmed",
+      stellar_address: keypair.publicKey,
+      derivation_path: "m/44'/148'/0'/0/0",
+      swept: false,
+      confirmed_at: new Date(),
+      ...paymentOverrides,
+    };
+    const account = Object.assign(new Account(keypair.publicKey, "123456"), {
+      balances: [
+        {
+          asset_type: "credit_alphanum4",
+          asset_code: "USDC",
+          asset_issuer: issuerPublicKey,
+          balance,
+        },
+      ],
+    });
+    return { payment, keypair, account };
+  }
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -103,39 +136,11 @@ describe("SweepService", () => {
 
   describe("sweepPaidPayments", () => {
     it("should identify and sweep confirmed payments", async () => {
-      const mockPayments = [
-        {
-          id: "payment_1",
-          merchantId: "merchant_1",
-          amount: "100.00",
-          status: "confirmed",
-          stellar_address: "GTEST123",
-          derivation_path: "m/44'/148'/0'/0/0",
-          swept: false,
-          confirmed_at: new Date(),
-        },
-      ];
+      const { payment, keypair, account } = createSweepFixture();
 
-      const mockKeypair = {
-        publicKey: "GTEST123",
-        secretKey: "STEST123",
-      };
-
-      const mockAccount = {
-        balances: [
-          {
-            asset_type: "credit_alphanum4",
-            asset_code: "USDC",
-            asset_issuer: issuerPublicKey,
-            balance: "100.0000000",
-          },
-        ],
-        sequence: "123456",
-      };
-
-      mockPrisma.payment.findMany.mockResolvedValue(mockPayments);
-      mockHDWalletService.regenerateKeypairFromPath.mockResolvedValue(mockKeypair);
-      mockServer.loadAccount.mockResolvedValue(mockAccount);
+      mockPrisma.payment.findMany.mockResolvedValue([payment]);
+      mockHDWalletService.regenerateKeypairFromPath.mockResolvedValue(keypair);
+      mockServer.loadAccount.mockResolvedValue(account);
       mockServer.submitTransaction.mockResolvedValue({ hash: "tx_hash_123" });
 
       const result = await sweepService.sweepPaidPayments({ adminId: "admin_1" });
@@ -154,37 +159,14 @@ describe("SweepService", () => {
     });
 
     it("should skip payments with no USDC balance", async () => {
-      const mockPayments = [
-        {
-          id: "payment_1",
-          merchantId: "merchant_1",
-          amount: "100.00",
-          status: "confirmed",
-          stellar_address: "GTEST123",
-          derivation_path: "m/44'/148'/0'/0/0",
-          swept: false,
-          confirmed_at: new Date(),
-        },
-      ];
+      const { payment, keypair } = createSweepFixture();
+      const account = Object.assign(new Account(keypair.publicKey, "123456"), {
+        balances: [{ asset_type: "native", balance: "10.0000000" }],
+      });
 
-      const mockKeypair = {
-        publicKey: "GTEST123",
-        secretKey: "STEST123",
-      };
-
-      const mockAccount = {
-        balances: [
-          {
-            asset_type: "native",
-            balance: "10.0000000",
-          },
-        ],
-        sequence: "123456",
-      };
-
-      mockPrisma.payment.findMany.mockResolvedValue(mockPayments);
-      mockHDWalletService.regenerateKeypairFromPath.mockResolvedValue(mockKeypair);
-      mockServer.loadAccount.mockResolvedValue(mockAccount);
+      mockPrisma.payment.findMany.mockResolvedValue([payment]);
+      mockHDWalletService.regenerateKeypairFromPath.mockResolvedValue(keypair);
+      mockServer.loadAccount.mockResolvedValue(account);
 
       const result = await sweepService.sweepPaidPayments({ adminId: "admin_1" });
 
@@ -196,39 +178,14 @@ describe("SweepService", () => {
     it("should skip payments below minimum balance threshold", async () => {
       process.env.SWEEP_MIN_BALANCE_USDC = "0.5";
 
-      const mockPayments = [
-        {
-          id: "payment_1",
-          merchantId: "merchant_1",
-          amount: "0.30",
-          status: "confirmed",
-          stellar_address: "GTEST123",
-          derivation_path: "m/44'/148'/0'/0/0",
-          swept: false,
-          confirmed_at: new Date(),
-        },
-      ];
+      const { payment, keypair, account } = createSweepFixture(
+        { amount: "0.30" },
+        "0.3000000",
+      );
 
-      const mockKeypair = {
-        publicKey: "GTEST123",
-        secretKey: "STEST123",
-      };
-
-      const mockAccount = {
-        balances: [
-          {
-            asset_type: "credit_alphanum4",
-            asset_code: "USDC",
-            asset_issuer: issuerPublicKey,
-            balance: "0.3000000",
-          },
-        ],
-        sequence: "123456",
-      };
-
-      mockPrisma.payment.findMany.mockResolvedValue(mockPayments);
-      mockHDWalletService.regenerateKeypairFromPath.mockResolvedValue(mockKeypair);
-      mockServer.loadAccount.mockResolvedValue(mockAccount);
+      mockPrisma.payment.findMany.mockResolvedValue([payment]);
+      mockHDWalletService.regenerateKeypairFromPath.mockResolvedValue(keypair);
+      mockServer.loadAccount.mockResolvedValue(account);
 
       const result = await sweepService.sweepPaidPayments({ adminId: "admin_1" });
 
@@ -239,26 +196,17 @@ describe("SweepService", () => {
     });
 
     it("should skip payments with address mismatch", async () => {
-      const mockPayments = [
-        {
-          id: "payment_1",
-          merchantId: "merchant_1",
-          amount: "100.00",
-          status: "confirmed",
-          stellar_address: "GTEST123",
-          derivation_path: "m/44'/148'/0'/0/0",
-          swept: false,
-          confirmed_at: new Date(),
-        },
-      ];
-
-      const mockKeypair = {
-        publicKey: "GWRONG456",
-        secretKey: "STEST123",
+      const mismatchKey = Keypair.random();
+      const { payment } = createSweepFixture({
+        stellar_address: Keypair.random().publicKey(),
+      });
+      const keypair = {
+        publicKey: mismatchKey.publicKey(),
+        secretKey: mismatchKey.secret(),
       };
 
-      mockPrisma.payment.findMany.mockResolvedValue(mockPayments);
-      mockHDWalletService.regenerateKeypairFromPath.mockResolvedValue(mockKeypair);
+      mockPrisma.payment.findMany.mockResolvedValue([payment]);
+      mockHDWalletService.regenerateKeypairFromPath.mockResolvedValue(keypair);
 
       const result = await sweepService.sweepPaidPayments({ adminId: "admin_1" });
 
@@ -268,39 +216,11 @@ describe("SweepService", () => {
     });
 
     it("should handle dry run mode without submitting transactions", async () => {
-      const mockPayments = [
-        {
-          id: "payment_1",
-          merchantId: "merchant_1",
-          amount: "100.00",
-          status: "confirmed",
-          stellar_address: "GTEST123",
-          derivation_path: "m/44'/148'/0'/0/0",
-          swept: false,
-          confirmed_at: new Date(),
-        },
-      ];
+      const { payment, keypair, account } = createSweepFixture();
 
-      const mockKeypair = {
-        publicKey: "GTEST123",
-        secretKey: "STEST123",
-      };
-
-      const mockAccount = {
-        balances: [
-          {
-            asset_type: "credit_alphanum4",
-            asset_code: "USDC",
-            asset_issuer: issuerPublicKey,
-            balance: "100.0000000",
-          },
-        ],
-        sequence: "123456",
-      };
-
-      mockPrisma.payment.findMany.mockResolvedValue(mockPayments);
-      mockHDWalletService.regenerateKeypairFromPath.mockResolvedValue(mockKeypair);
-      mockServer.loadAccount.mockResolvedValue(mockAccount);
+      mockPrisma.payment.findMany.mockResolvedValue([payment]);
+      mockHDWalletService.regenerateKeypairFromPath.mockResolvedValue(keypair);
+      mockServer.loadAccount.mockResolvedValue(account);
 
       const result = await sweepService.sweepPaidPayments({
         adminId: "admin_1",
@@ -338,43 +258,18 @@ describe("SweepService", () => {
     });
 
     it("should use encrypted_key_data when derivation_path is not available", async () => {
-      const mockPayments = [
-        {
-          id: "payment_1",
-          merchantId: "merchant_1",
-          amount: "100.00",
-          status: "confirmed",
-          stellar_address: "GTEST123",
-          encrypted_key_data: "encrypted_data",
-          swept: false,
-          confirmed_at: new Date(),
-        },
-      ];
+      const { payment, keypair, account } = createSweepFixture({
+        derivation_path: undefined,
+        encrypted_key_data: "encrypted_data",
+      });
 
-      const mockKeypair = {
-        publicKey: "GTEST123",
-        secretKey: "STEST123",
-      };
-
-      const mockAccount = {
-        balances: [
-          {
-            asset_type: "credit_alphanum4",
-            asset_code: "USDC",
-            asset_issuer: issuerPublicKey,
-            balance: "100.0000000",
-          },
-        ],
-        sequence: "123456",
-      };
-
-      mockPrisma.payment.findMany.mockResolvedValue(mockPayments);
+      mockPrisma.payment.findMany.mockResolvedValue([payment]);
       mockHDWalletService.decryptKeyData.mockResolvedValue({
         merchantIndex: 0,
         paymentIndex: 0,
       });
-      mockHDWalletService.regenerateKeypair.mockResolvedValue(mockKeypair);
-      mockServer.loadAccount.mockResolvedValue(mockAccount);
+      mockHDWalletService.regenerateKeypair.mockResolvedValue(keypair);
+      mockServer.loadAccount.mockResolvedValue(account);
       mockServer.submitTransaction.mockResolvedValue({ hash: "tx_hash_123" });
 
       const result = await sweepService.sweepPaidPayments({ adminId: "admin_1" });
@@ -385,38 +280,13 @@ describe("SweepService", () => {
     });
 
     it("should use legacy DB lookup when both derivation_path and encrypted_key_data are missing", async () => {
-      const mockPayments = [
-        {
-          id: "payment_1",
-          merchantId: "merchant_1",
-          amount: "100.00",
-          status: "confirmed",
-          stellar_address: "GTEST123",
-          swept: false,
-          confirmed_at: new Date(),
-        },
-      ];
+      const { payment, keypair, account } = createSweepFixture({
+        derivation_path: undefined,
+      });
 
-      const mockKeypair = {
-        publicKey: "GTEST123",
-        secretKey: "STEST123",
-      };
-
-      const mockAccount = {
-        balances: [
-          {
-            asset_type: "credit_alphanum4",
-            asset_code: "USDC",
-            asset_issuer: issuerPublicKey,
-            balance: "100.0000000",
-          },
-        ],
-        sequence: "123456",
-      };
-
-      mockPrisma.payment.findMany.mockResolvedValue(mockPayments);
-      mockHDWalletService.regenerateKeypair.mockResolvedValue(mockKeypair);
-      mockServer.loadAccount.mockResolvedValue(mockAccount);
+      mockPrisma.payment.findMany.mockResolvedValue([payment]);
+      mockHDWalletService.regenerateKeypair.mockResolvedValue(keypair);
+      mockServer.loadAccount.mockResolvedValue(account);
       mockServer.submitTransaction.mockResolvedValue({ hash: "tx_hash_123" });
 
       const result = await sweepService.sweepPaidPayments({ adminId: "admin_1" });
@@ -447,39 +317,11 @@ describe("SweepService", () => {
 
   describe("transaction retry logic", () => {
     it("should retry failed transactions with fee bumps", async () => {
-      const mockPayments = [
-        {
-          id: "payment_1",
-          merchantId: "merchant_1",
-          amount: "100.00",
-          status: "confirmed",
-          stellar_address: "GTEST123",
-          derivation_path: "m/44'/148'/0'/0/0",
-          swept: false,
-          confirmed_at: new Date(),
-        },
-      ];
+      const { payment, keypair, account } = createSweepFixture();
 
-      const mockKeypair = {
-        publicKey: "GTEST123",
-        secretKey: "STEST123",
-      };
-
-      const mockAccount = {
-        balances: [
-          {
-            asset_type: "credit_alphanum4",
-            asset_code: "USDC",
-            asset_issuer: issuerPublicKey,
-            balance: "100.0000000",
-          },
-        ],
-        sequence: "123456",
-      };
-
-      mockPrisma.payment.findMany.mockResolvedValue(mockPayments);
-      mockHDWalletService.regenerateKeypairFromPath.mockResolvedValue(mockKeypair);
-      mockServer.loadAccount.mockResolvedValue(mockAccount);
+      mockPrisma.payment.findMany.mockResolvedValue([payment]);
+      mockHDWalletService.regenerateKeypairFromPath.mockResolvedValue(keypair);
+      mockServer.loadAccount.mockResolvedValue(account);
       
       // Fail twice, succeed on third attempt
       mockServer.submitTransaction
@@ -494,39 +336,11 @@ describe("SweepService", () => {
     });
 
     it("should fail after max retries", async () => {
-      const mockPayments = [
-        {
-          id: "payment_1",
-          merchantId: "merchant_1",
-          amount: "100.00",
-          status: "confirmed",
-          stellar_address: "GTEST123",
-          derivation_path: "m/44'/148'/0'/0/0",
-          swept: false,
-          confirmed_at: new Date(),
-        },
-      ];
+      const { payment, keypair, account } = createSweepFixture();
 
-      const mockKeypair = {
-        publicKey: "GTEST123",
-        secretKey: "STEST123",
-      };
-
-      const mockAccount = {
-        balances: [
-          {
-            asset_type: "credit_alphanum4",
-            asset_code: "USDC",
-            asset_issuer: issuerPublicKey,
-            balance: "100.0000000",
-          },
-        ],
-        sequence: "123456",
-      };
-
-      mockPrisma.payment.findMany.mockResolvedValue(mockPayments);
-      mockHDWalletService.regenerateKeypairFromPath.mockResolvedValue(mockKeypair);
-      mockServer.loadAccount.mockResolvedValue(mockAccount);
+      mockPrisma.payment.findMany.mockResolvedValue([payment]);
+      mockHDWalletService.regenerateKeypairFromPath.mockResolvedValue(keypair);
+      mockServer.loadAccount.mockResolvedValue(account);
       mockServer.submitTransaction.mockRejectedValue(new Error("tx_failed"));
 
       const result = await sweepService.sweepPaidPayments({ adminId: "admin_1" });
@@ -541,39 +355,11 @@ describe("SweepService", () => {
     it("should include account merge operation when enabled", async () => {
       process.env.SWEEP_ENABLE_ACCOUNT_MERGE = "true";
 
-      const mockPayments = [
-        {
-          id: "payment_1",
-          merchantId: "merchant_1",
-          amount: "100.00",
-          status: "confirmed",
-          stellar_address: "GTEST123",
-          derivation_path: "m/44'/148'/0'/0/0",
-          swept: false,
-          confirmed_at: new Date(),
-        },
-      ];
+      const { payment, keypair, account } = createSweepFixture();
 
-      const mockKeypair = {
-        publicKey: "GTEST123",
-        secretKey: "STEST123",
-      };
-
-      const mockAccount = {
-        balances: [
-          {
-            asset_type: "credit_alphanum4",
-            asset_code: "USDC",
-            asset_issuer: issuerPublicKey,
-            balance: "100.0000000",
-          },
-        ],
-        sequence: "123456",
-      };
-
-      mockPrisma.payment.findMany.mockResolvedValue(mockPayments);
-      mockHDWalletService.regenerateKeypairFromPath.mockResolvedValue(mockKeypair);
-      mockServer.loadAccount.mockResolvedValue(mockAccount);
+      mockPrisma.payment.findMany.mockResolvedValue([payment]);
+      mockHDWalletService.regenerateKeypairFromPath.mockResolvedValue(keypair);
+      mockServer.loadAccount.mockResolvedValue(account);
       mockServer.submitTransaction.mockResolvedValue({ hash: "tx_hash_123" });
 
       const result = await sweepService.sweepPaidPayments({
@@ -588,39 +374,11 @@ describe("SweepService", () => {
     it("should skip account merge when FUNDER_PUBLIC_KEY is not set", async () => {
       delete process.env.FUNDER_PUBLIC_KEY;
 
-      const mockPayments = [
-        {
-          id: "payment_1",
-          merchantId: "merchant_1",
-          amount: "100.00",
-          status: "confirmed",
-          stellar_address: "GTEST123",
-          derivation_path: "m/44'/148'/0'/0/0",
-          swept: false,
-          confirmed_at: new Date(),
-        },
-      ];
+      const { payment, keypair, account } = createSweepFixture();
 
-      const mockKeypair = {
-        publicKey: "GTEST123",
-        secretKey: "STEST123",
-      };
-
-      const mockAccount = {
-        balances: [
-          {
-            asset_type: "credit_alphanum4",
-            asset_code: "USDC",
-            asset_issuer: issuerPublicKey,
-            balance: "100.0000000",
-          },
-        ],
-        sequence: "123456",
-      };
-
-      mockPrisma.payment.findMany.mockResolvedValue(mockPayments);
-      mockHDWalletService.regenerateKeypairFromPath.mockResolvedValue(mockKeypair);
-      mockServer.loadAccount.mockResolvedValue(mockAccount);
+      mockPrisma.payment.findMany.mockResolvedValue([payment]);
+      mockHDWalletService.regenerateKeypairFromPath.mockResolvedValue(keypair);
+      mockServer.loadAccount.mockResolvedValue(account);
       mockServer.submitTransaction.mockResolvedValue({ hash: "tx_hash_123" });
 
       const consoleSpy = jest.spyOn(console, "warn").mockImplementation();
