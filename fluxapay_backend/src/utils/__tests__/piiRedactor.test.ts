@@ -5,7 +5,9 @@ import {
   hashIdentifier, 
   hashMerchantId, 
   redactEmail,
-  sanitizeObject 
+  sanitizeObject,
+  redactRequestBody,
+  redactRequestContext,
 } from '../piiRedactor';
 
 describe('PII Redactor', () => {
@@ -187,6 +189,99 @@ describe('PII Redactor', () => {
       expect(sanitizeObject(null)).toBe(null);
       expect(sanitizeObject('string')).toBe('string');
       expect(sanitizeObject(123)).toBe(123);
+    });
+
+    it('should always redact secret_key regardless of log level', () => {
+      const obj = { secret_key: 'sk_live_supersecret123', amount: 100 };
+      const result = sanitizeObject(obj);
+      expect(result.secret_key).toBe('[REDACTED]');
+      expect(result.amount).toBe(100);
+    });
+
+    it('should always redact api_key', () => {
+      const obj = { api_key: 'ak_live_abc123', name: 'merchant' };
+      const result = sanitizeObject(obj);
+      expect(result.api_key).toBe('[REDACTED]');
+      expect(result.name).toBe('merchant');
+    });
+
+    it('should always redact account_number', () => {
+      const obj = { account_number: '1234567890', bank: 'First Bank' };
+      const result = sanitizeObject(obj);
+      expect(result.account_number).toBe('[REDACTED]');
+    });
+  });
+
+  describe('redactRequestBody', () => {
+    it('should redact api_key, secret_key, password, email, phone, account_number in request body', () => {
+      const body = {
+        api_key: 'ak_live_xyz',
+        secret_key: 'sk_live_abc',
+        password: 'hunter2',
+        email: 'user@example.com',
+        phone: '+2348012345678',
+        account_number: '0123456789',
+        amount: 200,
+        currency: 'NGN',
+      };
+      const result = redactRequestBody(body);
+      expect(result.api_key).toBe('[REDACTED]');
+      expect(result.secret_key).toBe('[REDACTED]');
+      expect(result.password).toBe('[REDACTED]');
+      expect(result.email).toBe('[REDACTED]');
+      expect(result.phone).toBe('[REDACTED]');
+      expect(result.account_number).toBe('[REDACTED]');
+      // Non-sensitive fields untouched
+      expect(result.amount).toBe(200);
+      expect(result.currency).toBe('NGN');
+    });
+
+    it('should handle an undefined/null body gracefully', () => {
+      expect(redactRequestBody(null)).toBe(null);
+      expect(redactRequestBody(undefined)).toBe(undefined);
+    });
+
+    it('should redact nested sensitive fields in the body', () => {
+      const body = { user: { email: 'a@b.com', name: 'Alice' } };
+      const result = redactRequestBody(body);
+      expect(result.user.email).toBe('[REDACTED]');
+      expect(result.user.name).toBe('Alice');
+    });
+  });
+
+  describe('redactRequestContext', () => {
+    it('should redact Bearer token in authorization field', () => {
+      const ctx = { authorization: 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.payload.sig' };
+      const result = redactRequestContext(ctx);
+      expect(result.authorization).toMatch(/^Bearer /);
+      expect(result.authorization).not.toContain('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.payload.sig');
+    });
+
+    it('should redact x-api-key field', () => {
+      const ctx = { 'x-api-key': 'sk_live_abc1234567890' };
+      const result = redactRequestContext(ctx);
+      expect(result['x-api-key']).toMatch(/^\*\*\*/);
+      expect(result['x-api-key']).not.toContain('sk_live_abc1234567890');
+    });
+
+    it('should not mutate the original context object', () => {
+      const ctx = { authorization: 'Bearer secret_token', other: 'data' };
+      redactRequestContext(ctx);
+      expect(ctx.authorization).toBe('Bearer secret_token'); // original untouched
+    });
+
+    it('should pass through non-auth fields unchanged', () => {
+      const ctx = { requestId: 'req-123', method: 'POST', statusCode: 200 };
+      const result = redactRequestContext(ctx);
+      expect(result.requestId).toBe('req-123');
+      expect(result.method).toBe('POST');
+      expect(result.statusCode).toBe(200);
+    });
+
+    it('should handle context without any sensitive fields gracefully', () => {
+      const ctx = { method: 'GET', path: '/api/payments' };
+      const result = redactRequestContext(ctx);
+      expect(result).toEqual(ctx);
     });
   });
 });

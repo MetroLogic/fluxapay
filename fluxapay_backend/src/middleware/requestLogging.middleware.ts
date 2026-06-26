@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { getLogger } from '../utils/logger';
 import { getMetricsCollector } from '../utils/logger';
 import { AuthRequest } from '../types/express';
-import { redactAuthHeader, hashMerchantId, sanitizeObject } from '../utils/piiRedactor';
+import { redactAuthHeader, redactEmail, hashMerchantId, sanitizeObject, redactRequestBody } from '../utils/piiRedactor';
 
 /**
  * Request Logging Middleware
@@ -30,9 +30,9 @@ export function requestLoggingMiddleware(req: Request, res: Response, next: Next
     baseContext.merchantIdHash = hashMerchantId(authReq.merchantId);
   }
   
-  // Add user info (email is already redacted in the token/user object)
+  // Add user info with email redacted to prevent PII in logs at any log level
   if (authReq.user?.email) {
-    baseContext.userEmail = authReq.user.email; // Should already be redacted from JWT
+    baseContext.userEmail = redactEmail(authReq.user.email);
   }
   
   const requestLogger = getLogger().child(baseContext);
@@ -60,8 +60,8 @@ export function requestLoggingMiddleware(req: Request, res: Response, next: Next
       ip: req.ip,
       authorization: redactAuthHeader(req.headers.authorization),
       hasApiKey: !!(req.headers['x-api-key'] || req.headers['authorization']),
-      query: sanitizeObject(req.query),
-      body: sanitizeObject(req.body),
+      query: redactRequestBody(req.query),
+      body: redactRequestBody(req.body),
       contentLength: contentLength ? parseInt(contentLength, 10) : undefined,
       responseSize: responseContentLength ? parseInt(responseContentLength, 10) : undefined,
     });
