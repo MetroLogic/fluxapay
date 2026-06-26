@@ -1,4 +1,6 @@
 import { createController } from "../helpers/controller.helper";
+import { apiError, sendApiError } from "../helpers/apiError.helper";
+import { ErrorCode } from "../types/errors";
 
 import * as dashboardService from "../services/dashboard.service";
 import { AuthRequest } from "../types/express";
@@ -29,7 +31,7 @@ export async function getMerchantAuditLogs(req: AuthRequest, res: Response) {
   try {
     const merchantId = req.merchantId;
     if (!merchantId) {
-      return res.status(401).json({ success: false, error: { code: "UNAUTHORIZED", message: "Authentication required" } });
+      return sendApiError(res, apiError(401, ErrorCode.UNAUTHORIZED, "Authentication required"));
     }
 
     const { date_from, date_to, action_type, page, limit } = req.query;
@@ -40,14 +42,14 @@ export async function getMerchantAuditLogs(req: AuthRequest, res: Response) {
     if (date_from) {
       dateFrom = new Date(date_from as string);
       if (isNaN(dateFrom.getTime())) {
-        return res.status(400).json({ success: false, error: { code: "VALIDATION_ERROR", message: "Invalid date_from format" } });
+        return sendApiError(res, apiError(400, ErrorCode.VALIDATION_ERROR, "Invalid date_from format"));
       }
     }
 
     if (date_to) {
       dateTo = new Date(date_to as string);
       if (isNaN(dateTo.getTime())) {
-        return res.status(400).json({ success: false, error: { code: "VALIDATION_ERROR", message: "Invalid date_to format" } });
+        return sendApiError(res, apiError(400, ErrorCode.VALIDATION_ERROR, "Invalid date_to format"));
       }
     }
 
@@ -58,7 +60,7 @@ export async function getMerchantAuditLogs(req: AuthRequest, res: Response) {
     let actionType: AuditActionType | undefined;
     if (action_type) {
       if (!Object.values(AuditActionType).includes(action_type as AuditActionType)) {
-        return res.status(400).json({ success: false, error: { code: "VALIDATION_ERROR", message: "Invalid action_type" } });
+        return sendApiError(res, apiError(400, ErrorCode.VALIDATION_ERROR, "Invalid action_type"));
       }
       actionType = action_type as AuditActionType;
     }
@@ -80,6 +82,6 @@ export async function getMerchantAuditLogs(req: AuthRequest, res: Response) {
     });
   } catch (error: any) {
     console.error("Error fetching merchant audit logs:", error);
-    return res.status(500).json({ success: false, error: { code: "INTERNAL_ERROR", message: "Failed to fetch audit logs" } });
+    return sendApiError(res, apiError(500, ErrorCode.INTERNAL_ERROR, "Failed to fetch audit logs"));
   }
 }

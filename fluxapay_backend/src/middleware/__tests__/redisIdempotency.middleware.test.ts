@@ -34,14 +34,22 @@ describe("Redis Idempotency Middleware", () => {
   it("should return 400 if Idempotency-Key is missing", async () => {
     await redisIdempotencyMiddleware(req as Request, res as Response, next);
     expect(res.status).toHaveBeenCalledWith(400);
-    expect(res.json).toHaveBeenCalledWith({ error: "Missing Idempotency-Key header." });
+    expect(res.json).toHaveBeenCalledWith({
+      code: "MISSING_IDEMPOTENCY_KEY",
+      message: "Missing Idempotency-Key header.",
+    });
   });
 
   it("should return 400 if Idempotency-Key is not a valid UUID", async () => {
     req.headers!["idempotency-key"] = "invalid-key";
     await redisIdempotencyMiddleware(req as Request, res as Response, next);
     expect(res.status).toHaveBeenCalledWith(400);
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: expect.stringContaining("Invalid Idempotency-Key format") }));
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        code: "INVALID_IDEMPOTENCY_KEY",
+        message: expect.stringContaining("Invalid Idempotency-Key format"),
+      }),
+    );
   });
 
   it("should call next() if key is unique and setnx succeeds", async () => {
@@ -71,7 +79,12 @@ describe("Redis Idempotency Middleware", () => {
 
     expect(redisClient.get).toHaveBeenCalledWith(`idempotency:merch_123:${key}`);
     expect(res.status).toHaveBeenCalledWith(409);
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: "idempotency_conflict" }));
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        code: "IDEMPOTENCY_CONFLICT",
+        message: "A request with this idempotency key is already in progress.",
+      }),
+    );
   });
 
   it("should return 200 with replayed response if completed", async () => {

@@ -4,7 +4,7 @@
  * Verifies that:
  *  1. Requests within the limit are accepted normally (200/201/4xx from route logic)
  *  2. Requests exceeding the limit receive 413 with a structured JSON error
- *  3. The error body contains `error`, `message`, and `limit` fields
+ *  3. The error body contains `code`, `message`, and limit details
  *  4. The limit is configurable via REQUEST_BODY_SIZE_LIMIT env var
  *  5. Non-JSON routes (health check) are unaffected
  *
@@ -14,6 +14,8 @@
 
 import express, { Request, Response, NextFunction } from "express";
 import request from "supertest";
+import { apiError, sendApiError } from "../../helpers/apiError.helper";
+import { ErrorCode } from "../../types/errors";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -37,11 +39,15 @@ function buildApp(limitOverride?: string) {
             next: NextFunction,
         ) => {
             if (err.type === "entity.too.large" || err.status === 413) {
-                return res.status(413).json({
-                    error: "Payload Too Large",
-                    message: `Request body exceeds the ${bodyLimit} limit. Reduce the payload size and try again.`,
-                    limit: bodyLimit,
-                });
+                return sendApiError(
+                    res,
+                    apiError(
+                        413,
+                        ErrorCode.PAYLOAD_TOO_LARGE,
+                        `Request body exceeds the ${bodyLimit} limit. Reduce the payload size and try again.`,
+                        { details: { limit: bodyLimit } },
+                    ),
+                );
             }
             next(err);
         },
@@ -110,9 +116,9 @@ describe("Request body size limit", () => {
 
             expect(res.status).toBe(413);
             expect(res.body).toMatchObject({
-                error: "Payload Too Large",
+                code: "PAYLOAD_TOO_LARGE",
                 message: expect.stringContaining("1mb"),
-                limit: "1mb",
+                details: { limit: "1mb" },
             });
         });
 
@@ -142,7 +148,7 @@ describe("Request body size limit", () => {
                 .set("Content-Type", "application/json")
                 .send(bodyOfSize(200));
             expect(large.status).toBe(413);
-            expect(large.body.limit).toBe("100b");
+            expect(large.body.details.limit).toBe("100b");
         });
 
         it("respects a larger limit (5mb)", async () => {
@@ -177,8 +183,9 @@ describe("Request body size limit", () => {
                 .send(bodyOfSize(300 * 1024)); // 300kb > 256kb
 
             expect(res.status).toBe(413);
+            expect(res.body.code).toBe("PAYLOAD_TOO_LARGE");
             expect(res.body.message).toContain("256kb");
-            expect(res.body.limit).toBe("256kb");
+            expect(res.body.details.limit).toBe("256kb");
         });
     });
 });

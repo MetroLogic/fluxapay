@@ -101,11 +101,9 @@ describe('Audit Controller', () => {
       expect(res.status).toHaveBeenCalledWith(400);
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({
-          success: false,
-          error: expect.objectContaining({
-            code: 'VALIDATION_ERROR',
-          }),
-        })
+          code: "VALIDATION_ERROR",
+          message: "Invalid date_from format",
+        }),
       );
     });
   });
@@ -146,11 +144,9 @@ describe('Audit Controller', () => {
       expect(res.status).toHaveBeenCalledWith(404);
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({
-          success: false,
-          error: expect.objectContaining({
-            code: 'NOT_FOUND',
-          }),
-        })
+          code: "NOT_FOUND",
+          message: "Audit log not found",
+        }),
       );
     });
   });

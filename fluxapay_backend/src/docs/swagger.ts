@@ -39,10 +39,24 @@ const options: swaggerJsdoc.Options = {
             schemas: {
                 ErrorResponse: {
                     type: 'object',
+                    required: ['code', 'message'],
                     properties: {
+                        code: {
+                            type: 'string',
+                            description: 'Machine-readable error code',
+                            enum: [
+                                'INVALID_API_KEY', 'MERCHANT_NOT_FOUND', 'PAYMENT_NOT_FOUND',
+                                'RATE_LIMIT_EXCEEDED', 'VALIDATION_ERROR', 'INTERNAL_ERROR',
+                            ],
+                            example: 'VALIDATION_ERROR',
+                        },
                         message: {
                             type: 'string',
                             example: 'Validation failed',
+                        },
+                        details: {
+                            type: 'object',
+                            additionalProperties: true,
                         },
                         errors: {
                             type: 'array',
@@ -53,6 +67,10 @@ const options: swaggerJsdoc.Options = {
                                     message: { type: 'string', example: 'Amount must be greater than 0' },
                                 },
                             },
+                        },
+                        retry_after_seconds: {
+                            type: 'integer',
+                            example: 60,
                         },
                     },
                 },

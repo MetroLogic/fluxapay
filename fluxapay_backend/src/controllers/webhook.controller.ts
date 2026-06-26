@@ -1,3 +1,5 @@
+import { ErrorCode } from "../types/errors";
+import { apiError, sendApiError } from "../helpers/apiError.helper";
 import { Request, Response } from "express";
 import z from "zod";
 import * as webhookSchema from "../schemas/webhook.schema";
@@ -36,7 +38,7 @@ export async function getWebhookLogs(req: AuthRequest, res: Response) {
     res.status(200).json(result);
   } catch (err) {
     console.error(err);
-    res.status((err as any).status || 500).json({ message: (err as any).message || "Server error" });
+    sendApiError(res, err);
   }
 }
 
@@ -59,7 +61,7 @@ export async function exportWebhookLogs(req: AuthRequest, res: Response) {
     return res.status(200).send(result.content);
   } catch (err) {
     console.error(err);
-    res.status((err as any).status || 500).json({ message: (err as any).message || "Server error" });
+    sendApiError(res, err);
   }
 }
 
@@ -69,7 +71,7 @@ export async function getWebhookLogDetails(req: AuthRequest, res: Response) {
     const { log_id } = req.params;
 
     if (!log_id || Array.isArray(log_id)) {
-      return res.status(400).json({ message: "Log ID is required" });
+      return sendApiError(res, apiError(400, ErrorCode.LOG_ID_REQUIRED, "Log ID is required"));
     }
 
     const result = await getWebhookLogDetailsService({
@@ -80,7 +82,7 @@ export async function getWebhookLogDetails(req: AuthRequest, res: Response) {
     res.status(200).json(result);
   } catch (err: any) {
     console.error(err);
-    res.status(err.status || 500).json({ message: err.message || "Server error" });
+    sendApiError(res, err);
   }
 }
 
@@ -90,7 +92,7 @@ export async function retryWebhook(req: AuthRequest, res: Response) {
     const { log_id } = req.params;
 
     if (!log_id || Array.isArray(log_id)) {
-      return res.status(400).json({ message: "Log ID is required" });
+      return sendApiError(res, apiError(400, ErrorCode.LOG_ID_REQUIRED, "Log ID is required"));
     }
 
     const result = await retryWebhookService({
@@ -101,7 +103,7 @@ export async function retryWebhook(req: AuthRequest, res: Response) {
     res.status(200).json(result);
   } catch (err: any) {
     console.error(err);
-    res.status(err.status || 500).json({ message: err.message || "Server error" });
+    sendApiError(res, err);
   }
 }
 
@@ -120,7 +122,7 @@ export async function sendTestWebhook(req: AuthRequest, res: Response) {
     res.status(200).json(result);
   } catch (err) {
     console.error(err);
-    res.status((err as any).status || 500).json({ message: (err as any).message || "Server error" });
+    sendApiError(res, err);
   }
 }
 
@@ -141,7 +143,7 @@ export async function getDeadLetterQueue(req: Request, res: Response) {
     res.status(200).json(result);
   } catch (err: any) {
     console.error(err);
-    res.status(err.status || 500).json({ message: err.message || "Server error" });
+    sendApiError(res, err);
   }
 }
 
@@ -150,13 +152,13 @@ export async function requeueWebhook(req: Request, res: Response) {
     const { log_id } = req.params;
 
     if (!log_id || Array.isArray(log_id)) {
-      return res.status(400).json({ message: "Log ID is required" });
+      return sendApiError(res, apiError(400, ErrorCode.LOG_ID_REQUIRED, "Log ID is required"));
     }
 
     const result = await requeueWebhookService({ log_id });
     res.status(200).json(result);
   } catch (err: any) {
     console.error(err);
-    res.status(err.status || 500).json({ message: err.message || "Server error" });
+    sendApiError(res, err);
   }
 }

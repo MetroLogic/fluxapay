@@ -1,3 +1,5 @@
+import { ErrorCode } from "../types/errors";
+import { apiError, sendApiError } from "../helpers/apiError.helper";
 import { Request, Response } from "express";
 import { apiKeyService } from "../services/apiKey.service";
 import { AuthRequest } from "../types/express";
@@ -13,11 +15,11 @@ export const createApiKey = async (req: Request, res: Response) => {
     const { name, environment } = req.body;
 
     if (!name || typeof name !== "string") {
-      return res.status(400).json({ error: "name is required and must be a string" });
+      return sendApiError(res, apiError(400, ErrorCode.MISSING_REQUIRED_FIELD, "name is required and must be a string"));
     }
 
     if (environment !== "live" && environment !== "test") {
-      return res.status(400).json({ error: "environment must be 'live' or 'test'" });
+      return sendApiError(res, apiError(400, ErrorCode.INVALID_ENVIRONMENT, "environment must be 'live' or 'test'"));
     }
 
     const result = await apiKeyService.createApiKey(
@@ -31,14 +33,20 @@ export const createApiKey = async (req: Request, res: Response) => {
   } catch (error: unknown) {
     if (error instanceof Error) {
       if (error.message.includes("Rate limit exceeded")) {
-        return res.status(429).json({ error: error.message });
+        return sendApiError(
+          res,
+          apiError(429, ErrorCode.API_KEY_RATE_LIMIT, error.message),
+        );
       }
       if (error.message.includes("Maximum active keys")) {
-        return res.status(422).json({ error: error.message });
+        return sendApiError(
+          res,
+          apiError(422, ErrorCode.MAX_ACTIVE_KEYS, error.message),
+        );
       }
     }
     console.error("Error creating API key:", error);
-    res.status(500).json({ error: "Failed to create API key" });
+    sendApiError(res, apiError(500, ErrorCode.API_KEY_CREATE_FAILED, "Failed to create API key"));
   }
 };
 
@@ -55,7 +63,7 @@ export const listApiKeys = async (req: Request, res: Response) => {
     res.json({ data: apiKeys });
   } catch (error: unknown) {
     console.error("Error listing API keys:", error);
-    res.status(500).json({ error: "Failed to list API keys" });
+    sendApiError(res, apiError(500, ErrorCode.API_KEY_LIST_FAILED, "Failed to list API keys"));
   }
 };
 
@@ -74,13 +82,13 @@ export const revokeApiKey = async (req: Request, res: Response) => {
   } catch (error: unknown) {
     if (error instanceof Error) {
       if (error.message === "API key not found") {
-        return res.status(404).json({ error: "API key not found" });
+        return sendApiError(res, apiError(404, ErrorCode.API_KEY_NOT_FOUND, "API key not found"));
       }
       if (error.message === "API key is already revoked") {
-        return res.status(400).json({ error: "API key is already revoked" });
+        return sendApiError(res, apiError(400, ErrorCode.API_KEY_ALREADY_REVOKED, "API key is already revoked"));
       }
     }
     console.error("Error revoking API key:", error);
-    res.status(500).json({ error: "Failed to revoke API key" });
+    sendApiError(res, apiError(500, ErrorCode.API_KEY_REVOKE_FAILED, "Failed to revoke API key"));
   }
 };

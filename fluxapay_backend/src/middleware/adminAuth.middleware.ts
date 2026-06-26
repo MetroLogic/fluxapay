@@ -1,4 +1,6 @@
 import { Request, Response, NextFunction } from "express";
+import { apiError, sendApiError } from "../helpers/apiError.helper";
+import { ErrorCode } from "../types/errors";
 
 /**
  * Middleware to protect admin-only routes using a pre-shared secret.
@@ -14,16 +16,22 @@ export function adminAuth(req: Request, res: Response, next: NextFunction) {
   if (!adminSecret) {
     // If secret is not configured, only allow in development
     if (process.env.NODE_ENV === "production") {
-      return res.status(503).json({
-        message: "Admin endpoints are disabled in production because ADMIN_SECRET is not configured.",
-      });
+      return sendApiError(
+        res,
+        apiError(
+          503,
+          ErrorCode.SERVICE_UNAVAILABLE,
+          "Admin endpoints are disabled in production because ADMIN_SECRET is not configured.",
+        ),
+      );
     }
   } else {
     // Secret is configured, must match
     if (providedSecret !== adminSecret) {
-      return res.status(401).json({
-        message: "Unauthorized. Invalid or missing admin secret.",
-      });
+      return sendApiError(
+        res,
+        apiError(401, ErrorCode.UNAUTHORIZED, "Unauthorized. Invalid or missing admin secret."),
+      );
     }
   }
 

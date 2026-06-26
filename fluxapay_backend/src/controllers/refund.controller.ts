@@ -1,3 +1,5 @@
+import { ErrorCode } from "../types/errors";
+import { apiError, sendApiError } from "../helpers/apiError.helper";
 import { Request, Response } from "express";
 import { validateUserId } from "../helpers/request.helper";
 import { AuthRequest } from "../types/express";
@@ -53,7 +55,7 @@ export async function updateRefundStatus(req: AuthRequest, res: Response) {
     const refundIdRaw = (req.params as any).refund_id as string | string[] | undefined;
     const refund_id = Array.isArray(refundIdRaw) ? refundIdRaw[0] : refundIdRaw;
     if (!refund_id) {
-      return res.status(400).json({ message: "refund_id is required" });
+      return sendApiError(res, apiError(400, ErrorCode.REFUND_ID_REQUIRED, "refund_id is required"));
     }
 
     const result = await updateRefundStatusService({

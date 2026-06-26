@@ -1,3 +1,5 @@
+import { apiError, sendApiError } from "../helpers/apiError.helper";
+import { ErrorCode } from "../types/errors";
 import { Response } from "express";
 import { AuthRequest } from "../types/express";
 import { validateUserId } from "../helpers/request.helper";
@@ -21,7 +23,7 @@ export async function selfRequestDeletion(req: AuthRequest, res: Response) {
       ...result,
     });
   } catch (err: any) {
-    res.status(err.status || 500).json({ message: err.message || "Server error" });
+    sendApiError(res, err);
   }
 }
 
@@ -35,7 +37,7 @@ export async function selfGetDeletionRequest(req: AuthRequest, res: Response) {
     const request = await getDeletionRequest(merchantId);
     res.json(request);
   } catch (err: any) {
-    res.status(err.status || 500).json({ message: err.message || "Server error" });
+    sendApiError(res, err);
   }
 }
 
@@ -51,7 +53,7 @@ export async function adminRequestDeletion(req: AuthRequest, res: Response) {
     const result = await requestDeletion(merchantId, `admin:${adminId}`, reason);
     res.status(202).json({ message: "Deletion request recorded.", ...result });
   } catch (err: any) {
-    res.status(err.status || 500).json({ message: err.message || "Server error" });
+    sendApiError(res, err);
   }
 }
 
@@ -66,6 +68,6 @@ export async function adminExecuteDeletion(req: AuthRequest, res: Response) {
     await executeDeletion(merchantId, adminId);
     res.json({ message: "Merchant account anonymized. Financial records retained." });
   } catch (err: any) {
-    res.status(err.status || 500).json({ message: err.message || "Server error" });
+    sendApiError(res, err);
   }
 }
