@@ -3,10 +3,10 @@ import { incrementConversions } from "@/lib/links";
 
 export async function POST(
   _req: NextRequest,
-  { params }: { params: Promise<{ slug: string }> }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const { slug } = await params;
-  const link = incrementConversions(slug);
+  const { id } = await params;
+  const link = incrementConversions(id);
   if (!link) return NextResponse.json({ error: "Not found" }, { status: 404 });
   return NextResponse.json({ conversions: link.conversions });
 }
