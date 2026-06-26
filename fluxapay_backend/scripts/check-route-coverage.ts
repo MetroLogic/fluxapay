@@ -35,6 +35,7 @@ const ROUTE_FILE_MOUNT_PREFIX: Record<string, string> = {
     'settlement.route.ts': '/settlements',
     'settlementBatch.route.ts': '/admin/settlement',
     'sweep.route.ts': '/admin/sweep',
+    'system.route.ts': '/admin/system',
     'webhook.route.ts': '/webhooks',
 };
 
