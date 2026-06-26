@@ -70,7 +70,8 @@ export const QuickActions = () => {
       });
 
       if (format === "pdf") {
-        exportSettlementReportPDF(result.content, `settlement_report_${fromDate}_${toDate}.pdf`);
+        const pdfResult = result as { content: Parameters<typeof exportSettlementReportPDF>[0] };
+        exportSettlementReportPDF(pdfResult.content, `settlement_report_${fromDate}_${toDate}.pdf`);
       } else {
         const blob = result as Blob;
         const url = URL.createObjectURL(blob);
