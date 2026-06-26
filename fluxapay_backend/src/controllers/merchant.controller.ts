@@ -16,6 +16,10 @@ import {
   addBankAccountService,
   updateBankAccountService,
 } from "../services/merchant.service";
+import {
+  getNotificationPreferences,
+  updateNotificationPreferences,
+} from "../services/notificationPreferences.service";
 import { AuthRequest } from "../types/express";
 import { validateUserId } from "../helpers/request.helper";
 
@@ -37,7 +41,17 @@ export const verifyOtp = createController<VerifyOtpRequest>(
 );
 
 export const resendOtp = createController<ResendOtpRequest>(
-  resendOtpMerchantService,
+  async (body, req) => {
+    const ip: string | undefined =
+      (req.ip) ||
+      (req.socket?.remoteAddress) ||
+      undefined;
+    return resendOtpMerchantService({
+      merchantId: body.merchantId,
+      channel: body.channel,
+      ip,
+    });
+  },
 );
 
 export const getLoggedInMerchant = createController(
@@ -273,5 +287,30 @@ export const updateBankAccount = createController(
       merchantId,
       ...body,
     });
+  },
+);
+
+// ── Notification preferences ──────────────────────────────────────────────────
+
+export const getNotificationPreferencesController = createController(
+  async (_, req: AuthRequest) => {
+    const merchantId = await validateUserId(req);
+    const preferences = await getNotificationPreferences(merchantId);
+    return { preferences };
+  },
+);
+
+export const updateNotificationPreferencesController = createController(
+  async (
+    body: { payment_expiry_reminder?: boolean; reminder_minutes_before?: number },
+    req: AuthRequest,
+  ) => {
+    const merchantId = await validateUserId(req);
+    const preferences = await updateNotificationPreferences({
+      merchantId,
+      payment_expiry_reminder: body.payment_expiry_reminder,
+      reminder_minutes_before: body.reminder_minutes_before,
+    });
+    return { message: "Notification preferences updated", preferences };
   },
 );

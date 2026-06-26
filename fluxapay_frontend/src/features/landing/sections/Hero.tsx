@@ -4,6 +4,7 @@ import { Link } from "@/i18n/routing";
 import { useTranslations } from "next-intl";
 import Image from "next/image";
 import { Navbar } from "../components/Navbar";
+import { track } from "@/lib/analytics";
 
 import transfer_icon_1 from "@/assets/transfer-icon-ngn.svg";
 import transfer_icon_2 from "@/assets/transfer-icon-khs.svg";
@@ -11,6 +12,10 @@ import transfer_icon_3 from "@/assets/transfer-icon-ghs.svg";
 
 const Hero = () => {
   const t = useTranslations("hero");
+  
+  const handleGetStartedClick = () => {
+    track("cta_clicked", { location: "hero", action: "signup" });
+  };
   
   return (
     <div className="hero">
@@ -85,6 +90,7 @@ const Hero = () => {
 
               <Link
                 href="/signup"
+                onClick={handleGetStartedClick}
                 className="px-5 py-2 text-lg font-semibold text-black bg-white rounded-lg transition-all block w-fit mx-auto"
               >
                 {t("cta")}

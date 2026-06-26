@@ -316,3 +316,67 @@ export async function sendSecurityAlertEmail(data: {
     // Don't throw - security alerts shouldn't block the main flow
   }
 }
+
+export interface BackupFailureAlertDetails {
+  to: string;
+  backupId: string;
+  reason: string;
+}
+
+export async function sendBackupFailureAlertEmail(
+  details: BackupFailureAlertDetails,
+): Promise<void> {
+  try {
+    const response = await getResend().emails.send({
+      from: process.env.MAIL_FROM || "noreply@fluxapay.com",
+      to: details.to,
+      subject: `🚨 [FluxaPay] Database Backup FAILED — ${details.backupId}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #dc2626;">🚨 Database Backup Failed</h2>
+          <p>The automated database backup job has failed. Immediate attention is required.</p>
+          <div style="background: #fef2f2; border-left: 4px solid #dc2626; padding: 16px; border-radius: 4px; margin: 16px 0;">
+            <table style="width: 100%; border-collapse: collapse;">
+              <tr>
+                <td style="padding: 6px 0; font-weight: bold;">Backup ID:</td>
+                <td style="padding: 6px 0; font-family: monospace; font-size: 12px;">${details.backupId}</td>
+              </tr>
+              <tr>
+                <td style="padding: 6px 0; font-weight: bold;">Failure Reason:</td>
+                <td style="padding: 6px 0; color: #991b1b;">${details.reason}</td>
+              </tr>
+              <tr>
+                <td style="padding: 6px 0; font-weight: bold;">Time:</td>
+                <td style="padding: 6px 0;">${new Date().toUTCString()}</td>
+              </tr>
+            </table>
+          </div>
+          <p><strong>Recommended Actions:</strong></p>
+          <ol>
+            <li>Check the application logs for the full error stack trace.</li>
+            <li>Verify <code>DATABASE_URL</code> and <code>DB_BACKUP_ENCRYPTION_KEY</code> environment variables are set correctly.</li>
+            <li>Confirm <code>pg_dump</code> is available and can connect to the database.</li>
+            <li>Ensure the backup directory has sufficient disk space.</li>
+            <li>Trigger a manual backup once the issue is resolved: check <code>cron.service.ts</code> for the manual trigger pattern.</li>
+            <li>Consult the <a href="docs/DB_BACKUP_RUNBOOK.md">DB Backup Runbook</a> for detailed recovery steps.</li>
+          </ol>
+          <p style="color: #666; font-size: 13px;">
+            This is an automated alert from the FluxaPay backup service. Do not reply to this email.
+          </p>
+          <p>— FluxaPay Ops</p>
+        </div>
+      `,
+    });
+    if (response.error) {
+      if (isDevEnv()) {
+        console.error("Error sending backup failure alert:", response.error);
+      }
+      throw new Error("Failed to send backup failure alert email");
+    }
+  } catch (err) {
+    if (isDevEnv()) {
+      console.error("Error sending backup failure alert:", err);
+    }
+    // Don't throw — alert failures must not mask the underlying backup error
+  }
+}

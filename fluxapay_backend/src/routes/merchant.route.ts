@@ -16,13 +16,15 @@ import {
   updateSettlementSchedule,
   addBankAccount,
   updateBankAccount,
+  getNotificationPreferencesController,
+  updateNotificationPreferencesController,
 } from "../controllers/merchant.controller";
 import { validate } from "../middleware/validation.middleware";
 import * as merchantSchema from "../schemas/merchant.schema";
 import { authenticateApiKey } from "../middleware/apiKeyAuth.middleware";
 import { idempotencyMiddleware } from "../middleware/idempotency.middleware";
 import { adminAuth } from "../middleware/adminAuth.middleware";
-import { updateSettlementScheduleSchema, bankAccountSchema, updateBankAccountSchema } from "../schemas/merchant.schema";
+import { updateSettlementScheduleSchema, bankAccountSchema, updateBankAccountSchema, updateNotificationPreferencesSchema } from "../schemas/merchant.schema";
 import { authRateLimit, merchantApiKeyRateLimit, merchantRateLimit } from "../middleware/rateLimit.middleware";
 
 const router = Router();
@@ -536,6 +538,80 @@ router.patch(
   authenticateApiKey, merchantApiKeyRateLimit(),
   validate(updateBankAccountSchema),
   updateBankAccount,
+);
+
+/**
+ * @swagger
+ * /api/v1/merchants/me/notification-preferences:
+ *   get:
+ *     summary: Get merchant notification preferences
+ *     tags: [Merchants]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Current notification preferences
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 preferences:
+ *                   type: object
+ *                   properties:
+ *                     merchantId:
+ *                       type: string
+ *                     payment_expiry_reminder:
+ *                       type: boolean
+ *                       description: Whether to receive payment-expiry reminder notifications
+ *                     reminder_minutes_before:
+ *                       type: integer
+ *                       description: How many minutes before expiry to send the reminder
+ *       401:
+ *         description: Unauthorized
+ */
+router.get(
+  "/me/notification-preferences",
+  authenticateApiKey, merchantApiKeyRateLimit(),
+  getNotificationPreferencesController,
+);
+
+/**
+ * @swagger
+ * /api/v1/merchants/me/notification-preferences:
+ *   patch:
+ *     summary: Update merchant notification preferences
+ *     tags: [Merchants]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               payment_expiry_reminder:
+ *                 type: boolean
+ *                 description: Set to false to opt out of payment-expiry reminders
+ *               reminder_minutes_before:
+ *                 type: integer
+ *                 minimum: 1
+ *                 maximum: 1440
+ *                 description: Minutes before expiry to send the reminder (1–1440)
+ *     responses:
+ *       200:
+ *         description: Preferences updated
+ *       400:
+ *         description: Validation error
+ *       401:
+ *         description: Unauthorized
+ */
+router.patch(
+  "/me/notification-preferences",
+  authenticateApiKey, merchantApiKeyRateLimit(),
+  validate(updateNotificationPreferencesSchema),
+  updateNotificationPreferencesController,
 );
 
 export default router;
