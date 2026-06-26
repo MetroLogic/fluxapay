@@ -35,6 +35,8 @@ import dataExportRoutes from "./routes/dataExport.route";
 import oracleRoutes from "./routes/oracle.route";
 import chargesRoutes from "./routes/charges.route";
 import apiKeyRoutes from "./routes/apiKey.route";
+import authRoutes from "./routes/auth.route";
+import escrowRoutes from "./routes/escrow.route";
 
 const app = express();
 const prisma = new PrismaClient();

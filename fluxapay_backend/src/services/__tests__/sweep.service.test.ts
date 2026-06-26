@@ -176,6 +176,51 @@ describe("SweepService", () => {
       expect(result.skipped[0].reason).toContain("No USDC balance");
     });
 
+    it("should skip payments below minimum balance threshold", async () => {
+      process.env.SWEEP_MIN_BALANCE_USDC = "0.5";
+
+      const mockPayments = [
+        {
+          id: "payment_1",
+          merchantId: "merchant_1",
+          amount: "0.30",
+          status: "confirmed",
+          stellar_address: "GTEST123",
+          derivation_path: "m/44'/148'/0'/0/0",
+          swept: false,
+          confirmed_at: new Date(),
+        },
+      ];
+
+      const mockKeypair = {
+        publicKey: "GTEST123",
+        secretKey: "STEST123",
+      };
+
+      const mockAccount = {
+        balances: [
+          {
+            asset_type: "credit_alphanum4",
+            asset_code: "USDC",
+            asset_issuer: "GBBD47IF6LWK7P7MDEVSCWT73IQIGCEZHR7OMXMBZQ3ZONN2T4U6W23Y",
+            balance: "0.3000000",
+          },
+        ],
+        sequence: "123456",
+      };
+
+      mockPrisma.payment.findMany.mockResolvedValue(mockPayments);
+      mockHDWalletService.regenerateKeypairFromPath.mockResolvedValue(mockKeypair);
+      mockServer.loadAccount.mockResolvedValue(mockAccount);
+
+      const result = await sweepService.sweepPaidPayments({ adminId: "admin_1" });
+
+      expect(result.addressesSwept).toBe(0);
+      expect(result.skipped).toHaveLength(1);
+      expect(result.skipped[0].reason).toContain("below minimum threshold");
+      expect(mockServer.submitTransaction).not.toHaveBeenCalled();
+    });
+
     it("should skip payments with address mismatch", async () => {
       const mockPayments = [
         {

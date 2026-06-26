@@ -165,7 +165,7 @@ export class DepositAddressService {
     let enc = cipher.update(plaintext, "utf8", "hex");
     enc += cipher.final("hex");
     const tag = cipher.getAuthTag();
-    return \`\${iv.toString("hex")}:\${tag.toString("hex")}:\${enc}\`;
+    return `${iv.toString("hex")}:${tag.toString("hex")}:${enc}`;
   }
 
   /**

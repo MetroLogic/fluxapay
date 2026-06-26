@@ -31,10 +31,11 @@ import { performDatabaseBackup } from "./dbBackup.service";
 import { runInvoiceOverdueJob } from "./invoiceOverdue.service";
 import { cleanupExpiredIdempotencyRecords } from "../middleware/idempotency.middleware";
 import { DepositAddressService } from "./depositAddress.service";
+import { getSweepCronInterval, logSweepConfigAtStartup } from "../config/sweep.config";
 
 const SETTLEMENT_CRON_EXPR = process.env.SETTLEMENT_CRON ?? "0 0 * * *";
 const BILLING_CRON_EXPR = process.env.BILLING_CRON ?? "0 1 * * *";
-const SWEEP_CRON_EXPR = process.env.SWEEP_CRON ?? "*/5 * * * *";
+const SWEEP_CRON_EXPR = getSweepCronInterval();
 const FUNDER_MONITOR_CRON_EXPR = process.env.FUNDER_MONITOR_CRON ?? "*/10 * * * *";
 const CHECKOUT_REMINDER_CRON_EXPR = process.env.CHECKOUT_REMINDER_CRON ?? "*/2 * * * *";
 const PAYMENT_EXPIRY_CRON_EXPR = process.env.PAYMENT_EXPIRY_CRON ?? "*/5 * * * *";
@@ -86,10 +87,12 @@ export function startCronJobs(): void {
   }, { timezone: "UTC" });
 
   // ── Sweep Job ──────────────────────────────────────────────────────────────
+  logSweepConfigAtStartup();
   sweepTask = schedule(SWEEP_CRON_EXPR, async () => {
     console.log(`[Cron] ⏰ Sweep triggered at ${new Date().toISOString()}`);
     await runSweepWithLock();
   }, { timezone: "UTC" });
+  console.log(`[Cron] ✅ Sweep job scheduled (${SWEEP_CRON_EXPR}) in UTC.`);
 
   // ── Funder Monitor ─────────────────────────────────────────────────────────
   funderMonitorTask = schedule(FUNDER_MONITOR_CRON_EXPR, async () => {
