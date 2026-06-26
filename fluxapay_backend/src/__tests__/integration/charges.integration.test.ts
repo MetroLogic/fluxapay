@@ -146,6 +146,6 @@ describe("POST /api/v1/charges Integration", () => {
       .send(payload);
 
     expect(res.status).toBe(409);
-    expect(res.body).toHaveProperty("error", "idempotency_conflict");
+    expect(res.body).toHaveProperty("code", "IDEMPOTENCY_CONFLICT");
   });
 });

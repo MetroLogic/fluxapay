@@ -185,10 +185,16 @@ export class FluxaPayError extends Error {
   constructor(
     public readonly statusCode: number,
     message: string,
+    public readonly code?: string,
     public readonly raw?: unknown,
   ) {
     super(message);
     this.name = 'FluxaPayError';
+  }
+
+  /** Branch on machine-readable error code from the API. */
+  is(code: string): boolean {
+    return this.code === code;
   }
 }
 
@@ -218,9 +224,11 @@ async function request<T>(
   const json = await res.json().catch(() => null);
 
   if (!res.ok) {
+    const body = json as { message?: string; code?: string } | null;
     throw new FluxaPayError(
       res.status,
-      (json as { message?: string })?.message ?? `HTTP ${res.status}`,
+      body?.message ?? `HTTP ${res.status}`,
+      body?.code,
       json,
     );
   }

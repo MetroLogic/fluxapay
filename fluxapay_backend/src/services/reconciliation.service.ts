@@ -1,3 +1,5 @@
+import { apiError } from "../helpers/apiError.helper";
+import { ErrorCode } from "../types/errors";
 import {
   AlertSeverity,
   PrismaClient,
@@ -158,7 +160,7 @@ export async function getReconciliationSummaryService(params: {
   const periodEnd = new Date(params.period_end);
 
   if (periodStart > periodEnd) {
-    throw { status: 400, message: "period_start must be earlier than period_end" };
+    throw apiError(400, ErrorCode.INVALID_DATE_RANGE, "period_start must be earlier than period_end");
   }
 
   const merchants = params.merchant_id

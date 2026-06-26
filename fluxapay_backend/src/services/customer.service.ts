@@ -1,3 +1,5 @@
+import { apiError } from "../helpers/apiError.helper";
+import { ErrorCode } from "../types/errors";
 import { PrismaClient, Prisma } from "../generated/client/client";
 
 const prisma = new PrismaClient();
@@ -6,7 +8,7 @@ function validateAndNormalizeEmail(email: string): string {
   // RFC 5322 basic validation
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailRegex.test(email)) {
-    throw { status: 400, message: "Invalid email format" };
+    throw apiError(400, ErrorCode.INVALID_EMAIL, "Invalid email format");
   }
   return email.toLowerCase().trim();
 }
@@ -26,7 +28,7 @@ export async function createCustomerService(params: {
 
   // Validate metadata max 10 pairs
   if (metadata && Object.keys(metadata).length > 10) {
-    throw { status: 400, message: "Metadata cannot exceed 10 key-value pairs" };
+    throw apiError(400, ErrorCode.INVALID_METADATA, "Metadata cannot exceed 10 key-value pairs");
   }
 
   // Check for duplicate email per merchant
@@ -39,7 +41,7 @@ export async function createCustomerService(params: {
   });
 
   if (existing) {
-    throw { status: 409, message: "Customer with this email already exists" };
+    throw apiError(409, ErrorCode.CUSTOMER_ALREADY_EXISTS, "Customer with this email already exists");
   }
 
   return prisma.customer.create({
@@ -103,7 +105,7 @@ export async function getCustomerByIdService(params: {
   });
 
   if (!row) {
-    throw { status: 404, message: "Customer not found" };
+    throw apiError(404, ErrorCode.CUSTOMER_NOT_FOUND, "Customer not found");
   }
 
   // Get payment history summary
@@ -152,13 +154,13 @@ export async function updateCustomerService(params: {
     });
 
     if (existing) {
-      throw { status: 409, message: "Customer with this email already exists" };
+      throw apiError(409, ErrorCode.CUSTOMER_ALREADY_EXISTS, "Customer with this email already exists");
     }
   }
 
   // Validate metadata max 10 pairs
   if (metadata && Object.keys(metadata).length > 10) {
-    throw { status: 400, message: "Metadata cannot exceed 10 key-value pairs" };
+    throw apiError(400, ErrorCode.INVALID_METADATA, "Metadata cannot exceed 10 key-value pairs");
   }
 
   const updateData: Prisma.CustomerUpdateInput = {};
@@ -183,7 +185,7 @@ export async function deleteCustomerService(params: {
   });
 
   if (!customer) {
-    throw { status: 404, message: "Customer not found" };
+    throw apiError(404, ErrorCode.CUSTOMER_NOT_FOUND, "Customer not found");
   }
 
   // Soft-delete with GDPR anonymization

@@ -440,7 +440,7 @@ describe('OpenAPI Contract Tests', () => {
 
       expect(response.status).toBe(401);
       expect(
-        'message' in response.body || 'error' in response.body,
+        'code' in response.body || 'message' in response.body || 'error' in response.body,
       ).toBe(true);
 
       await assertMatchesSpec(

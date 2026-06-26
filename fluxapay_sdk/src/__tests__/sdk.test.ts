@@ -34,9 +34,12 @@ const client = new FluxaPay({ apiKey: 'sk_test_123', baseUrl: 'http://localhost:
 assert(client instanceof FluxaPay, 'creates client instance');
 
 // FluxaPayError
-const err = new FluxaPayError(400, 'bad request');
+const err = new FluxaPayError(400, 'bad request', 'VALIDATION_ERROR');
 assert(err.statusCode === 400, 'FluxaPayError.statusCode is 400');
 assert(err.message === 'bad request', 'FluxaPayError.message is set');
+assert(err.code === 'VALIDATION_ERROR', 'FluxaPayError.code is set');
+assert(err.is('VALIDATION_ERROR'), 'FluxaPayError.is matches code');
+assert(!err.is('NOT_FOUND'), 'FluxaPayError.is rejects other codes');
 assert(err.name === 'FluxaPayError', 'FluxaPayError.name is correct');
 
 // Webhook verify – tampered payload should fail

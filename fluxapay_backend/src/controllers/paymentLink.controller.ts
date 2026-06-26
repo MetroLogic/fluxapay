@@ -1,3 +1,5 @@
+import { apiError, sendApiError } from "../helpers/apiError.helper";
+import { ErrorCode } from "../types/errors";
 import { Request, Response } from "express";
 import { validateUserId } from "../helpers/request.helper";
 import { AuthRequest } from "../types/express";
@@ -26,7 +28,7 @@ export async function createPaymentLink(req: AuthRequest, res: Response) {
     res.status(201).json(result);
   } catch (err: unknown) {
     const e = err as { status?: number; message?: string };
-    res.status(e.status || 500).json({ message: e.message || "Server error" });
+    sendApiError(res, err);
   }
 }
 
@@ -40,7 +42,7 @@ export async function getPaymentLinkById(req: AuthRequest, res: Response) {
     res.status(200).json(result);
   } catch (err: unknown) {
     const e = err as { status?: number; message?: string };
-    res.status(e.status || 500).json({ message: e.message || "Server error" });
+    sendApiError(res, err);
   }
 }
 
@@ -57,7 +59,7 @@ export async function listPaymentLinks(req: Request, res: Response) {
     res.status(200).json(result);
   } catch (err: unknown) {
     const e = err as { status?: number; message?: string };
-    res.status(e.status || 500).json({ message: e.message || "Server error" });
+    sendApiError(res, err);
   }
 }
 
@@ -76,7 +78,7 @@ export async function updatePaymentLink(req: AuthRequest, res: Response) {
     res.status(200).json(result);
   } catch (err: unknown) {
     const e = err as { status?: number; message?: string };
-    res.status(e.status || 500).json({ message: e.message || "Server error" });
+    sendApiError(res, err);
   }
 }
 
@@ -90,6 +92,6 @@ export async function deletePaymentLink(req: AuthRequest, res: Response) {
     res.status(204).send();
   } catch (err: unknown) {
     const e = err as { status?: number; message?: string };
-    res.status(e.status || 500).json({ message: e.message || "Server error" });
+    sendApiError(res, err);
   }
 }

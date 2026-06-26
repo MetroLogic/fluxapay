@@ -1,3 +1,5 @@
+import { ErrorCode } from "../types/errors";
+import { apiError, sendApiError } from "../helpers/apiError.helper";
 import { Request, Response } from "express";
 import {
   getReconciliationSummaryService,
@@ -16,7 +18,7 @@ export async function getReconciliationSummary(req: Request, res: Response) {
 
     res.status(200).json(result);
   } catch (err: any) {
-    res.status(err.status || 500).json({ message: err.message || "Server error" });
+    sendApiError(res, err);
   }
 }
 
@@ -34,7 +36,7 @@ export async function listDiscrepancyAlerts(req: Request, res: Response) {
 
     res.status(200).json(result);
   } catch (err: any) {
-    res.status(err.status || 500).json({ message: err.message || "Server error" });
+    sendApiError(res, err);
   }
 }
 
@@ -49,7 +51,7 @@ export async function upsertDiscrepancyThreshold(req: Request, res: Response) {
 
     res.status(200).json(result);
   } catch (err: any) {
-    res.status(err.status || 500).json({ message: err.message || "Server error" });
+    sendApiError(res, err);
   }
 }
 
@@ -58,7 +60,7 @@ export async function resolveDiscrepancyAlert(req: Request, res: Response) {
     const alertIdRaw = (req.params as any).alert_id as string | string[] | undefined;
     const alert_id = Array.isArray(alertIdRaw) ? alertIdRaw[0] : alertIdRaw;
     if (!alert_id) {
-      return res.status(400).json({ message: "alert_id is required" });
+      return sendApiError(res, apiError(400, ErrorCode.ALERT_ID_REQUIRED, "alert_id is required"));
     }
 
     const result = await resolveDiscrepancyAlertService({
@@ -68,6 +70,6 @@ export async function resolveDiscrepancyAlert(req: Request, res: Response) {
 
     res.status(200).json(result);
   } catch (err: any) {
-    res.status(err.status || 500).json({ message: err.message || "Server error" });
+    sendApiError(res, err);
   }
 }

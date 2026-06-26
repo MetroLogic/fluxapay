@@ -1,3 +1,5 @@
+import { apiError, sendApiError } from "../helpers/apiError.helper";
+import { ErrorCode } from "../types/errors";
 import { Request, Response } from "express";
 import { validateUserId } from "../helpers/request.helper";
 import { AuthRequest } from "../types/express";
@@ -23,7 +25,7 @@ export async function createCustomer(req: AuthRequest, res: Response) {
     res.status(201).json(row);
   } catch (err: unknown) {
     const e = err as { status?: number; message?: string };
-    res.status(e.status || 500).json({ message: e.message || "Server error" });
+    sendApiError(res, err);
   }
 }
 
@@ -42,7 +44,7 @@ export async function listCustomers(req: Request, res: Response) {
     res.status(200).json(result);
   } catch (err: unknown) {
     const e = err as { status?: number; message?: string };
-    res.status(e.status || 500).json({ message: e.message || "Server error" });
+    sendApiError(res, err);
   }
 }
 
@@ -56,7 +58,7 @@ export async function getCustomerById(req: AuthRequest, res: Response) {
     res.status(200).json(row);
   } catch (err: unknown) {
     const e = err as { status?: number; message?: string };
-    res.status(e.status || 500).json({ message: e.message || "Server error" });
+    sendApiError(res, err);
   }
 }
 
@@ -75,7 +77,7 @@ export async function updateCustomer(req: AuthRequest, res: Response) {
     res.status(200).json(row);
   } catch (err: unknown) {
     const e = err as { status?: number; message?: string };
-    res.status(e.status || 500).json({ message: e.message || "Server error" });
+    sendApiError(res, err);
   }
 }
 
@@ -89,6 +91,6 @@ export async function deleteCustomer(req: AuthRequest, res: Response) {
     res.status(204).send();
   } catch (err: unknown) {
     const e = err as { status?: number; message?: string };
-    res.status(e.status || 500).json({ message: e.message || "Server error" });
+    sendApiError(res, err);
   }
 }

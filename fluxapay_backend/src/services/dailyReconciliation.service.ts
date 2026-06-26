@@ -1,3 +1,5 @@
+import { apiError } from "../helpers/apiError.helper";
+import { ErrorCode } from "../types/errors";
 import { PrismaClient, Prisma } from "../generated/client/client";
 import { sendInvoiceEmail } from "./email.service";
 
@@ -167,7 +169,7 @@ export async function getDailyReconciliationReportService(params: {
   });
 
   if (!report) {
-    throw { status: 404, message: "Report not found" };
+    throw apiError(404, ErrorCode.REPORT_NOT_FOUND, "Report not found");
   }
 
   return {
@@ -259,7 +261,7 @@ export async function emailDailyReconciliationReportService(params: {
   });
 
   if (!merchant) {
-    throw { status: 404, message: "Merchant not found" };
+    throw apiError(404, ErrorCode.MERCHANT_NOT_FOUND, "Merchant not found");
   }
 
   const report = await getDailyReconciliationReportService({ merchantId, reportDate });

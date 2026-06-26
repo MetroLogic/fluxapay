@@ -1,4 +1,6 @@
 import { Request, Response, NextFunction } from "express";
+import { apiError, sendApiError } from "../helpers/apiError.helper";
+import { ErrorCode } from "../types/errors";
 import { PrismaClient } from "../generated/client/client";
 import crypto from "crypto";
 
@@ -36,10 +38,14 @@ export const idempotencyMiddleware = async (
     idempotencyKey.length === 0 ||
     idempotencyKey.length > 255
   ) {
-    res.status(400).json({
-      error:
+    sendApiError(
+      res,
+      apiError(
+        400,
+        ErrorCode.INVALID_IDEMPOTENCY_KEY,
         "Invalid Idempotency-Key header. Must be a non-empty string with max 255 characters.",
-    });
+      ),
+    );
     return;
   }
 
@@ -58,10 +64,14 @@ export const idempotencyMiddleware = async (
     if (existingRecord) {
       // Check if the request body matches
       if (existingRecord.request_hash !== requestHash) {
-        res.status(422).json({
-          error:
+        sendApiError(
+          res,
+          apiError(
+            422,
+            ErrorCode.IDEMPOTENCY_CONFLICT,
             "Idempotency key conflict: request body differs from original request",
-        });
+          ),
+        );
         return;
       }
 

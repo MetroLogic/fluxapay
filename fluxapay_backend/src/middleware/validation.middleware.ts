@@ -1,3 +1,5 @@
+import { ErrorCode } from "../types/errors";
+import { apiError, sendApiError } from "../helpers/apiError.helper";
 import { Request, Response, NextFunction } from "express";
 import { ZodType } from "zod";
 
@@ -17,7 +19,7 @@ export function validate<T extends ZodType>(schema: T) {
         message: issue.message,
       }));
 
-      return res.status(400).json({ message: "Validation failed", errors });
+      return sendApiError(res, apiError(400, ErrorCode.VALIDATION_ERROR, "Validation failed", { errors }));
     }
 
     const parsed = result.data as any;
@@ -47,7 +49,7 @@ export function validateQuery<T extends ZodType>(schema: T) {
         message: issue.message,
       }));
 
-      return res.status(400).json({ message: "Validation failed", errors });
+      return sendApiError(res, apiError(400, ErrorCode.VALIDATION_ERROR, "Validation failed", { errors }));
     }
 
     // Express 5 exposes `req.query` with a getter-only descriptor; replace it safely.

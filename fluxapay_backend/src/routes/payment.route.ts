@@ -1,3 +1,5 @@
+import { ErrorCode } from "../types/errors";
+import { apiError, sendApiError } from "../helpers/apiError.helper";
 import { Router } from 'express';
 import {
   createPayment,
@@ -194,7 +196,7 @@ router.get('/:id/stream', publicPaymentStreamRateLimit, streamPaymentStatus);
  * Hosted checkout (public, no API key) — must be registered before /:id
  */
 router.get('/checkout/:id/stream', (_req, res) => {
-  res.status(404).json({ error: 'Checkout SSE is not available; use polling' });
+  sendApiError(res, apiError(404, ErrorCode.CHECKOUT_SSE_UNAVAILABLE, "Checkout SSE is not available; use polling"));
 });
 router.get('/checkout/:id/status', getPublicCheckoutPaymentStatus);
 router.get('/checkout/:id', getPublicCheckoutPayment);

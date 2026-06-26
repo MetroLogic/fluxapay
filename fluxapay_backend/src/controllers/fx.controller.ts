@@ -1,3 +1,5 @@
+import { ErrorCode } from "../types/errors";
+import { apiError, sendApiError } from "../helpers/apiError.helper";
 import { Request, Response } from "express";
 import { FxService } from "../services/fx.service";
 
@@ -14,6 +16,6 @@ export async function getFxRates(req: Request, res: Response) {
       },
     });
   } catch (error: any) {
-    res.status(500).json({ error: error.message || "Failed to fetch FX rates" });
+    sendApiError(res, apiError(500, ErrorCode.FX_FETCH_FAILED, error.message || "Failed to fetch FX rates"));
   }
 }
