@@ -51,7 +51,12 @@ test.describe("Login flow", () => {
     await page.getByRole("button", { name: /login/i }).click();
 
     await expect
-      .poll(async () => page.evaluate(() => localStorage.getItem("token")))
+      .poll(async () =>
+        page.evaluate(
+          () =>
+            localStorage.getItem("token") ?? sessionStorage.getItem("token"),
+        ),
+      )
       .toBe("mock-jwt-token");
   });
 });

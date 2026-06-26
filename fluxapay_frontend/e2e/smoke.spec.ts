@@ -55,7 +55,9 @@ test.describe('Smoke Tests - Critical Path', () => {
       await expect(page.getByRole('button', { name: /login/i })).toBeVisible();
       return;
     }
-    await expect(page.getByRole('navigation').or(page.getByText(/payments/i))).toBeVisible({
+    await expect(
+      page.getByRole('navigation').or(page.getByText('Payments', { exact: true })).first(),
+    ).toBeVisible({
       timeout: 10000,
     });
   });
@@ -78,9 +80,9 @@ test.describe('Smoke Tests - Critical Path', () => {
       return;
     }
 
-    await expect(
-      page.getByRole('heading', { name: /create payment/i }).or(page.getByText(/create payment/i)),
-    ).toBeVisible({ timeout: 10000 });
+    await expect(page.getByRole('heading', { name: 'Create Payment' })).toBeVisible({
+      timeout: 10000,
+    });
   });
 
   test('@smoke - Navigation works', async ({ page }) => {
