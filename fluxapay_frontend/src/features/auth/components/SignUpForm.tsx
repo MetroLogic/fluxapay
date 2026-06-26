@@ -113,7 +113,7 @@ const SignUpForm = () => {
       }
     } catch (err) {
       if (err instanceof yup.ValidationError) {
-        const fieldErrors: any = {};
+        const fieldErrors: Record<string, string> = {};
         err.inner.forEach((issue) => {
           if (issue.path) {
             fieldErrors[issue.path] = issue.message;

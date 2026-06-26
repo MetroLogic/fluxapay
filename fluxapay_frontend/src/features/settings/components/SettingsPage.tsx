@@ -120,7 +120,7 @@ export default function SettingsPage() {
       setSettlementDay((merchant.settlement_day as number) ?? 1);
 
       if (merchant.bankAccount) {
-        const ba = merchant.bankAccount as any;
+        const ba = merchant.bankAccount as Record<string, string | undefined>;
         setAccountName(ba.account_name || "");
         setAccountNumber(ba.account_number || "");
         setBankName(ba.bank_name || "");

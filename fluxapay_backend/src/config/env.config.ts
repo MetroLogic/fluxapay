@@ -66,7 +66,10 @@ const envSchema = z.object({
     MASTER_VAULT_SECRET_KEY: z.string().min(1, 'MASTER_VAULT_SECRET_KEY is required'),
     FUNDER_PUBLIC_KEY: z.string().optional(),
     SWEEP_ENABLE_ACCOUNT_MERGE: z.enum(['true', 'false']).default('false'),
-    SWEEP_CRON: z.string().default('*/5 * * * *'),
+    /** Legacy cron env var; prefer SWEEP_CRON_INTERVAL. */
+    SWEEP_CRON: z.string().default('0 * * * *'),
+    SWEEP_CRON_INTERVAL: z.string().default('0 * * * *'),
+    SWEEP_MIN_BALANCE_USDC: z.coerce.number().nonnegative().default(0.5),
     SWEEP_LOCK_TTL_MS: z.coerce.number().int().positive().default(600000),
 
     // KMS Configuration (CRITICAL)

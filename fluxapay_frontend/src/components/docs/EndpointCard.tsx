@@ -52,7 +52,7 @@ export function EndpointCard({
   const { apiKey } = useApiSandbox();
   const [formValues, setFormValues] = useState<Record<string, string>>({});
   const [sandboxLoading, setSandboxLoading] = useState(false);
-  const [sandboxResponse, setSandboxResponse] = useState<{status: number, data: any} | null>(null);
+  const [sandboxResponse, setSandboxResponse] = useState<{status: number, data: unknown} | null>(null);
   const [sandboxError, setSandboxError] = useState<string | null>(null);
 
   const handleSandboxSubmit = async (e: React.FormEvent) => {
@@ -69,7 +69,7 @@ export function EndpointCard({
     try {
       let finalPath = path;
       const queryParams = new URLSearchParams();
-      let body: Record<string, any> | undefined = undefined;
+      let body: Record<string, unknown> | undefined = undefined;
 
       params.forEach((param) => {
         const val = formValues[param.name];
@@ -103,8 +103,8 @@ export function EndpointCard({
 
       const data = await res.json().catch(() => null);
       setSandboxResponse({ status: res.status, data });
-    } catch (err: any) {
-      setSandboxError(err.message || "Failed to execute request");
+    } catch (err: unknown) {
+      setSandboxError(err instanceof Error ? err.message : "Failed to execute request");
     } finally {
       setSandboxLoading(false);
     }

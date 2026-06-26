@@ -5,35 +5,43 @@
  */
 
 import { runSettlementBatch, isMerchantDueForSettlement } from "../settlementBatch.service";
-import { PrismaClient } from "../../generated/client/client";
 import { getExchangePartner } from "../exchange.service";
 
-// Mock dependencies
-const mockPrisma = {
-  merchant: {
-    findMany: jest.fn(),
-    findUnique: jest.fn(),
-  },
-  payment: {
-    findMany: jest.fn(),
-    updateMany: jest.fn(),
-  },
-  settlement: {
-    create: jest.fn(),
-  },
-  $transaction: jest.fn(),
-};
+jest.mock("../../generated/client/client", () => {
+  const mockPrismaClient = {
+    merchant: {
+      findMany: jest.fn(),
+      findUnique: jest.fn(),
+    },
+    payment: {
+      findMany: jest.fn(),
+      updateMany: jest.fn(),
+    },
+    settlement: {
+      create: jest.fn(),
+    },
+    $transaction: jest.fn(),
+  };
+  return {
+    PrismaClient: jest.fn(() => mockPrismaClient),
+    Prisma: {
+      TransactionClient: jest.fn(),
+    },
+  };
+});
 
-jest.mock("../../generated/client/client", () => ({
-  PrismaClient: jest.fn(() => mockPrisma),
-  Prisma: {
-    TransactionClient: jest.fn(),
-  },
-}));
+import { PrismaClient } from "../../generated/client/client";
+
+const mockPrisma = new PrismaClient() as jest.Mocked<PrismaClient> & {
+  merchant: { findMany: jest.Mock; findUnique: jest.Mock };
+  payment: { findMany: jest.Mock; updateMany: jest.Mock };
+  settlement: { create: jest.Mock };
+  $transaction: jest.Mock;
+};
 
 jest.mock("../exchange.service");
 jest.mock("../webhook.service", () => ({
-  createAndDeliverWebhook: jest.fn(),
+  createAndDeliverWebhook: jest.fn().mockResolvedValue(undefined),
 }));
 jest.mock("../audit.service", () => ({
   logSettlementBatch: jest.fn().mockResolvedValue({ id: "audit_123" }),

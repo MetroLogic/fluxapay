@@ -304,6 +304,10 @@ export class AnchorPartner implements ExchangePartner {
 
 let _instance: ExchangePartner | null = null;
 
+export function resetExchangePartnerForTests(): void {
+  _instance = null;
+}
+
 export function getExchangePartner(): ExchangePartner {
   if (_instance) return _instance;
 

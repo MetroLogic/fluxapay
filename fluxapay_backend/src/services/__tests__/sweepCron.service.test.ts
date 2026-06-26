@@ -4,20 +4,19 @@
  * Unit tests for the sweep cron service with DB locking mechanism.
  */
 
-import { runSweepWithLock } from "../sweepCron.service";
-import { PrismaClient } from "../../generated/client/client";
-import { sweepService } from "../sweep.service";
-import { logSweepTrigger, updateSweepCompletion } from "../audit.service";
-
-jest.mock("../../generated/client/client");
-jest.mock("../sweep.service");
-jest.mock("../audit.service");
-
 const mockPrisma = {
   $executeRaw: jest.fn(),
 };
 
-(PrismaClient as jest.Mock).mockImplementation(() => mockPrisma);
+jest.mock("../../generated/client/client", () => ({
+  PrismaClient: jest.fn(() => mockPrisma),
+}));
+jest.mock("../sweep.service");
+jest.mock("../audit.service");
+
+import { runSweepWithLock } from "../sweepCron.service";
+import { sweepService } from "../sweep.service";
+import { logSweepTrigger, updateSweepCompletion } from "../audit.service";
 
 describe("sweepCron.service", () => {
   beforeEach(() => {

@@ -87,7 +87,7 @@ function buildRedisMock() {
       const removed = (entry.value as Set<string>).delete(member);
       return removed ? 1 : 0;
     },
-    on(_event: string, _handler: (...args: any[]) => void): this {
+    on(_event: string, _handler: (...args: any[]) => void) {
       return this;
     },
   };

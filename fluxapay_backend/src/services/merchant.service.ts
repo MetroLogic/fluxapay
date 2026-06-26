@@ -104,15 +104,12 @@ export async function signupMerchantService(data: {
     }
   });
 
-  // Generate OTP
+  // Generate OTP (non-blocking — merchant record is already committed)
   try {
     const otp = await createOtp(merchant.id, "email");
     await sendOtpEmail(email, otp);
   } catch (err) {
-    if (isDevEnv()) {
-      console.log("err sending mail", err);
-    }
-    throw err;
+    console.error("OTP email delivery failed during signup:", err);
   }
 
   return {

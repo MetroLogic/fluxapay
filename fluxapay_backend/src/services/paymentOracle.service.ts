@@ -22,21 +22,7 @@ import { getLogger, getMetricsCollector } from "../utils/logger";
 import { createAndDeliverWebhook } from "./webhook.service";
 
 const prisma = new PrismaClient();
-type LoggerLike = {
-  info: (message: string, meta?: unknown) => void;
-  warn: (message: string, meta?: unknown) => void;
-  error: (message: string, meta?: unknown) => void;
-  debug: (message: string, meta?: unknown) => void;
-};
-
-const rawLogger = (getLogger("PaymentOracleService") ?? {}) as Partial<LoggerLike>;
-const noop = () => {};
-const logger: LoggerLike = {
-  info: rawLogger.info ?? noop,
-  warn: rawLogger.warn ?? noop,
-  error: rawLogger.error ?? noop,
-  debug: rawLogger.debug ?? noop,
-};
+const logger = getLogger("PaymentOracleService");
 const metrics = getMetricsCollector();
 
 // ─── Configuration ───────────────────────────────────────────────────────────

@@ -21,15 +21,15 @@ beforeEach(() => {
 
 // Feature: global-error-boundary-toast-standardization, Property 3: Defined status codes map to exact messages
 describe("Property 3: Defined status codes map to exact messages", () => {
-  it("maps 401 to session expired message", () => {
+  it("maps 401 to session expired message (suppressed — handled globally)", () => {
     toastApiError(new ApiError(401, "ignored"));
-    expect(toast.error).toHaveBeenCalledWith("Session expired. Please sign in again.");
+    expect(toast.error).not.toHaveBeenCalled();
     vi.clearAllMocks();
   });
 
-  it("maps 403 to permission denied message", () => {
+  it("maps 403 to permission denied message (suppressed — handled globally)", () => {
     toastApiError(new ApiError(403, "ignored"));
-    expect(toast.error).toHaveBeenCalledWith("You do not have permission to perform this action.");
+    expect(toast.error).not.toHaveBeenCalled();
     vi.clearAllMocks();
   });
 

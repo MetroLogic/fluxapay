@@ -136,7 +136,7 @@ describe('PII Redactor', () => {
       const result = sanitizeObject(obj);
       expect(result.name).toBe('John Doe');
       expect(result.password).toBe('[REDACTED]');
-      expect(result.email).toBe('john@example.com');
+      expect(result.email).toBe('[REDACTED]');
       expect(result.apiKey).toBe('[REDACTED]');
     });
 

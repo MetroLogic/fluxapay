@@ -3,6 +3,10 @@ import { PrismaClient } from '../../generated/client/client';
 
 const prisma = new PrismaClient();
 
+function uniquePhone(): string {
+  return `+1${Date.now()}${Math.floor(Math.random() * 10000)}`;
+}
+
 describe('Refund Service - Validation', () => {
   // Test data cleanup
   beforeEach(async () => {
@@ -30,7 +34,7 @@ describe('Refund Service - Validation', () => {
           id: 'test-merchant',
           business_name: 'Test Merchant',
           email: 'test@example.com',
-          phone_number: '+1234567890',
+          phone_number: uniquePhone(),
           country: 'US',
           settlement_currency: 'USD',
           webhook_secret: 'secret',
@@ -76,7 +80,7 @@ describe('Refund Service - Validation', () => {
           id: 'other-merchant',
           business_name: 'Other Merchant',
           email: 'other@example.com',
-          phone_number: '+0987654321',
+          phone_number: uniquePhone(),
           country: 'US',
           settlement_currency: 'USD',
           webhook_secret: 'secret',
@@ -132,7 +136,7 @@ describe('Refund Service - Validation', () => {
           id: 'test-merchant',
           business_name: 'Test Merchant',
           email: 'test@example.com',
-          phone_number: '+1234567890',
+          phone_number: uniquePhone(),
           country: 'US',
           settlement_currency: 'USD',
           webhook_secret: 'secret',
@@ -278,7 +282,7 @@ describe('Refund Service - Validation', () => {
           id: 'test-merchant',
           business_name: 'Test Merchant',
           email: 'test@example.com',
-          phone_number: '+1234567890',
+          phone_number: uniquePhone(),
           country: 'US',
           settlement_currency: 'USD',
           webhook_secret: 'secret',
@@ -451,7 +455,7 @@ describe('Refund Service - Validation', () => {
           id: 'test-merchant',
           business_name: 'Test Merchant',
           email: 'test@example.com',
-          phone_number: '+1234567890',
+          phone_number: uniquePhone(),
           country: 'US',
           settlement_currency: 'USD',
           webhook_secret: 'secret',

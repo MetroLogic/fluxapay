@@ -367,6 +367,11 @@ model Payment {
   paymentLink        PaymentLink? @relation(fields: [paymentLinkId], references: [id])
   depositAddress     DepositAddress?
 
+  // escrow fields
+  escrow_mode              Boolean  @default(false)
+  escrow_contract_address  String?
+  escrow_status            String?
+
   @@index([swept, status])
   @@index([customerId])
   @@index([merchantId, createdAt(sort: Desc)])

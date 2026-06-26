@@ -57,8 +57,8 @@ export class SweepQueue {
    * Throws an error if the queue is full.
    */
   async enqueue(taskId: string, task: () => Promise<void>): Promise<void> {
-    // Backpressure: reject if queue is full
-    if (this.queue.length >= this.maxQueueSize) {
+    // Backpressure: reject when queued + active work reaches capacity
+    if (this.queue.length + this.activeCount >= this.maxQueueSize) {
       this.metrics.increment("sweep_queue.backpressure_rejected");
       throw new Error(
         `Sweep queue is full (${this.maxQueueSize} tasks). Please retry later.`,
@@ -196,14 +196,14 @@ export class SweepQueue {
    * Check if the queue is accepting new tasks (not at capacity).
    */
   canAcceptTask(): boolean {
-    return this.queue.length < this.maxQueueSize;
+    return this.queue.length + this.activeCount < this.maxQueueSize;
   }
 
   /**
    * Get the current backpressure level (0-1, where 1 is full).
    */
   getBackpressureLevel(): number {
-    return this.queue.length / this.maxQueueSize;
+    return (this.queue.length + this.activeCount) / this.maxQueueSize;
   }
 }
 

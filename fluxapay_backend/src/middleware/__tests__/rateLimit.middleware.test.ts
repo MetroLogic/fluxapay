@@ -12,7 +12,7 @@ import {
 import { Request, Response, NextFunction } from "express";
 
 describe("Rate Limit Middleware", () => {
-  let mockReq: Partial<Request>;
+  let mockReq: any;
   let mockRes: Partial<Response>;
   let mockNext: NextFunction;
 
@@ -20,7 +20,6 @@ describe("Rate Limit Middleware", () => {
     mockReq = {
       ip: "127.0.0.1",
       path: "/api/v1/test",
-      socket: { remoteAddress: "127.0.0.1" },
     };
     mockRes = {
       setHeader: jest.fn(),

@@ -31,9 +31,15 @@ jest.mock("../services/paymentMonitor.service", () => ({
     stopPaymentMonitor: jest.fn(),
 }));
 
+jest.mock("../services/paymentOracle.service", () => ({
+    startPaymentOracle: jest.fn(),
+    stopPaymentOracle: jest.fn(),
+}));
+
 import { gracefulShutdown, registerShutdownHandlers } from "../services/shutdown.service";
 import { stopCronJobs } from "../services/cron.service";
 import { stopPaymentMonitor } from "../services/paymentMonitor.service";
+import { stopPaymentOracle } from "../services/paymentOracle.service";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -79,6 +85,7 @@ describe("gracefulShutdown()", () => {
 
         expect(stopCronJobs).toHaveBeenCalledTimes(1);
         expect(stopPaymentMonitor).toHaveBeenCalledTimes(1);
+        expect(stopPaymentOracle).toHaveBeenCalledTimes(1);
         expect(server.close).toHaveBeenCalledTimes(1);
         expect(prisma.$disconnect).toHaveBeenCalledTimes(1);
         expect(exitSpy).toHaveBeenCalledWith(0);
@@ -89,6 +96,7 @@ describe("gracefulShutdown()", () => {
 
         (stopCronJobs as jest.Mock).mockImplementation(() => callOrder.push("stopCronJobs"));
         (stopPaymentMonitor as jest.Mock).mockImplementation(() => callOrder.push("stopPaymentMonitor"));
+        (stopPaymentOracle as jest.Mock).mockImplementation(() => callOrder.push("stopPaymentOracle"));
 
         const server = {
             close: jest.fn((cb?: (err?: Error) => void) => {
@@ -99,7 +107,7 @@ describe("gracefulShutdown()", () => {
 
         await gracefulShutdown("SIGTERM", { server: server as any, prisma: makeMockPrisma() });
 
-        expect(callOrder).toEqual(["stopCronJobs", "stopPaymentMonitor", "server.close"]);
+        expect(callOrder).toEqual(["stopCronJobs", "stopPaymentMonitor", "stopPaymentOracle", "server.close"]);
     });
 
     it("exits with code 1 when server.close returns an error", async () => {

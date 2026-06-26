@@ -386,7 +386,7 @@ export const api = {
       date_to?: string;
       currency?: string;
       format?: "pdf" | "csv";
-    }): Promise<Blob | any> => {
+    }): Promise<Blob | Record<string, unknown>> => {
       const sp = new URLSearchParams();
       if (params.date_from) sp.set("date_from", params.date_from);
       if (params.date_to) sp.set("date_to", params.date_to);

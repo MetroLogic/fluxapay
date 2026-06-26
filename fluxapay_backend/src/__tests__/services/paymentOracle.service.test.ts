@@ -13,7 +13,21 @@ import {
 
 // Mock dependencies
 jest.mock("../../generated/client/client");
-jest.mock("../../utils/logger");
+jest.mock("../../utils/logger", () => ({
+  getLogger: jest.fn(() => ({
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+    debug: jest.fn(),
+    child: jest.fn(),
+  })),
+  getMetricsCollector: jest.fn(() => ({
+    increment: jest.fn(),
+    gauge: jest.fn(),
+    histogram: jest.fn(),
+    timer: jest.fn(),
+  })),
+}));
 jest.mock("../../services/paymentContract.service");
 jest.mock("../../services/webhook.service");
 

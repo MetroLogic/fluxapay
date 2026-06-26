@@ -12,8 +12,23 @@
 
 // ── Module mocks ──────────────────────────────────────────────────────────────
 
+const mockPrismaClient = {
+  cronLock: {
+    upsert: jest.fn().mockResolvedValue({}),
+    findUnique: jest.fn(),
+    delete: jest.fn().mockResolvedValue({}),
+  },
+  payment: {
+    findMany: jest.fn(),
+    updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+  },
+  merchant: {
+    findMany: jest.fn(),
+  },
+};
+
 jest.mock("../../generated/client/client", () => ({
-  PrismaClient: jest.fn().mockImplementation(() => mockPrismaClient),
+  PrismaClient: jest.fn(() => mockPrismaClient),
 }));
 
 jest.mock("../../services/webhook.service", () => ({
@@ -34,23 +49,6 @@ import { runPaymentExpiryReminderJob } from "../../services/paymentExpiryReminde
 import { createAndDeliverWebhook } from "../../services/webhook.service";
 import { sendCheckoutExpiryReminderEmail } from "../../services/email.service";
 import { getNotificationPreferences } from "../../services/notificationPreferences.service";
-
-// ── Prisma mock ───────────────────────────────────────────────────────────────
-
-const mockPrismaClient = {
-  cronLock: {
-    upsert: jest.fn().mockResolvedValue({}),
-    findUnique: jest.fn(),
-    delete: jest.fn().mockResolvedValue({}),
-  },
-  payment: {
-    findMany: jest.fn(),
-    updateMany: jest.fn().mockResolvedValue({ count: 1 }),
-  },
-  merchant: {
-    findMany: jest.fn(),
-  },
-};
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

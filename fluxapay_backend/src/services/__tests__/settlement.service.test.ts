@@ -4,6 +4,23 @@
  * Tests for settlement query and export services
  */
 
+jest.mock("../../generated/client/client", () => {
+  const mockPrismaClient = {
+    settlement: {
+      findMany: jest.fn(),
+      findUnique: jest.fn(),
+      count: jest.fn(),
+      aggregate: jest.fn(),
+    },
+    payment: {
+      findMany: jest.fn(),
+    },
+  };
+  return {
+    PrismaClient: jest.fn(() => mockPrismaClient),
+  };
+});
+
 import {
   listSettlementsService,
   getSettlementDetailsService,
@@ -13,22 +30,17 @@ import {
 } from "../settlement.service";
 import { PrismaClient } from "../../generated/client/client";
 
-// Mock Prisma
-const mockPrisma = {
+const mockPrisma = new PrismaClient() as jest.Mocked<PrismaClient> & {
   settlement: {
-    findMany: jest.fn(),
-    findUnique: jest.fn(),
-    count: jest.fn(),
-    aggregate: jest.fn(),
-  },
+    findMany: jest.Mock;
+    findUnique: jest.Mock;
+    count: jest.Mock;
+    aggregate: jest.Mock;
+  };
   payment: {
-    findMany: jest.fn(),
-  },
+    findMany: jest.Mock;
+  };
 };
-
-jest.mock("../../generated/client/client", () => ({
-  PrismaClient: jest.fn(() => mockPrisma),
-}));
 
 describe("settlement.service", () => {
   beforeEach(() => {
@@ -245,8 +257,12 @@ describe("settlement.service", () => {
 
       expect(result.filename).toContain(".pdf");
       expect(result.contentType).toBe("application/json");
-      expect(result.content.settlement).toBeDefined();
-      expect(result.content.payments).toHaveLength(1);
+      const pdfContent = result.content as {
+        settlement: { id: string };
+        payments: unknown[];
+      };
+      expect(pdfContent.settlement).toBeDefined();
+      expect(pdfContent.payments).toHaveLength(1);
     });
 
     it("should throw error if settlement not found", async () => {

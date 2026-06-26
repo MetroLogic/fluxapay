@@ -12,6 +12,7 @@ import { HDWalletService } from "./HDWalletService";
 import { logSweepTrigger, updateSweepCompletion } from "./audit.service";
 import { getLogger, getMetricsCollector } from "../utils/logger";
 import { sweepQueue } from "./sweepQueue.service";
+import { getSweepMinBalanceUsdc } from "../config/sweep.config";
 
 const prisma = new PrismaClient();
 
@@ -305,10 +306,21 @@ export class SweepService {
         );
 
         const accountUsdcAmount = Number(usdcBalanceEntry?.balance ?? "0");
+        const minBalanceUsdc = getSweepMinBalanceUsdc();
         if (!Number.isFinite(accountUsdcAmount) || accountUsdcAmount <= 0) {
           const skipEntry = {
             paymentId: p.id,
             reason: "No USDC balance to sweep",
+          };
+          skipped.push(skipEntry);
+          if (dryRun) decisions.push({ ...skipEntry, action: "skip" });
+          continue;
+        }
+
+        if (accountUsdcAmount < minBalanceUsdc) {
+          const skipEntry = {
+            paymentId: p.id,
+            reason: `Balance ${accountUsdcAmount.toFixed(7)} USDC below minimum threshold ${minBalanceUsdc}`,
           };
           skipped.push(skipEntry);
           if (dryRun) decisions.push({ ...skipEntry, action: "skip" });

@@ -9,6 +9,7 @@ import {
   YellowCardPartner,
   AnchorPartner,
   getExchangePartner,
+  resetExchangePartnerForTests,
   BankAccountDetails,
 } from "../exchange.service";
 
@@ -238,8 +239,14 @@ describe("exchange.service", () => {
   });
 
   describe("getExchangePartner", () => {
+    afterEach(() => {
+      resetExchangePartnerForTests();
+      delete process.env.EXCHANGE_PARTNER;
+    });
+
     it("should return MockExchangePartner by default", () => {
       delete process.env.EXCHANGE_PARTNER;
+      resetExchangePartnerForTests();
       const partner = getExchangePartner();
       expect(partner).toBeInstanceOf(MockExchangePartner);
     });
@@ -247,8 +254,7 @@ describe("exchange.service", () => {
     it("should return YellowCardPartner when configured", () => {
       process.env.EXCHANGE_PARTNER = "yellowcard";
       process.env.YELLOWCARD_API_KEY = "test_key";
-      // Reset singleton
-      (getExchangePartner as any)._instance = null;
+      resetExchangePartnerForTests();
       const partner = getExchangePartner();
       expect(partner).toBeInstanceOf(YellowCardPartner);
     });
@@ -256,13 +262,13 @@ describe("exchange.service", () => {
     it("should return AnchorPartner when configured", () => {
       process.env.EXCHANGE_PARTNER = "anchor";
       process.env.ANCHOR_API_KEY = "test_key";
-      // Reset singleton
-      (getExchangePartner as any)._instance = null;
+      resetExchangePartnerForTests();
       const partner = getExchangePartner();
       expect(partner).toBeInstanceOf(AnchorPartner);
     });
 
     it("should return same instance on subsequent calls", () => {
+      resetExchangePartnerForTests();
       const partner1 = getExchangePartner();
       const partner2 = getExchangePartner();
       expect(partner1).toBe(partner2);
