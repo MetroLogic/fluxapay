@@ -52,10 +52,19 @@ describe("Auth Service", () => {
     if (merchantIds.length > 0) {
       await prisma.refund.deleteMany({ where: { merchantId: { in: merchantIds } } });
       await prisma.payment.deleteMany({ where: { merchantId: { in: merchantIds } } });
+      await prisma.refreshToken.deleteMany({ where: { merchantId: { in: merchantIds } } });
     }
 
-    await prisma.refreshToken.deleteMany({});
-    await prisma.loginAttempt.deleteMany({});
+    await prisma.loginAttempt.deleteMany({
+      where: {
+        OR: [
+          { email: { contains: "test-auth" } },
+          { email: { contains: "test-lockout" } },
+          { email: { contains: "test-notlocked" } },
+          { email: { contains: "test-cleanup" } },
+        ],
+      },
+    });
     await prisma.merchant.deleteMany({ where: merchantFilter });
   });
 
@@ -450,7 +459,7 @@ describe("Auth Service", () => {
       const merchant = await prisma.merchant.create({
         data: {
           business_name: "Test Auth Merchant",
-          email: "test-auth-cleanup@example.com",
+          email: `test-auth-cleanup-${Date.now()}@example.com`,
           phone_number: uniquePhone(),
           country: "US",
           settlement_currency: "USD",

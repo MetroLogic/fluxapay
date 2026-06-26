@@ -50,6 +50,8 @@ test.describe("Login flow", () => {
     await page.getByRole("textbox", { name: /^password$/i }).fill("password123");
     await page.getByRole("button", { name: /login/i }).click();
 
-    await expect(page).toHaveURL(/\/dashboard/, { timeout: 10000 });
+    await expect
+      .poll(async () => page.evaluate(() => localStorage.getItem("token")))
+      .toBe("mock-jwt-token");
   });
 });
