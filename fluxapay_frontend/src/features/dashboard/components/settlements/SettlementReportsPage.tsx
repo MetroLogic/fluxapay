@@ -19,11 +19,13 @@ export function SettlementReportsPage() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [currencyFilter, setCurrencyFilter] = useState("all");
   const [selectedSettlementId, setSelectedSettlementId] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
 
   const { settlements, isLoading, error } = useSettlements({
     status: statusFilter !== "all" ? statusFilter : undefined,
+    currency: currencyFilter !== "all" ? currencyFilter : undefined,
     date_from: dateFrom || undefined,
     date_to: dateTo || undefined,
     limit: 100,
@@ -56,6 +58,7 @@ export function SettlementReportsPage() {
       const blob = await api.settlements.exportRange({
         date_from: dateFrom || undefined,
         date_to: dateTo || undefined,
+        currency: currencyFilter !== "all" ? currencyFilter : undefined,
         format: "csv",
       });
 
@@ -82,6 +85,7 @@ export function SettlementReportsPage() {
       const blob = await api.settlements.exportRange({
         date_from: dateFrom || undefined,
         date_to: dateTo || undefined,
+        currency: currencyFilter !== "all" ? currencyFilter : undefined,
         format: "pdf",
       });
 
@@ -203,7 +207,7 @@ export function SettlementReportsPage() {
       {/* Filters */}
       <div className="p-4 rounded-xl border border-border bg-card">
         <label className="text-sm font-medium mb-3 block">Filters</label>
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-4">
           <div>
             <label className="text-xs text-muted-foreground mb-1 block">Status</label>
             <select
@@ -216,6 +220,21 @@ export function SettlementReportsPage() {
               <option value="pending">Pending</option>
               <option value="processing">Processing</option>
               <option value="failed">Failed</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Currency</label>
+            <select
+              value={currencyFilter}
+              onChange={(e) => setCurrencyFilter(e.target.value)}
+              className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+              <option value="all">All Currencies</option>
+              <option value="USD">USD</option>
+              <option value="NGN">NGN</option>
+              <option value="KES">KES</option>
+              <option value="EUR">EUR</option>
+              <option value="GBP">GBP</option>
             </select>
           </div>
           <div>
