@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from "express";
+import crypto from "crypto";
 import { PrismaClient } from "../../generated/client/client";
 import {
   idempotencyMiddleware,
@@ -20,6 +21,10 @@ jest.mock("../../generated/client/client", () => {
     PrismaClient: jest.fn(() => mockPrisma),
   };
 });
+
+function hashRequestBody(body: unknown): string {
+  return crypto.createHash("sha256").update(JSON.stringify(body)).digest("hex");
+}
 
 describe("Idempotency Middleware", () => {
   let mockReq: Partial<Request>;
@@ -57,7 +62,7 @@ describe("Idempotency Middleware", () => {
     });
 
     it("should reject invalid idempotency key", async () => {
-      mockReq.headers = { "idempotency-key": "" };
+      mockReq.headers = { "idempotency-key": "x".repeat(256) };
 
       await idempotencyMiddleware(
         mockReq as Request,
@@ -67,7 +72,8 @@ describe("Idempotency Middleware", () => {
 
       expect(mockRes.status).toHaveBeenCalledWith(400);
       expect(mockRes.json).toHaveBeenCalledWith({
-        error: expect.stringContaining("Invalid Idempotency-Key"),
+        code: "INVALID_IDEMPOTENCY_KEY",
+        message: expect.stringContaining("Invalid Idempotency-Key"),
       });
       expect(mockNext).not.toHaveBeenCalled();
     });
@@ -84,7 +90,7 @@ describe("Idempotency Middleware", () => {
 
       prisma.idempotencyRecord.findUnique.mockResolvedValue({
         idempotency_key: idempotencyKey,
-        request_hash: expect.any(String),
+        request_hash: hashRequestBody(mockReq.body),
         response_code: 201,
         response_body: cachedResponse,
         created_at: new Date(),
@@ -121,7 +127,8 @@ describe("Idempotency Middleware", () => {
 
       expect(mockRes.status).toHaveBeenCalledWith(422);
       expect(mockRes.json).toHaveBeenCalledWith({
-        error: expect.stringContaining("Idempotency key conflict"),
+        code: "IDEMPOTENCY_CONFLICT",
+        message: expect.stringContaining("Idempotency key conflict"),
       });
       expect(mockNext).not.toHaveBeenCalled();
     });
@@ -153,7 +160,7 @@ describe("Idempotency Middleware", () => {
 
       prisma.idempotencyRecord.findUnique.mockResolvedValue({
         idempotency_key: idempotencyKey,
-        request_hash: expect.any(String),
+        request_hash: hashRequestBody(mockReq.body),
         response_code: 201,
         response_body: {},
         created_at: expiredDate,

@@ -5,6 +5,8 @@
  */
 
 import { Request, Response } from "express";
+import { apiError, sendApiError } from "../helpers/apiError.helper";
+import { ErrorCode } from "../types/errors";
 import {
   getOracleMetrics,
   getOracleHealth,
@@ -27,10 +29,7 @@ export async function getMetrics(req: Request, res: Response): Promise<void> {
     });
   } catch (error: any) {
     logger.error("Failed to get oracle metrics", { error: error.message });
-    res.status(500).json({
-      success: false,
-      error: "Failed to retrieve oracle metrics",
-    });
+    sendApiError(res, apiError(500, ErrorCode.INTERNAL_ERROR, "Failed to retrieve oracle metrics"));
   }
 }
 
@@ -49,10 +48,7 @@ export async function getHealth(req: Request, res: Response): Promise<void> {
     });
   } catch (error: any) {
     logger.error("Failed to get oracle health", { error: error.message });
-    res.status(500).json({
-      success: false,
-      error: "Failed to retrieve oracle health",
-    });
+    sendApiError(res, apiError(500, ErrorCode.INTERNAL_ERROR, "Failed to retrieve oracle health"));
   }
 }
 
@@ -65,10 +61,7 @@ export async function verifyPayment(req: Request, res: Response): Promise<void> 
     const paymentId = req.params.paymentId as string;
 
     if (!paymentId || Array.isArray(paymentId)) {
-      res.status(400).json({
-        success: false,
-        error: "Payment ID is required",
-      });
+      sendApiError(res, apiError(400, ErrorCode.MISSING_REQUIRED_FIELD, "Payment ID is required"));
       return;
     }
 
@@ -91,15 +84,9 @@ export async function verifyPayment(req: Request, res: Response): Promise<void> 
     });
     
     if (error.message.includes("not found")) {
-      res.status(404).json({
-        success: false,
-        error: error.message,
-      });
+      sendApiError(res, apiError(404, ErrorCode.PAYMENT_NOT_FOUND, error.message));
     } else {
-      res.status(500).json({
-        success: false,
-        error: "Payment verification failed",
-      });
+      sendApiError(res, apiError(500, ErrorCode.INTERNAL_ERROR, "Payment verification failed"));
     }
   }
 }

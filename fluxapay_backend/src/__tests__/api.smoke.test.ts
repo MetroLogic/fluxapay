@@ -19,6 +19,7 @@ describeIfServer("Backend API Smoke Tests", () => {
       expect(response.status).toBe(200);
       expect(response.body).toMatchObject({
         status: "ok",
+        uptime: expect.any(Number),
       });
     });
   });

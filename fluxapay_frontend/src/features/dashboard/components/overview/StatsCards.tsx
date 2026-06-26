@@ -4,6 +4,7 @@ import { ArrowUpRight, ArrowDownRight, DollarSign, Activity, CreditCard, Clock, 
 import { cn } from "@/lib/utils";
 import { useDashboardDateRange } from "@/features/dashboard/context/DashboardDateRangeContext";
 import { useDashboardStats } from "@/hooks/useDashboardStats";
+import { FxRateBadge } from "./FxRateBadge";
 
 interface StatCardProps {
     title: string;
@@ -92,6 +93,7 @@ export const StatsCards = () => {
     return (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
             {/* USDC Volume — highlighted as primary metric */}
+        <div className="md:col-span-2 lg:col-span-1 xl:col-span-2 flex flex-col gap-2">
             <StatCard
                 title="Total Volume (USDC)"
                 value={formatUsdc(stats.totalRevenue)}
@@ -99,9 +101,14 @@ export const StatsCards = () => {
                 trend="up"
                 icon={Coins}
                 highlight
-                className="md:col-span-2 lg:col-span-1 xl:col-span-2"
+                className="flex-1"
             />
-            {/* Fiat settled */}
+            <div className="flex justify-end">
+                {/* Fallback to NGN as an example, but ideally use merchant's currency */}
+                <FxRateBadge currency="NGN" />
+            </div>
+        </div>
+        {/* Fiat settled */}
             <StatCard
                 title="Total Settled (Fiat)"
                 value={formatCurrency(stats.totalSettled)}

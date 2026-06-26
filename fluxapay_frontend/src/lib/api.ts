@@ -52,6 +52,7 @@ class ApiError extends Error {
   constructor(
     public status: number,
     message: string,
+    public code?: string,
   ) {
     super(message);
     this.name = "ApiError";
@@ -128,7 +129,12 @@ async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
     const error = await response
       .json()
       .catch(() => ({ message: "An error occurred" }));
-    throw new ApiError(response.status, error.message || "Request failed");
+    const body = error as { message?: string; code?: string };
+    throw new ApiError(
+      response.status,
+      body.message || "Request failed",
+      body.code,
+    );
   }
 
   return response.json();
@@ -384,11 +390,13 @@ export const api = {
     exportRange: async (params: {
       date_from?: string;
       date_to?: string;
+      currency?: string;
       format?: "pdf" | "csv";
-    }): Promise<Blob | any> => {
+    }): Promise<Blob | Record<string, unknown>> => {
       const sp = new URLSearchParams();
       if (params.date_from) sp.set("date_from", params.date_from);
       if (params.date_to) sp.set("date_to", params.date_to);
+      if (params.currency) sp.set("currency", params.currency);
       sp.set("format", params.format || "csv");
       const response = await fetch(
         `${API_BASE_URL}/api/v1/settlements/export?${sp.toString()}`,
@@ -800,6 +808,8 @@ export const api = {
         if (params?.date_to) sp.set("date_to", params.date_to);
         return fetchWithAuth(`/api/v1/admin/payments?${sp.toString()}`);
       },
+    addressPool: {
+      stats: () => fetchWithAuth("/api/v1/admin/address-pool/stats"),
     },
   },
 };

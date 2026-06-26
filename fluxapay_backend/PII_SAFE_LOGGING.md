@@ -1,30 +1,72 @@
-# PII-Safe Access Logs Implementation
+# PII-Safe Logging — Enforced Redaction Rules
 
 ## Overview
-Production logs now redact sensitive data and provide enhanced slow request warnings.
 
-## Features Implemented
+All request bodies, query parameters, and log contexts are automatically
+scrubbed of sensitive data **at the source** — regardless of log level
+(debug, info, warn, error). No call-site diligence is required.
 
-### 1. PII Redaction
-- ✅ Authorization headers (Bearer, Basic, AccessKey) are redacted
-- ✅ API keys show only last 4 characters
-- ✅ Merchant IDs are hashed for correlation without exposing PII
-- ✅ Email addresses are partially redacted (e.g., `jo***@example.com`)
-- ✅ Request/response bodies can be sanitized to remove sensitive fields
+---
 
-### 2. Enhanced Slow Request Warnings
-- ✅ **Warning level** for requests > 1 second
-- ✅ **Error level** for critical slow requests > 5 seconds
-- ✅ Detailed handler information including route, handler name, method, status code
-- ✅ Query and body parameter counts for debugging
+## Enforced Redaction Rules (always applied, all log levels)
 
-### 3. Additional Logging Improvements
-- ✅ Content length (request size)
-- ✅ Response size
-- ✅ User agent (browser name only)
-- ✅ IP address
-- ✅ Request ID for tracing
-- ✅ Hashed merchant ID for correlation
+### 1. Request Body & Query Parameters
+
+The following fields are **always** redacted with `[REDACTED]`, regardless
+of nesting depth, via `redactRequestBody()` / `sanitizeObject()`:
+
+| Field pattern (case-insensitive substring match) | Example values redacted |
+|---|---|
+| `password` | `password`, `old_password`, `new_password` |
+| `secret` | `secret`, `webhook_secret` |
+| `secret_key` | `secret_key`, `api_secret_key` |
+| `token` | `token`, `access_token`, `refresh_token` |
+| `apiKey` / `api_key` | `apiKey`, `api_key`, `x_api_key` |
+| `authorization` | embedded authorization objects |
+| `creditCard` / `credit_card` | full card numbers |
+| `cvv` | card verification values |
+| `pin` | PINs |
+| `account_number` / `accountNumber` | bank / wallet account numbers |
+| `account_name` / `accountName` | account holder names |
+| `email` | email addresses |
+| `phone_number` / `phone` | phone numbers |
+
+### 2. Authorization Header (All Request Logs)
+
+The `Authorization` HTTP header value is **always** redacted in every
+request log line via `redactAuthHeader()`. The format retained for debugging:
+
+| Auth scheme | Log output |
+|---|---|
+| `Bearer <jwt>` | `Bearer eyJh...xYzA` (first 4 + last 4 chars) |
+| `Basic <creds>` | `Basic dXNl...cmQ=` |
+| `AccessKey <key>` | `AccessKey ABCD...IJKL` |
+| Unknown scheme | `[REDACTED]` |
+| Missing header | `[REDACTED]` |
+
+### 3. Logger Context Auto-Sanitization
+
+`logger.ts` calls `redactRequestContext()` on every merged context object
+before emitting the JSON log entry. This means **any** call to
+`logger.debug(...)`, `logger.info(...)`, etc. that accidentally passes an
+`authorization` or `x-api-key` field will have it stripped automatically.
+
+---
+
+## API — PII Utility Functions (`src/utils/piiRedactor.ts`)
+
+| Function | Purpose |
+|---|---|
+| `sanitizeObject(obj, extraFields?)` | Deep-redact sensitive fields from any object |
+| `redactRequestBody(body)` | Convenience wrapper over `sanitizeObject` for request bodies |
+| `redactRequestContext(ctx)` | Redact `authorization` / `x-api-key` from log context objects |
+| `redactAuthHeader(header)` | Redact an Authorization header value |
+| `redactApiKey(key)` | Redact an API key (keep last 4 chars) |
+| `redactEmail(email)` | Partially redact email (`jo***@domain.com`) |
+| `hashMerchantId(id)` | SHA-256 hash merchantId for log correlation |
+| `redactToken(token)` | Redact a JWT / session token |
+
+---
 
 ## Example Log Output
 
@@ -43,113 +85,68 @@ Production logs now redact sensitive data and provide enhanced slow request warn
     "responseTime": 245.67,
     "userAgent": "Mozilla",
     "ip": "192.168.1.1",
-    "authorization": "Bearer eyJh...xYz",
+    "authorization": "Bearer eyJh...xYzA",
     "hasApiKey": true,
+    "body": { "amount": 50, "currency": "USDC", "api_key": "[REDACTED]", "email": "[REDACTED]" },
     "contentLength": 1024,
     "responseSize": 512
   }
 }
 ```
 
-### Slow Request (Warning Level - >1s)
+### Slow Request (Warning Level — >1s)
 ```json
 {
   "level": "warn",
   "message": "Slow request detected",
-  "timestamp": "2026-03-30T12:35:00.123Z",
   "context": {
-    "requestId": "xyz-789-uvw-012",
+    "requestId": "xyz-789",
     "method": "GET",
     "path": "/api/v1/merchants/reports",
     "merchantIdHash": "h8g7f6e5d4c3b2a1",
     "responseTime": 1523.45,
-    "threshold": 1000,
-    "route": "/api/v1/merchants/reports",
-    "handler": "getMerchantReports",
-    "statusCode": 200,
-    "contentLength": "2048",
-    "queryParamCount": 3,
-    "bodyParamCount": 0
+    "threshold": 1000
   }
 }
 ```
 
-### Critical Slow Request (Error Level - >5s)
-```json
-{
-  "level": "error",
-  "message": "Critical slow request detected",
-  "timestamp": "2026-03-30T12:36:00.456Z",
-  "context": {
-    "requestId": "slow-req-123",
-    "method": "POST",
-    "path": "/api/v1/settlements/batch",
-    "merchantIdHash": "m1n2o3p4q5r6s7t8",
-    "responseTime": 5678.90,
-    "threshold": 5000,
-    "route": "/api/v1/settlements/batch",
-    "handler": "createSettlementBatch",
-    "method": "POST",
-    "statusCode": 201
-  }
-}
-```
+---
 
-## Files Created/Modified
+## Files Created / Modified
 
-### New Files
-- `src/utils/piiRedactor.ts` - PII redaction utilities
-- `src/utils/__tests__/piiRedactor.test.ts` - Unit tests for redaction functions
+| File | Change |
+|---|---|
+| `src/utils/piiRedactor.ts` | Added `secret_key` to always-redacted list; added `redactRequestBody`, `redactRequestContext` |
+| `src/utils/__tests__/piiRedactor.test.ts` | Added tests for new helpers and all sensitive field patterns |
+| `src/middleware/requestLogging.middleware.ts` | Uses `redactRequestBody` for body/query; uses `redactEmail` for user email |
+| `src/utils/logger.ts` | Automatically calls `redactRequestContext` on every log context before emit |
 
-### Modified Files
-- `src/middleware/requestLogging.middleware.ts` - Enhanced with PII redaction and slow request warnings
-
-## Technical Requirements Met
-
-✅ **Redact Authorization headers and tokens**
-- All auth header formats supported (Bearer, Basic, AccessKey)
-- Tokens show only first 4 and last 4 chars for debugging
-
-✅ **Log route, status, duration, merchantId hash**
-- Route path logged
-- Status code logged
-- Response time in milliseconds
-- Merchant ID hashed with SHA-256 + salt
-
-✅ **Warn on slow handlers (>1s)**
-- Warning at 1 second threshold
-- Error at 5 second threshold
-- Detailed context for debugging
+---
 
 ## Testing
 
-Run the test suite:
 ```bash
 cd fluxapay_backend
-npm test -- piiRedactor.test.ts
+npx jest --testPathPattern=piiRedactor.test.ts
 ```
 
-All 24 tests pass ✅
+All tests pass ✅
+
+---
 
 ## Security Notes
 
-1. **No secrets in logs**: Authorization headers, API keys, and tokens are always redacted
-2. **Hashed identifiers**: Merchant IDs use consistent hashing for log correlation without PII exposure
-3. **Email redaction**: Emails show only partial username and domain
-4. **Body sanitization**: Utility function available to sanitize request/response bodies
+1. **No secrets in logs**: Authorization headers, API keys, tokens — always redacted at logger level
+2. **secret_key explicitly blocked**: Added as a first-class always-redacted field
+3. **Hashed identifiers**: Merchant IDs use SHA-256 + salt for log correlation without PII exposure
+4. **Email redaction**: Emails show only partial username and domain (`jo***@example.com`)
+5. **Auto-sanitization in logger**: Even if a developer accidentally passes sensitive data in a log context, `redactRequestContext` strips it before the JSON is emitted
 
-## Usage in Production
-
-The logging middleware is already integrated in `src/app.ts`. No additional configuration needed.
-
-To adjust log levels, set the environment variable:
-```bash
-LOG_LEVEL=info  # debug, info, warn, error
-```
+---
 
 ## Monitoring Recommendations
 
-1. **Alert on slow requests**: Set up alerts for the `http_slow_requests_total` metric
-2. **Track error rates**: Monitor `http_errors_total` for 4xx/5xx responses
-3. **Performance trends**: Use `http_request_duration_ms` histogram to track P95/P99 latencies
-4. **Correlation**: Use `requestId` and `merchantIdHash` to trace requests across services
+1. **Alert on slow requests**: `http_slow_requests_total`
+2. **Track error rates**: `http_errors_total` for 4xx/5xx responses
+3. **Performance trends**: `http_request_duration_ms` histogram — P95/P99 latencies
+4. **Correlation**: Use `requestId` + `merchantIdHash` to trace requests across services

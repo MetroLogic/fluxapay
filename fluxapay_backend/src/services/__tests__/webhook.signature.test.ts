@@ -270,14 +270,16 @@ describe("Webhook Signature Generation (HMAC-SHA256)", () => {
     });
 
     it("should handle edge case at exact window boundary", () => {
-      const now = Date.now();
-      const timestamp = new Date(now - 300000).toISOString(); // Exactly 5 minutes ago
+      jest.useFakeTimers();
+      const now = new Date("2026-06-26T10:00:00.000Z");
+      jest.setSystemTime(now);
 
-      // Should be accepted (within window)
-      expect(verifyWebhookTimestamp(timestamp, 300000)).toBe(true);
+      const timestamp = new Date(now.getTime() - 300_000).toISOString();
 
-      // Should be rejected (outside window)
-      expect(verifyWebhookTimestamp(timestamp, 299999)).toBe(false);
+      expect(verifyWebhookTimestamp(timestamp, 300_000)).toBe(true);
+      expect(verifyWebhookTimestamp(timestamp, 299_999)).toBe(false);
+
+      jest.useRealTimers();
     });
   });
 

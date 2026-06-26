@@ -24,7 +24,10 @@ import { logSettlementBatch, updateSettlementBatchCompletion } from "./audit.ser
 const prisma = new PrismaClient();
 
 /** Fee percentage charged by FluxaPay (default 2%). Configurable via env. */
-const FEE_PERCENT = parseFloat(process.env.SETTLEMENT_FEE_PERCENT ?? "2");
+function getSettlementFeePercent(): number {
+  const configured = parseFloat(process.env.SETTLEMENT_FEE_PERCENT ?? "2");
+  return Number.isFinite(configured) ? configured : 2;
+}
 
 /** Hard limit: maximum payments per merchant per batch call (prevents OOM). */
 const BATCH_PAYMENT_LIMIT = parseInt(process.env.SETTLEMENT_BATCH_LIMIT ?? "500", 10);
@@ -248,7 +251,7 @@ async function settleMerchant(
 
         // 7. Calculate fee and net
         const feeAmount = parseFloat(
-            ((fiatGross * FEE_PERCENT) / 100).toFixed(2),
+            ((fiatGross * getSettlementFeePercent()) / 100).toFixed(2),
         );
         const netAmount = parseFloat((fiatGross - feeAmount).toFixed(2));
 
@@ -275,7 +278,7 @@ async function settleMerchant(
                         usdc_amount: totalUsdc,
                         exchange_rate: exchangeRate,
                         fiat_gross: fiatGross,
-                        fee_percent: FEE_PERCENT,
+                        fee_percent: getSettlementFeePercent(),
                         fee_amount: feeAmount,
                         net_amount: netAmount,
                         payment_count: paymentIds.length,

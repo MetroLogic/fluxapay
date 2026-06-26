@@ -8,6 +8,10 @@ import { PrismaClient } from "../../generated/client/client";
 
 const prisma = new PrismaClient();
 
+function uniquePhone(): string {
+  return `+188802${Date.now()}${Math.floor(Math.random() * 10000)}`;
+}
+
 describe("Escrow Service", () => {
   beforeAll(async () => {
     // Setup test database
@@ -23,7 +27,12 @@ describe("Escrow Service", () => {
       where: { customer_email: { contains: "test-escrow" } },
     });
     await prisma.merchant.deleteMany({
-      where: { email: { contains: "test-escrow" } },
+      where: {
+        OR: [
+          { email: { contains: "test-escrow" } },
+          { phone_number: { startsWith: "+188802" } },
+        ],
+      },
     });
   });
 
@@ -34,7 +43,7 @@ describe("Escrow Service", () => {
         data: {
           business_name: "Test Escrow Merchant",
           email: "test-escrow@example.com",
-          phone_number: "+1234567890",
+          phone_number: uniquePhone(),
           country: "US",
           settlement_currency: "USD",
           password: "hashedpassword",
@@ -75,7 +84,7 @@ describe("Escrow Service", () => {
         data: {
           business_name: "Test Escrow Merchant",
           email: "test-escrow-2@example.com",
-          phone_number: "+1234567890",
+          phone_number: uniquePhone(),
           country: "US",
           settlement_currency: "USD",
           password: "hashedpassword",
@@ -121,7 +130,7 @@ describe("Escrow Service", () => {
         data: {
           business_name: "Test Escrow Merchant",
           email: "test-escrow-release@example.com",
-          phone_number: "+1234567890",
+          phone_number: uniquePhone(),
           country: "US",
           settlement_currency: "USD",
           password: "hashedpassword",
@@ -162,7 +171,7 @@ describe("Escrow Service", () => {
         data: {
           business_name: "Test Escrow Merchant",
           email: "test-escrow-unauth@example.com",
-          phone_number: "+1234567890",
+          phone_number: uniquePhone(),
           country: "US",
           settlement_currency: "USD",
           password: "hashedpassword",
@@ -206,7 +215,7 @@ describe("Escrow Service", () => {
         data: {
           business_name: "Test Escrow Merchant",
           email: "test-escrow-refund@example.com",
-          phone_number: "+1234567890",
+          phone_number: uniquePhone(),
           country: "US",
           settlement_currency: "USD",
           password: "hashedpassword",
@@ -250,7 +259,7 @@ describe("Escrow Service", () => {
         data: {
           business_name: "Test Escrow Merchant",
           email: "test-escrow-event@example.com",
-          phone_number: "+1234567890",
+          phone_number: uniquePhone(),
           country: "US",
           settlement_currency: "USD",
           password: "hashedpassword",
@@ -283,7 +292,7 @@ describe("Escrow Service", () => {
       });
 
       expect(result).toHaveProperty("message", "Contract event processed successfully");
-      expect(result.payment.escrow_status).toBe("released");
+      expect(result!.payment.escrow_status).toBe("released");
     });
 
     it("should process refunded event successfully", async () => {
@@ -291,7 +300,7 @@ describe("Escrow Service", () => {
         data: {
           business_name: "Test Escrow Merchant",
           email: "test-escrow-event-2@example.com",
-          phone_number: "+1234567890",
+          phone_number: uniquePhone(),
           country: "US",
           settlement_currency: "USD",
           password: "hashedpassword",
@@ -324,7 +333,7 @@ describe("Escrow Service", () => {
       });
 
       expect(result).toHaveProperty("message", "Contract event processed successfully");
-      expect(result.payment.escrow_status).toBe("refunded");
+      expect(result!.payment.escrow_status).toBe("refunded");
     });
   });
 });

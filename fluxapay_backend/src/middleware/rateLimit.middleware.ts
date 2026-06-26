@@ -1,3 +1,5 @@
+import { ErrorCode } from "../types/errors";
+import { apiError, sendApiError } from "../helpers/apiError.helper";
 import type { Request, Response, NextFunction, RequestHandler } from "express";
 import { AuthRequest } from "../types/express";
 import { PrismaClient } from "../generated/client/client";
@@ -171,13 +173,14 @@ export function globalRateLimit(): RequestHandler {
     
     // Check emergency block
     if (isEmergencyBlocked(ip)) {
-      return res.status(429).json({
-        success: false,
-        error: {
-          code: "EMERGENCY_RATE_LIMIT_EXCEEDED",
-          message: "IP temporarily blocked due to excessive requests. Contact support if this is an error.",
-        },
-      });
+      return sendApiError(
+        res,
+        apiError(
+          429,
+          ErrorCode.EMERGENCY_RATE_LIMIT_EXCEEDED,
+          "IP temporarily blocked due to excessive requests. Contact support if this is an error.",
+        ),
+      );
     }
     
     const key = `global:${ip}`;
@@ -201,13 +204,14 @@ export function globalRateLimit(): RequestHandler {
         emergencyData.count += 1;
         if (emergencyData.count > EMERGENCY_THRESHOLD) {
           addEmergencyBlock(ip);
-          return res.status(429).json({
-            success: false,
-            error: {
-              code: "EMERGENCY_RATE_LIMIT_EXCEEDED",
-              message: "IP temporarily blocked due to excessive requests. Contact support if this is an error.",
-            },
-          });
+          return sendApiError(
+            res,
+            apiError(
+              429,
+              ErrorCode.EMERGENCY_RATE_LIMIT_EXCEEDED,
+              "IP temporarily blocked due to excessive requests. Contact support if this is an error.",
+            ),
+          );
         }
       }
     }
@@ -223,14 +227,12 @@ export function globalRateLimit(): RequestHandler {
         retryAfterSeconds,
       });
       
-      return res.status(429).json({
-        success: false,
-        error: {
-          code: "RATE_LIMIT_EXCEEDED",
-          message: "Too many requests. Please slow down.",
-          retry_after_seconds: retryAfterSeconds,
-        },
-      });
+      return sendApiError(
+        res,
+        apiError(429, ErrorCode.RATE_LIMIT_EXCEEDED, "Too many requests. Please slow down.", {
+          retryAfterSeconds,
+        }),
+      );
     }
 
     next();
@@ -270,14 +272,15 @@ export function merchantRateLimit(): RequestHandler {
         retryAfterSeconds,
       });
       
-      return res.status(429).json({
-        success: false,
-        error: {
-          code: "RATE_LIMIT_EXCEEDED",
-          message: "Per-merchant rate limit exceeded. Please slow down.",
-          retry_after_seconds: retryAfterSeconds,
-        },
-      });
+      return sendApiError(
+        res,
+        apiError(
+          429,
+          ErrorCode.RATE_LIMIT_EXCEEDED,
+          "Per-merchant rate limit exceeded. Please slow down.",
+          { retryAfterSeconds },
+        ),
+      );
     }
 
     next();
@@ -314,14 +317,15 @@ export function authRateLimit(): RequestHandler {
         retryAfterSeconds,
       });
       
-      return res.status(429).json({
-        success: false,
-        error: {
-          code: "RATE_LIMIT_EXCEEDED",
-          message: "Too many authentication attempts. Please try again later.",
-          retry_after_seconds: retryAfterSeconds,
-        },
-      });
+      return sendApiError(
+        res,
+        apiError(
+          429,
+          ErrorCode.RATE_LIMIT_EXCEEDED,
+          "Too many authentication attempts. Please try again later.",
+          { retryAfterSeconds },
+        ),
+      );
     }
 
     next();
@@ -350,7 +354,7 @@ export function merchantApiKeyRateLimit(): RequestHandler {
   return (req: Request, res: Response, next: NextFunction) => {
     const id = getMerchantIdForApiKeyLimit(req);
     if (!id) {
-      return res.status(401).json({ message: "Authentication required" });
+      return sendApiError(res, apiError(401, ErrorCode.AUTHENTICATION_REQUIRED, "Authentication required"));
     }
     const key = `mapikey:${id}`;
     const { allowed, retryAfterSeconds, remaining } = checkLimit(key, max, windowMs);
@@ -369,14 +373,15 @@ export function merchantApiKeyRateLimit(): RequestHandler {
         retryAfterSeconds,
       });
       
-      return res.status(429).json({
-        success: false,
-        error: {
-          code: "RATE_LIMIT_EXCEEDED",
-          message: "API rate limit for this key exceeded. Please slow down.",
-          retry_after_seconds: retryAfterSeconds,
-        },
-      });
+      return sendApiError(
+        res,
+        apiError(
+          429,
+          ErrorCode.RATE_LIMIT_EXCEEDED,
+          "API rate limit for this key exceeded. Please slow down.",
+          { retryAfterSeconds },
+        ),
+      );
     }
 
     next();
@@ -391,13 +396,14 @@ export function captchaCheck(): RequestHandler {
     const ip = getIp(req);
     
     if (checkCaptchaRequired(ip)) {
-      return res.status(403).json({
-        success: false,
-        error: {
-          code: "CAPTCHA_REQUIRED",
-          message: "Too many failed payment attempts. Please complete the CAPTCHA to continue.",
-        },
-      });
+      return sendApiError(
+        res,
+        apiError(
+          403,
+          ErrorCode.CAPTCHA_REQUIRED,
+          "Too many failed payment attempts. Please complete the CAPTCHA to continue.",
+        ),
+      );
     }
     
     next();

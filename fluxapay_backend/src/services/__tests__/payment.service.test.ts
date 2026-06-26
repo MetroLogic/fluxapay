@@ -22,6 +22,18 @@ jest.mock("../HDWalletService");
 // Mock StellarService
 jest.mock("../StellarService");
 
+jest.mock("../depositAddress.service", () => ({
+  DepositAddressService: {
+    allocateAddress: jest.fn().mockResolvedValue(null),
+  },
+}));
+
+jest.mock("../fx.service", () => ({
+  FxService: {
+    getUSDCExchangeRate: jest.fn().mockResolvedValue(1),
+  },
+}));
+
 describe("PaymentService", () => {
   let mockPrisma: any;
   const originalEnv = process.env;

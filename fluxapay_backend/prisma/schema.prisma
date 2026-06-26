@@ -87,6 +87,7 @@ model Customer {
   @@index([merchantId])
   @@index([merchantId, email])
   @@index([deleted_at])
+  @@unique([merchantId, email])
 }
 
 model PaymentLink {
@@ -367,6 +368,11 @@ model Payment {
   paymentLink        PaymentLink? @relation(fields: [paymentLinkId], references: [id])
   depositAddress     DepositAddress?
 
+  // escrow fields
+  escrow_mode              Boolean  @default(false)
+  escrow_contract_address  String?
+  escrow_status            String?
+
   @@index([swept, status])
   @@index([customerId])
   @@index([merchantId, createdAt(sort: Desc)])
@@ -519,8 +525,6 @@ model IdempotencyRecord {
   created_at       DateTime @default(now())
   updated_at       DateTime @updatedAt
 }
-
-// ...existing code...
 
 enum MerchantStatus {
   pending_verification

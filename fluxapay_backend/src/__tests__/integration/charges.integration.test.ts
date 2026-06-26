@@ -8,6 +8,30 @@ process.env.MASTER_VAULT_SECRET_KEY = "SA5V5N44OEQ5FDE3WIF5M7BHLD6NRLJ72S2VPEI5M
 process.env.HD_WALLET_MASTER_SEED = "test-seed-xyz";
 process.env.KMS_PROVIDER = "local";
 
+jest.mock("ioredis", () => {
+  const store = new Map<string, string>();
+
+  return jest.fn().mockImplementation(() => ({
+    set: jest.fn(async (key: string, value: string, ...args: unknown[]) => {
+      if (args.includes("NX") && store.has(key)) {
+        return null;
+      }
+      store.set(key, value);
+      return "OK";
+    }),
+    get: jest.fn(async (key: string) => store.get(key) ?? null),
+    del: jest.fn(async (key: string) => {
+      store.delete(key);
+      return 1;
+    }),
+    keys: jest.fn(async () => Array.from(store.keys())),
+    quit: jest.fn().mockResolvedValue("OK"),
+    on: jest.fn(),
+    connect: jest.fn().mockResolvedValue(undefined),
+    disconnect: jest.fn(),
+  }));
+});
+
 import request from "supertest";
 import { app } from "../../app";
 import { PrismaClient } from "../../generated/client/client";
@@ -122,6 +146,6 @@ describe("POST /api/v1/charges Integration", () => {
       .send(payload);
 
     expect(res.status).toBe(409);
-    expect(res.body).toHaveProperty("error", "idempotency_conflict");
+    expect(res.body).toHaveProperty("code", "IDEMPOTENCY_CONFLICT");
   });
 });

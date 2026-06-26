@@ -11,7 +11,16 @@ import {
 import { PrismaClient } from "../../generated/client/client";
 import bcrypt from "bcrypt";
 
+process.env.DATABASE_URL =
+  process.env.DATABASE_URL ||
+  "postgresql://postgres:postgres@localhost:5432/fluxapay_test?schema=public";
+process.env.JWT_SECRET = process.env.JWT_SECRET || "ci-test-jwt-secret-key";
+
 const prisma = new PrismaClient();
+
+function uniquePhone(): string {
+  return `+188801${Date.now()}${Math.floor(Math.random() * 10000)}`;
+}
 
 describe("Auth Service", () => {
   beforeAll(async () => {
@@ -24,12 +33,39 @@ describe("Auth Service", () => {
   });
 
   beforeEach(async () => {
-    // Clean up test data
-    await prisma.refreshToken.deleteMany({});
-    await prisma.loginAttempt.deleteMany({});
-    await prisma.merchant.deleteMany({
-      where: { email: { contains: "test-auth" } },
+    const merchantFilter = {
+      OR: [
+        { email: { contains: "test-auth" } },
+        { email: { contains: "test-lockout" } },
+        { email: { contains: "test-notlocked" } },
+        { email: { contains: "test-cleanup" } },
+        { phone_number: { startsWith: "+188801" } },
+      ],
+    };
+
+    const merchants = await prisma.merchant.findMany({
+      where: merchantFilter,
+      select: { id: true },
     });
+    const merchantIds = merchants.map((m) => m.id);
+
+    if (merchantIds.length > 0) {
+      await prisma.refund.deleteMany({ where: { merchantId: { in: merchantIds } } });
+      await prisma.payment.deleteMany({ where: { merchantId: { in: merchantIds } } });
+      await prisma.refreshToken.deleteMany({ where: { merchantId: { in: merchantIds } } });
+    }
+
+    await prisma.loginAttempt.deleteMany({
+      where: {
+        OR: [
+          { email: { contains: "test-auth" } },
+          { email: { contains: "test-lockout" } },
+          { email: { contains: "test-notlocked" } },
+          { email: { contains: "test-cleanup" } },
+        ],
+      },
+    });
+    await prisma.merchant.deleteMany({ where: merchantFilter });
   });
 
   describe("loginWithEmailPassword", () => {
@@ -40,7 +76,7 @@ describe("Auth Service", () => {
         data: {
           business_name: "Test Auth Merchant",
           email: "test-auth@example.com",
-          phone_number: "+1234567890",
+          phone_number: uniquePhone(),
           country: "US",
           settlement_currency: "USD",
           password: hashedPassword,
@@ -68,7 +104,7 @@ describe("Auth Service", () => {
         data: {
           business_name: "Test Auth Merchant",
           email: "test-auth@example.com",
-          phone_number: "+1234567890",
+          phone_number: uniquePhone(),
           country: "US",
           settlement_currency: "USD",
           password: hashedPassword,
@@ -95,7 +131,7 @@ describe("Auth Service", () => {
         data: {
           business_name: "Test Auth Merchant",
           email: "test-auth-lockout@example.com",
-          phone_number: "+1234567890",
+          phone_number: uniquePhone(),
           country: "US",
           settlement_currency: "USD",
           password: hashedPassword,
@@ -134,7 +170,7 @@ describe("Auth Service", () => {
         data: {
           business_name: "Test Auth Merchant",
           email: "test-auth-inactive@example.com",
-          phone_number: "+1234567890",
+          phone_number: uniquePhone(),
           country: "US",
           settlement_currency: "USD",
           password: hashedPassword,
@@ -163,7 +199,7 @@ describe("Auth Service", () => {
         data: {
           business_name: "Test Auth Merchant",
           email: "test-auth-refresh@example.com",
-          phone_number: "+1234567890",
+          phone_number: uniquePhone(),
           country: "US",
           settlement_currency: "USD",
           password: hashedPassword,
@@ -212,7 +248,7 @@ describe("Auth Service", () => {
         data: {
           business_name: "Test Auth Merchant",
           email: "test-auth-rotation@example.com",
-          phone_number: "+1234567890",
+          phone_number: uniquePhone(),
           country: "US",
           settlement_currency: "USD",
           password: hashedPassword,
@@ -252,7 +288,7 @@ describe("Auth Service", () => {
         data: {
           business_name: "Test Auth Merchant",
           email: "test-auth-logout@example.com",
-          phone_number: "+1234567890",
+          phone_number: uniquePhone(),
           country: "US",
           settlement_currency: "USD",
           password: hashedPassword,
@@ -290,7 +326,7 @@ describe("Auth Service", () => {
         data: {
           business_name: "Test Auth Merchant",
           email: "test-auth-logoutall@example.com",
-          phone_number: "+1234567890",
+          phone_number: uniquePhone(),
           country: "US",
           settlement_currency: "USD",
           password: hashedPassword,
@@ -331,7 +367,7 @@ describe("Auth Service", () => {
         data: {
           business_name: "Test Auth Merchant",
           email: "test-auth-reuse@example.com",
-          phone_number: "+1234567890",
+          phone_number: uniquePhone(),
           country: "US",
           settlement_currency: "USD",
           password: hashedPassword,
@@ -423,8 +459,8 @@ describe("Auth Service", () => {
       const merchant = await prisma.merchant.create({
         data: {
           business_name: "Test Auth Merchant",
-          email: "test-auth-cleanup@example.com",
-          phone_number: "+1234567890",
+          email: `test-auth-cleanup-${Date.now()}@example.com`,
+          phone_number: uniquePhone(),
           country: "US",
           settlement_currency: "USD",
           password: hashedPassword,

@@ -23,21 +23,17 @@ interface FiatEquivalentProps {
  */
 export function FiatEquivalent({ usdcAmount, fiatCurrency = 'USD' }: FiatEquivalentProps) {
   const [fiatValue, setFiatValue] = useState<string | null>(null);
+  const [resolvedKey, setResolvedKey] = useState('');
+  const requestKey = `${usdcAmount}:${fiatCurrency}`;
 
   useEffect(() => {
-    // Re-fetch whenever the currency changes
-    setFiatValue(null);
-
     let cancelled = false;
 
     async function load() {
       const rateData = await api.fx.getRate(fiatCurrency);
       if (cancelled || !rateData) return;
 
-      // rate = fiat units per 1 USDC
       const equivalent = usdcAmount * rateData.rate;
-
-      // Choose decimal places: currencies like JPY/KRW have no sub-units
       const noDecimals = ['JPY', 'KRW', 'VND', 'CLP', 'ISK'];
       const fractionDigits = noDecimals.includes(fiatCurrency.toUpperCase()) ? 0 : 2;
 
@@ -47,6 +43,7 @@ export function FiatEquivalent({ usdcAmount, fiatCurrency = 'USD' }: FiatEquival
       });
 
       setFiatValue(`≈ ${formatted} ${fiatCurrency.toUpperCase()}`);
+      setResolvedKey(requestKey);
     }
 
     void load();
@@ -54,10 +51,9 @@ export function FiatEquivalent({ usdcAmount, fiatCurrency = 'USD' }: FiatEquival
     return () => {
       cancelled = true;
     };
-  }, [usdcAmount, fiatCurrency]);
+  }, [usdcAmount, fiatCurrency, requestKey]);
 
-  // Render nothing until we have a value — no skeleton, no error message
-  if (!fiatValue) return null;
+  if (resolvedKey !== requestKey || !fiatValue) return null;
 
   return (
     <p

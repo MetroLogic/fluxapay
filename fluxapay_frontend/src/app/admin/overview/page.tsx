@@ -33,7 +33,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-
+import { AddressPoolCard } from "./AddressPoolCard";
 
 export default function AdminOverviewPage() {
   const { stats, isLoading, error } = useAdminOverviewStats();
@@ -161,6 +161,11 @@ export default function AdminOverviewPage() {
             </p>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Address Pool Monitoring Section */}
+      <div className="grid grid-cols-1">
+        <AddressPoolCard />
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">

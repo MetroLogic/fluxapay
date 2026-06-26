@@ -1,3 +1,5 @@
+import { apiError } from "../helpers/apiError.helper";
+import { ErrorCode } from "../types/errors";
 import { PrismaClient } from "../generated/client/client";
 import { isDevEnv } from "../helpers/env.helper";
 
@@ -25,11 +27,11 @@ export async function initializeEscrowContract(data: {
   });
 
   if (!payment) {
-    throw { status: 404, message: "Payment not found" };
+    throw apiError(404, ErrorCode.PAYMENT_NOT_FOUND, "Payment not found");
   }
 
   if (payment.escrow_mode) {
-    throw { status: 400, message: "Escrow already initialized for this payment" };
+    throw apiError(400, ErrorCode.ESCROW_ALREADY_INITIALIZED, "Escrow already initialized for this payment");
   }
 
   // In a real implementation, this would call the Soroban escrow contract
@@ -73,10 +75,11 @@ export async function initializeEscrowContract(data: {
           operation: "initialize_escrow",
           error: error.message,
         });
-        throw {
-          status: 500,
-          message: "Failed to initialize escrow contract after multiple retries",
-        };
+        throw apiError(
+          500,
+          ErrorCode.ESCROW_INIT_FAILED,
+          "Failed to initialize escrow contract after multiple retries",
+        );
       }
       
       // Wait before retrying
@@ -84,7 +87,7 @@ export async function initializeEscrowContract(data: {
     }
   }
 
-  throw { status: 500, message: "Failed to initialize escrow contract" };
+  throw apiError(500, ErrorCode.ESCROW_INIT_FAILED, "Failed to initialize escrow contract");
 }
 
 /**
@@ -102,19 +105,19 @@ export async function releaseEscrowFunds(data: {
   });
 
   if (!payment) {
-    throw { status: 404, message: "Payment not found" };
+    throw apiError(404, ErrorCode.PAYMENT_NOT_FOUND, "Payment not found");
   }
 
   if (!payment.escrow_mode) {
-    throw { status: 400, message: "Payment is not in escrow mode" };
+    throw apiError(400, ErrorCode.PAYMENT_NOT_ESCROW, "Payment is not in escrow mode");
   }
 
   if (payment.merchantId !== merchantId) {
-    throw { status: 403, message: "Not authorized to release this escrow" };
+    throw apiError(403, ErrorCode.FORBIDDEN, "Not authorized to release this escrow");
   }
 
   if (payment.escrow_status === "released") {
-    throw { status: 400, message: "Escrow already released" };
+    throw apiError(400, ErrorCode.ESCROW_ALREADY_RELEASED, "Escrow already released");
   }
 
   let attempt = 0;
@@ -154,17 +157,18 @@ export async function releaseEscrowFunds(data: {
           operation: "release_escrow",
           error: error.message,
         });
-        throw {
-          status: 500,
-          message: "Failed to release escrow funds after multiple retries",
-        };
+        throw apiError(
+          500,
+          ErrorCode.ESCROW_RELEASE_FAILED,
+          "Failed to release escrow funds after multiple retries",
+        );
       }
       
       await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
     }
   }
 
-  throw { status: 500, message: "Failed to release escrow funds" };
+  throw apiError(500, ErrorCode.ESCROW_RELEASE_FAILED, "Failed to release escrow funds");
 }
 
 /**
@@ -184,19 +188,19 @@ export async function refundEscrowFunds(data: {
   });
 
   if (!payment) {
-    throw { status: 404, message: "Payment not found" };
+    throw apiError(404, ErrorCode.PAYMENT_NOT_FOUND, "Payment not found");
   }
 
   if (!payment.escrow_mode) {
-    throw { status: 400, message: "Payment is not in escrow mode" };
+    throw apiError(400, ErrorCode.PAYMENT_NOT_ESCROW, "Payment is not in escrow mode");
   }
 
   if (payment.escrow_status === "refunded") {
-    throw { status: 400, message: "Escrow already refunded" };
+    throw apiError(400, ErrorCode.ESCROW_ALREADY_REFUNDED, "Escrow already refunded");
   }
 
   if (payment.escrow_status === "released") {
-    throw { status: 400, message: "Cannot refund released escrow" };
+    throw apiError(400, ErrorCode.CANNOT_REFUND_RELEASED_ESCROW, "Cannot refund released escrow");
   }
 
   let attempt = 0;
@@ -235,17 +239,18 @@ export async function refundEscrowFunds(data: {
           operation: "refund_escrow",
           error: error.message,
         });
-        throw {
-          status: 500,
-          message: "Failed to refund escrow funds after multiple retries",
-        };
+        throw apiError(
+          500,
+          ErrorCode.ESCROW_REFUND_FAILED,
+          "Failed to refund escrow funds after multiple retries",
+        );
       }
       
       await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
     }
   }
 
-  throw { status: 500, message: "Failed to refund escrow funds" };
+  throw apiError(500, ErrorCode.ESCROW_REFUND_FAILED, "Failed to refund escrow funds");
 }
 
 /**
@@ -300,7 +305,7 @@ export async function processEscrowContractEvent(data: {
       webhookEventType = "payment.escrow_expired";
       break;
     default:
-      throw { status: 400, message: "Unknown event type" };
+      throw apiError(400, ErrorCode.UNKNOWN_EVENT_TYPE, "Unknown event type");
   }
 
   const updatedPayment = await prisma.payment.update({

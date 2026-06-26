@@ -1,3 +1,5 @@
+import { ErrorCode } from "../types/errors";
+import { apiError, sendApiError } from "../helpers/apiError.helper";
 import { Response, NextFunction } from "express";
 import { AuthRequest } from "../types/express";
 import { PrismaClient } from "../generated/client/client";
@@ -35,7 +37,7 @@ export async function authenticateApiKey(
     }
 
     if (!key) {
-        return res.status(401).json({ message: "Authentication required" });
+        return sendApiError(res, apiError(401, ErrorCode.AUTHENTICATION_REQUIRED, "Authentication required"));
     }
 
     // 3. Try interpreting as API Key first.
@@ -61,10 +63,10 @@ export async function authenticateApiKey(
                 }
             }
 
-            return res.status(401).json({ message: "Invalid API key" });
+            return sendApiError(res, apiError(401, ErrorCode.INVALID_API_KEY, "Invalid API key"));
         } catch (error) {
             console.error("API Key Auth Error:", error);
-            return res.status(500).json({ message: "Authentication error" });
+            return sendApiError(res, apiError(500, ErrorCode.AUTHENTICATION_ERROR, "Authentication error"));
         }
     }
 
@@ -78,8 +80,8 @@ export async function authenticateApiKey(
         }
     } catch (err) {
         // If it's not a valid JWT either, then fail
-        return res.status(401).json({ message: "Invalid authentication credentials" });
+        return sendApiError(res, apiError(401, ErrorCode.INVALID_AUTH_CREDENTIALS, "Invalid authentication credentials"));
     }
 
-    return res.status(401).json({ message: "Authentication failed" });
+    return sendApiError(res, apiError(401, ErrorCode.AUTHENTICATION_FAILED, "Authentication failed"));
 }

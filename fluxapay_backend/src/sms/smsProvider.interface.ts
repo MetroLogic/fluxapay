@@ -1,3 +1,5 @@
+export type SmsDriver = "none" | "twilio" | "messagebird" | "mock";
+
 /**
  * Pluggable SMS delivery for OTP and other transactional texts.
  */

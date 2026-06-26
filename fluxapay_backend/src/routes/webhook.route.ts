@@ -221,6 +221,29 @@ router.get(
  */
 router.get("/logs/:log_id", authenticateToken, merchantApiKeyRateLimit(), getWebhookLogDetails);
 
+/**
+ * @swagger
+ * /api/v1/webhooks/deliveries/{log_id}:
+ *   get:
+ *     summary: Get webhook delivery details (alias for logs)
+ *     tags: [Webhooks]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: log_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The webhook log ID
+ *     responses:
+ *       200:
+ *         description: Webhook delivery details retrieved successfully
+ *       404:
+ *         description: Webhook log not found
+ *       401:
+ *         description: Unauthorized
+ */
 // Alias /deliveries/:log_id to /logs/:log_id
 router.get("/deliveries/:log_id", authenticateToken, merchantApiKeyRateLimit(), getWebhookLogDetails);
 

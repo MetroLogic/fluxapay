@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { api, ApiError } from "@/lib/api";
+import { api, ApiError, InitiateRefundRequest } from "@/lib/api";
 import { PaymentDetails } from "@/features/dashboard/payments/PaymentDetails";
 import { type Payment } from "@/features/dashboard/payments/types";
 import { type RefundRecord, type RefundReason } from "@/features/dashboard/refunds/refunds-mock";
@@ -58,14 +58,14 @@ export default function PaymentDetailsPage() {
     setLoading(true);
     setError(null);
     try {
-      const response = (await api.payments.getById(id as string)) as any;
-      const data = response.payment || response.data || response;
+      const response = (await api.payments.getById(id as string)) as Record<string, unknown>;
+      const data = (response.payment || response.data || response) as unknown as BackendPayment;
       setPayment(mapBackendPayment(data));
       
       // Fetch refunds for this payment if available
       try {
-        const refundsResponse = (await api.refunds.list({ paymentId: id as string })) as any;
-        setRefunds(refundsResponse.data || refundsResponse.refunds || []);
+        const refundsResponse = (await api.refunds.list({ paymentId: id as string })) as Record<string, unknown>;
+        setRefunds((refundsResponse.data || refundsResponse.refunds || []) as RefundRecord[]);
       } catch (e) {
         console.error("Failed to fetch refunds", e);
       }
@@ -82,7 +82,7 @@ export default function PaymentDetailsPage() {
     if (id) fetchPaymentDetails();
   }, [id]);
 
-  const handleInitiateRefund = async (payload: any) => {
+  const handleInitiateRefund = async (payload: InitiateRefundRequest) => {
     try {
       await api.refunds.initiate(payload);
       toast.success("Refund initiated successfully");

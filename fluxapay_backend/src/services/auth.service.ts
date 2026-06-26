@@ -1,3 +1,5 @@
+import { apiError } from "../helpers/apiError.helper";
+import { ErrorCode } from "../types/errors";
 import { PrismaClient } from "../generated/client/client";
 import bcrypt from "bcrypt";
 import { generateAccessToken, generateRefreshTokenPair } from "../helpers/jwt.helper";
@@ -43,11 +45,12 @@ export async function loginWithEmailPassword(data: {
         success: false,
       },
     });
-    throw {
-      status: 429,
-      message: "Account locked due to too many failed login attempts. Please try again later.",
-      retry_after: ACCOUNT_LOCKOUT_MINUTES * 60,
-    };
+    throw apiError(
+      429,
+      ErrorCode.RATE_LIMIT_EXCEEDED,
+      "Account locked due to too many failed login attempts. Please try again later.",
+      { retryAfterSeconds: ACCOUNT_LOCKOUT_MINUTES * 60 },
+    );
   }
 
   const merchant = await prisma.merchant.findUnique({ where: { email } });
@@ -62,11 +65,11 @@ export async function loginWithEmailPassword(data: {
         success: false,
       },
     });
-    throw { status: 400, message: "Invalid credentials" };
+    throw apiError(400, ErrorCode.INVALID_CREDENTIALS, "Invalid credentials");
   }
 
   if (merchant.status !== "active") {
-    throw { status: 403, message: "Account not active" };
+    throw apiError(403, ErrorCode.ACCOUNT_NOT_ACTIVE, "Account not active");
   }
 
   const match = await bcrypt.compare(password, merchant.password);
@@ -80,7 +83,7 @@ export async function loginWithEmailPassword(data: {
         success: false,
       },
     });
-    throw { status: 400, message: "Invalid credentials" };
+    throw apiError(400, ErrorCode.INVALID_CREDENTIALS, "Invalid credentials");
   }
 
   // Log successful attempt
@@ -173,7 +176,7 @@ export async function refreshAccessToken(data: {
 
   if (!matchedToken) {
     // Token not found - could be expired, revoked, or never existed
-    throw { status: 401, message: "Invalid or expired refresh token" };
+    throw apiError(401, ErrorCode.INVALID_REFRESH_TOKEN, "Invalid or expired refresh token");
   }
 
   // Check if token has been reused (security incident)
@@ -188,10 +191,11 @@ export async function refreshAccessToken(data: {
       message: "We detected a potential security incident with your account. All sessions have been invalidated for your protection. Please login again.",
     });
     
-    throw { 
-      status: 403, 
-      message: "Security incident detected. All sessions have been invalidated. Please login again." 
-    };
+    throw apiError(
+      403,
+      ErrorCode.FORBIDDEN,
+      "Security incident detected. All sessions have been invalidated. Please login again.",
+    );
   }
 
   // Revoke the old refresh token (rotation)

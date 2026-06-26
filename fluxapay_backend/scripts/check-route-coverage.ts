@@ -15,22 +15,33 @@ import { specs } from '../src/docs/swagger';
 
 /** Must stay in sync with `src/app.ts` mount paths (path after `/api/v1`). */
 const ROUTE_FILE_MOUNT_PREFIX: Record<string, string> = {
+    'addressPool.route.ts': '/admin/address-pool',
+    'apiKey.route.ts': '/api-keys',
     'audit.route.ts': '/admin',
     'customer.route.ts': '/customers',
+    'dailyReconciliation.route.ts': '/reports/reconciliation',
     'dashboard.route.ts': '/dashboard',
     'dataExport.route.ts': '/merchants/export',
+    'fx.route.ts': '/fx-rates',
     'invoice.route.ts': '/invoices',
     'keys.route.ts': '/keys',
     'kyc.route.ts': '/merchants/kyc',
     'merchant.route.ts': '/merchants',
     'merchantDeletion.route.ts': '/merchants',
     'payment.route.ts': '/payments',
+    'paymentLink.route.ts': '/payment-links',
     'reconciliation.route.ts': '/admin/reconciliation',
     'refund.route.ts': '/refunds',
     'settlement.route.ts': '/settlements',
     'settlementBatch.route.ts': '/admin/settlement',
     'sweep.route.ts': '/admin/sweep',
+    'system.route.ts': '/admin/system',
     'webhook.route.ts': '/webhooks',
+};
+
+/** Routes mounted outside `/api/v1` (full path prefix). */
+const ROUTE_FILE_FULL_MOUNT_PREFIX: Record<string, string> = {
+    'health.route.ts': '/health',
 };
 
 interface RouteInfo {
@@ -87,6 +98,11 @@ class RouteCoverageChecker {
 
   /** Full documented path as in OpenAPI (includes `/api/v1` prefix). */
   private expressRouteToOpenApiPath(file: string, routePath: string): string {
+    if (ROUTE_FILE_FULL_MOUNT_PREFIX[file]) {
+      const mount = ROUTE_FILE_FULL_MOUNT_PREFIX[file];
+      const suffix = routePath === '/' ? '' : routePath;
+      return `${mount}${suffix}`;
+    }
     const mount = ROUTE_FILE_MOUNT_PREFIX[file] ?? '';
     const suffix = routePath === '/' ? '' : routePath;
     return `/api/v1${mount}${suffix}`;

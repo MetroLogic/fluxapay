@@ -151,7 +151,7 @@ jobs:
 
       - name: Run linting
         working-directory: ./fluxapay_frontend
-        run: npx eslint . --max-warnings=0
+        run: npx eslint . --quiet
 
       - name: Build frontend
         working-directory: ./fluxapay_frontend

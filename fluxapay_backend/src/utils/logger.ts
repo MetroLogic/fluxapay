@@ -1,6 +1,7 @@
 import { AsyncLocalStorage } from 'async_hooks';
 import { Logger, LogEntry, LogLevel, LogContext, MetricsCollector, MetricEvent, MetricsTags } from '../types/logging.types';
 import { getRequestId } from './requestContext';
+import { redactRequestContext } from './piiRedactor';
 
 export const loggerStorage = new AsyncLocalStorage<{ requestId: string }>();
 
@@ -53,9 +54,10 @@ class StructuredLogger implements Logger {
     // Automatically inject requestId from AsyncLocalStorage if available and not already provided
     const requestId = getRequestId();
 
-    // Merge default context with storage context and provided context
+    // Merge default context with storage context and provided context, then redact PII
     const storageContext = loggerStorage.getStore() || {};
-    const mergedContext = { ...this.defaultContext, ...storageContext, ...context };
+    const rawContext = { ...this.defaultContext, ...storageContext, ...context };
+    const mergedContext = redactRequestContext(rawContext);
     if (requestId && !mergedContext.requestId) {
       mergedContext.requestId = requestId;
     }

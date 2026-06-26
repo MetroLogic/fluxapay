@@ -159,7 +159,7 @@ jobs:
           tags: |
             type=ref,event=branch
             type=ref,event=pr
-            type=sha,prefix={{branch}}-
+            type=sha,prefix=sha-
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push Docker image
@@ -167,7 +167,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: ./fluxapay_backend
-          push: true
+          push: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
@@ -181,7 +181,7 @@ jobs:
     name: Deploy to Staging
     runs-on: ubuntu-latest
     needs: build-and-push-docker
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == false
     environment:
       name: staging
       url: https://staging.fluxapay.com
