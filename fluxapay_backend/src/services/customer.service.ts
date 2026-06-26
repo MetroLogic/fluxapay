@@ -31,21 +31,24 @@ export async function createCustomerService(params: {
     throw apiError(400, ErrorCode.INVALID_METADATA, "Metadata cannot exceed 10 key-value pairs");
   }
 
-  // Check for duplicate email per merchant
-  const existing = await prisma.customer.findFirst({
+  // Use upsert to ensure idempotent creation keyed by (merchantId, email)
+  // Requires a compound unique constraint in Prisma schema: @@unique([merchantId, email])
+  return prisma.customer.upsert({
     where: {
-      merchantId,
-      email: normalizedEmail,
+      merchantId_email: {
+        merchantId,
+        email: normalizedEmail,
+      },
+    },
+    update: {
+      // Update optional fields if provided and revive soft-deleted records
+      name: name ?? undefined,
+      phone: phone ?? undefined,
+      stellar_address: stellar_address ?? undefined,
+      metadata: (metadata ?? undefined) as Prisma.InputJsonValue | undefined,
       deleted_at: null,
     },
-  });
-
-  if (existing) {
-    throw apiError(409, ErrorCode.CUSTOMER_ALREADY_EXISTS, "Customer with this email already exists");
-  }
-
-  return prisma.customer.create({
-    data: {
+    create: {
       merchantId,
       email: normalizedEmail,
       name,

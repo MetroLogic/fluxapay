@@ -87,6 +87,7 @@ model Customer {
   @@index([merchantId])
   @@index([merchantId, email])
   @@index([deleted_at])
+  @@unique([merchantId, email])
 }
 
 model PaymentLink {
@@ -524,8 +525,6 @@ model IdempotencyRecord {
   created_at       DateTime @default(now())
   updated_at       DateTime @updatedAt
 }
-
-// ...existing code...
 
 enum MerchantStatus {
   pending_verification
