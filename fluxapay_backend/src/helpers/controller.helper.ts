@@ -24,11 +24,20 @@ export function createController<T = Record<string, any>>(
       res.status(successStatus).json(result);
     } catch (err) {
       console.error(err);
-      res
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .status((err as any).status || 500)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .json({ message: (err as any).message || "Server error" });
+      const status = (err as any).status || 500;
+      const message = (err as any).message || "Server error";
+
+      // Set Retry-After header for rate-limit errors that carry retryAfterSeconds
+      if (status === 429 && (err as any).retryAfterSeconds) {
+        res.setHeader("Retry-After", String((err as any).retryAfterSeconds));
+      }
+
+      res.status(status).json({
+        message,
+        ...(status === 429 && (err as any).retryAfterSeconds
+          ? { retry_after_seconds: (err as any).retryAfterSeconds }
+          : {}),
+      });
     }
   };
 }

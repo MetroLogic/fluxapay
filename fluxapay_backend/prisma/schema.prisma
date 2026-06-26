@@ -639,6 +639,11 @@ enum AuditActionType {
   bank_account_updated
   api_key_rotated
   webhook_secret_rotated
+  // Database backup lifecycle
+  db_backup_started
+  db_backup_success
+  db_backup_failed
+  db_backup_retention_purge
 }
 
 enum AuditEntityType {
@@ -653,10 +658,25 @@ enum AuditEntityType {
   bank_account
   api_key
   webhook_secret
+  database_backup
 }
 
 /// Tracks a merchant's right-to-erasure request.
 /// Financial records are retained under legal hold; only PII is anonymized.
+/**
+ * Per-merchant notification preferences.
+ * Created on first write; absence means all defaults apply (reminders enabled).
+ */
+model MerchantNotificationPreferences {
+  merchantId                   String   @id
+  /// Whether to send payment-expiry reminder emails/webhooks (default: true)
+  payment_expiry_reminder      Boolean  @default(true)
+  /// Minutes before expiry to send the reminder (default: 5, min: 1)
+  reminder_minutes_before      Int      @default(5)
+  created_at                   DateTime @default(now())
+  updated_at                   DateTime @updatedAt
+}
+
 model MerchantDeletionRequest {
   id           String    @id @default(cuid())
   merchantId   String    @unique

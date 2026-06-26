@@ -162,8 +162,9 @@ export async function verifyOtpMerchantService(data: {
 export async function resendOtpMerchantService(data: {
   merchantId: string;
   channel: "email" | "phone";
+  ip?: string;
 }) {
-  const { merchantId, channel } = data;
+  const { merchantId, channel, ip } = data;
   const merchant = await prisma.merchant.findUnique({
     where: { id: merchantId },
   });
@@ -175,7 +176,7 @@ export async function resendOtpMerchantService(data: {
   if (channel === "email") {
     await sendOtpEmail(merchant.email, otp);
   } else {
-    await sendMerchantOtpSms(merchantId, merchant.phone_number, otp);
+    await sendMerchantOtpSms(merchantId, merchant.phone_number, otp, ip);
   }
 
   return { message: "OTP resent" };
