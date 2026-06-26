@@ -384,11 +384,13 @@ export const api = {
     exportRange: async (params: {
       date_from?: string;
       date_to?: string;
+      currency?: string;
       format?: "pdf" | "csv";
     }): Promise<Blob | any> => {
       const sp = new URLSearchParams();
       if (params.date_from) sp.set("date_from", params.date_from);
       if (params.date_to) sp.set("date_to", params.date_to);
+      if (params.currency) sp.set("currency", params.currency);
       sp.set("format", params.format || "csv");
       const response = await fetch(
         `${API_BASE_URL}/api/v1/settlements/export?${sp.toString()}`,
@@ -780,6 +782,14 @@ export const api = {
       },
       getById: (id: string) => fetchWithAuth(`/api/v1/admin/audit-logs/${id}`),
     },
+    addressPool: {
+      stats: () => fetchWithAuth("/api/v1/admin/address-pool/stats"),
+    },
+  },
+  
+  // FX Rates
+  fx: {
+    getRate: (currency: string) => fetchWithAuth(`/api/v1/fx-rates?currency=${currency}`),
   },
 };
 
