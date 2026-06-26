@@ -78,29 +78,6 @@ test.describe("Login flow", () => {
               localStorage.getItem("token") ?? sessionStorage.getItem("token"),
           ),
         { timeout: 15000 },
-    await page.route("**/api/merchants/login", (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          token: "mock-jwt-token",
-          message: "Login successful",
-          merchantId: "mer_1",
-        }),
-      }),
-    );
-
-    await page.goto("/login");
-    await page.getByLabel(/email/i).fill("test@example.com");
-    await page.getByRole("textbox", { name: /^password$/i }).fill("password123");
-    await page.getByRole("button", { name: /login/i }).click();
-
-    await expect
-      .poll(async () =>
-        page.evaluate(
-          () =>
-            localStorage.getItem("token") ?? sessionStorage.getItem("token"),
-        ),
       )
       .toBe("mock-jwt-token");
   });

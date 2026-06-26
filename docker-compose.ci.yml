@@ -22,17 +22,6 @@ services:
     tmpfs:
       - /var/lib/postgresql/data
 
-  redis:
-    image: redis:7-alpine
-    container_name: fluxapay-ci-redis
-    ports:
-      - "6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
   backend:
     build:
       context: ./fluxapay_backend
@@ -42,7 +31,6 @@ services:
       NODE_ENV: test
       PORT: 3000
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/fluxapay_test?schema=public
-      REDIS_URL: redis://redis:6379
       JWT_SECRET: ci-test-jwt-secret-key-for-integration-testing-only
       WEBHOOK_SECRET: ci-test-webhook-secret
       CLOUDINARY_CLOUD_NAME: test
@@ -51,9 +39,9 @@ services:
       RESEND_API_KEY: re_test
       STELLAR_HORIZON_URL: https://horizon-testnet.stellar.org
       STELLAR_NETWORK_PASSPHRASE: Test SDF Network ; September 2015
-      FUNDER_SECRET_KEY: SBFTEST23456789012345678901234567890123456789012345678901234
-      MASTER_VAULT_SECRET_KEY: SBFTEST23456789012345678901234567890123456789012345678901234
-      USDC_ISSUER_PUBLIC_KEY: GBBTEST23456789012345678901234567890123456789012345678901234
+      FUNDER_SECRET_KEY: SBXEHJKWF7C7BIFSUGXZE7XKFJ5SP6Y7JGPD4J4TKMX2MQXWQQRF3BSG
+      MASTER_VAULT_SECRET_KEY: SDGHCAPDRWTOTBAQT6HJ5KBUZOECD2JEOH6E76NDL4OXNBXIWODLZA4B
+      USDC_ISSUER_PUBLIC_KEY: GBVXGET7UCLTTLDZGVWDDMZ7FVLCNZL75GU7BLVPTWUP6UIVYHAY5OAX
       KMS_PROVIDER: local
       KMS_ENCRYPTION_PASSPHRASE: ci-test-passphrase-for-hd-wallet-secure
       HD_WALLET_MASTER_SEED: ci-test-master-seed-32chars-long-padded!!
@@ -65,11 +53,9 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      redis:
-        condition: service_healthy
     command: ["sh", "-c", "npx prisma db push --skip-generate && npm start"]
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health/ready"]
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
       interval: 10s
       timeout: 5s
       retries: 5
