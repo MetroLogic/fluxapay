@@ -123,6 +123,7 @@ export function sanitizeObject(obj: any, sensitiveFields: string[] = []): any {
   const defaultSensitiveFields = [
     'password',
     'secret',
+    'secret_key',
     'token',
     'apiKey',
     'api_key',
@@ -176,4 +177,30 @@ export function getSafeRequestMetadata(req: any) {
     contentType: headers['content-type'],
     contentLength: headers['content-length'],
   };
+}
+
+/**
+ * Convenience wrapper — sanitize a request body for logging.
+ * Always uses the full default sensitive-field list.
+ */
+export function redactRequestBody(body: any): any {
+  return sanitizeObject(body);
+}
+
+/**
+ * Redact authorization-related headers inside a log context object.
+ * Returns a shallow-cloned copy — the original is not mutated.
+ */
+export function redactRequestContext(context: Record<string, any>): Record<string, any> {
+  const safe = { ...context };
+
+  if (typeof safe['authorization'] === 'string') {
+    safe['authorization'] = redactAuthHeader(safe['authorization']);
+  }
+
+  if (typeof safe['x-api-key'] === 'string') {
+    safe['x-api-key'] = redactApiKey(safe['x-api-key']);
+  }
+
+  return safe;
 }

@@ -124,17 +124,15 @@ export async function runPaymentExpiryJob(): Promise<PaymentExpiryResult> {
       try {
         await createAndDeliverWebhook(
           payment.merchantId,
-          "payment_failed",          // product spec: use payment_failed event type
+          "payment_expired",          // issue #655: use the dedicated payment_expired event type
           {
             event: "payment.expired",
             data: {
-              payment_id: payment.id,
+              charge_id: payment.id,
+              merchant_id: payment.merchantId,
               amount: payment.amount.toString(),
               currency: payment.currency,
-              status: PaymentStatus.EXPIRED,
-              customer_email: payment.customer_email,
               expired_at: now.toISOString(),
-              reason: "Payment window expired without on-chain confirmation.",
             },
           },
           payment.id,

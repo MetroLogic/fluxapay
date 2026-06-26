@@ -11,6 +11,7 @@ export type CanonicalEventName =
     | 'payment.partially_paid'
     | 'payment.overpaid'
     | 'payment.failed'
+    | 'payment.expired'
     | 'payment.settled'
     | 'refund.created'
     | 'refund.completed'
@@ -27,6 +28,7 @@ export type LegacyEventName =
     | 'payment_partially_paid'
     | 'payment_overpaid'
     | 'payment_failed'
+    | 'payment_expired'
     | 'payment_pending'
     | 'refund_completed'
     | 'refund_failed'
@@ -45,6 +47,7 @@ const legacyToCanonical: Record<LegacyEventName, CanonicalEventName> = {
     'payment_partially_paid': 'payment.partially_paid',
     'payment_overpaid': 'payment.overpaid',
     'payment_failed': 'payment.failed',
+    'payment_expired': 'payment.expired',
     'payment_pending': 'payment.pending',
     'refund_completed': 'refund.completed',
     'refund_failed': 'refund.failed',
@@ -63,6 +66,7 @@ const canonicalToLegacy: Record<CanonicalEventName, LegacyEventName> = {
     'payment.partially_paid': 'payment_partially_paid',
     'payment.overpaid': 'payment_overpaid',
     'payment.failed': 'payment_failed',
+    'payment.expired': 'payment_expired',
     'payment.settled': 'payment_completed',
     'refund.created': 'refund_completed',
     'refund.completed': 'refund_completed',
