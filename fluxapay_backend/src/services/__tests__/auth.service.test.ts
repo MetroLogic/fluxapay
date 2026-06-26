@@ -19,7 +19,7 @@ process.env.JWT_SECRET = process.env.JWT_SECRET || "ci-test-jwt-secret-key";
 const prisma = new PrismaClient();
 
 function uniquePhone(): string {
-  return `+1999${Date.now()}${Math.floor(Math.random() * 10000)}`;
+  return `+188801${Date.now()}${Math.floor(Math.random() * 10000)}`;
 }
 
 describe("Auth Service", () => {
@@ -39,7 +39,7 @@ describe("Auth Service", () => {
         { email: { contains: "test-lockout" } },
         { email: { contains: "test-notlocked" } },
         { email: { contains: "test-cleanup" } },
-        { phone_number: { startsWith: "+1999" } },
+        { phone_number: { startsWith: "+188801" } },
       ],
     };
 
