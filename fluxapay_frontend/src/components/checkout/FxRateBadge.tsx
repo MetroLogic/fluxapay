@@ -4,11 +4,12 @@ import { useFxRate } from "@/hooks/useFxRate";
 import { Loader2, AlertCircle } from "lucide-react";
 
 interface FxRateBadgeProps {
+  amount?: number;
   currency?: string;
   className?: string;
 }
 
-export function FxRateBadge({ currency = "USD", className = "" }: FxRateBadgeProps) {
+export function FxRateBadge({ amount, currency = "USD", className = "" }: FxRateBadgeProps) {
   const { rate, timestamp, error, isLoading } = useFxRate(currency);
 
   const lastUpdated = timestamp
@@ -32,6 +33,27 @@ export function FxRateBadge({ currency = "USD", className = "" }: FxRateBadgePro
       <div className={`flex items-center gap-1.5 text-xs text-amber-600 ${className}`}>
         <AlertCircle className="h-3 w-3" aria-hidden="true" />
         <span>Rate unavailable</span>
+      </div>
+    );
+  }
+
+  if (amount != null) {
+    const fiatEquivalent = (amount * rate).toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+
+    return (
+      <div className={`text-xs text-gray-500 ${className}`}>
+        <span>
+          ≈ {fiatEquivalent} {currency}
+        </span>
+        {lastUpdated && (
+          <span className="ml-2 text-gray-400">
+            • Updated {lastUpdated}
+            {isStale && " • Stale"}
+          </span>
+        )}
       </div>
     );
   }

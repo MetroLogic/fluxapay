@@ -412,7 +412,7 @@ export default function CheckoutPage() {
               <p className="text-3xl font-bold text-gray-900 sm:text-4xl">
                 {payment.amount} {payment.currency}
               </p>
-              <FxRateBadge currency="USD" className="mt-1 justify-center" />
+              <FxRateBadge amount={payment.amount} currency="USD" className="mt-1 justify-center" />
               {payment.description && (
                 <p className="mt-2 text-sm text-gray-500">{payment.description}</p>
               )}
