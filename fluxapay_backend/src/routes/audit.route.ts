@@ -2,12 +2,46 @@ import { Router } from 'express';
 import { authenticateToken } from '../middleware/auth.middleware';
 import { adminAuth } from '../middleware/adminAuth.middleware';
 import { getAuditLogs, getAuditLogByIdHandler, getSettlementPayoutPayload } from '../controllers/audit.controller';
+import { getAdminPayments } from '../controllers/payment.controller';
 
 const router = Router();
 
 // All audit log routes require authentication and admin authorization
 router.use(authenticateToken);
 router.use(adminAuth);
+
+/**
+ * @swagger
+ * /api/v1/admin/payments:
+ *   get:
+ *     summary: Query payments across all merchants with filters (Admin only)
+ *     tags: [Admin - Payments]
+ *     security:
+ *       - bearerAuth: []
+ *       - adminSecret: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema: { type: integer }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer }
+ *       - in: query
+ *         name: status
+ *         schema: { type: string }
+ *       - in: query
+ *         name: currency
+ *         schema: { type: string }
+ *       - in: query
+ *         name: search
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: List of payments across the platform
+ *       401:
+ *         description: Unauthorized
+ */
+router.get('/payments', getAdminPayments);
 
 /**
  * @swagger

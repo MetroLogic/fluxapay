@@ -7,11 +7,13 @@ import { cn } from "@/lib/utils";
 interface PaymentsTableProps {
   payments: Payment[];
   onSelectPayment: (payment: Payment) => void;
+  isLoading?: boolean;
 }
 
 export function PaymentsTable({
   payments,
   onSelectPayment,
+  isLoading = false,
 }: PaymentsTableProps) {
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -43,72 +45,100 @@ export function PaymentsTable({
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {payments.map((payment) => (
-              <tr
-                key={payment.id}
-                className="group hover:bg-muted/50 transition-colors cursor-pointer"
-                onClick={() => onSelectPayment(payment)}
-              >
-                <td className="px-6 py-4 font-mono text-xs text-primary font-medium">
-                  {payment.id.slice(0, 12)}...
-                </td>
-                <td className="px-6 py-4">
-                  <div className="flex flex-col">
-                    <span className="font-medium text-foreground">
-                      {payment.merchantName}
-                    </span>
-                    <span className="text-xs text-muted-foreground font-mono">
-                      {payment.merchantId.slice(0, 8)}
-                    </span>
-                  </div>
-                </td>
-                <td className="px-6 py-4 text-right">
-                  <div className="font-mono font-semibold">
-                    {payment.amount.toLocaleString(undefined, {
-                      minimumFractionDigits: 2,
-                    })}
-                    <span className="ml-1 text-xs text-muted-foreground">
-                      {payment.currency}
-                    </span>
-                  </div>
-                </td>
-                <td className="px-6 py-4 text-center">
-                  <span
-                    className={cn(
-                      "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border",
-                      getStatusColor(payment.status),
-                    )}
-                  >
-                    {payment.status}
-                  </span>
-                </td>
-                <td className="px-6 py-4 text-muted-foreground whitespace-nowrap">
-                  {new Date(payment.createdAt).toLocaleDateString()}
-                  <span className="block text-xs opacity-70">
-                    {new Date(payment.createdAt).toLocaleTimeString()}
-                  </span>
-                </td>
-                <td className="px-6 py-4 text-right">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onSelectPayment(payment);
-                    }}
-                  >
-                    <ArrowRight className="h-4 w-4" />
-                  </Button>
-                </td>
-              </tr>
-            ))}
-            {payments.length === 0 && (
+            {isLoading ? (
+              Array.from({ length: 5 }).map((_, idx) => (
+                <tr key={`skeleton-${idx}`} className="animate-pulse">
+                  <td className="px-6 py-4">
+                    <div className="h-4 bg-muted rounded w-24"></div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="space-y-2">
+                      <div className="h-4 bg-muted rounded w-32"></div>
+                      <div className="h-3 bg-muted rounded w-16"></div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="h-4 bg-muted rounded w-20 ml-auto"></div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="h-5 bg-muted rounded-full w-16 mx-auto"></div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="space-y-2">
+                      <div className="h-4 bg-muted rounded w-24"></div>
+                      <div className="h-3 bg-muted rounded w-16"></div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4"></td>
+                </tr>
+              ))
+            ) : payments.length === 0 ? (
               <EmptyState
                 colSpan={6}
                 className="px-6 py-12 text-muted-foreground"
                 message="No payments found matching your criteria."
               />
+            ) : (
+              payments.map((payment) => (
+                <tr
+                  key={payment.id}
+                  className="group hover:bg-muted/50 transition-colors cursor-pointer"
+                  onClick={() => onSelectPayment(payment)}
+                >
+                  <td className="px-6 py-4 font-mono text-xs text-primary font-medium">
+                    {payment.id.slice(0, 12)}...
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex flex-col">
+                      <span className="font-medium text-foreground">
+                        {payment.merchantName}
+                      </span>
+                      <span className="text-xs text-muted-foreground font-mono">
+                        {payment.merchantId.slice(0, 8)}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <div className="font-mono font-semibold">
+                      {payment.amount.toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                      })}
+                      <span className="ml-1 text-xs text-muted-foreground">
+                        {payment.currency}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 text-center">
+                    <span
+                      className={cn(
+                        "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border",
+                        getStatusColor(payment.status),
+                      )}
+                    >
+                      {payment.status}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-muted-foreground whitespace-nowrap">
+                    {new Date(payment.createdAt).toLocaleDateString()}
+                    <span className="block text-xs opacity-70">
+                      {new Date(payment.createdAt).toLocaleTimeString()}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSelectPayment(payment);
+                      }}
+                    >
+                      <ArrowRight className="h-4 w-4" />
+                    </Button>
+                  </td>
+                </tr>
+              ))
             )}
           </tbody>
         </table>
@@ -116,3 +146,6 @@ export function PaymentsTable({
     </div>
   );
 }
+
+
+

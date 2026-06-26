@@ -780,6 +780,27 @@ export const api = {
       },
       getById: (id: string) => fetchWithAuth(`/api/v1/admin/audit-logs/${id}`),
     },
+    payments: {
+      list: (params?: {
+        page?: number;
+        limit?: number;
+        status?: string;
+        currency?: string;
+        search?: string;
+        date_from?: string;
+        date_to?: string;
+      }) => {
+        const sp = new URLSearchParams();
+        if (params?.page != null) sp.set("page", String(params.page));
+        if (params?.limit != null) sp.set("limit", String(params.limit));
+        if (params?.status && params.status !== "all") sp.set("status", params.status);
+        if (params?.currency) sp.set("currency", params.currency);
+        if (params?.search?.trim()) sp.set("search", params.search.trim());
+        if (params?.date_from) sp.set("date_from", params.date_from);
+        if (params?.date_to) sp.set("date_to", params.date_to);
+        return fetchWithAuth(`/api/v1/admin/payments?${sp.toString()}`);
+      },
+    },
   },
 };
 

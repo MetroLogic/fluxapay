@@ -538,3 +538,67 @@ export const getPaymentSettlement = async (req: Request, res: Response) => {
     res.status(500).json({ error: "Internal Server Error" });
   }
 };
+
+/**
+ * GET /api/v1/admin/payments
+ * Query payments across all merchants (Admin only).
+ */
+export const getAdminPayments = async (req: Request, res: Response) => {
+  try {
+    const query = req.query as Record<string, unknown>;
+    const page = Number(query.page) || 1;
+    const limit = Number(query.limit) || 10;
+    const status = query.status ? String(query.status) : undefined;
+    const currency = query.currency ? String(query.currency) : undefined;
+    const search = query.search ? String(query.search) : undefined;
+    const date_from = query.date_from ? String(query.date_from) : undefined;
+    const date_to = query.date_to ? String(query.date_to) : undefined;
+    const sortBy =
+      typeof query.sort_by === "string" ? query.sort_by : "createdAt";
+    const sortOrder: "asc" | "desc" = query.order === "asc" ? "asc" : "desc";
+
+    const where: Record<string, unknown> = {
+      ...(status && status !== "all" && { status }),
+      ...(currency && { currency }),
+      ...((date_from || date_to) && {
+        createdAt: {
+          ...(date_from && { gte: new Date(date_from) }),
+          ...(date_to && { lte: new Date(date_to) }),
+        },
+      }),
+      ...(search && {
+        OR: [
+          { id: { contains: search } },
+          { order_id: { contains: search } },
+          { customer_email: { contains: search, mode: "insensitive" } },
+          { merchant: { business_name: { contains: search, mode: "insensitive" } } },
+        ],
+      }),
+    };
+
+    const [data, total] = await Promise.all([
+      prisma.payment.findMany({
+        where: where as any,
+        skip: (page - 1) * limit,
+        take: limit,
+        orderBy: { [sortBy]: sortOrder },
+        include: {
+          merchant: {
+            select: {
+              id: true,
+              business_name: true,
+              email: true,
+            },
+          },
+        },
+      }),
+      prisma.payment.count({ where: where as any }),
+    ]);
+
+    return res.json({ data, meta: { total, page, limit } });
+  } catch (error: unknown) {
+    console.error("Error in getAdminPayments:", error);
+    return res.status(500).json({ error: "Internal Server Error" });
+  }
+};
+

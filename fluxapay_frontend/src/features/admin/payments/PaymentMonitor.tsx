@@ -1,52 +1,42 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import { MOCK_PAYMENTS } from './mock-data';
+import { useState, useEffect } from 'react';
 import { Payment, PaymentFilterState } from './types';
 import { PaymentsTable } from './components/PaymentsTable';
 import { PaymentFilters } from './components/PaymentFilters';
 import { PaymentDetails } from './components/PaymentDetails';
 import { Modal } from '@/components/Modal';
+import { useAdminPayments } from '@/hooks/useAdminPayments';
+import { Button } from '@/components/Button';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 export default function PaymentMonitor() {
-    const [payments] = useState<Payment[]>(MOCK_PAYMENTS);
     const [filters, setFilters] = useState<PaymentFilterState>({
         status: 'all',
         merchant: '',
     });
+    const [page, setPage] = useState(1);
     const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
 
-    const filteredPayments = useMemo(() => {
-        return payments.filter(p => {
-            // Status Filter
-            if (filters.status && filters.status !== 'all' && p.status !== filters.status) {
-                return false;
-            }
+    // Reset to page 1 on filter changes
+    useEffect(() => {
+        setPage(1);
+    }, [filters]);
 
-            // Merchant/Search Filter
-            if (filters.merchant) {
-                const searchLower = filters.merchant.toLowerCase();
-                const matchesMerchant = p.merchantName.toLowerCase().includes(searchLower) ||
-                    p.id.toLowerCase().includes(searchLower) ||
-                    p.merchantId.toLowerCase().includes(searchLower);
-                if (!matchesMerchant) return false;
-            }
+    // Format dates for backend API
+    const date_from = filters.dateRange?.from ? filters.dateRange.from.toISOString() : undefined;
+    const date_to = filters.dateRange?.to ? filters.dateRange.to.toISOString() : undefined;
 
-            // Date Range Filter
-            if (filters.dateRange?.from) {
-                if (new Date(p.createdAt) < filters.dateRange.from) return false;
-            }
-            if (filters.dateRange?.to) {
-                // Add one day to include the end date fully if it's just a date string logic, 
-                // usually nice to set time to 23:59:59 but for simple comparison:
-                const endDate = new Date(filters.dateRange.to);
-                endDate.setHours(23, 59, 59, 999);
-                if (new Date(p.createdAt) > endDate) return false;
-            }
+    const { payments, meta, isLoading, error } = useAdminPayments({
+        page,
+        limit: 20,
+        status: filters.status,
+        search: filters.merchant,
+        date_from,
+        date_to,
+    });
 
-            return true;
-        });
-    }, [payments, filters]);
+    const totalPages = Math.ceil(meta.total / meta.limit) || 1;
 
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
@@ -60,13 +50,47 @@ export default function PaymentMonitor() {
             <div className="space-y-4">
                 <PaymentFilters filters={filters} onFilterChange={setFilters} />
 
+                {error && (
+                    <div className="p-4 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">
+                        Failed to load live payments. Showing empty results.
+                    </div>
+                )}
+
                 <PaymentsTable
-                    payments={filteredPayments}
+                    payments={payments}
                     onSelectPayment={setSelectedPayment}
+                    isLoading={isLoading}
                 />
 
-                <div className="text-xs text-muted-foreground text-right">
-                    Showing {filteredPayments.length} results
+                <div className="flex items-center justify-between mt-4">
+                    <div className="text-xs text-muted-foreground">
+                        Showing {meta.total > 0 ? (page - 1) * meta.limit + 1 : 0} to {Math.min(page * meta.limit, meta.total)} of {meta.total} results
+                    </div>
+                    {totalPages > 1 && (
+                        <div className="flex items-center gap-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setPage(p => Math.max(1, p - 1))}
+                                disabled={page === 1}
+                                className="h-8 w-8 p-0"
+                            >
+                                <ChevronLeft className="h-4 w-4" />
+                            </Button>
+                            <span className="text-sm font-medium">
+                                Page {page} of {totalPages}
+                            </span>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                                disabled={page === totalPages}
+                                className="h-8 w-8 p-0"
+                            >
+                                <ChevronRight className="h-4 w-4" />
+                            </Button>
+                        </div>
+                    )}
                 </div>
             </div>
 
