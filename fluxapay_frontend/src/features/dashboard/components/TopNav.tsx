@@ -1,8 +1,9 @@
 "use client";
 
-import { Menu, Bell, User } from "lucide-react";
+import { Menu, Bell, User, Moon, Sun } from "lucide-react";
 import { Button } from "@/components/Button";
 import { usePathname, useRouter } from "next/navigation";
+import { useTheme } from "@/components/ThemeProvider";
 import { useDashboardNotifications } from "@/hooks/useDashboardNotifications";
 
 interface TopNavProps {
@@ -12,6 +13,7 @@ interface TopNavProps {
 export function TopNav({ onMenuClick }: TopNavProps) {
     const pathname = usePathname();
     const router = useRouter();
+    const { isDark, isMounted, toggleTheme } = useTheme();
     const { unreadCount } = useDashboardNotifications({ webhookLimit: 5, payoutLimit: 5 });
 
     const getTitle = () => {
@@ -55,6 +57,17 @@ export function TopNav({ onMenuClick }: TopNavProps) {
                     )}
                     <span className="sr-only">Notifications</span>
                 </Button>
+                {isMounted && (
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-muted-foreground hover:text-foreground"
+                        onClick={toggleTheme}
+                        aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+                    >
+                        {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+                    </Button>
+                )}
                 <Button variant="ghost" size="icon" className="ml-2 rounded-full bg-secondary text-secondary-foreground hover:bg-secondary/80">
                     <User className="h-5 w-5" />
                     <span className="sr-only">Profile</span>
