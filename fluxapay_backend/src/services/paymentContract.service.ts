@@ -1,6 +1,7 @@
 import { Keypair, nativeToScVal, rpc, TransactionBuilder, Networks, Contract } from '@stellar/stellar-sdk';
 import { isDevEnv } from '../helpers/env.helper';
 import { PrismaClient } from '../generated/client/client';
+import { recordSorobanFailure, recordSorobanSuccess } from './SorobanService';
 
 const prisma = new PrismaClient();
 
@@ -59,6 +60,7 @@ export class PaymentContractService {
                 if (isDevEnv()) {
                     console.log(`Successfully verified payment ${paymentId} on-chain (tx: ${contractTxHash}).`);
                 }
+                recordSorobanSuccess();
                 return true;
             } catch (error) {
                 attempt++;
@@ -74,6 +76,7 @@ export class PaymentContractService {
                             verification_error: errorMessage
                         }
                     });
+                    recordSorobanFailure(errorMessage);
                     this.logToManualInterventionQueue(paymentId, errorMessage);
                     return false;
                 }

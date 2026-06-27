@@ -159,5 +159,19 @@ describe('Environment Configuration Validation', () => {
             expect(config.PORT).toBe(5000);
             expect(config.SETTLEMENT_FEE_PERCENT).toBe(3.5);
         });
+
+        it('should default ENABLE_SOROBAN_VERIFICATION to true in production', () => {
+            process.env.DATABASE_URL = 'postgresql://localhost/test';
+            process.env.JWT_SECRET = 'test-secret';
+            process.env.FUNDER_SECRET_KEY = 'test-key';
+            process.env.USDC_ISSUER_PUBLIC_KEY = 'test-issuer';
+            process.env.MASTER_VAULT_SECRET_KEY = 'test-vault';
+            process.env.KMS_ENCRYPTED_MASTER_SEED = 'encrypted-seed';
+            process.env.NODE_ENV = 'production';
+            delete process.env.ENABLE_SOROBAN_VERIFICATION;
+
+            const config = validateEnv();
+            expect(config.ENABLE_SOROBAN_VERIFICATION).toBe('true');
+        });
     });
 });
