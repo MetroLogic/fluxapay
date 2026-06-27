@@ -42,6 +42,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Validate Prisma schema
+        run: npx prisma validate
+
       - name: Generate Prisma Client
         run: npx prisma generate
 
@@ -110,6 +113,17 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Validate Prisma schema
+        run: npx prisma validate
+
+      - name: Check migrations are in sync with schema
+        run: |
+          npx prisma migrate diff \
+            --from-migrations prisma/migrations \
+            --to-schema-datamodel prisma/schema.prisma \
+            --shadow-database-url "$DATABASE_URL" \
+            --exit-code
 
       - name: Generate Prisma Client
         run: npx prisma generate

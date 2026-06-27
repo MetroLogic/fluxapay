@@ -7,18 +7,27 @@ import { ErrorCode } from "../types/errors";
  *   - Payment, Settlement, Refund, Invoice, AuditLog records are KEPT
  *     (financial / regulatory obligation — typically 7 years).
  *   - PII fields on Merchant are overwritten with anonymized placeholders.
- *   - Webhook logs endpoint URL is cleared (may contain PII).
+ *   - Active API keys are revoked; webhook endpoints deactivated.
+ *   - Pending webhook deliveries are cancelled; active charges cancelled.
  *   - KYC documents are deleted; KYC record is anonymized.
  *   - OTPs, BankAccount, Customers, Subscriptions are hard-deleted.
- *   - An AuditLog entry is written for both the request and the execution.
  */
-import { PrismaClient, AuditActionType, AuditEntityType } from "../generated/client/client";
+import { PrismaClient } from "../generated/client/client";
+import {
+  logMerchantDeleted,
+  logApiKeysRevoked,
+  logWebhooksDeactivated,
+  logChargesCancelled,
+} from "./audit.service";
 
 const prisma = new PrismaClient();
 
 const ANON_EMAIL = (id: string) => `deleted-${id}@anonymized.invalid`;
 const ANON_PHONE = (id: string) => `+000000${id.slice(-6)}`;
 const ANON_NAME = "Anonymized Account";
+
+const ACTIVE_CHARGE_STATUSES = ["pending", "partially_paid"] as const;
+const PENDING_WEBHOOK_STATUSES = ["pending", "retrying"] as const;
 
 /**
  * Record a deletion request (step 1 — merchant self-service or admin).
@@ -33,32 +42,15 @@ export async function requestDeletion(
   if (!merchant) throw apiError(404, ErrorCode.MERCHANT_NOT_FOUND, "Merchant not found");
   if (merchant.anonymized_at) throw apiError(409, ErrorCode.ACCOUNT_ALREADY_ANONYMIZED, "Account already anonymized");
 
-  // Upsert so re-requests are idempotent
   const req = await prisma.merchantDeletionRequest.upsert({
     where: { merchantId },
     create: { merchantId, reason, requested_by: requestedBy },
     update: { reason, requested_by: requestedBy, executed_at: null },
   });
 
-  // Mark merchant as pending deletion
   await prisma.merchant.update({
     where: { id: merchantId },
     data: { deletion_requested_at: new Date() },
-  });
-
-  // Audit log
-  await prisma.auditLog.create({
-    data: {
-      admin_id: requestedBy,
-      action_type: AuditActionType.merchant_deletion_requested,
-      entity_type: AuditEntityType.merchant_account,
-      entity_id: merchantId,
-      details: {
-        reason: reason ?? null,
-        requested_by: requestedBy,
-        requested_at: new Date().toISOString(),
-      },
-    },
   });
 
   return { requestId: req.id };
@@ -68,7 +60,7 @@ export async function requestDeletion(
  * Execute anonymization (admin-only step 2).
  *
  * Financial records (payments, settlements, refunds, invoices) are retained.
- * PII is overwritten. Hard-deletes non-financial data.
+ * PII is overwritten. Cascades revoke keys, deactivate webhooks, cancel charges.
  */
 export async function executeDeletion(
   merchantId: string,
@@ -84,7 +76,44 @@ export async function executeDeletion(
   if (!deletionReq) throw apiError(400, ErrorCode.NO_DELETION_REQUEST, "No deletion request found for this merchant");
 
   await prisma.$transaction(async (tx) => {
-    // 1. Anonymize Merchant PII
+    // 1. Revoke all active API keys
+    const revokedKeys = await tx.apiKey.updateMany({
+      where: { merchantId, status: "active" },
+      data: { status: "revoked" },
+    });
+
+    // 2. Deactivate webhook endpoint and cancel pending deliveries
+    await tx.merchant.update({
+      where: { id: merchantId },
+      data: {
+        webhook_url: null,
+        webhook_secret: "REDACTED",
+      },
+    });
+
+    const cancelledWebhooks = await tx.webhookLog.updateMany({
+      where: {
+        merchantId,
+        status: { in: [...PENDING_WEBHOOK_STATUSES] },
+      },
+      data: {
+        status: "failed",
+        failure_reason: "merchant_deleted",
+        next_retry_at: null,
+        failed_at: new Date(),
+      },
+    });
+
+    // 3. Cancel active payment charges
+    const cancelledCharges = await tx.payment.updateMany({
+      where: {
+        merchantId,
+        status: { in: [...ACTIVE_CHARGE_STATUSES] },
+      },
+      data: { status: "cancelled" },
+    });
+
+    // 4. Anonymize Merchant PII
     await tx.merchant.update({
       where: { id: merchantId },
       data: {
@@ -92,8 +121,6 @@ export async function executeDeletion(
         email: ANON_EMAIL(merchantId),
         phone_number: ANON_PHONE(merchantId),
         password: "REDACTED",
-        webhook_url: null,
-        webhook_secret: "REDACTED",
         api_key_hashed: null,
         api_key_last_four: null,
         checkout_logo_url: null,
@@ -102,7 +129,7 @@ export async function executeDeletion(
       },
     });
 
-    // 2. Anonymize KYC record (keep for audit trail, wipe PII)
+    // 5. Anonymize KYC record (keep for audit trail, wipe PII)
     await tx.merchantKYC.updateMany({
       where: { merchantId },
       data: {
@@ -116,43 +143,58 @@ export async function executeDeletion(
       },
     });
 
-    // 3. Delete KYC documents (files already on Cloudinary — caller must purge separately)
+    // 6. Delete KYC documents
     await tx.kYCDocument.deleteMany({ where: { kyc: { merchantId } } });
 
-    // 4. Clear webhook log endpoint URLs (may contain PII in query params)
+    // 7. Clear webhook log endpoint URLs (may contain PII in query params)
     await tx.webhookLog.updateMany({
       where: { merchantId },
       data: { endpoint_url: "REDACTED" },
     });
 
-    // 5. Hard-delete non-financial / session data
+    // 8. Hard-delete non-financial / session data
     await tx.oTP.deleteMany({ where: { merchantId } });
     await tx.bankAccount.deleteMany({ where: { merchantId } });
     await tx.merchantSubscription.deleteMany({ where: { merchantId } });
     await tx.customer.deleteMany({ where: { merchantId } });
+    await tx.refreshToken.deleteMany({ where: { merchantId } });
 
-    // 6. Mark deletion request as executed
+    // 9. Mark deletion request as executed
     await tx.merchantDeletionRequest.update({
       where: { merchantId },
       data: { executed_at: new Date() },
     });
 
-    // 7. Audit log
-    await tx.auditLog.create({
-      data: {
-        admin_id: adminId,
-        action_type: AuditActionType.merchant_anonymized,
-        entity_type: AuditEntityType.merchant_account,
-        entity_id: merchantId,
-        details: {
-          executed_by: adminId,
-          executed_at: new Date().toISOString(),
-          retained: ["payments", "settlements", "refunds", "invoices", "audit_logs"],
-          deleted: ["otps", "bank_account", "subscriptions", "customers", "kyc_documents"],
-          anonymized: ["merchant_profile", "kyc_record", "webhook_log_urls"],
-        },
+    // 10. Audit events for each cascaded action
+    await logMerchantDeleted(
+      {
+        adminId,
+        merchantId,
+        reason: deletionReq.reason ?? undefined,
       },
-    });
+      tx,
+    );
+
+    if (revokedKeys.count > 0) {
+      await logApiKeysRevoked(
+        { adminId, merchantId, revokedCount: revokedKeys.count },
+        tx,
+      );
+    }
+
+    if (cancelledWebhooks.count > 0) {
+      await logWebhooksDeactivated(
+        { adminId, merchantId, cancelledDeliveryCount: cancelledWebhooks.count },
+        tx,
+      );
+    }
+
+    if (cancelledCharges.count > 0) {
+      await logChargesCancelled(
+        { adminId, merchantId, cancelledCount: cancelledCharges.count },
+        tx,
+      );
+    }
   });
 }
 

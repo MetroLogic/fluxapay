@@ -30,6 +30,7 @@ import paymentLinkRoutes from "./routes/paymentLink.route";
 import dailyReconciliationRoutes from "./routes/dailyReconciliation.route";
 import sweepRoutes from "./routes/sweep.route";
 import systemRoutes from "./routes/system.route";
+import adminConfigRoutes from "./routes/adminConfig.route";
 import keysRoutes from "./routes/keys.route";
 import settlementBatchRoutes from "./routes/settlementBatch.route";
 import dashboardRoutes from "./routes/dashboard.route";
@@ -198,6 +199,7 @@ app.use("/api/v1/admin/reconciliation", reconciliationRoutes);
 app.use("/api/v1/admin/settlement", settlementBatchRoutes);
 app.use("/api/v1/admin/sweep", sweepRoutes);
 app.use("/api/v1/admin/system", systemRoutes);
+app.use("/api/v1/admin/config", adminConfigRoutes);
 app.use("/api/v1/admin", auditRoutes);
 app.use("/api/v1", oracleRoutes);
 

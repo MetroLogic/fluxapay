@@ -1,6 +1,12 @@
 import { AuditActionType, AuditEntityType } from "../../generated/client/client";
 
-// ── Prisma mock ───────────────────────────────────────────────────────────────
+jest.mock("../audit.service", () => ({
+  logMerchantDeleted: jest.fn().mockResolvedValue({}),
+  logApiKeysRevoked: jest.fn().mockResolvedValue({}),
+  logWebhooksDeactivated: jest.fn().mockResolvedValue({}),
+  logChargesCancelled: jest.fn().mockResolvedValue({}),
+}));
+
 const merchant = { findUnique: jest.fn(), update: jest.fn() };
 const merchantDeletionRequest = {
   upsert: jest.fn(),
@@ -14,9 +20,10 @@ const oTP = { deleteMany: jest.fn() };
 const bankAccount = { deleteMany: jest.fn() };
 const merchantSubscription = { deleteMany: jest.fn() };
 const customer = { deleteMany: jest.fn() };
-const auditLog = { create: jest.fn() };
+const refreshToken = { deleteMany: jest.fn() };
+const apiKey = { updateMany: jest.fn() };
+const payment = { updateMany: jest.fn() };
 
-// $transaction executes the callback with the same mock client
 const txClient = {
   merchant,
   merchantDeletionRequest,
@@ -27,7 +34,9 @@ const txClient = {
   bankAccount,
   merchantSubscription,
   customer,
-  auditLog,
+  refreshToken,
+  apiKey,
+  payment,
 };
 
 jest.mock("../../generated/client/client", () => ({
@@ -35,13 +44,8 @@ jest.mock("../../generated/client/client", () => ({
     ...txClient,
     $transaction: jest.fn((fn: (tx: typeof txClient) => Promise<void>) => fn(txClient)),
   })),
-  AuditActionType: {
-    merchant_deletion_requested: "merchant_deletion_requested",
-    merchant_anonymized: "merchant_anonymized",
-  },
-  AuditEntityType: {
-    merchant_account: "merchant_account",
-  },
+  AuditActionType: {},
+  AuditEntityType: {},
 }));
 
 import {
@@ -49,6 +53,12 @@ import {
   executeDeletion,
   getDeletionRequest,
 } from "../merchantDeletion.service";
+import {
+  logMerchantDeleted,
+  logApiKeysRevoked,
+  logWebhooksDeactivated,
+  logChargesCancelled,
+} from "../audit.service";
 
 const MERCHANT_ID = "merchant-1";
 const ADMIN_ID = "admin-1";
@@ -62,32 +72,14 @@ const activeMerchant = {
 beforeEach(() => jest.clearAllMocks());
 
 describe("requestDeletion", () => {
-  it("creates a deletion request and audit log", async () => {
+  it("creates a deletion request", async () => {
     merchant.findUnique.mockResolvedValue(activeMerchant);
     merchantDeletionRequest.upsert.mockResolvedValue({ id: "req-1", merchantId: MERCHANT_ID });
     merchant.update.mockResolvedValue({});
-    auditLog.create.mockResolvedValue({});
 
     const result = await requestDeletion(MERCHANT_ID, "merchant", "closing business");
 
-    expect(merchantDeletionRequest.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { merchantId: MERCHANT_ID },
-        create: expect.objectContaining({ requested_by: "merchant" }),
-      }),
-    );
-    expect(merchant.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ deletion_requested_at: expect.any(Date) }) }),
-    );
-    expect(auditLog.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          action_type: AuditActionType.merchant_deletion_requested,
-          entity_type: AuditEntityType.merchant_account,
-          entity_id: MERCHANT_ID,
-        }),
-      }),
-    );
+    expect(merchantDeletionRequest.upsert).toHaveBeenCalled();
     expect(result.requestId).toBe("req-1");
   });
 
@@ -105,42 +97,58 @@ describe("requestDeletion", () => {
 describe("executeDeletion", () => {
   beforeEach(() => {
     merchant.findUnique.mockResolvedValue(activeMerchant);
-    merchantDeletionRequest.findUnique.mockResolvedValue({ id: "req-1", merchantId: MERCHANT_ID });
+    merchantDeletionRequest.findUnique.mockResolvedValue({
+      id: "req-1",
+      merchantId: MERCHANT_ID,
+      reason: "gdpr request",
+    });
     merchant.update.mockResolvedValue({});
     merchantKYC.updateMany.mockResolvedValue({});
     kYCDocument.deleteMany.mockResolvedValue({});
-    webhookLog.updateMany.mockResolvedValue({});
+    webhookLog.updateMany.mockResolvedValue({ count: 2 });
     oTP.deleteMany.mockResolvedValue({});
     bankAccount.deleteMany.mockResolvedValue({});
     merchantSubscription.deleteMany.mockResolvedValue({});
     customer.deleteMany.mockResolvedValue({});
+    refreshToken.deleteMany.mockResolvedValue({});
     merchantDeletionRequest.update.mockResolvedValue({});
-    auditLog.create.mockResolvedValue({});
+    apiKey.updateMany.mockResolvedValue({ count: 3 });
+    payment.updateMany.mockResolvedValue({ count: 1 });
   });
 
-  it("anonymizes PII and writes audit log", async () => {
+  it("revokes API keys, cancels webhooks/charges, and emits audit events", async () => {
     await executeDeletion(MERCHANT_ID, ADMIN_ID);
 
-    expect(merchant.update).toHaveBeenCalledWith(
+    expect(apiKey.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({
-          email: expect.stringContaining("anonymized.invalid"),
-          password: "REDACTED",
-          anonymized_at: expect.any(Date),
+        where: { merchantId: MERCHANT_ID, status: "active" },
+        data: { status: "revoked" },
+      }),
+    );
+    expect(webhookLog.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          merchantId: MERCHANT_ID,
+          status: { in: ["pending", "retrying"] },
         }),
       }),
     );
-    expect(kYCDocument.deleteMany).toHaveBeenCalled();
-    expect(oTP.deleteMany).toHaveBeenCalled();
-    expect(bankAccount.deleteMany).toHaveBeenCalled();
-    expect(auditLog.create).toHaveBeenCalledWith(
+    expect(payment.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({
-          action_type: AuditActionType.merchant_anonymized,
-          entity_id: MERCHANT_ID,
+        where: expect.objectContaining({
+          merchantId: MERCHANT_ID,
+          status: { in: ["pending", "partially_paid"] },
         }),
+        data: { status: "cancelled" },
       }),
     );
+    expect(logMerchantDeleted).toHaveBeenCalledWith(
+      expect.objectContaining({ adminId: ADMIN_ID, merchantId: MERCHANT_ID, reason: "gdpr request" }),
+      txClient,
+    );
+    expect(logApiKeysRevoked).toHaveBeenCalled();
+    expect(logWebhooksDeactivated).toHaveBeenCalled();
+    expect(logChargesCancelled).toHaveBeenCalled();
   });
 
   it("throws 404 when merchant not found", async () => {

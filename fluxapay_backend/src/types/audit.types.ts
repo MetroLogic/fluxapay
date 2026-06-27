@@ -25,6 +25,7 @@ export interface QueryAuditLogsParams {
   dateTo?: Date;
   adminId?: string;
   actionType?: AuditActionType;
+  eventType?: AuditActionType;
   entityId?: string;
   page?: number;
   limit?: number;
@@ -48,10 +49,21 @@ export interface KycDecisionDetails {
 }
 
 export interface ConfigChangeDetails {
-  config_key: string;
-  previous_value: string;
-  new_value: string;
-  is_sensitive: boolean;
+  config_key?: string;
+  previous_value?: string;
+  new_value?: string;
+  is_sensitive?: boolean;
+  changed_fields?: string[];
+  old_values?: Record<string, unknown>;
+  new_values?: Record<string, unknown>;
+  updated_at?: string;
+}
+
+export interface MerchantDeletedDetails {
+  merchant_id: string;
+  actor: string;
+  reason?: string;
+  deleted_at: string;
 }
 
 export interface SweepOperationDetails {

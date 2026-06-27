@@ -166,3 +166,23 @@ Transaction submission now retries with bounded fee bumps. Configuration:
 Details are documented in:
 
 - `docs/STELLAR_FEE_BUMP_STRATEGY.md`
+
+## Database Migrations (Prisma)
+
+Always keep `schema.prisma` and migration files in sync. CI runs `prisma validate` and `prisma migrate diff` on every backend change.
+
+**Local workflow:**
+
+1. Edit `prisma/schema.prisma`
+2. Generate a migration: `npx prisma migrate dev --name describe_your_change`
+3. Commit **both** the schema and the new folder under `prisma/migrations/`
+4. Regenerate the client if needed: `npx prisma generate`
+
+**Production / staging deployment:**
+
+Use `npx prisma migrate deploy` (never `migrate dev`). Staging Docker Compose already runs `migrate deploy` before `npm start`.
+
+```bash
+# Production-safe apply
+npx prisma migrate deploy
+```

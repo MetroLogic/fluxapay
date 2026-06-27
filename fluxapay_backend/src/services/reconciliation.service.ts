@@ -50,6 +50,72 @@ async function getThresholdForMerchant(merchantId: string) {
   };
 }
 
+async function detectDuplicatePayments(
+  merchantId: string,
+  periodStart: Date,
+  periodEnd: Date,
+  reconciliationRecordId: string,
+) {
+  const paymentsWithReceipts = await prisma.payment.findMany({
+    where: {
+      merchantId,
+      createdAt: { gte: periodStart, lte: periodEnd },
+      receivedTransactions: { some: {} },
+    },
+    include: {
+      receivedTransactions: true,
+    },
+  });
+
+  for (const payment of paymentsWithReceipts) {
+    if (payment.receivedTransactions.length <= 1) continue;
+
+    const totalReceived = payment.receivedTransactions.reduce(
+      (sum, tx) => sum + toNumber(tx.amount),
+      0,
+    );
+    const expectedAmount = toNumber(payment.amount);
+    const surplusAmount = totalReceived - expectedAmount;
+    const txHashes = payment.receivedTransactions.map((tx) => tx.transaction_hash);
+
+    const existingAlerts = await prisma.discrepancyAlert.findMany({
+      where: {
+        reconciliationRecordId,
+        discrepancy_type: "duplicate_payment",
+      },
+    });
+
+    const alreadyFlagged = existingAlerts.some(
+      (alert) => (alert.details as { payment_id?: string } | null)?.payment_id === payment.id,
+    );
+
+    if (alreadyFlagged) continue;
+
+    await prisma.discrepancyAlert.create({
+      data: {
+        merchantId,
+        reconciliationRecordId,
+        severity: "high",
+        discrepancy_type: "duplicate_payment",
+        message: `Duplicate Stellar payments detected for charge ${payment.id}. ${txHashes.length} transactions received.`,
+        details: {
+          payment_id: payment.id,
+          charge_id: payment.id,
+          transaction_hashes: txHashes,
+          expected_amount: expectedAmount,
+          total_received: totalReceived,
+          surplus_amount: surplusAmount,
+        },
+      },
+    });
+
+    await prisma.reconciliationRecord.update({
+      where: { id: reconciliationRecordId },
+      data: { status: "duplicate_payment" },
+    });
+  }
+}
+
 async function reconcileMerchant(
   merchantId: string,
   periodStart: Date,
@@ -125,6 +191,7 @@ async function reconcileMerchant(
       where: {
         reconciliationRecordId: record.id,
         is_resolved: false,
+        discrepancy_type: null,
       },
     });
 
@@ -147,6 +214,8 @@ async function reconcileMerchant(
       });
     }
   }
+
+  await detectDuplicatePayments(merchantId, periodStart, periodEnd, record.id);
 
   return record;
 }
@@ -204,10 +273,11 @@ export async function getReconciliationSummaryService(params: {
 export async function listDiscrepancyAlertsService(params: {
   merchant_id?: string;
   is_resolved?: boolean;
+  discrepancy_type?: string;
   page: number;
   limit: number;
 }) {
-  const { merchant_id, is_resolved, page, limit } = params;
+  const { merchant_id, is_resolved, discrepancy_type, page, limit } = params;
   const skip = (page - 1) * limit;
 
   const where: Record<string, unknown> = {};
@@ -216,6 +286,9 @@ export async function listDiscrepancyAlertsService(params: {
   }
   if (typeof is_resolved === "boolean") {
     where.is_resolved = is_resolved;
+  }
+  if (discrepancy_type) {
+    where.discrepancy_type = discrepancy_type;
   }
 
   const [alerts, total] = await Promise.all([

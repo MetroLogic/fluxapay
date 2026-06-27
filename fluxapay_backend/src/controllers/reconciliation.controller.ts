@@ -30,6 +30,7 @@ export async function listDiscrepancyAlerts(req: Request, res: Response) {
         typeof req.query.is_resolved === "string"
           ? req.query.is_resolved === "true"
           : undefined,
+      discrepancy_type: req.query.discrepancy_type as string | undefined,
       page: Number(req.query.page) || 1,
       limit: Number(req.query.limit) || 10,
     });
