@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect } from "react";
+import * as Sentry from "@sentry/nextjs";
 
 /**
  * app/error.tsx — root-level error boundary.
@@ -14,6 +16,9 @@ export default function RootError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  useEffect(() => {
+    Sentry.captureException(error);
+  }, [error]);
   return (
     <div className="hero">
       <div className="py-8 h-screen flex flex-col relative overflow-hidden">

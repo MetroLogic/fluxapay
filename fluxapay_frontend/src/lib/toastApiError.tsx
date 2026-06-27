@@ -1,4 +1,5 @@
 import toast from "react-hot-toast";
+import * as Sentry from "@sentry/nextjs";
 import { ApiError } from "@/lib/api";
 
 /** User-friendly messages for known API error codes. */
@@ -62,6 +63,9 @@ export function toastApiError(error: unknown): void {
 
   try {
     toast.error(resolveMessage(error));
+    if (error instanceof ApiError && error.status >= 500) {
+      Sentry.captureException(error, { tags: { error_type: "api_error", status: error.status } });
+    }
   } catch {
     // never throw
   }
@@ -89,6 +93,9 @@ export function toastApiErrorWithRetry(
       ));
     } else {
       toast.error(message);
+    }
+    if (error instanceof ApiError && error.status >= 500) {
+      Sentry.captureException(error, { tags: { error_type: "api_error", status: error.status } });
     }
   } catch {
     // never throw
