@@ -5,6 +5,74 @@ import { Payment } from '@/types/payment';
 
 type ConnectionType = 'sse' | 'polling' | null;
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+}
+
+function firstString(...values: unknown[]): string | undefined {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim() !== '') {
+      return value;
+    }
+  }
+  return undefined;
+}
+
+function normalizeHexColor(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  const color = value.trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(color)) return color;
+  if (/^[0-9a-fA-F]{6}$/.test(color)) return `#${color}`;
+  return color;
+}
+
+export function normalizePaymentResponse(data: unknown): Payment {
+  const raw = asRecord(data);
+  const merchantBranding = asRecord(raw.merchant_branding ?? raw.merchantBranding);
+
+  return {
+    ...(raw as unknown as Payment),
+    expiresAt: new Date(raw.expiresAt as string),
+    merchantName: firstString(
+      raw.merchantName,
+      raw.merchant_name,
+      merchantBranding.businessName,
+      merchantBranding.business_name,
+      merchantBranding.merchantName,
+      merchantBranding.merchant_name
+    ),
+    checkoutLogoUrl: firstString(
+      raw.checkoutLogoUrl,
+      raw.checkout_logo_url,
+      merchantBranding.logoUrl,
+      merchantBranding.logo_url,
+      merchantBranding.checkoutLogoUrl,
+      merchantBranding.checkout_logo_url
+    ),
+    checkoutAccentColor: normalizeHexColor(firstString(
+      raw.checkoutAccentColor,
+      raw.checkout_accent_color,
+      merchantBranding.primaryColor,
+      merchantBranding.primary_color,
+      merchantBranding.brandColor,
+      merchantBranding.brand_color,
+      merchantBranding.accentColor,
+      merchantBranding.accent_color,
+      merchantBranding.checkoutAccentColor,
+      merchantBranding.checkout_accent_color
+    )),
+    paidAmount:
+      (raw.paidAmount as number | undefined) ??
+      (raw.paid_amount as number | undefined),
+    supportUrl:
+      (raw.supportUrl as string | undefined) ??
+      (raw.support_url as string | undefined),
+    transactionHash:
+      (raw.transactionHash as string | undefined) ??
+      (raw.transaction_hash as string | undefined),
+  };
+}
+
 interface UsePaymentStatusReturn {
   payment: Payment | null;
   loading: boolean;
@@ -90,26 +158,7 @@ export function usePaymentStatus(paymentId: string): UsePaymentStatusReturn {
       }
 
       const data = await response.json();
-      const raw = data as Record<string, unknown>;
-      const paymentData: Payment = {
-        ...(data as Payment),
-        expiresAt: new Date((data as { expiresAt?: string }).expiresAt as string),
-        checkoutLogoUrl:
-          (raw.checkoutLogoUrl as string | undefined) ??
-          (raw.checkout_logo_url as string | undefined),
-        checkoutAccentColor:
-          (raw.checkoutAccentColor as string | undefined) ??
-          (raw.checkout_accent_color as string | undefined),
-        paidAmount:
-          (raw.paidAmount as number | undefined) ??
-          (raw.paid_amount as number | undefined),
-        supportUrl:
-          (raw.supportUrl as string | undefined) ??
-          (raw.support_url as string | undefined),
-        transactionHash:
-          (raw.transactionHash as string | undefined) ??
-          (raw.transaction_hash as string | undefined),
-      };
+      const paymentData = normalizePaymentResponse(data);
 
       pollingBackoffRef.current = 3000;
       reconnectBackoffRef.current = 1000;

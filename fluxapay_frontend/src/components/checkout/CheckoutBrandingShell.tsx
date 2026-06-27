@@ -32,7 +32,7 @@ function CheckoutBrandMark({
         {/* eslint-disable-next-line @next/next/no-img-element -- remote merchant URLs */}
         <img
           src={logoUrl}
-          alt=""
+          alt={merchantName ? `${merchantName} logo` : 'Merchant logo'}
           className="h-10 w-auto max-w-[200px] object-contain object-left"
           onError={() => setLogoFailed(true)}
           loading="eager"
