@@ -57,18 +57,18 @@ export const Bridges = () => {
     },
     {
       icon: UpdateIcon,
-      title: "Real-Time Confirmation",
-      description: "Instant payment verification on Stellar with live status updates via webhooks."
+      title: t("realtime.title"),
+      description: t("realtime.description")
     },
     {
       icon: GlobeIcon,
-      title: "Built for Emerging Markets",
-      description: "Optimized for low fees, fast settlement, and local payout rails across emerging economies."
+      title: t("emerging.title"),
+      description: t("emerging.description")
     },
     {
       icon: CodeIcon,
-      title: "Stripe-Like Developer API",
-      description: "Create charges, track payment status, handle refunds, and integrate fast with a familiar API experience."
+      title: t("stripe.title"),
+      description: t("stripe.description")
     }
   ];
 

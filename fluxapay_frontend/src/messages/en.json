@@ -1,0 +1,53 @@
+{
+  "whyFluxapay": {
+    "title": "Why Fluxapay",
+    "subtitle": "The best solution for your payments",
+    "instant": { "title": "Instant", "description": "Instant processing" },
+    "lowFees": { "title": "Low Fees", "description": "Low fees for all" },
+    "global": { "title": "Global", "description": "Global reach" }
+  },
+  "bridges": {
+    "title": "Bridges",
+    "subtitle": "Connect your world",
+    "crypto": { "title": "Crypto", "description": "Crypto bridges" },
+    "fiat": { "title": "Fiat", "description": "Fiat bridges" },
+    "settlement": { "title": "Settlement", "description": "Settlement bridges" }
+  },
+  "globalReach": {
+    "countries": "Worldwide",
+    "title": "Global Reach",
+    "subtitle": "Millions of users"
+  },
+  "useCases": {
+    "header": "Use Cases",
+    "business": { "title": "Business Transfers", "description": "Business transfers handled" },
+    "personal": { "title": "Personal Transfers", "description": "Send love" },
+    "exchange": { "title": "Currency exchange", "description": "Best rates" }
+  },
+  "faq": {
+    "title": "Frequently Asked questions 🙋‍♀️",
+    "subtitle": "Got questions? We got answers!",
+    "contact": "Contact us →",
+    "items": {
+      "whatIsFluxapay": "What is Fluxapay",
+      "whatIsFluxapayAnswer": "Join paywall pup and integrate seamlessly into your website.",
+      "signupNeeds": "What do I need to sign up?",
+      "signupNeedsAnswer": "FluxaPay is a payment gateway built on the Stellar blockchain...",
+      "onboardingSpeed": "How fast is onboarding?",
+      "onboardingSpeedAnswer": "Our streamlined onboarding process...",
+      "accountCount": "How many accounts can i create?",
+      "accountCountAnswer": "You can create multiple merchant accounts...",
+      "techStack": "What tech stack do you support?",
+      "techStackAnswer": "We provide REST APIs, SDKs for popular frameworks..."
+    }
+  },
+  "footer": {
+    "contact": "Contact",
+    "privacy": "Privacy Policy",
+    "terms": "Terms of Service"
+  },
+  "features": {
+    "title": "Features",
+    "description": "Our platform features"
+  }
+}

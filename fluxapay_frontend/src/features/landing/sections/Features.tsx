@@ -2,29 +2,29 @@ import { Shield, Zap, Globe, BarChart3 } from "lucide-react";
 
 const features = [
   {
-    title: "Instant Settlements",
-    description: "Receive funds in your local currency or stablecoins in minutes, not days.",
+    title: t("features.instant.title"),
+    description: t("features.instant.description"),
     icon: Zap,
     color: "text-yellow-500",
     bg: "bg-yellow-500/10",
   },
   {
-    title: "Global Reach",
-    description: "Accept payments from customers in over 150 countries with a few lines of code.",
+    title: t("features.globalReach.title"),
+    description: t("features.globalReach.description"),
     icon: Globe,
     color: "text-blue-500",
     bg: "bg-blue-500/10",
   },
   {
-    title: "Bank-Grade Security",
-    description: "PCI-DSS compliant infrastructure with advanced fraud detection systems.",
+    title: t("features.security.title"),
+    description: t("features.security.description"),
     icon: Shield,
     color: "text-green-500",
     bg: "bg-green-500/10",
   },
   {
-    title: "Rich Analytics",
-    description: "Deep insights into your business performance with real-time dashboards.",
+    title: t("features.analytics.title"),
+    description: t("features.analytics.description"),
     icon: BarChart3,
     color: "text-purple-500",
     bg: "bg-purple-500/10",
