@@ -14,6 +14,10 @@
  */
 
 import { sanitizeObject } from "../utils/piiRedactor";
+import { redisClient } from "../middleware/redisIdempotency.middleware";
+import { getLogger } from "../utils/logger";
+
+const logger = getLogger();
 
 export interface ExchangeQuoteResult {
   /** Amount of fiat the merchant will receive before fees */
@@ -66,6 +70,128 @@ export interface ExchangePartner {
     bankAccount: BankAccountDetails,
     reference: string,
   ): Promise<PayoutResult>;
+}
+
+export interface CachedFxRate {
+  exchange_rate: number;
+  fiat_currency: string;
+  cached_at: string;
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// FX Rate Caching (Redis) – 5-minute TTL with stale fallback
+// ──────────────────────────────────────────────────────────────────────────────
+
+const FX_CACHE_TTL = 300; // 5 minutes in seconds
+const FX_STALE_TTL = 3600; // 1 hour for stale fallback
+
+function getCacheKey(fromCurrency: string, toCurrency: string): string {
+  return `fx_rate:${fromCurrency}:${toCurrency}`;
+}
+
+export async function getCachedFxRate(
+  fromCurrency: string,
+  toCurrency: string,
+): Promise<CachedFxRate | null> {
+  try {
+    const key = getCacheKey(fromCurrency, toCurrency);
+    const cached = await redisClient.get(key);
+    if (cached) {
+      return JSON.parse(cached);
+    }
+    return null;
+  } catch (err) {
+    logger.warn('Failed to retrieve cached FX rate', { fromCurrency, toCurrency, error: err });
+    return null;
+  }
+}
+
+export async function getStaleFxRate(
+  fromCurrency: string,
+  toCurrency: string,
+): Promise<CachedFxRate | null> {
+  try {
+    const key = `${getCacheKey(fromCurrency, toCurrency)}:stale`;
+    const stale = await redisClient.get(key);
+    if (stale) {
+      return JSON.parse(stale);
+    }
+    return null;
+  } catch (err) {
+    logger.warn('Failed to retrieve stale FX rate', { fromCurrency, toCurrency, error: err });
+    return null;
+  }
+}
+
+async function cacheFxRate(
+  fromCurrency: string,
+  toCurrency: string,
+  rate: number,
+): Promise<void> {
+  try {
+    const key = getCacheKey(fromCurrency, toCurrency);
+    const staleKey = `${key}:stale`;
+    const cacheData: CachedFxRate = {
+      exchange_rate: rate,
+      fiat_currency: toCurrency,
+      cached_at: new Date().toISOString(),
+    };
+
+    // Cache for 5 minutes
+    await redisClient.setex(key, FX_CACHE_TTL, JSON.stringify(cacheData));
+    // Also store as stale copy for 1 hour (fallback if API is down)
+    await redisClient.setex(staleKey, FX_STALE_TTL, JSON.stringify(cacheData));
+  } catch (err) {
+    logger.warn('Failed to cache FX rate', { fromCurrency, toCurrency, error: err });
+  }
+}
+
+async function getQuoteWithFallback(
+  partner: ExchangePartner,
+  usdcAmount: number,
+  targetCurrency: string,
+): Promise<ExchangeQuoteResult> {
+  try {
+    const quote = await partner.getQuote(usdcAmount, targetCurrency);
+    // Cache the successful rate
+    await cacheFxRate('USDC', targetCurrency, quote.exchange_rate);
+    return quote;
+  } catch (err) {
+    // API call failed, try stale rate
+    logger.warn('FX API call failed, attempting stale fallback', { targetCurrency, error: err });
+    const staleRate = await getStaleFxRate('USDC', targetCurrency);
+    if (staleRate) {
+      logger.warn('Using stale FX rate as fallback', { targetCurrency, rate: staleRate.exchange_rate });
+      return {
+        fiat_gross: parseFloat((usdcAmount * staleRate.exchange_rate).toFixed(2)),
+        exchange_rate: staleRate.exchange_rate,
+        fiat_currency: staleRate.fiat_currency,
+      };
+    }
+    // If no stale rate available, rethrow the original error
+    throw err;
+  }
+}
+
+export async function getAllCachedFxRates(): Promise<Record<string, CachedFxRate>> {
+  try {
+    const keys = await redisClient.keys('fx_rate:USDC:*');
+    const rates: Record<string, CachedFxRate> = {};
+
+    for (const key of keys) {
+      if (key.includes(':stale')) continue;
+      const cached = await redisClient.get(key);
+      if (cached) {
+        const currency = key.replace('fx_rate:USDC:', '');
+        rates[currency] = JSON.parse(cached);
+      }
+    }
+
+    return rates;
+  } catch (err) {
+    logger.error('Failed to retrieve all cached FX rates', { error: err });
+    return {};
+  }
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -160,6 +286,17 @@ export class YellowCardPartner implements ExchangePartner {
   }
 
   async getQuote(usdcAmount: number, targetCurrency: string): Promise<ExchangeQuoteResult> {
+    // Check cache first
+    const cached = await getCachedFxRate('USDC', targetCurrency);
+    if (cached) {
+      return {
+        fiat_gross: parseFloat((usdcAmount * cached.exchange_rate).toFixed(2)),
+        exchange_rate: cached.exchange_rate,
+        fiat_currency: cached.fiat_currency,
+        quote_ref: `cached_${cached.cached_at}`,
+      };
+    }
+
     // Yellow Card quote endpoint (adapt path as per live docs)
     const data = await this.request<{
       rate: number;
@@ -167,12 +304,16 @@ export class YellowCardPartner implements ExchangePartner {
       quoteId: string;
     }>(`/v2/rates?from=USDC&to=${targetCurrency}&amount=${usdcAmount}`);
 
-    return {
+    const result = {
       fiat_gross: data.destinationAmount,
       exchange_rate: data.rate,
       fiat_currency: targetCurrency,
       quote_ref: data.quoteId,
     };
+
+    // Cache the rate for future use
+    await cacheFxRate('USDC', targetCurrency, data.rate);
+    return result;
   }
 
   async convertAndPayout(
@@ -181,7 +322,7 @@ export class YellowCardPartner implements ExchangePartner {
     bankAccount: BankAccountDetails,
     reference: string,
   ): Promise<PayoutResult> {
-    const quote = await this.getQuote(usdcAmount, targetCurrency);
+    const quote = await getQuoteWithFallback(this, usdcAmount, targetCurrency);
 
     const data = await this.request<{
       transferId: string;
@@ -247,16 +388,30 @@ export class AnchorPartner implements ExchangePartner {
   }
 
   async getQuote(usdcAmount: number, targetCurrency: string): Promise<ExchangeQuoteResult> {
+    // Check cache first
+    const cached = await getCachedFxRate('USDC', targetCurrency);
+    if (cached) {
+      return {
+        fiat_gross: parseFloat((usdcAmount * cached.exchange_rate).toFixed(2)),
+        exchange_rate: cached.exchange_rate,
+        fiat_currency: cached.fiat_currency,
+      };
+    }
+
     const data = await this.request<{
       rate: number;
       fiat_amount: number;
     }>(`/v1/quote?source_currency=USDC&dest_currency=${targetCurrency}&amount=${usdcAmount}`);
 
-    return {
+    const result = {
       fiat_gross: data.fiat_amount,
       exchange_rate: data.rate,
       fiat_currency: targetCurrency,
     };
+
+    // Cache the rate for future use
+    await cacheFxRate('USDC', targetCurrency, data.rate);
+    return result;
   }
 
   async convertAndPayout(
@@ -265,6 +420,8 @@ export class AnchorPartner implements ExchangePartner {
     bankAccount: BankAccountDetails,
     reference: string,
   ): Promise<PayoutResult> {
+    const quote = await getQuoteWithFallback(this, usdcAmount, targetCurrency);
+
     const data = await this.request<{
       reference: string;
       exchange_id: string;
@@ -287,7 +444,7 @@ export class AnchorPartner implements ExchangePartner {
 
     return {
       transfer_ref: data.reference,
-      exchange_ref: data.exchange_id,
+      exchange_ref: quote.quote_ref,
       initiated_at: new Date().toISOString(),
       raw_partner_payload: {
         partner: 'anchor',
