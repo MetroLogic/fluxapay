@@ -15,6 +15,8 @@ jest.mock("../../generated/client/client", () => {
     },
     payment: {
       findMany: jest.fn(),
+      findUnique: jest.fn(),
+      update: jest.fn(),
       updateMany: jest.fn(),
     },
     settlement: {
@@ -34,7 +36,7 @@ import { PrismaClient } from "../../generated/client/client";
 
 const mockPrisma = new PrismaClient() as jest.Mocked<PrismaClient> & {
   merchant: { findMany: jest.Mock; findUnique: jest.Mock };
-  payment: { findMany: jest.Mock; updateMany: jest.Mock };
+  payment: { findMany: jest.Mock; findUnique: jest.Mock; update: jest.Mock; updateMany: jest.Mock };
   settlement: { create: jest.Mock };
   $transaction: jest.Mock;
 };
@@ -47,6 +49,8 @@ jest.mock("../audit.service", () => ({
   logSettlementBatch: jest.fn().mockResolvedValue({ id: "audit_123" }),
   updateSettlementBatchCompletion: jest.fn(),
 }));
+import { updateSettlementBatchCompletion } from "../audit.service";
+import { createAndDeliverWebhook } from "../webhook.service";
 
 describe("settlementBatch.service", () => {
   beforeEach(() => {
@@ -151,6 +155,11 @@ describe("settlementBatch.service", () => {
       mockPrisma.merchant.findMany.mockResolvedValue(mockMerchants);
       mockPrisma.payment.findMany.mockResolvedValue(mockPayments);
       mockPrisma.merchant.findUnique.mockResolvedValue(mockMerchants[0]);
+      mockPrisma.payment.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) => {
+        const p = mockPayments.find((pay) => pay.id === where.id);
+        return p ? { ...p, metadata: {}, settled: false } : null;
+      });
+      mockPrisma.payment.update.mockResolvedValue({});
       mockPrisma.$transaction.mockImplementation(async (callback: any) => {
         return callback({
           settlement: {
@@ -160,6 +169,7 @@ describe("settlementBatch.service", () => {
             }),
           },
           payment: {
+            update: jest.fn(),
             updateMany: jest.fn(),
           },
         });
@@ -286,6 +296,13 @@ describe("settlementBatch.service", () => {
       mockPrisma.merchant.findMany.mockResolvedValue(mockMerchants);
       mockPrisma.payment.findMany.mockResolvedValue(mockPayments);
       mockPrisma.merchant.findUnique.mockResolvedValue(mockMerchants[0]);
+      mockPrisma.payment.findUnique.mockResolvedValue({
+        id: "payment_1",
+        amount: 100,
+        metadata: {},
+        settled: false,
+      });
+      mockPrisma.payment.update.mockResolvedValue({});
       mockPrisma.settlement.create.mockResolvedValue({
         id: "settlement_failed",
         status: "failed",
@@ -296,7 +313,7 @@ describe("settlementBatch.service", () => {
       const result = await runSettlementBatch(new Date("2024-01-15"), "admin_1");
 
       expect(result.totalMerchantsFailed).toBe(1);
-      expect(result.merchantResults[0].error).toContain("Exchange API unavailable");
+      expect(result.merchantResults[0].paymentResults?.[0].error).toContain("Exchange API unavailable");
     });
 
     it("should return empty result when no unsettled payments found", async () => {
@@ -357,6 +374,11 @@ describe("settlementBatch.service", () => {
       mockPrisma.merchant.findMany.mockResolvedValue(mockMerchants);
       mockPrisma.payment.findMany.mockResolvedValue(mockPayments);
       mockPrisma.merchant.findUnique.mockResolvedValue(mockMerchants[0]);
+      mockPrisma.payment.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) => {
+        const p = mockPayments.find((pay) => pay.id === where.id);
+        return p ? { ...p, metadata: {}, settled: false } : null;
+      });
+      mockPrisma.payment.update.mockResolvedValue({});
       mockPrisma.$transaction.mockImplementation(async (callback: any) => {
         return callback({
           settlement: {
@@ -366,6 +388,7 @@ describe("settlementBatch.service", () => {
             }),
           },
           payment: {
+            update: jest.fn(),
             updateMany: jest.fn(),
           },
         });
@@ -376,10 +399,111 @@ describe("settlementBatch.service", () => {
       const result = await runSettlementBatch(new Date("2024-01-15"), "admin_1");
 
       expect(result.totalMerchantsSucceeded).toBe(1);
-      // Fee should be 2.5% of 155000 = 3875
-      // Net should be 155000 - 3875 = 151125
-      expect(result.merchantResults[0].feeAmount).toBe(3875);
-      expect(result.merchantResults[0].netAmount).toBe(151125);
+      expect(result.merchantResults[0].paymentResults?.[0].status).toBe("succeeded");
+      expect(result.merchantResults[0].paymentResults?.[0].netAmount).toBe(151125);
+    });
+
+    it("should mark batch as partial when some merchants succeed and others fail", async () => {
+      const mockMerchantsDue = [{ id: "merchant_1" }, { id: "merchant_2" }];
+      const mockPayments = [
+        { id: "payment_1", merchantId: "merchant_1", amount: 100, swept: true, settled: false, createdAt: new Date() },
+        { id: "payment_2", merchantId: "merchant_2", amount: 50, swept: true, settled: false, createdAt: new Date() },
+      ];
+
+      const merchant1 = {
+        id: "merchant_1",
+        business_name: "Success Co",
+        settlement_schedule: "daily",
+        settlement_day: null,
+        settlement_currency: "NGN",
+        webhook_url: null,
+        bankAccount: {
+          account_name: "A", account_number: "1", bank_name: "B", currency: "NGN", country: "NG",
+        },
+      };
+      const merchant2 = { ...merchant1, id: "merchant_2", business_name: "Fail Co" };
+
+      const successPartner = {
+        getQuote: jest.fn().mockResolvedValue({ fiat_gross: 155000, exchange_rate: 1550, fiat_currency: "NGN" }),
+        convertAndPayout: jest.fn().mockResolvedValue({
+          transfer_ref: "t1", exchange_ref: "e1", initiated_at: new Date().toISOString(),
+        }),
+      };
+      const failPartner = {
+        getQuote: jest.fn().mockRejectedValue(new Error("Payout address invalid")),
+        convertAndPayout: jest.fn(),
+      };
+
+      mockPrisma.merchant.findMany.mockResolvedValue(mockMerchantsDue);
+      mockPrisma.payment.findMany.mockResolvedValue(mockPayments);
+      mockPrisma.merchant.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) =>
+        where.id === "merchant_1" ? merchant1 : merchant2,
+      );
+      mockPrisma.payment.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) => {
+        const p = mockPayments.find((pay) => pay.id === where.id);
+        return p ? { ...p, metadata: {}, settled: false } : null;
+      });
+      mockPrisma.payment.update.mockResolvedValue({});
+      mockPrisma.settlement.create.mockResolvedValue({ id: "settlement_failed", status: "failed" });
+      mockPrisma.$transaction.mockImplementation(async (callback: any) =>
+        callback({
+          settlement: { create: jest.fn().mockResolvedValue({ id: "settlement_ok", merchantId: "merchant_1" }) },
+          payment: { update: jest.fn() },
+        }),
+      );
+
+      (getExchangePartner as jest.Mock)
+        .mockReturnValueOnce(successPartner)
+        .mockReturnValueOnce(failPartner);
+
+      const result = await runSettlementBatch(new Date("2024-01-15"), "admin_1");
+
+      expect(result.totalMerchantsSucceeded).toBeGreaterThanOrEqual(1);
+      expect(result.totalMerchantsFailed).toBe(1);
+      expect(updateSettlementBatchCompletion).toHaveBeenCalledWith(
+        expect.objectContaining({ status: "partial" }),
+      );
+    });
+
+    it("should defer settlement_failed webhook until 3 retries exhausted", async () => {
+      const mockMerchants = [{ id: "merchant_1" }];
+      const mockPayments = [
+        { id: "payment_1", merchantId: "merchant_1", amount: 100, swept: true, settled: false, createdAt: new Date() },
+      ];
+      const merchant = {
+        id: "merchant_1",
+        business_name: "Retry Co",
+        settlement_schedule: "daily",
+        settlement_day: null,
+        settlement_currency: "NGN",
+        webhook_url: "https://example.com/hook",
+        bankAccount: {
+          account_name: "A", account_number: "1", bank_name: "B", currency: "NGN", country: "NG",
+        },
+      };
+
+      const failPartner = {
+        getQuote: jest.fn().mockRejectedValue(new Error("Exchange down")),
+        convertAndPayout: jest.fn(),
+      };
+
+      mockPrisma.merchant.findMany.mockResolvedValue(mockMerchants);
+      mockPrisma.payment.findMany.mockResolvedValue(mockPayments);
+      mockPrisma.merchant.findUnique.mockResolvedValue(merchant);
+      mockPrisma.payment.findUnique.mockResolvedValue({
+        id: "payment_1", amount: 100, metadata: { settlement_retry_count: 2 }, settled: false,
+      });
+      mockPrisma.payment.update.mockResolvedValue({});
+      mockPrisma.settlement.create.mockResolvedValue({ id: "sf", status: "failed" });
+      (getExchangePartner as jest.Mock).mockReturnValue(failPartner);
+
+      await runSettlementBatch(new Date("2024-01-15"), "admin_1");
+
+      expect(createAndDeliverWebhook).toHaveBeenCalledWith(
+        "merchant_1",
+        "settlement_failed",
+        expect.objectContaining({ payment_ids: ["payment_1"] }),
+      );
     });
   });
 });

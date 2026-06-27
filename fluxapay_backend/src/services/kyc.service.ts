@@ -102,6 +102,25 @@ export async function uploadKycDocumentService(
     size: number;
   }
 ) {
+  // Validate file type
+  const allowedMimeTypes = [
+    "image/jpeg",
+    "image/png",
+    "image/gif",
+    "application/pdf",
+  ];
+  if (!allowedMimeTypes.includes(file.mimetype)) {
+    throw apiError(
+      400,
+      ErrorCode.VALIDATION_ERROR,
+      "Invalid file type. Only JPEG, PNG, GIF, and PDF are allowed.",
+    );
+  }
+
+  // Validate file size (max 10MB)
+  const maxSize = 10 * 1024 * 1024;
+  if (file.size > maxSize) {
+    throw apiError(413, ErrorCode.FILE_TOO_LARGE, "File size exceeds 10MB limit");
   const validationError = validateKycUploadFile(file);
   if (validationError) {
     throw validationError;

@@ -1,21 +1,56 @@
 import { apiError } from "../helpers/apiError.helper";
 import { ErrorCode } from "../types/errors";
 import { PrismaClient, DataExportStatus } from "../generated/client/client";
+import { redactEmail } from "../utils/piiRedactor";
+import {
+  logDataExportRequested,
+  logDataExportCompleted,
+  logDataExportFailed,
+  logDataExportDownloaded,
+} from "./audit.service";
+import { getMerchantPlanFeatures, merchantHasFeature } from "./usage.service";
 
 const prisma = new PrismaClient();
 
 /** How long a completed export download link is valid (24 h). */
 const EXPORT_TTL_MS = 24 * 60 * 60 * 1000;
 
+export const DATA_EXPORT_PII_PERMISSION = "data_export_pii";
+
 /**
- * Enqueue a new export job and immediately process it synchronously.
- * For large datasets this can be moved to a background worker; the
- * job record + status field already supports that pattern.
+ * Ensures the authenticated merchant can only access their own data.
+ * Returns 403 when merchant_id does not match the authenticated merchant.
  */
+export function assertMerchantExportAccess(
+  authenticatedMerchantId: string,
+  requestedMerchantId: string,
+  isAdmin = false,
+): void {
+  if (isAdmin) return;
+  if (authenticatedMerchantId !== requestedMerchantId) {
+    throw apiError(
+      403,
+      ErrorCode.FORBIDDEN,
+      "You may only export data for your own merchant account.",
+    );
+  }
+}
+
 export async function requestDataExport(
   merchantId: string,
   requestedBy: string,
+  options: { includePii?: boolean; actorId?: string } = {},
 ): Promise<{ jobId: string; status: DataExportStatus }> {
+  const merchant = await prisma.merchant.findUnique({ where: { id: merchantId } });
+  if (!merchant) {
+    throw apiError(404, ErrorCode.MERCHANT_NOT_FOUND, "Merchant not found");
+  }
+
+  const features = await getMerchantPlanFeatures(merchantId);
+  const includePii =
+    options.includePii ??
+    merchantHasFeature(features, DATA_EXPORT_PII_PERMISSION);
+
   const job = await prisma.dataExportJob.create({
     data: {
       merchantId,
@@ -24,15 +59,28 @@ export async function requestDataExport(
     },
   });
 
-  // Process inline (async-safe — errors are caught and stored on the job)
-  processExport(job.id, merchantId).catch(() => {
+  await logDataExportRequested({
+    actorId: options.actorId ?? merchantId,
+    merchantId,
+    jobId: job.id,
+    requestedBy,
+  });
+
+  processExport(job.id, merchantId, includePii).catch(() => {
     // already handled inside processExport
   });
 
   return { jobId: job.id, status: DataExportStatus.pending };
 }
 
-export async function getExportJob(jobId: string, merchantId: string) {
+export async function getExportJob(
+  jobId: string,
+  merchantId: string,
+  authenticatedMerchantId: string,
+  isAdmin = false,
+) {
+  assertMerchantExportAccess(authenticatedMerchantId, merchantId, isAdmin);
+
   const job = await prisma.dataExportJob.findFirst({
     where: { id: jobId, merchantId },
   });
@@ -40,14 +88,14 @@ export async function getExportJob(jobId: string, merchantId: string) {
   return job;
 }
 
-/**
- * Return the decoded JSON payload for a completed job.
- * Validates ownership and expiry.
- */
 export async function downloadExport(
   jobId: string,
   merchantId: string,
+  authenticatedMerchantId: string,
+  options: { isAdmin?: boolean; actorId?: string } = {},
 ): Promise<object> {
+  assertMerchantExportAccess(authenticatedMerchantId, merchantId, options.isAdmin);
+
   const job = await prisma.dataExportJob.findFirst({
     where: { id: jobId, merchantId },
   });
@@ -58,30 +106,82 @@ export async function downloadExport(
     throw apiError(410, ErrorCode.EXPORT_EXPIRED, "Export link has expired");
   if (!job.payload) throw apiError(500, ErrorCode.EXPORT_PAYLOAD_MISSING, "Export payload missing");
 
-  return JSON.parse(Buffer.from(job.payload, "base64").toString("utf8"));
+  const data = JSON.parse(Buffer.from(job.payload, "base64").toString("utf8"));
+
+  await logDataExportDownloaded({
+    actorId: options.actorId ?? authenticatedMerchantId,
+    merchantId,
+    jobId,
+    rowCount: countExportRows(data),
+  });
+
+  return data;
 }
 
-// ── Internal ──────────────────────────────────────────────────────────────────
+function countExportRows(data: unknown): number {
+  if (!data || typeof data !== "object") return 0;
+  const record = data as Record<string, unknown>;
+  const payments = record.payments_summary as { total?: number } | undefined;
+  const webhooks = record.webhook_logs_summary as { total?: number } | undefined;
+  return (payments?.total ?? 0) + (webhooks?.total ?? 0);
+}
 
-async function processExport(jobId: string, merchantId: string) {
+function redactExportPii<T extends Record<string, unknown>>(payload: T): T {
+  const clone = JSON.parse(JSON.stringify(payload)) as T;
+
+  const profile = clone.merchant_profile as Record<string, unknown> | undefined;
+  if (profile) {
+    if (typeof profile.email === "string") profile.email = redactEmail(profile.email);
+    if (typeof profile.phone_number === "string") profile.phone_number = "[REDACTED]";
+  }
+
+  const payments = clone.payments_summary as { records?: Array<Record<string, unknown>> } | undefined;
+  if (payments?.records) {
+    payments.records = payments.records.map((p) => ({
+      ...p,
+      customer_email:
+        typeof p.customer_email === "string" ? redactEmail(p.customer_email) : p.customer_email,
+    }));
+  }
+
+  return clone;
+}
+
+async function processExport(jobId: string, merchantId: string, includePii: boolean) {
   await prisma.dataExportJob.update({
     where: { id: jobId },
     data: { status: DataExportStatus.processing },
   });
 
   try {
-    const data = await buildExportPayload(merchantId);
+    let data: Awaited<ReturnType<typeof buildExportPayload>> = await buildExportPayload(merchantId);
+    if (!includePii) {
+      data = redactExportPii(data) as typeof data;
+    }
     const payload = Buffer.from(JSON.stringify(data)).toString("base64");
 
     await prisma.dataExportJob.update({
       where: { id: jobId },
       data: { status: DataExportStatus.completed, payload },
     });
+
+    await logDataExportCompleted({
+      actorId: merchantId,
+      merchantId,
+      jobId,
+      rowCount: countExportRows(data),
+    });
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
     await prisma.dataExportJob.update({
       where: { id: jobId },
       data: { status: DataExportStatus.failed, error },
+    });
+    await logDataExportFailed({
+      actorId: merchantId,
+      merchantId,
+      jobId,
+      error,
     });
   }
 }
@@ -148,7 +248,7 @@ async function buildExportPayload(merchantId: string) {
         created_at: true,
       },
       orderBy: { created_at: "desc" },
-      take: 1000, // cap for large merchants
+      take: 1000,
     }),
   ]);
 

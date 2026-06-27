@@ -1,5 +1,4 @@
 import { apiError, sendApiError } from "../helpers/apiError.helper";
-import { ErrorCode } from "../types/errors";
 import { Response } from "express";
 import { AuthRequest } from "../types/express";
 import { validateUserId } from "../helpers/request.helper";
@@ -7,6 +6,7 @@ import {
   requestDataExport,
   getExportJob,
   downloadExport,
+  assertMerchantExportAccess,
 } from "../services/dataExport.service";
 
 /**
@@ -16,12 +16,16 @@ import {
 export async function requestExport(req: AuthRequest, res: Response) {
   try {
     const merchantId = await validateUserId(req);
-    const result = await requestDataExport(merchantId, "merchant");
+    const queryMerchantId = req.query.merchant_id as string | undefined;
+    if (queryMerchantId) {
+      assertMerchantExportAccess(merchantId, queryMerchantId);
+    }
+    const result = await requestDataExport(merchantId, "merchant", { actorId: merchantId });
     res.status(202).json({
       message: "Export job queued. Poll /export/:jobId for status.",
       ...result,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     sendApiError(res, err);
   }
 }
@@ -33,14 +37,21 @@ export async function requestExport(req: AuthRequest, res: Response) {
 export async function getExportStatus(req: AuthRequest, res: Response) {
   try {
     const merchantId = await validateUserId(req);
-    const job = await getExportJob(req.params.jobId as string, merchantId);
+    const queryMerchantId = (req.query.merchant_id as string) ?? merchantId;
+    assertMerchantExportAccess(merchantId, queryMerchantId);
+
+    const job = await getExportJob(
+      req.params.jobId as string,
+      queryMerchantId,
+      merchantId,
+    );
     res.json({
       jobId: job.id,
       status: job.status,
       expires_at: job.expires_at,
       error: job.error ?? undefined,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     sendApiError(res, err);
   }
 }
@@ -52,43 +63,58 @@ export async function getExportStatus(req: AuthRequest, res: Response) {
 export async function downloadExportHandler(req: AuthRequest, res: Response) {
   try {
     const merchantId = await validateUserId(req);
-    const data = await downloadExport(req.params.jobId as string, merchantId);
+    const queryMerchantId = (req.query.merchant_id as string) ?? merchantId;
+    assertMerchantExportAccess(merchantId, queryMerchantId);
+
+    const data = await downloadExport(
+      req.params.jobId as string,
+      queryMerchantId,
+      merchantId,
+      { actorId: merchantId },
+    );
     res.setHeader("Content-Disposition", `attachment; filename="export-${req.params.jobId as string}.json"`);
     res.json(data);
-  } catch (err: any) {
+  } catch (err: unknown) {
     sendApiError(res, err);
   }
 }
 
 /**
- * POST /api/v1/admin/merchants/:merchantId/export
- * Admin-triggered export on behalf of a merchant.
+ * POST /api/v1/merchants/export/admin/:merchantId
+ * Admin-triggered export on behalf of a merchant (cross-merchant, RBAC-guarded).
  */
 export async function adminRequestExport(req: AuthRequest, res: Response) {
   try {
     const { merchantId } = req.params as Record<string, string>;
     const adminId = req.adminUser?.id ?? req.user?.id ?? "admin";
-    const result = await requestDataExport(merchantId, `admin:${adminId}`);
+    const result = await requestDataExport(merchantId, `admin:${adminId}`, {
+      includePii: true,
+      actorId: adminId,
+    });
     res.status(202).json({
       message: "Export job queued.",
       ...result,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     sendApiError(res, err);
   }
 }
 
 /**
- * GET /api/v1/admin/merchants/:merchantId/export/:jobId/download
+ * GET /api/v1/merchants/export/admin/:merchantId/:jobId/download
  * Admin download of a completed export.
  */
 export async function adminDownloadExport(req: AuthRequest, res: Response) {
   try {
     const { merchantId, jobId } = req.params as Record<string, string>;
-    const data = await downloadExport(jobId, merchantId);
+    const adminId = req.adminUser?.id ?? req.user?.id ?? "admin";
+    const data = await downloadExport(jobId, merchantId, merchantId, {
+      isAdmin: true,
+      actorId: adminId,
+    });
     res.setHeader("Content-Disposition", `attachment; filename="export-${jobId}.json"`);
     res.json(data);
-  } catch (err: any) {
+  } catch (err: unknown) {
     sendApiError(res, err);
   }
 }

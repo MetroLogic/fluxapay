@@ -36,6 +36,8 @@ import dashboardRoutes from "./routes/dashboard.route";
 import auditRoutes from "./routes/audit.route";
 import merchantDeletionRoutes from "./routes/merchantDeletion.route";
 import dataExportRoutes from "./routes/dataExport.route";
+import usageRoutes from "./routes/usage.route";
+import adminUsageRoutes from "./routes/adminUsage.route";
 import oracleRoutes from "./routes/oracle.route";
 import chargesRoutes from "./routes/charges.route";
 import apiKeyRoutes from "./routes/apiKey.route";
@@ -172,6 +174,7 @@ if (process.env.NODE_ENV !== "production") {
 const merchantRouter = Router();
 merchantRouter.use("/kyc", kycRoutes);
 merchantRouter.use("/export", dataExportRoutes);
+merchantRouter.use("/", usageRoutes);
 merchantRouter.use("/", merchantDeletionRoutes);
 merchantRouter.use("/", merchantRoutes);
 app.use("/api/v1/merchants", merchantRouter);
@@ -196,6 +199,7 @@ app.use("/api/v1/dashboard", merchantRateLimit(), dashboardRoutes);
 
 // ── Admin routes ───────────────────────────────────────────────────────────────
 app.use("/api/v1/admin/reconciliation", reconciliationRoutes);
+app.use("/api/v1/admin/usage", adminUsageRoutes);
 app.use("/api/v1/admin/settlement", settlementBatchRoutes);
 app.use("/api/v1/admin/sweep", sweepRoutes);
 app.use("/api/v1/admin/system", systemRoutes);
