@@ -53,7 +53,6 @@ export async function uploadKycDocument(req: AuthRequest, res: Response) {
     res.status(200).json(result);
   } catch (err: unknown) {
     console.error(err);
-    const error = err as { status?: number; message?: string };
     sendApiError(res, err);
   }
 }

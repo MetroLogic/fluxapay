@@ -43,6 +43,7 @@ import chargesRoutes from "./routes/charges.route";
 import apiKeyRoutes from "./routes/apiKey.route";
 import authRoutes from "./routes/auth.route";
 import escrowRoutes from "./routes/escrow.route";
+import emailRoutes from "./routes/email.route";
 
 const app = express();
 const prisma = new PrismaClient();
@@ -204,6 +205,7 @@ app.use("/api/v1/admin/sweep", sweepRoutes);
 app.use("/api/v1/admin/system", systemRoutes);
 app.use("/api/v1/admin", auditRoutes);
 app.use("/api/v1", oracleRoutes);
+app.use("/api/v1/email", emailRoutes);
 
 // Health probes (no auth, not rate-limited)
 app.use("/health", createHealthRouter(prisma));

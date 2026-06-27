@@ -9,7 +9,7 @@ import { apiError, sendApiError } from "../helpers/apiError.helper";
 import { ErrorCode } from "../types/errors";
 import {
   getOracleMetrics,
-  getOracleHealth,
+  getOracleHealthWithSoroban,
   manualVerifyPayment,
 } from "../services/paymentOracle.service";
 import { getLogger } from "../utils/logger";
@@ -39,7 +39,7 @@ export async function getMetrics(req: Request, res: Response): Promise<void> {
  */
 export async function getHealth(req: Request, res: Response): Promise<void> {
   try {
-    const health = getOracleHealth();
+    const health = getOracleHealthWithSoroban();
     const statusCode = health.isHealthy ? 200 : 503;
     
     res.status(statusCode).json({

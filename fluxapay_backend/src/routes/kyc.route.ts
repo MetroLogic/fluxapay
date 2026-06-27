@@ -12,6 +12,7 @@ import { validate } from "../middleware/validation.middleware";
 import * as kycSchema from "../schemas/kyc.schema";
 import { authenticateToken } from "../middleware/auth.middleware";
 import { multerErrorHandler } from "../middleware/multerError.middleware";
+import { KYC_ALLOWED_MIME_TYPES, KYC_MAX_FILE_SIZE_BYTES } from "../utils/kycUploadValidation.util";
 
 const router = Router();
 
@@ -19,19 +20,13 @@ const router = Router();
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB limit
+    fileSize: KYC_MAX_FILE_SIZE_BYTES,
   },
   fileFilter: (req: any, file: any, cb: any) => {
-    const allowedMimeTypes = [
-      "image/jpeg",
-      "image/png",
-      "image/gif",
-      "application/pdf",
-    ];
-    if (allowedMimeTypes.includes(file.mimetype)) {
+    if (KYC_ALLOWED_MIME_TYPES.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error("Invalid file type. Only JPEG, PNG, GIF, and PDF are allowed."));
+      cb(new Error("Invalid file type. Only JPEG, PNG, and PDF are allowed."));
     }
   },
 });
@@ -209,7 +204,7 @@ router.post(
  *               file:
  *                 type: string
  *                 format: binary
- *                 description: Document file (JPEG, PNG, GIF, or PDF, max 10MB)
+ *                 description: Document file (JPEG, PNG, or PDF, max 10MB)
  *     responses:
  *       200:
  *         description: Document uploaded successfully

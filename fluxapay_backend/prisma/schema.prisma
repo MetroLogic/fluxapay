@@ -905,3 +905,15 @@ model DepositAddress {
 
   @@index([status, cooldown_until])
 }
+
+/// Suppressed email addresses (bounces, complaints, unsubscribes).
+model EmailSuppression {
+  id         String   @id @default(cuid())
+  email      String   @unique
+  reason     String
+  source     String?
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([email])
+}

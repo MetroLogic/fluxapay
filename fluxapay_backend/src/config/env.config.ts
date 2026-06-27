@@ -111,7 +111,9 @@ const envSchema = z.object({
     ORACLE_MAX_MISSED_POLLS: z.coerce.number().int().positive().default(5),
     ORACLE_BATCH_SIZE: z.coerce.number().int().positive().default(50),
     ORACLE_HORIZON_TIMEOUT_MS: z.coerce.number().int().positive().default(10000),
-    ENABLE_SOROBAN_VERIFICATION: z.enum(['true', 'false']).default('false'),
+    ENABLE_SOROBAN_VERIFICATION: z.enum(['true', 'false']).optional(),
+    ENABLE_ADDRESS_POOL: z.enum(['true', 'false']).default('false'),
+    SHARED_DEPOSIT_ADDRESS: z.string().optional(),
 
     // Cron Jobs
     PAYMENT_MONITOR_CRON: z.string().default('*/2 * * * *'),
@@ -236,6 +238,12 @@ export function validateEnv(): EnvConfig {
         ].join('\n');
 
         throw new EnvValidationError(errorMessage);
+    }
+
+    // Default Soroban verification: enabled in production unless explicitly disabled
+    if (!config.ENABLE_SOROBAN_VERIFICATION) {
+        config.ENABLE_SOROBAN_VERIFICATION =
+            config.NODE_ENV === 'production' ? 'true' : 'false';
     }
 
     return config;

@@ -12,6 +12,7 @@ import { uploadToCloudinary, deleteFromCloudinary } from "./cloudinary.service";
 import { SubmitKycInput, UpdateKycStatusInput } from "../schemas/kyc.schema";
 import { logKycDecision } from "./audit.service";
 import { KYCStatus as AuditKYCStatus } from "../types/audit.types";
+import { validateKycUploadFile } from "../utils/kycUploadValidation.util";
 
 const prisma = new PrismaClient();
 
@@ -120,6 +121,9 @@ export async function uploadKycDocumentService(
   const maxSize = 10 * 1024 * 1024;
   if (file.size > maxSize) {
     throw apiError(413, ErrorCode.FILE_TOO_LARGE, "File size exceeds 10MB limit");
+  const validationError = validateKycUploadFile(file);
+  if (validationError) {
+    throw validationError;
   }
 
   // Get merchant KYC

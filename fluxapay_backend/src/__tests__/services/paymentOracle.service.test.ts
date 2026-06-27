@@ -2,6 +2,23 @@
  * Payment Oracle Service Tests
  */
 
+jest.mock("@stellar/stellar-sdk", () => {
+  const actual = jest.requireActual("@stellar/stellar-sdk");
+  return {
+    ...actual,
+    Asset: jest.fn().mockImplementation((code: string, issuer: string) => ({
+      code,
+      issuer,
+    })),
+    Horizon: {
+      Server: jest.fn().mockImplementation(() => ({
+        loadAccount: jest.fn(),
+        payments: jest.fn(),
+      })),
+    },
+  };
+});
+
 import { PrismaClient } from "../../generated/client/client";
 import {
   startPaymentOracle,
