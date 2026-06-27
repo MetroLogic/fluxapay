@@ -293,6 +293,11 @@ export const api = {
       fetchWithAuth("/api/v1/keys/regenerate", {
         method: "POST",
       }),
+    createKey: (data: { name: string }) =>
+      fetchWithAuth("/api/merchants/keys/create", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
     rotateApiKey: () =>
       fetchWithAuth("/api/merchants/keys/rotate-api-key", {
         method: "POST",
