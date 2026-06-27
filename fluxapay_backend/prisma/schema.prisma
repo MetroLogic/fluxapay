@@ -396,6 +396,7 @@ model Payment {
   customer           Customer?   @relation(fields: [customerId], references: [id], onDelete: SetNull)
   paymentLink        PaymentLink? @relation(fields: [paymentLinkId], references: [id])
   depositAddress     DepositAddress?
+  receivedTransactions PaymentReceivedTransaction[]
 
   // escrow fields
   escrow_mode              Boolean  @default(false)
@@ -406,6 +407,20 @@ model Payment {
   @@index([customerId])
   @@index([merchantId, createdAt(sort: Desc)])
   @@index([merchantId, status, createdAt(sort: Desc)])
+}
+
+/// On-chain USDC receipts matched to a payment/charge (supports duplicate detection).
+model PaymentReceivedTransaction {
+  id               String   @id @default(cuid())
+  payment          Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  paymentId        String
+  transaction_hash String
+  amount           Decimal
+  payer_address    String?
+  created_at       DateTime @default(now())
+
+  @@unique([paymentId, transaction_hash])
+  @@index([paymentId])
 }
 
 model Refund {
@@ -517,6 +532,8 @@ model DiscrepancyAlert {
   threshold              DiscrepancyThreshold? @relation(fields: [thresholdId], references: [id])
   thresholdId            String?
   severity               AlertSeverity
+  discrepancy_type       String?
+  details                Json?
   message                String
   is_resolved            Boolean               @default(false)
   resolved_at            DateTime?
@@ -535,6 +552,7 @@ enum PaymentStatus {
   failed
   paid
   completed
+  cancelled
 }
 
 model CronLock {
@@ -616,6 +634,7 @@ enum WebhookEventType {
   payment_escrow_released
   payment_escrow_refunded
   payment_escrow_expired
+  payment_duplicate_received
 }
 
 enum WebhookStatus {
@@ -644,6 +663,7 @@ enum ReconciliationStatus {
   ok
   discrepancy
   discrepancy_detected
+  duplicate_payment
 }
 
 enum AlertSeverity {
@@ -668,6 +688,11 @@ enum AuditActionType {
   settlement_batch_fail
   merchant_deletion_requested
   merchant_anonymized
+  merchant_deleted
+  config_updated
+  api_keys_revoked
+  webhooks_deactivated
+  charges_cancelled
   merchant_profile_updated
   bank_account_updated
   api_key_rotated

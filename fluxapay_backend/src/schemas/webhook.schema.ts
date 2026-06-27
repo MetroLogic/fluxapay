@@ -8,6 +8,7 @@ export const webhookEventTypes = [
   'payment.confirmed',
   'payment.failed',
   'payment.settled',
+  'payment.duplicate_received',
   // Refund events
   'refund.created',
   'refund.completed',
@@ -31,6 +32,7 @@ export const webhookEventTypes = [
   'subscription_renewed',
   'invoice_paid',
   'invoice_overdue',
+  'payment_duplicate_received',
 ] as const;
 
 export const webhookStatuses = [

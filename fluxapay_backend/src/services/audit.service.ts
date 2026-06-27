@@ -36,35 +36,38 @@ const metrics = {
 };
 
 /**
- * Safe audit log wrapper with retry logic and error handling
+ * Safe audit log wrapper with retry logic — throws if all attempts fail.
  */
 async function safeAuditLog<T>(
   operation: () => Promise<T>,
   context: string,
-): Promise<T | null> {
+): Promise<T> {
   let attempts = 0;
   const maxAttempts = 3;
+  let lastError: Error | undefined;
 
   while (attempts < maxAttempts) {
     try {
       return await operation();
-    } catch (error: any) {
+    } catch (error: unknown) {
       attempts++;
+      lastError = error instanceof Error ? error : new Error(String(error));
       logger.error("Audit log failure", {
         context,
         attempt: attempts,
-        error: error.message,
+        error: lastError.message,
       });
 
       if (attempts < maxAttempts) {
-        await delay(Math.pow(2, attempts) * 100); // Exponential backoff: 100ms, 200ms, 400ms
+        await delay(Math.pow(2, attempts) * 100);
       }
     }
   }
 
-  // Emit metric for monitoring
   metrics.increment("audit_log_failure", { context });
-  return null;
+  throw new Error(
+    `Audit log write failed after ${maxAttempts} attempts (${context}): ${lastError?.message}`,
+  );
 }
 
 /**
@@ -104,7 +107,7 @@ function redactSensitiveValue(value: string, isSensitive: boolean): string {
 async function createAuditLog(
   params: CreateAuditLogParams,
   tx?: Prisma.TransactionClient,
-): Promise<any | null> {
+): Promise<any> {
   const client = tx || prisma;
 
   return await safeAuditLog(async () => {
@@ -136,7 +139,7 @@ export async function logKycDecision(
     reason?: string;
   },
   tx?: Prisma.TransactionClient,
-): Promise<any | null> {
+): Promise<any> {
   const details: KycDecisionDetails = {
     merchant_id: params.merchantId,
     previous_status: params.previousStatus,
@@ -163,7 +166,7 @@ export async function logKycDecision(
 }
 
 /**
- * Log configuration change
+ * Log configuration change (single key — legacy helper)
  */
 export async function logConfigChange(
   params: {
@@ -174,23 +177,144 @@ export async function logConfigChange(
     isSensitive?: boolean;
   },
   tx?: Prisma.TransactionClient,
-): Promise<any | null> {
-  const isSensitive = params.isSensitive || false;
+): Promise<any> {
+  return logConfigUpdated(
+    {
+      adminId: params.adminId,
+      changedFields: [params.configKey],
+      oldValues: { [params.configKey]: redactSensitiveValue(params.previousValue, params.isSensitive ?? false) },
+      newValues: { [params.configKey]: redactSensitiveValue(params.newValue, params.isSensitive ?? false) },
+    },
+    tx,
+  );
+}
+
+/**
+ * Log admin configuration update with full field diff
+ */
+export async function logConfigUpdated(
+  params: {
+    adminId: string;
+    changedFields: string[];
+    oldValues: Record<string, unknown>;
+    newValues: Record<string, unknown>;
+    sensitiveFields?: string[];
+  },
+  tx?: Prisma.TransactionClient,
+): Promise<any> {
+  const sensitive = new Set(params.sensitiveFields ?? []);
+  const redactRecord = (record: Record<string, unknown>) =>
+    Object.fromEntries(
+      Object.entries(record).map(([key, value]) => [
+        key,
+        sensitive.has(key) ? redactSensitiveValue(String(value), true) : value,
+      ]),
+    );
 
   const details: ConfigChangeDetails = {
-    config_key: params.configKey,
-    previous_value: redactSensitiveValue(params.previousValue, isSensitive),
-    new_value: redactSensitiveValue(params.newValue, isSensitive),
-    is_sensitive: isSensitive,
+    changed_fields: params.changedFields,
+    old_values: redactRecord(params.oldValues),
+    new_values: redactRecord(params.newValues),
+    updated_at: new Date().toISOString(),
   };
 
   return await createAuditLog(
     {
       admin_id: params.adminId,
-      action_type: AuditActionType.config_change,
+      action_type: AuditActionType.config_updated,
       entity_type: AuditEntityType.system_config,
-      entity_id: params.configKey,
+      entity_id: params.changedFields.join(",") || "system",
       details,
+    },
+    tx,
+  );
+}
+
+/**
+ * Log merchant deletion (soft-delete / anonymization executed)
+ */
+export async function logMerchantDeleted(
+  params: {
+    adminId: string;
+    merchantId: string;
+    reason?: string;
+  },
+  tx?: Prisma.TransactionClient,
+): Promise<any> {
+  const details = {
+    merchant_id: params.merchantId,
+    actor: params.adminId,
+    reason: params.reason,
+    deleted_at: new Date().toISOString(),
+  };
+
+  return await createAuditLog(
+    {
+      admin_id: params.adminId,
+      action_type: AuditActionType.merchant_deleted,
+      entity_type: AuditEntityType.merchant_account,
+      entity_id: params.merchantId,
+      details,
+    },
+    tx,
+  );
+}
+
+export async function logApiKeysRevoked(
+  params: { adminId: string; merchantId: string; revokedCount: number },
+  tx?: Prisma.TransactionClient,
+): Promise<any> {
+  return await createAuditLog(
+    {
+      admin_id: params.adminId,
+      action_type: AuditActionType.api_keys_revoked,
+      entity_type: AuditEntityType.api_key,
+      entity_id: params.merchantId,
+      details: {
+        merchant_id: params.merchantId,
+        revoked_count: params.revokedCount,
+        revoked_at: new Date().toISOString(),
+      },
+    },
+    tx,
+  );
+}
+
+export async function logWebhooksDeactivated(
+  params: { adminId: string; merchantId: string; cancelledDeliveryCount: number },
+  tx?: Prisma.TransactionClient,
+): Promise<any> {
+  return await createAuditLog(
+    {
+      admin_id: params.adminId,
+      action_type: AuditActionType.webhooks_deactivated,
+      entity_type: AuditEntityType.webhook_secret,
+      entity_id: params.merchantId,
+      details: {
+        merchant_id: params.merchantId,
+        cancelled_delivery_count: params.cancelledDeliveryCount,
+        deactivated_at: new Date().toISOString(),
+      },
+    },
+    tx,
+  );
+}
+
+export async function logChargesCancelled(
+  params: { adminId: string; merchantId: string; cancelledCount: number },
+  tx?: Prisma.TransactionClient,
+): Promise<any> {
+  return await createAuditLog(
+    {
+      admin_id: params.adminId,
+      action_type: AuditActionType.charges_cancelled,
+      entity_type: AuditEntityType.payment_gateway,
+      entity_id: params.merchantId,
+      details: {
+        merchant_id: params.merchantId,
+        cancelled_count: params.cancelledCount,
+        cancelled_at: new Date().toISOString(),
+      },
     },
     tx,
   );
@@ -367,8 +491,8 @@ export async function queryAuditLogs(params: QueryAuditLogsParams): Promise<{
     where.admin_id = params.adminId;
   }
 
-  if (params.actionType) {
-    where.action_type = params.actionType;
+  if (params.actionType || params.eventType) {
+    where.action_type = params.actionType ?? params.eventType;
   }
 
   if (params.entityId) {

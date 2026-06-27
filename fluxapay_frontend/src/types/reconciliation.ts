@@ -31,6 +31,15 @@ export interface DiscrepancyAlertApi {
   reconciliationRecordId: string;
   thresholdId?: string | null;
   severity: string;
+  discrepancy_type?: string | null;
+  details?: {
+    payment_id?: string;
+    charge_id?: string;
+    transaction_hashes?: string[];
+    expected_amount?: number;
+    total_received?: number;
+    surplus_amount?: number;
+  } | null;
   message: string;
   is_resolved: boolean;
   resolved_at?: string | null;
@@ -98,7 +107,9 @@ export function mapReconciliationRecordApiToUi(
 
 function inferAlertType(
   rec: ReconciliationRecordApi | undefined,
+  alert?: DiscrepancyAlertApi,
 ): DiscrepancyAlert['type'] {
+  if (alert?.discrepancy_type === 'duplicate_payment') return 'duplicate_payment';
   if (!rec) return 'missing_transaction';
   const exp = num(rec.expected_total);
   const act = num(rec.actual_total);
@@ -116,9 +127,11 @@ export function mapDiscrepancyAlertApiToUi(
     id: a.id,
     reconciliationRecordId: a.reconciliationRecordId,
     settlementId: rec?.id ?? a.reconciliationRecordId,
-    type: inferAlertType(rec),
+    type: inferAlertType(rec, a),
     amount,
     description: a.message,
+    transactionHashes: a.details?.transaction_hashes,
+    surplusAmount: a.details?.surplus_amount,
     date: new Date(a.created_at),
     resolved: a.is_resolved,
     severity: a.severity || 'medium',
@@ -173,10 +186,12 @@ export interface DiscrepancyAlert {
   id: string;
   reconciliationRecordId?: string;
   settlementId: string;
-  type: 'overpayment' | 'underpayment' | 'missing_transaction';
+  type: 'overpayment' | 'underpayment' | 'missing_transaction' | 'duplicate_payment';
   severity?: string;
   amount: number;
   description: string;
+  transactionHashes?: string[];
+  surplusAmount?: number;
   date: Date;
   resolved: boolean;
 }

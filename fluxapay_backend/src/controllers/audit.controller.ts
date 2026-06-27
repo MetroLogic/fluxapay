@@ -19,6 +19,7 @@ export async function getAuditLogs(req: AuthRequest, res: Response) {
       date_to,
       admin_id,
       action_type,
+      event_type,
       entity_id,
       page,
       limit,
@@ -59,15 +60,14 @@ export async function getAuditLogs(req: AuthRequest, res: Response) {
       return sendApiError(res, apiError(400, ErrorCode.VALIDATION_ERROR, "limit must be between 1 and 100"));
     }
 
-    // Validate action_type if provided
+    // Validate action_type / event_type if provided (event_type is alias for action_type)
+    const filterType = (action_type ?? event_type) as string | undefined;
     let actionType: AuditActionType | undefined;
-    if (action_type) {
-      if (
-        !Object.values(AuditActionType).includes(action_type as AuditActionType)
-      ) {
-        return sendApiError(res, apiError(400, ErrorCode.VALIDATION_ERROR, "Invalid action_type"));
+    if (filterType) {
+      if (!Object.values(AuditActionType).includes(filterType as AuditActionType)) {
+        return sendApiError(res, apiError(400, ErrorCode.VALIDATION_ERROR, "Invalid action_type or event_type"));
       }
-      actionType = action_type as AuditActionType;
+      actionType = filterType as AuditActionType;
     }
 
     // Query audit logs

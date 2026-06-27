@@ -94,7 +94,7 @@ describe('Audit Service', () => {
       const auditLog = await logConfigChange(params);
 
       expect(auditLog).toBeDefined();
-      expect(auditLog?.action_type).toBe(AuditActionType.config_change);
+      expect(auditLog?.action_type).toBe(AuditActionType.config_updated);
       expect(auditLog?.entity_type).toBe(AuditEntityType.system_config);
       expect(auditLog?.entity_id).toBe('settlement_fee_percent');
       expect(auditLog?.details).toMatchObject({

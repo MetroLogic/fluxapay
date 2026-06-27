@@ -20,11 +20,8 @@ import { Decimal } from "@prisma/client/runtime/library";
 import { paymentContractService } from "./paymentContract.service";
 import { getLogger, getMetricsCollector } from "../utils/logger";
 import { createAndDeliverWebhook } from "./webhook.service";
-import {
-  parseHorizonMemo,
-  resolveMemoMatchMode,
-  validateMemoMatch,
-} from "../utils/oracleMemo.util";
+import { analyzeDuplicatePayments, MatchedStellarPayment } from "../utils/duplicatePayment.util";
+import {parseHorizonMemo, resolveMemoMatchMode, validateMemoMatch } from "../utils/oracleMemo.util";
 import { isSorobanVerificationEnabled } from "../utils/sorobanVerification.util";
 import { getSorobanHealthStatus } from "./SorobanService";
 
@@ -57,6 +54,9 @@ interface PaymentVerification {
   payer?: string;
   verified: boolean;
   status: string;
+  matchedPayments: MatchedStellarPayment[];
+  hasDuplicatePayment: boolean;
+  surplusAmount: Decimal;
 }
 
 interface OracleMetrics {
@@ -187,8 +187,6 @@ async function verifyPayment(payment: Payment): Promise<PaymentVerification> {
         b.asset_issuer === usdcAsset.issuer
     );
 
-    const actualAmount = usdcBalance ? new Decimal(usdcBalance.balance) : new Decimal(0);
-
     // Build payments query with cursor support
     let paymentsQuery = server
       .payments()
@@ -201,10 +199,10 @@ async function verifyPayment(payment: Payment): Promise<PaymentVerification> {
     }
 
     const transactions = await paymentsQuery.call();
-    let latestTxHash: string | undefined;
-    let latestPayer: string | undefined;
     let latestPagingToken = payment.last_paging_token;
+    const matchedPayments: MatchedStellarPayment[] = [];
 
+    // Collect all valid USDC payments to this address (not just the first)
     const memoMatchMode = resolveMemoMatchMode(address, {
       sharedDepositAddress: SHARED_DEPOSIT_ADDRESS,
       addressPoolEnabled: ENABLE_ADDRESS_POOL,
@@ -217,15 +215,20 @@ async function verifyPayment(payment: Payment): Promise<PaymentVerification> {
       }
 
       if (record.type === "payment" || record.type === "create_account") {
-        const paymentRecord = record as any; // Type assertion for payment record
-        
-        // Verify it's a USDC payment
+        const paymentRecord = record as any;
+
         if (
           paymentRecord.asset_type !== "native" &&
           paymentRecord.asset_code === "USDC" &&
           paymentRecord.asset_issuer === usdcAsset.issuer &&
           paymentRecord.to === address
         ) {
+          matchedPayments.push({
+            transactionHash: paymentRecord.transaction_hash,
+            amount: new Decimal(paymentRecord.amount),
+            payer: paymentRecord.from,
+            pagingToken: record.paging_token,
+          });
           const txHash = paymentRecord.transaction_hash as string | undefined;
           if (!txHash) {
             continue;
@@ -281,6 +284,36 @@ async function verifyPayment(payment: Payment): Promise<PaymentVerification> {
       }
     }
 
+    // Persist all matched transactions for reconciliation
+    for (const matched of matchedPayments) {
+      await prisma.paymentReceivedTransaction.upsert({
+        where: {
+          paymentId_transaction_hash: {
+            paymentId: payment.id,
+            transaction_hash: matched.transactionHash,
+          },
+        },
+        create: {
+          paymentId: payment.id,
+          transaction_hash: matched.transactionHash,
+          amount: matched.amount,
+          payer_address: matched.payer,
+        },
+        update: {},
+      });
+    }
+
+    const duplicateAnalysis = analyzeDuplicatePayments(expectedAmount, matchedPayments);
+    const latestTx = matchedPayments[0];
+    const latestTxHash = latestTx?.transactionHash;
+    const latestPayer = latestTx?.payer;
+
+    const actualAmount = duplicateAnalysis.totalReceived.gt(0)
+      ? duplicateAnalysis.totalReceived
+      : usdcBalance
+        ? new Decimal(usdcBalance.balance)
+        : new Decimal(0);
+
     // Update paging token
     if (latestPagingToken !== payment.last_paging_token) {
       await prisma.payment.update({
@@ -315,6 +348,9 @@ async function verifyPayment(payment: Payment): Promise<PaymentVerification> {
       payer: latestPayer,
       verified,
       status,
+      matchedPayments,
+      hasDuplicatePayment: duplicateAnalysis.hasDuplicate,
+      surplusAmount: duplicateAnalysis.surplusAmount,
     };
   } catch (error: any) {
     logger.error("Payment verification failed", {
@@ -374,7 +410,7 @@ async function verifyPaymentOnChain(
 async function updatePaymentStatus(verification: PaymentVerification): Promise<void> {
   const updateData: any = {
     status: verification.status,
-    amount_received: verification.actualAmount,
+    paid_amount: verification.actualAmount,
     updated_at: new Date(),
   };
 
@@ -418,6 +454,30 @@ async function updatePaymentStatus(verification: PaymentVerification): Promise<v
       );
     } catch (webhookError: any) {
       logger.error("Webhook delivery failed", {
+        paymentId: verification.paymentId,
+        error: webhookError.message,
+      });
+    }
+  }
+
+  // Notify merchant when duplicate Stellar transactions were received
+  if (verification.hasDuplicatePayment && updatedPayment.merchant) {
+    try {
+      await createAndDeliverWebhook(
+        updatedPayment.merchantId,
+        "payment_duplicate_received" as any,
+        {
+          payment_id: updatedPayment.id,
+          charge_id: updatedPayment.id,
+          expected_amount: verification.expectedAmount.toString(),
+          total_received: verification.actualAmount.toString(),
+          surplus_amount: verification.surplusAmount.toString(),
+          transaction_hashes: verification.matchedPayments.map((tx) => tx.transactionHash),
+          currency: updatedPayment.currency,
+        },
+      );
+    } catch (webhookError: any) {
+      logger.error("Duplicate payment webhook delivery failed", {
         paymentId: verification.paymentId,
         error: webhookError.message,
       });
