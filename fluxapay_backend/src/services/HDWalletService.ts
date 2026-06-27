@@ -249,6 +249,7 @@ export class HDWalletService {
    * Derives the payment address using BIP44 path.
    * Atomically assigns merchant_index and payment_index counters in DB.
    * Returns full derivation metadata for storage on the Payment row.
+   * Logs derived address with index for audit trail.
    */
   public async derivePaymentAddress(
     merchantId: string,
@@ -260,6 +261,21 @@ export class HDWalletService {
     const { publicKey, derivationPath } = await this.deriveKeypairFromPath(
       merchantIndex,
       paymentIndex,
+    );
+
+    // Log the derived address with indices for audit trail
+    console.log(
+      JSON.stringify({
+        level: "info",
+        message: "HD wallet address derived",
+        paymentId,
+        merchantId,
+        publicKey,
+        merchantIndex,
+        paymentIndex,
+        derivationPath,
+        timestamp: new Date().toISOString(),
+      }),
     );
 
     return {

@@ -2,6 +2,21 @@ import type { Request, Response, NextFunction, RequestHandler } from "express";
 import { apiError, sendApiError } from "../helpers/apiError.helper";
 import { ErrorCode } from "../types/errors";
 
+/**
+ * simpleRateLimit.middleware.ts
+ *
+ * Consolidated in-memory rate limiter for public/unauthenticated endpoints.
+ *
+ * Routes using this middleware:
+ *  - GET /api/v1/payments/{id}/status  (30 req/30s per IP:paymentId)
+ *  - GET /api/v1/payments/{id}/stream  (15 req/30s per IP)
+ *
+ * Response Headers:
+ *  - X-RateLimit-Limit: Maximum allowed requests
+ *  - X-RateLimit-Remaining: Remaining requests in window
+ *  - Retry-After: Seconds to wait before retry (on 429)
+ */
+
 type RateLimitOptions = {
   /**
    * Maximum number of requests allowed within `windowMs`.
@@ -43,10 +58,19 @@ export function simpleRateLimit(options: RateLimitOptions): RequestHandler {
     const existing = counters.get(key);
     if (!existing || existing.resetAt <= t) {
       counters.set(key, { count: 1, resetAt: t + windowMs });
+      // Set standard rate limit headers on success
+      res.setHeader("X-RateLimit-Limit", String(max));
+      res.setHeader("X-RateLimit-Remaining", String(max - 1));
       return next();
     }
 
     existing.count += 1;
+    const remaining = Math.max(0, max - existing.count);
+
+    // Set standard rate limit headers on all responses
+    res.setHeader("X-RateLimit-Limit", String(max));
+    res.setHeader("X-RateLimit-Remaining", String(remaining));
+
     if (existing.count > max) {
       const retryAfterSeconds = Math.max(1, Math.ceil((existing.resetAt - t) / 1000));
       res.setHeader("Retry-After", String(retryAfterSeconds));
