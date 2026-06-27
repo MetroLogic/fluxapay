@@ -1,7 +1,7 @@
 'use client';
 
 import { ExternalLink, Copy } from 'lucide-react';
-import { getStellarExpertTxUrl, shouldOpenInNewTab } from '@/lib/stellar';
+import { getStellarExpertTxUrl, shouldOpenInNewTab, type StellarNetwork } from '@/lib/stellar';
 
 interface TxHashLinkProps {
   /** Full transaction hash from the Stellar network. */
@@ -11,6 +11,11 @@ interface TxHashLinkProps {
    * When provided, this takes precedence over the auto-generated URL.
    */
   stellarExpertUrl?: string;
+  /**
+   * Optional network override ("testnet" or "public").
+   * When provided, overrides NEXT_PUBLIC_STELLAR_NETWORK env var.
+   */
+  network?: StellarNetwork;
   /**
    * How many leading characters of the hash to show.
    * @default 8
@@ -38,13 +43,14 @@ interface TxHashLinkProps {
 export function TxHashLink({
   txHash,
   stellarExpertUrl,
+  network,
   truncateStart = 8,
   truncateEnd = 4,
   className = '',
   showCopy = false,
   label,
 }: TxHashLinkProps) {
-  const href = stellarExpertUrl || getStellarExpertTxUrl(txHash);
+  const href = stellarExpertUrl || getStellarExpertTxUrl(txHash, network);
   const openInNewTab = shouldOpenInNewTab();
 
   const displayed =

@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import path from "node:path";
+import { withSentryConfig } from "@sentry/nextjs";
 
 const nextConfig: NextConfig = {
   env: {
@@ -27,10 +28,26 @@ const nextConfig: NextConfig = {
     return config;
   },
   async headers() {
+    // CSP trusted script origins:
+    // - 'self': app's own scripts from the origin
+    // - https://albedo.link: Albedo wallet provider
+    // - Freighter is injected via browser extension (no explicit CSP needed for extension content)
+    // - Nonces can be added at runtime for inline scripts if needed
+    const cspHeader = [
+      "default-src 'self'",
+      "script-src 'self' https://albedo.link",
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: https:",
+      "font-src 'self' data:",
+      "connect-src 'self'",
+      "frame-ancestors 'none'",
+      process.env.NEXT_PUBLIC_CSP_REPORT_URI ? `report-uri ${process.env.NEXT_PUBLIC_CSP_REPORT_URI}` : "",
+    ]
+      .filter(Boolean)
+      .join("; ");
+
     return [
       {
-        // Prevent the browser from caching the service worker script so updates
-        // are picked up immediately on the next page load.
         source: "/sw.js",
         headers: [
           { key: "Service-Worker-Allowed", value: "/" },
@@ -38,14 +55,27 @@ const nextConfig: NextConfig = {
         ],
       },
       {
-        // Allow the checkout shell HTML to be served stale while the SW
-        // revalidates it in the background (matching the SW strategy).
         source: "/pay/:path*",
         headers: [
           {
             key: "Cache-Control",
             value: "public, max-age=0, stale-while-revalidate=86400",
           },
+          { key: "Content-Security-Policy", value: cspHeader },
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-no-referrer" },
+          { key: "Permissions-Policy", value: "geolocation=(), microphone=(), camera=()" },
+        ],
+      },
+      {
+        source: "/:path*",
+        headers: [
+          { key: "Content-Security-Policy", value: cspHeader },
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-no-referrer" },
+          { key: "Permissions-Policy", value: "geolocation=(), microphone=(), camera=()" },
         ],
       },
     ];
@@ -83,4 +113,12 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default withSentryConfig(nextConfig, {
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  silent: true,
+  widenClientFileUpload: true,
+  tunnelRoute: "/monitoring",
+  hideSourceMaps: true,
+});

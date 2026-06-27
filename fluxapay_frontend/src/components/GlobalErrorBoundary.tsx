@@ -1,4 +1,5 @@
 import React, { ReactNode } from "react";
+import * as Sentry from "@sentry/nextjs";
 
 interface Props {
   children: ReactNode;
@@ -22,6 +23,7 @@ class GlobalErrorBoundary extends React.Component<Props, State> {
 
   componentDidCatch(error: Error, info: React.ErrorInfo): void {
     console.error(error, info);
+    Sentry.captureException(error, { contexts: { react: info } });
   }
 
   handleReset(): void {
