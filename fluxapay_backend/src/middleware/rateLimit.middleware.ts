@@ -10,12 +10,25 @@ const prisma = new PrismaClient();
 /**
  * Rate Limiting Middleware
  *
- * Provides two tiers:
- * 1. Global rate limit for public/unauthenticated API routes (by IP)
- * 2. Per-merchant rate limit for authenticated private routes (by merchantId)
+ * Consolidated rate limiting strategy for all authenticated and sensitive endpoints.
+ * Uses in-memory sliding window counter with per-category limits.
  *
- * Uses an in-memory sliding window counter. For multi-instance deployments,
- * replace the Map store with a Redis-backed implementation.
+ * Categories and usage:
+ * 1. globalRateLimit()           - Public API by IP (100 req/60s) — UNUSED (prefer simpleRateLimit)
+ * 2. merchantRateLimit()          - Per-merchant (200 req/60s) — UNUSED (legacy)
+ * 3. authRateLimit()              - Auth endpoints by IP (10 req/15m) — auth.route.ts
+ * 4. merchantApiKeyRateLimit()    - Per-merchant API key (200 req/60s) — payment.route.ts
+ * 5. captchaCheck()               - CAPTCHA requirement check — payment.controller.ts
+ *
+ * For public endpoints, see simpleRateLimit.middleware.ts instead.
+ *
+ * All responses include standard headers:
+ *  - X-RateLimit-Limit: Maximum requests per window
+ *  - X-RateLimit-Remaining: Requests remaining in current window
+ *  - Retry-After: Seconds to wait (only on 429)
+ *  - X-RateLimit-Window: Window size in seconds (info-only)
+ *
+ * FUTURE: Replace in-memory Map with Redis-backed implementation for distributed deployments.
  */
 
 type Counter = { count: number; resetAt: number };
