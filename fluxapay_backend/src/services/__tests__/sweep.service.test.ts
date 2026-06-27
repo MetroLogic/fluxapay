@@ -39,6 +39,9 @@ jest.mock("../audit.service", () => ({
 jest.mock("../sweepQueue.service", () => ({
   sweepQueue: {
     enqueue: jest.fn(async (_id, fn) => fn()),
+    canAcceptTask: jest.fn(() => true),
+    getBackpressureLevel: jest.fn(() => 0.5),
+    getStats: jest.fn(() => ({ queued: 0, active: 0 })),
   },
 }));
 
@@ -48,6 +51,10 @@ jest.mock("../HDWalletService", () => ({
     regenerateKeypair: jest.fn(),
     decryptKeyData: jest.fn(),
   })),
+}));
+
+jest.mock("../../config/sweep.config", () => ({
+  getSweepMinBalanceUsdc: jest.fn(() => 10),
 }));
 
 // Import after mocks
