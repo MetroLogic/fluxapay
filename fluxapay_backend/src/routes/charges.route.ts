@@ -3,7 +3,7 @@ import { createPayment } from "../controllers/payment.controller";
 import { validatePayment } from "../validators/payment.validator";
 import { authenticateApiKey } from "../middleware/apiKeyAuth.middleware";
 import { merchantApiKeyRateLimit } from "../middleware/rateLimit.middleware";
-import { redisIdempotencyMiddleware } from "../middleware/redisIdempotency.middleware";
+import { idempotencyMiddleware } from "../middleware/idempotency.middleware";
 import { createRefund, listRefunds } from "../controllers/refund.controller";
 import { validate, validateQuery } from "../middleware/validation.middleware";
 import { createRefundSchema, listRefundsQuerySchema } from "../schemas/refund.schema";
@@ -48,7 +48,7 @@ router.post(
   "/",
   authenticateApiKey,
   merchantApiKeyRateLimit(),
-  redisIdempotencyMiddleware,
+  idempotencyMiddleware,
   validatePayment,
   createPayment
 );
@@ -86,7 +86,7 @@ router.post(
   "/:id/refunds",
   authenticateApiKey,
   merchantApiKeyRateLimit(),
-  redisIdempotencyMiddleware,
+  idempotencyMiddleware,
   (req, res, next) => {
     req.body.payment_id = req.params.id;
     next();

@@ -59,7 +59,7 @@ function requiredEnv(name: string): string {
 }
 
 /**
- * SweepService
+ * SweepService with concurrency control and backpressure
  *
  * Moves USDC from per-payment derived addresses (custody addresses) into a
  * central master vault address so settlement batching can later operate on
@@ -96,8 +96,6 @@ export class SweepService {
       "GBBD47IF6LWK7P7MDEVSCWT73IQIGCEZHR7OMXMBZQ3ZONN2T4U6W23Y";
     this.usdcAsset = new Asset("USDC", issuer);
 
-    // Central vault is the collection wallet.
-    // Requirements mention "master vault"; we use MASTER_VAULT_SECRET_KEY.
     const vaultSecret = requiredEnv("MASTER_VAULT_SECRET_KEY");
     this.vaultKeypair = Keypair.fromSecret(vaultSecret);
 
@@ -121,7 +119,6 @@ export class SweepService {
     sourceSecret: string;
     destination: string;
     amount: string;
-    /** Optional destination to merge remaining XLM into after payment succeeds. */
     mergeDestination?: string;
   }): Promise<string> {
     let lastError: unknown;
@@ -153,7 +150,6 @@ export class SweepService {
         }
 
         const tx = builder.setTimeout(30).build();
-
         tx.sign(sourceKeypair);
 
         const res = await this.server.submitTransaction(tx);
@@ -204,9 +200,10 @@ export class SweepService {
   }
 
   /**
-   * Runs a sweep.
+   * Runs a sweep with concurrency control and backpressure.
    *
    * For safety and simplicity, this submits **one tx per payment address**.
+   * Uses a queue with concurrency limits to prevent overwhelming the network.
    */
   public async sweepPaidPayments(
     options: SweepOptions = {},
@@ -221,6 +218,20 @@ export class SweepService {
 
     const adminId = options.adminId || "system";
     const dryRun = options.dryRun === true;
+
+    // Check backpressure before starting
+    if (!dryRun && !sweepQueue.canAcceptTask()) {
+      const backpressureLevel = sweepQueue.getBackpressureLevel();
+      this.logger.warn("Sweep queue at capacity, applying backpressure", {
+        backpressureLevel,
+        queueStats: sweepQueue.getStats(),
+      });
+      this.metrics.increment("sweep.backpressure_applied");
+
+      throw new Error(
+        `Sweep queue is at ${(backpressureLevel * 100).toFixed(1)}% capacity. Please retry later.`,
+      );
+    }
 
     const auditLog = await logSweepTrigger({
       adminId,
@@ -250,98 +261,92 @@ export class SweepService {
       );
     }
 
+    // Process payments with concurrency control
+    const sweepPromises: Promise<void>[] = [];
+
     for (const p of payments) {
-      try {
-        const expected = Number(p.amount as any as Decimal);
-        if (!Number.isFinite(expected) || expected <= 0) {
-          const skipEntry = { paymentId: p.id, reason: "Invalid amount" };
-          skipped.push(skipEntry);
-          if (dryRun) decisions.push({ ...skipEntry, action: "skip" });
-          continue;
-        }
+      const sweepTask = async () => {
+        try {
+          const expected = Number(p.amount as any as Decimal);
+          if (!Number.isFinite(expected) || expected <= 0) {
+            const skipEntry = { paymentId: p.id, reason: "Invalid amount" };
+            skipped.push(skipEntry);
+            if (dryRun) decisions.push({ ...skipEntry, action: "skip" });
+            return;
+          }
 
-        // Recreate source secret for the derived payment address.
-        // Priority:
-        //   1. derivation_path (stored at payment creation — fastest, no extra DB query)
-        //   2. encrypted_key_data (decrypt indices, then derive)
-        //   3. Legacy fallback: DB index lookup via merchantId/paymentId
-        let kp: { publicKey: string; secretKey: string };
+          let kp: { publicKey: string; secretKey: string };
 
-        if (p.derivation_path) {
-          // Fast path: re-derive directly from the stored BIP44 path
-          kp = await this.hdWalletService.regenerateKeypairFromPath(
-            p.derivation_path,
+          if (p.derivation_path) {
+            kp = await this.hdWalletService.regenerateKeypairFromPath(
+              p.derivation_path,
+            );
+          } else if (p.encrypted_key_data) {
+            const { merchantIndex, paymentIndex } =
+              await this.hdWalletService.decryptKeyData(p.encrypted_key_data);
+            kp = await this.hdWalletService.regenerateKeypair(
+              merchantIndex,
+              paymentIndex,
+            );
+          } else {
+            kp = await this.hdWalletService.regenerateKeypair(
+              p.merchantId,
+              p.id,
+            );
+          }
+
+          if (p.stellar_address && kp.publicKey !== p.stellar_address) {
+            const skipEntry = {
+              paymentId: p.id,
+              reason: "Derived address mismatch",
+            };
+            skipped.push(skipEntry);
+            if (dryRun) decisions.push({ ...skipEntry, action: "skip" });
+            return;
+          }
+
+          const account = await this.server.loadAccount(kp.publicKey);
+          const usdcBalanceEntry = account.balances.find(
+            (b) =>
+              b.asset_type === "credit_alphanum4" &&
+              b.asset_code === "USDC" &&
+              b.asset_issuer === this.usdcAsset.issuer,
           );
-        } else if (p.encrypted_key_data) {
-          // Decrypt indices and derive
-          const { merchantIndex, paymentIndex } =
-            await this.hdWalletService.decryptKeyData(p.encrypted_key_data);
-          kp = await this.hdWalletService.regenerateKeypair(
-            merchantIndex,
-            paymentIndex,
-          );
-        } else {
-          // Legacy: look up indices from DB (payments created before this feature)
-          kp = await this.hdWalletService.regenerateKeypair(p.merchantId, p.id);
-        }
 
-        // Ensure address matches DB (defense in depth)
-        if (p.stellar_address && kp.publicKey !== p.stellar_address) {
-          const skipEntry = {
-            paymentId: p.id,
-            reason: "Derived address mismatch",
-          };
-          skipped.push(skipEntry);
-          if (dryRun) decisions.push({ ...skipEntry, action: "skip" });
-          continue;
-        }
+          const accountUsdcAmount = Number(usdcBalanceEntry?.balance ?? "0");
+          const minBalanceUsdc = getSweepMinBalanceUsdc();
+          if (!Number.isFinite(accountUsdcAmount) || accountUsdcAmount <= 0) {
+            const skipEntry = {
+              paymentId: p.id,
+              reason: "No USDC balance to sweep",
+            };
+            skipped.push(skipEntry);
+            if (dryRun) decisions.push({ ...skipEntry, action: "skip" });
+            return;
+          }
 
-        // Load current on-chain account state and use actual USDC balance.
-        const account = await this.server.loadAccount(kp.publicKey);
-        const usdcBalanceEntry = account.balances.find(
-          (b) =>
-            b.asset_type === "credit_alphanum4" &&
-            b.asset_code === "USDC" &&
-            b.asset_issuer === this.usdcAsset.issuer,
-        );
+          if (accountUsdcAmount < minBalanceUsdc) {
+            const skipEntry = {
+              paymentId: p.id,
+              reason: `Balance ${accountUsdcAmount.toFixed(7)} USDC below minimum threshold ${minBalanceUsdc}`,
+            };
+            skipped.push(skipEntry);
+            if (dryRun) decisions.push({ ...skipEntry, action: "skip" });
+            return;
+          }
 
-        const accountUsdcAmount = Number(usdcBalanceEntry?.balance ?? "0");
-        const minBalanceUsdc = getSweepMinBalanceUsdc();
-        if (!Number.isFinite(accountUsdcAmount) || accountUsdcAmount <= 0) {
-          const skipEntry = {
-            paymentId: p.id,
-            reason: "No USDC balance to sweep",
-          };
-          skipped.push(skipEntry);
-          if (dryRun) decisions.push({ ...skipEntry, action: "skip" });
-          continue;
-        }
+          if (dryRun) {
+            decisions.push({
+              paymentId: p.id,
+              action: "sweep",
+              amount: accountUsdcAmount.toFixed(7),
+            });
+            addressesSwept += 1;
+            total += accountUsdcAmount;
+            return;
+          }
 
-        if (accountUsdcAmount < minBalanceUsdc) {
-          const skipEntry = {
-            paymentId: p.id,
-            reason: `Balance ${accountUsdcAmount.toFixed(7)} USDC below minimum threshold ${minBalanceUsdc}`,
-          };
-          skipped.push(skipEntry);
-          if (dryRun) decisions.push({ ...skipEntry, action: "skip" });
-          continue;
-        }
-
-        if (dryRun) {
-          decisions.push({
-            paymentId: p.id,
-            action: "sweep",
-            amount: accountUsdcAmount.toFixed(7),
-          });
-          addressesSwept += 1;
-          total += accountUsdcAmount;
-          continue;
-        }
-
-        const amountStr = accountUsdcAmount.toFixed(7);
-        
-        // Use the sweepQueue to manage concurrency and prevent overloading Stellar network
-        await sweepQueue.enqueue(`sweep-payment-${p.id}`, async () => {
+          const amountStr = accountUsdcAmount.toFixed(7);
           const hash = await this.submitUsdcSweepTx({
             sourceSecret: kp.secretKey,
             destination: this.vaultKeypair.publicKey(),
@@ -361,14 +366,25 @@ export class SweepService {
           txHashes.push(hash);
           addressesSwept += 1;
           total += accountUsdcAmount;
-        });
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err);
-        skipped.push({ paymentId: p.id, reason: msg });
-        if (dryRun)
-          decisions.push({ paymentId: p.id, action: "skip", reason: msg });
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          skipped.push({ paymentId: p.id, reason: msg });
+          if (dryRun)
+            decisions.push({ paymentId: p.id, action: "skip", reason: msg });
+        }
+      };
+
+      if (dryRun) {
+        // In dry-run mode, execute immediately without queueing
+        sweepPromises.push(sweepTask());
+      } else {
+        // In production mode, use the queue for concurrency control
+        sweepPromises.push(sweepQueue.enqueue(`${sweepId}:${p.id}`, sweepTask));
       }
     }
+
+    // Wait for all sweep tasks to complete
+    await Promise.allSettled(sweepPromises);
 
     const completedAt = new Date();
 
