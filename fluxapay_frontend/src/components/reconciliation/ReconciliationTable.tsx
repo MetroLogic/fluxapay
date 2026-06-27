@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { format } from 'date-fns';
+import { VirtualizedTable } from '../VirtualizedTable';
 import { ReconciliationRecord } from '../../types/reconciliation';
 
 interface Props {
@@ -18,10 +19,45 @@ const formatCurrency = (amount: number, currency = 'USD') => {
 export function ReconciliationTable({ records, loading, onDownloadRecord }: Props) {
     const [currentPage, setCurrentPage] = useState(1);
     const recordsPerPage = 10;
+    const shouldVirtualize = records.length > 100;
 
     const totalPages = Math.ceil(records.length / recordsPerPage);
     const startIndex = (currentPage - 1) * recordsPerPage;
     const currentRecords = records.slice(startIndex, startIndex + recordsPerPage);
+
+    const renderRecordRow = useCallback((record: ReconciliationRecord) => {
+        const hasDiscrepancy = Math.abs(record.discrepancy) > 0.01;
+        return (
+            <tr key={record.id} className={hasDiscrepancy ? 'bg-red-50 hover:bg-red-100' : 'hover:bg-gray-50'}>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {format(record.date, 'MMM d, yyyy HH:mm')}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                    {record.settlementId}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900">
+                    {record.usdcReceived.toFixed(2)}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900">
+                    {formatCurrency(record.fiatPayout)}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">
+                    {formatCurrency(record.fees)}
+                </td>
+                <td className={`px-6 py-4 whitespace-nowrap text-sm text-right font-medium ${hasDiscrepancy ? 'text-red-600' : 'text-gray-900'}`}>
+                    {formatCurrency(record.discrepancy)}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    <button
+                        onClick={() => onDownloadRecord(record)}
+                        className="text-indigo-600 hover:text-indigo-900"
+                    >
+                        Download PDF
+                    </button>
+                </td>
+            </tr>
+        );
+    }, [onDownloadRecord]);
 
     if (loading) {
         return (
@@ -49,6 +85,44 @@ export function ReconciliationTable({ records, loading, onDownloadRecord }: Prop
         );
     }
 
+    if (shouldVirtualize) {
+        return (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col">
+                <div className="border-b border-gray-200 bg-gray-50">
+                    <div className="overflow-x-auto">
+                        <table className="min-w-full">
+                            <thead>
+                                <tr>
+                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Settlement ID</th>
+                                    <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">USDC Received</th>
+                                    <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Fiat Payout</th>
+                                    <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Fees</th>
+                                    <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Discrepancy</th>
+                                    <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                </tr>
+                            </thead>
+                        </table>
+                    </div>
+                </div>
+                <VirtualizedTable
+                    data={records}
+                    rowHeight={56}
+                    containerHeight={600}
+                    renderRow={(record) => (
+                        <div className="overflow-x-auto">
+                            <table className="min-w-full">
+                                <tbody className="divide-y divide-gray-200">
+                                    {renderRecordRow(record)}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                />
+            </div>
+        );
+    }
+
     return (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col">
             <div className="overflow-x-auto">
@@ -65,39 +139,7 @@ export function ReconciliationTable({ records, loading, onDownloadRecord }: Prop
                         </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                        {currentRecords.map((record) => {
-                            const hasDiscrepancy = Math.abs(record.discrepancy) > 0.01;
-                            return (
-                                <tr key={record.id} className={hasDiscrepancy ? 'bg-red-50 hover:bg-red-100' : 'hover:bg-gray-50'}>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                        {format(record.date, 'MMM d, yyyy HH:mm')}
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                        {record.settlementId}
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900">
-                                        {record.usdcReceived.toFixed(2)}
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900">
-                                        {formatCurrency(record.fiatPayout)}
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-500">
-                                        {formatCurrency(record.fees)}
-                                    </td>
-                                    <td className={`px-6 py-4 whitespace-nowrap text-sm text-right font-medium ${hasDiscrepancy ? 'text-red-600' : 'text-gray-900'}`}>
-                                        {formatCurrency(record.discrepancy)}
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                        <button
-                                            onClick={() => onDownloadRecord(record)}
-                                            className="text-indigo-600 hover:text-indigo-900"
-                                        >
-                                            Download PDF
-                                        </button>
-                                    </td>
-                                </tr>
-                            );
-                        })}
+                        {currentRecords.map((record) => renderRecordRow(record))}
                     </tbody>
                 </table>
             </div>
