@@ -52,6 +52,7 @@ model Merchant {
   settlements           Settlement[]
   kyc                   MerchantKYC?
   webhookLogs           WebhookLog[]
+  webhookDeadLetterQueue WebhookDeadLetterQueue[]
   payments              Payment[]
   refunds               Refund[]
   invoices              Invoice[]
@@ -339,6 +340,30 @@ model WebhookRetryAttempt {
   response_body  String?
   error_message  String?
   created_at     DateTime   @default(now())
+}
+
+model WebhookDeadLetterQueue {
+  id               String   @id @default(cuid())
+  merchant         Merchant @relation(fields: [merchantId], references: [id])
+  merchantId       String
+  webhookLog       WebhookLog @relation(fields: [webhookLogId], references: [id])
+  webhookLogId     String   @unique
+  event_type       String
+  endpoint_url     String
+  failure_reason   String
+  last_http_status Int?
+  request_payload  Json?
+  response_body    String?
+  retry_count      Int      @default(0)
+  max_retries      Int      @default(5)
+  alert_sent_at    DateTime?
+  replayed_at      DateTime?
+  expires_at       DateTime
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  @@index([merchantId, created_at(sort: Desc)])
+  @@index([expires_at])
 }
 
 model Payment {

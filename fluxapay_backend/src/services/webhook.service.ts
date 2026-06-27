@@ -6,6 +6,7 @@ import crypto from "crypto";
 import { webhookEventTypes } from "../schemas/webhook.schema";
 import { normalizeEventName, toLegacyEventName } from "../utils/webhook-event-mapping.util";
 import { trackWebhookDelivery } from "../middleware/metrics.middleware";
+import { moveWebhookToDLQ } from "./webhook-dlq.service";
 
 export class WebhookDispatcher {
   private prisma: PrismaClient;
@@ -398,6 +399,20 @@ export async function retryWebhookService(params: RetryWebhookParams) {
       }),
     },
   });
+
+  // Move to DLQ if permanently failed
+  if (isPermanentlyFailed) {
+    await moveWebhookToDLQ({
+      webhookLogId: log.id,
+      merchantId: merchantId,
+      event_type: log.event_type,
+      endpoint_url: log.endpoint_url,
+      failure_reason: result.error || `HTTP ${result.httpStatus || 0}`,
+      last_http_status: result.httpStatus,
+      request_payload: log.request_payload,
+      response_body: result.responseBody,
+    });
+  }
 
   return {
     message: result.success

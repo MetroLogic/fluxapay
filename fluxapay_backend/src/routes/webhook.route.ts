@@ -8,6 +8,12 @@ import {
   requeueWebhook,
   exportWebhookLogs,
 } from "../controllers/webhook.controller";
+import {
+  listDLQ,
+  getDLQItem,
+  replayDLQ,
+  removeDLQItem,
+} from "../controllers/webhookDLQ.controller";
 import { validate, validateQuery } from "../middleware/validation.middleware";
 import * as webhookSchema from "../schemas/webhook.schema";
 import { authenticateToken } from "../middleware/auth.middleware";
@@ -301,6 +307,122 @@ router.post(
   "/deliveries/:log_id/retry",
   authenticateToken, merchantApiKeyRateLimit(),
   retryWebhook
+);
+
+/**
+ * @swagger
+ * /api/v1/webhooks/dead-letter:
+ *   get:
+ *     summary: List webhooks in dead-letter queue (merchant view)
+ *     tags: [Webhooks]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 20
+ *           maximum: 100
+ *     responses:
+ *       200:
+ *         description: DLQ items retrieved
+ *       401:
+ *         description: Unauthorized
+ */
+router.get(
+  "/dead-letter",
+  authenticateToken, merchantApiKeyRateLimit(),
+  listDLQ
+);
+
+/**
+ * @swagger
+ * /api/v1/webhooks/dead-letter/{id}:
+ *   get:
+ *     summary: Get details of a DLQ item
+ *     tags: [Webhooks]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: DLQ item details
+ *       404:
+ *         description: DLQ item not found
+ *       401:
+ *         description: Unauthorized
+ */
+router.get(
+  "/dead-letter/:id",
+  authenticateToken, merchantApiKeyRateLimit(),
+  getDLQItem
+);
+
+/**
+ * @swagger
+ * /api/v1/webhooks/dead-letter/{id}/replay:
+ *   post:
+ *     summary: Replay a webhook from DLQ
+ *     tags: [Webhooks]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Webhook replayed
+ *       404:
+ *         description: DLQ item not found
+ *       401:
+ *         description: Unauthorized
+ */
+router.post(
+  "/dead-letter/:id/replay",
+  authenticateToken, merchantApiKeyRateLimit(),
+  replayDLQ
+);
+
+/**
+ * @swagger
+ * /api/v1/webhooks/dead-letter/{id}:
+ *   delete:
+ *     summary: Remove a webhook from DLQ permanently
+ *     tags: [Webhooks]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: DLQ item removed
+ *       404:
+ *         description: DLQ item not found
+ *       401:
+ *         description: Unauthorized
+ */
+router.delete(
+  "/dead-letter/:id",
+  authenticateToken, merchantApiKeyRateLimit(),
+  removeDLQItem
 );
 
 /**
