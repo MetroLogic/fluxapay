@@ -814,4 +814,17 @@ export const api = {
   },
 };
 
+// Public pricing config endpoint (no auth required)
+export const fetchPricingConfig = async () => {
+  try {
+    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/v1/public/pricing-config`, {
+      headers: { "Content-Type": "application/json" },
+    });
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
+};
+
 export { ApiError };

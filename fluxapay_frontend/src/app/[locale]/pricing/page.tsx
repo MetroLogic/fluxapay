@@ -1,22 +1,14 @@
 import { Metadata } from "next";
 import { generatePageMetadata } from "@/lib/seo";
+import { fetchPricingConfig } from "@/lib/api";
 import PricingGrid, { PricingPlan } from "@/components/pricing/PricingGrid";
 import ComparisonTable, { ComparisonFeature } from "@/components/pricing/ComparisonTable";
 import PricingFAQ, { FAQItem } from "@/components/pricing/PricingFAQ";
 
-export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
-  const { locale } = await params;
-  
-  return generatePageMetadata({
-    title: "FluxaPay Pricing - Transparent Payment Processing Fees",
-    description: "Competitive, transparent pricing for crypto and fiat payment processing. No hidden fees. Choose the plan that fits your business.",
-    slug: "/pricing",
-    keywords: ["pricing", "payment fees", "rates", "payment processing", "merchant fees"],
-    locale,
-  });
-}
+export const revalidate = 3600;
 
-const plans: PricingPlan[] = [
+// Fallback defaults
+const defaultPlans: PricingPlan[] = [
   {
     id: "starter",
     name: "Starter",
@@ -72,7 +64,7 @@ const plans: PricingPlan[] = [
   },
 ];
 
-const comparisonFeatures: ComparisonFeature[] = [
+const defaultComparisonFeatures: ComparisonFeature[] = [
   {
     category: "Payment Processing",
     features: [
@@ -91,7 +83,7 @@ const comparisonFeatures: ComparisonFeature[] = [
   }
 ];
 
-const faqItems: FAQItem[] = [
+const defaultFaqItems: FAQItem[] = [
   {
     id: "faq-1",
     question: "What payment methods do you support?",
@@ -109,11 +101,43 @@ const faqItems: FAQItem[] = [
   }
 ];
 
-export default function LocalizedPricingPage() {
+export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
+  const { locale } = await params;
+
+  return generatePageMetadata({
+    title: "FluxaPay Pricing - Transparent Payment Processing Fees",
+    description: "Competitive, transparent pricing for crypto and fiat payment processing. No hidden fees. Choose the plan that fits your business.",
+    slug: "/pricing",
+    keywords: ["pricing", "payment fees", "rates", "payment processing", "merchant fees"],
+    locale,
+  });
+}
+
+async function getPricingData() {
+  const config = await fetchPricingConfig();
+
+  if (!config) {
+    return {
+      plans: defaultPlans,
+      comparisonFeatures: defaultComparisonFeatures,
+      faqItems: defaultFaqItems,
+    };
+  }
+
+  return {
+    plans: config.plans || defaultPlans,
+    comparisonFeatures: config.comparisonFeatures || defaultComparisonFeatures,
+    faqItems: config.faqItems || defaultFaqItems,
+  };
+}
+
+export default async function LocalizedPricingPage() {
+  const { plans, comparisonFeatures, faqItems } = await getPricingData();
+
   return (
     <div className="bg-slate-50 min-h-screen py-16 px-4 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto space-y-24">
-        
+
         {/* Header */}
         <div className="text-center max-w-3xl mx-auto">
           <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 sm:text-5xl">
