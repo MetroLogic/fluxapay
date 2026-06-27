@@ -8,6 +8,7 @@ import {
 } from "@stellar/stellar-sdk";
 import { HDWalletService } from "./HDWalletService";
 import { getLogger, getMetricsCollector } from "../utils/logger";
+import { horizonCircuitBreaker } from "../utils/horizonCircuitBreaker";
 
 export class StellarService {
   private server: Horizon.Server;
@@ -71,10 +72,14 @@ export class StellarService {
    */
   public async checkAccountExists(publicKey: string): Promise<boolean> {
     try {
-      await this.server.loadAccount(publicKey);
+      await horizonCircuitBreaker.execute(() => this.server.loadAccount(publicKey));
       return true;
     } catch (error: any) {
       if (error.response && error.response.status === 404) {
+        return false;
+      }
+      if (error.message.includes("Circuit breaker")) {
+        this.logger.warn("Horizon API unavailable via circuit breaker", { publicKey });
         return false;
       }
       throw error;
@@ -146,8 +151,8 @@ export class StellarService {
     feeOverride?: string,
   ): Promise<void> {
     // Load the funder account
-    const funderAccountResponse = await this.server.loadAccount(
-      this.funderKeypair.publicKey(),
+    const funderAccountResponse = await horizonCircuitBreaker.execute(() =>
+      this.server.loadAccount(this.funderKeypair.publicKey())
     );
 
     // Build the transaction
@@ -169,8 +174,12 @@ export class StellarService {
 
     // Submit the transaction
     try {
-      await this.server.submitTransaction(transaction);
+      await horizonCircuitBreaker.execute(() => this.server.submitTransaction(transaction));
     } catch (error: any) {
+      if (error.message.includes("Circuit breaker")) {
+        this.logger.warn("Horizon API unavailable via circuit breaker", { destination });
+        throw new Error("HorizonUnavailable");
+      }
       this.logger.error("Error creating account", {
         error: { message: error.message, response: error.response?.data },
         destination,
@@ -189,7 +198,7 @@ export class StellarService {
     assetIssuer: string,
   ): Promise<boolean> {
     try {
-      const account = await this.server.loadAccount(publicKey);
+      const account = await horizonCircuitBreaker.execute(() => this.server.loadAccount(publicKey));
       const balances = account.balances;
 
       for (const balance of balances) {
@@ -203,7 +212,11 @@ export class StellarService {
         }
       }
       return false;
-    } catch (error) {
+    } catch (error: any) {
+      if (error.message.includes("Circuit breaker")) {
+        this.logger.warn("Horizon API unavailable via circuit breaker", { publicKey });
+        return false;
+      }
       this.logger.error("Error checking trustline", {
         error: { message: (error as Error).message },
         publicKey,
@@ -227,7 +240,9 @@ export class StellarService {
     feeOverride?: string,
   ): Promise<void> {
     const keypair = Keypair.fromSecret(secretKey);
-    const accountResponse = await this.server.loadAccount(keypair.publicKey());
+    const accountResponse = await horizonCircuitBreaker.execute(() =>
+      this.server.loadAccount(keypair.publicKey())
+    );
     const asset = new Asset(assetCode, assetIssuer);
 
     const transaction = new TransactionBuilder(accountResponse, {
@@ -245,8 +260,12 @@ export class StellarService {
     transaction.sign(keypair);
 
     try {
-      await this.server.submitTransaction(transaction);
+      await horizonCircuitBreaker.execute(() => this.server.submitTransaction(transaction));
     } catch (error: any) {
+      if (error.message.includes("Circuit breaker")) {
+        this.logger.warn("Horizon API unavailable via circuit breaker", { publicKey: keypair.publicKey() });
+        throw new Error("HorizonUnavailable");
+      }
       this.logger.error("Error adding trustline", {
         error: { message: error.message, response: error.response?.data },
         publicKey: keypair.publicKey(),

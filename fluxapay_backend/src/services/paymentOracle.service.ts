@@ -25,6 +25,7 @@ import { analyzeDuplicatePayments, MatchedStellarPayment } from "../utils/duplic
 import {parseHorizonMemo, resolveMemoMatchMode, validateMemoMatch } from "../utils/oracleMemo.util";
 import { isSorobanVerificationEnabled } from "../utils/sorobanVerification.util";
 import { getSorobanHealthStatus } from "./SorobanService";
+import { horizonCircuitBreaker } from "../utils/horizonCircuitBreaker";
 
 const logger = getLogger("PaymentOracleService");
 const metrics = getMetricsCollector();
@@ -76,6 +77,8 @@ interface HorizonHealthCheck {
   latencyMs: number;
   lastSuccessfulPoll: Date | null;
   consecutiveFailures: number;
+  circuitBreakerState?: string;
+  circuitBreakerConsecutiveFailures?: number;
 }
 
 // ─── Oracle State Management ─────────────────────────────────────────────────
@@ -179,7 +182,7 @@ async function verifyPayment(payment: Payment): Promise<PaymentVerification> {
 
   try {
     // Check account balance for USDC
-    const account = await server.loadAccount(address);
+    const account = await horizonCircuitBreaker.execute(() => server.loadAccount(address));
     const usdcBalance = account.balances.find(
       (b: any) =>
         "asset_code" in b &&
@@ -198,7 +201,7 @@ async function verifyPayment(payment: Payment): Promise<PaymentVerification> {
       paymentsQuery = paymentsQuery.cursor(payment.last_paging_token);
     }
 
-    const transactions = await paymentsQuery.call();
+    const transactions = await horizonCircuitBreaker.execute(() => paymentsQuery.call());
     let latestPagingToken = payment.last_paging_token;
     const matchedPayments: MatchedStellarPayment[] = [];
 
@@ -236,18 +239,22 @@ async function verifyPayment(payment: Payment): Promise<PaymentVerification> {
 
           let memoResult;
           try {
-            const tx = await server.transactions().transaction(txHash).call();
+            const tx = await horizonCircuitBreaker.execute(() => server.transactions().transaction(txHash).call());
             const memo = parseHorizonMemo({
               memo_type: tx.memo_type,
               memo: tx.memo,
             });
             memoResult = validateMemoMatch(payment.id, memo, memoMatchMode);
           } catch (memoError: any) {
-            logger.warn("Failed to fetch transaction memo for payment attribution", {
-              paymentId: payment.id,
-              transactionHash: txHash,
-              error: memoError.message,
-            });
+            if (memoError.message.includes("Circuit breaker")) {
+              logger.warn("Horizon API unavailable via circuit breaker", { transactionHash: txHash });
+            } else {
+              logger.warn("Failed to fetch transaction memo for payment attribution", {
+                paymentId: payment.id,
+                transactionHash: txHash,
+                error: memoError.message,
+              });
+            }
             if (memoMatchMode === "required") {
               continue;
             }
@@ -763,8 +770,13 @@ export interface OracleHealthResponse extends HorizonHealthCheck {
  * Gets combined oracle + Soroban integration health for admin monitoring.
  */
 export function getOracleHealthWithSoroban(): OracleHealthResponse {
+  const health = oracleState.getHealthCheck();
+  const cbStats = horizonCircuitBreaker.getStats();
+
   return {
-    ...oracleState.getHealthCheck(),
+    ...health,
+    circuitBreakerState: cbStats.state,
+    circuitBreakerConsecutiveFailures: cbStats.consecutiveFailures,
     soroban: getSorobanHealthStatus(),
   };
 }
