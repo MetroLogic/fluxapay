@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import {
   Save,
   Settings,
@@ -14,22 +15,22 @@ import {
   Lock,
   Zap,
   CreditCard,
-  Loader2
+  Loader2,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { api } from "@/lib/api";
 import { Link } from "@/i18n/routing";
 
 const ACTION_MAP: Record<string, string> = {
-  'kyc_approve': 'KYC Approval',
-  'kyc_reject': 'KYC Rejection',
-  'config_change': 'Config Change',
-  'sweep_trigger': 'Sweep Trigger',
-  'sweep_complete': 'Sweep Complete',
-  'sweep_fail': 'Sweep Failure',
-  'settlement_batch_initiate': 'Settlement Start',
-  'settlement_batch_complete': 'Settlement Complete',
-  'settlement_batch_fail': 'Settlement Failure'
+  kyc_approve: "KYC Approval",
+  kyc_reject: "KYC Rejection",
+  config_change: "Config Change",
+  sweep_trigger: "Sweep Trigger",
+  sweep_complete: "Sweep Complete",
+  sweep_fail: "Sweep Failure",
+  settlement_batch_initiate: "Settlement Start",
+  settlement_batch_complete: "Settlement Complete",
+  settlement_batch_fail: "Settlement Failure",
 };
 
 interface ConfigState {
@@ -62,6 +63,7 @@ interface AuditLog {
 }
 
 const AdminConfigPage = () => {
+  const router = useRouter();
   const primaryColor = "oklch(0.205 0 0)";
   const primaryLight = "oklch(0.93 0 0)";
 
@@ -86,8 +88,35 @@ const AdminConfigPage = () => {
     },
   });
 
+  const [originalConfig, setOriginalConfig] = useState<ConfigState>(config);
+  const [isDirty, setIsDirty] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
+  const pendingNavigationRef = useRef<string | null>(null);
+
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(false);
+
+  useEffect(() => {
+    setOriginalConfig(config);
+  }, []);
+
+  useEffect(() => {
+    const isDirty = JSON.stringify(config) !== JSON.stringify(originalConfig);
+    setIsDirty(isDirty);
+  }, [config, originalConfig]);
+
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isDirty) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [isDirty]);
 
   useEffect(() => {
     const fetchRecentLogs = async () => {
@@ -96,24 +125,28 @@ const AdminConfigPage = () => {
         const response = await api.admin.auditLogs.list({ limit: 5, page: 1 });
         if (response.success) {
           // Transform API response to fit the local AuditLog interface
-          const transformedLogs: AuditLog[] = (response.data as Array<{
-            id: string;
-            action_type: string;
-            admin_id: string;
-            created_at: string;
-            entity_type: string | null;
-            entity_id: string | null;
-          }>).map((log) => ({
+          const transformedLogs: AuditLog[] = (
+            response.data as Array<{
+              id: string;
+              action_type: string;
+              admin_id: string;
+              created_at: string;
+              entity_type: string | null;
+              entity_id: string | null;
+            }>
+          ).map((log) => ({
             id: log.id,
             action: ACTION_MAP[log.action_type] || log.action_type,
             user: log.admin_id,
-            timestamp: new Date(log.created_at).toLocaleString('en-US', {
-              month: 'short',
-              day: '2-digit',
-              hour: '2-digit',
-              minute: '2-digit'
+            timestamp: new Date(log.created_at).toLocaleString("en-US", {
+              month: "short",
+              day: "2-digit",
+              hour: "2-digit",
+              minute: "2-digit",
             }),
-            description: log.entity_type ? `${log.entity_type}: ${log.entity_id}` : 'General action',
+            description: log.entity_type
+              ? `${log.entity_type}: ${log.entity_id}`
+              : "General action",
           }));
           setAuditLogs(transformedLogs);
         }
@@ -127,15 +160,56 @@ const AdminConfigPage = () => {
     fetchRecentLogs();
   }, []);
 
-  const [isSaving, setIsSaving] = useState(false);
-
-  const handleSave = () => {
+  const handleSave = async () => {
     setIsSaving(true);
-    // Simulate API call
-    setTimeout(() => {
-      setIsSaving(false);
+    const previousConfig = { ...originalConfig };
+
+    setOriginalConfig(config);
+    setIsDirty(false);
+
+    try {
+      await new Promise((resolve, reject) => {
+        setTimeout(() => {
+          const shouldFail = Math.random() < 0.1;
+          if (shouldFail) {
+            reject(new Error("Failed to save configuration"));
+          } else {
+            resolve(undefined);
+          }
+        }, 1500);
+      });
       toast.success("Configuration saved successfully");
-    }, 1500);
+    } catch (error) {
+      setOriginalConfig(previousConfig);
+      setIsDirty(true);
+      toast.error("Failed to save configuration. Changes have been reverted.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDiscardChanges = () => {
+    setConfig(originalConfig);
+    setIsDirty(false);
+    setShowUnsavedDialog(false);
+    toast.success("Changes discarded");
+  };
+
+  const handleNavigation = (path: string) => {
+    if (isDirty) {
+      pendingNavigationRef.current = path;
+      setShowUnsavedDialog(true);
+    } else {
+      router.push(path);
+    }
+  };
+
+  const handleLeavePage = () => {
+    setShowUnsavedDialog(false);
+    if (pendingNavigationRef.current) {
+      router.push(pendingNavigationRef.current);
+      pendingNavigationRef.current = null;
+    }
   };
 
   return (
@@ -158,6 +232,15 @@ const AdminConfigPage = () => {
               </div>
             </div>
             <div className="flex items-center gap-3">
+              {isDirty && (
+                <button
+                  onClick={handleDiscardChanges}
+                  disabled={isSaving}
+                  className="flex items-center gap-2 px-4 py-2.5 text-slate-700 rounded-lg font-medium hover:bg-slate-100 transition-all disabled:opacity-50 disabled:cursor-not-allowed border border-slate-300"
+                >
+                  Discard Changes
+                </button>
+              )}
               <button
                 onClick={handleSave}
                 disabled={isSaving}
@@ -597,7 +680,10 @@ const AdminConfigPage = () => {
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
               <div className="p-5 border-b border-slate-200 flex items-center justify-between">
                 <h3 className="font-bold text-slate-900">Audit History</h3>
-                <Link href="/admin/audit-logs" className="text-xs font-semibold text-slate-500 hover:text-slate-900 transition-colors">
+                <Link
+                  href="/admin/audit-logs"
+                  className="text-xs font-semibold text-slate-500 hover:text-slate-900 transition-colors"
+                >
                   View All
                 </Link>
               </div>
@@ -605,12 +691,16 @@ const AdminConfigPage = () => {
                 {loadingLogs ? (
                   <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
                     <Loader2 className="w-6 h-6 text-slate-300 animate-spin mb-2" />
-                    <p className="text-xs text-slate-400 font-medium">Loading trail...</p>
+                    <p className="text-xs text-slate-400 font-medium">
+                      Loading trail...
+                    </p>
                   </div>
                 ) : auditLogs.length === 0 ? (
-                   <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
+                  <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
                     <Clock className="w-6 h-6 text-slate-200 mb-2" />
-                    <p className="text-xs text-slate-400 font-medium">No recent actions</p>
+                    <p className="text-xs text-slate-400 font-medium">
+                      No recent actions
+                    </p>
                   </div>
                 ) : (
                   auditLogs.map((log) => (
@@ -623,7 +713,9 @@ const AdminConfigPage = () => {
                           {log.action}
                         </span>
                         <span className="text-[10px] font-medium text-slate-400 whitespace-nowrap bg-slate-100 px-1.5 py-0.5 rounded uppercase">
-                          {log.timestamp.includes(',') ? log.timestamp.split(',')[1].trim() : log.timestamp}
+                          {log.timestamp.includes(",")
+                            ? log.timestamp.split(",")[1].trim()
+                            : log.timestamp}
                         </span>
                       </div>
                       <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed mb-2">
@@ -633,7 +725,10 @@ const AdminConfigPage = () => {
                         <div className="w-4 h-4 rounded-full bg-slate-900 text-white flex items-center justify-center text-[8px] font-bold">
                           {log.user.charAt(0).toUpperCase()}
                         </div>
-                        <span className="text-[10px] font-semibold text-slate-500 truncate w-32" title={log.user}>
+                        <span
+                          className="text-[10px] font-semibold text-slate-500 truncate w-32"
+                          title={log.user}
+                        >
                           {log.user}
                         </span>
                       </div>
@@ -665,6 +760,37 @@ const AdminConfigPage = () => {
           </div>
         </div>
       </main>
+
+      {/* Unsaved Changes Dialog */}
+      {showUnsavedDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full shadow-xl">
+            <div className="flex items-center gap-3 mb-4">
+              <AlertCircle className="w-6 h-6 text-amber-500" />
+              <h3 className="text-lg font-bold text-slate-900">
+                Unsaved Changes
+              </h3>
+            </div>
+            <p className="text-sm text-slate-600 mb-6">
+              You have unsaved changes. Leave page?
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setShowUnsavedDialog(false)}
+                className="px-4 py-2 border border-slate-300 rounded-lg text-slate-700 font-medium hover:bg-slate-50 transition-colors"
+              >
+                Stay
+              </button>
+              <button
+                onClick={handleLeavePage}
+                className="px-4 py-2 bg-slate-900 text-white rounded-lg font-medium hover:bg-slate-800 transition-colors"
+              >
+                Leave
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

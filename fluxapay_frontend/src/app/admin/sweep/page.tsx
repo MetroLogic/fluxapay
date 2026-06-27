@@ -14,6 +14,8 @@ import {
   Database,
   Percent,
   CalendarClock,
+  Eye,
+  Play,
 } from "lucide-react";
 import { api } from "@/lib/api";
 
@@ -27,6 +29,19 @@ interface SweepStatus {
   settlement_fee_percent: number;
   cron_schedule: string;
   recent_batches: RecentBatch[];
+}
+
+interface EligiblePayment {
+  id: string;
+  merchantId: string;
+  merchantName: string;
+  amount: number;
+  currency: string;
+  confirmed: boolean;
+  createdAt: string;
+  minAgeMet: boolean;
+  notAlreadySwept: boolean;
+  reason?: string;
 }
 
 interface RecentBatch {
@@ -134,6 +149,14 @@ export default function SweepPage() {
   const [sweepResult, setSweepResult] = useState<SweepResult | null>(null);
   const [sweepError, setSweepError] = useState<string | null>(null);
   const [dryRun, setDryRun] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
+  const [eligiblePayments, setEligiblePayments] = useState<EligiblePayment[]>(
+    [],
+  );
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyPageSize] = useState(5);
 
   const [expandedMerchant, setExpandedMerchant] = useState<string | null>(null);
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -182,11 +205,46 @@ export default function SweepPage() {
     fetchStatus();
   }, [fetchStatus, addLog]);
 
+  const handlePreviewSweep = async () => {
+    setPreviewLoading(true);
+    setEligiblePayments([]);
+    addLog("info", "▶ Previewing eligible payments...");
+
+    try {
+      const res = await api.sweep.previewSweep();
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message ?? data.error ?? `HTTP ${res.status}`);
+      }
+
+      setEligiblePayments(data.payments || []);
+      setShowPreview(true);
+      addLog("info", `Found ${data.payments?.length || 0} eligible payments`);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      addLog("error", `Preview failed: ${msg}`);
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
   const handleTriggerSweep = async () => {
+    if (!dryRun && !showConfirmDialog) {
+      setShowConfirmDialog(true);
+      return;
+    }
+
+    setShowConfirmDialog(false);
     setSweepRunning(true);
     setSweepResult(null);
     setSweepError(null);
-    addLog("info", dryRun ? "▶ Triggering dry-run sweep..." : "▶ Triggering accounts sweep...");
+    setShowPreview(false);
+    addLog(
+      "info",
+      dryRun
+        ? "▶ Triggering dry-run sweep..."
+        : "▶ Triggering accounts sweep...",
+    );
 
     try {
       const res = await api.sweep.runSweep(dryRun);
@@ -222,7 +280,6 @@ export default function SweepPage() {
         `🏁 Batch complete in ${result.durationMs}ms — ${result.totalMerchantsSucceeded} succeeded, ${result.totalMerchantsFailed} failed`,
       );
 
-      // Refresh status after a sweep
       await fetchStatus();
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -268,6 +325,15 @@ export default function SweepPage() {
               className={`w-4 h-4 ${statusLoading ? "animate-spin" : ""}`}
             />
             Refresh Status
+          </button>
+
+          <button
+            onClick={handlePreviewSweep}
+            disabled={previewLoading || sweepRunning}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-all shadow-sm disabled:opacity-50"
+          >
+            <Eye className="w-4 h-4" />
+            {previewLoading ? "Loading..." : "Preview Sweep"}
           </button>
 
           <label className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition-all">
@@ -383,6 +449,179 @@ export default function SweepPage() {
           <span className="font-semibold text-slate-900 capitalize">
             {sweepStatus.exchange_partner}
           </span>
+        </div>
+      )}
+
+      {/* ── Preview Panel ── */}
+      {showPreview && (
+        <section className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+          <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Eye className="w-5 h-5 text-slate-500" />
+              <h2 className="font-bold text-slate-900">Sweep Preview</h2>
+            </div>
+            <button
+              onClick={() => setShowPreview(false)}
+              className="text-sm text-slate-500 hover:text-slate-700"
+            >
+              Close
+            </button>
+          </div>
+
+          <div className="p-6 space-y-6">
+            {/* Summary */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              {[
+                {
+                  label: "Eligible Payments",
+                  value: eligiblePayments.length,
+                  color: "text-slate-900",
+                },
+                {
+                  label: "Total USDC",
+                  value: `${eligiblePayments.reduce((sum, p) => sum + p.amount, 0).toFixed(2)} USDC`,
+                  color: "text-emerald-600",
+                },
+                {
+                  label: "Est. Fee",
+                  value: sweepStatus
+                    ? `${((eligiblePayments.reduce((sum, p) => sum + p.amount, 0) * sweepStatus.settlement_fee_percent) / 100).toFixed(2)} USDC`
+                    : "—",
+                  color: "text-amber-600",
+                },
+                {
+                  label: "Net Amount",
+                  value: sweepStatus
+                    ? `${(eligiblePayments.reduce((sum, p) => sum + p.amount, 0) * (1 - sweepStatus.settlement_fee_percent / 100)).toFixed(2)} USDC`
+                    : "—",
+                  color: "text-blue-600",
+                },
+              ].map((kpi) => (
+                <div
+                  key={kpi.label}
+                  className="bg-slate-50 rounded-xl p-4 border border-slate-100"
+                >
+                  <p className="text-[11px] font-semibold text-slate-500 mb-1">
+                    {kpi.label}
+                  </p>
+                  <p className={`text-lg font-black ${kpi.color}`}>
+                    {kpi.value}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            {/* Eligibility Criteria */}
+            <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
+              <h3 className="text-sm font-bold text-blue-900 mb-2">
+                Eligibility Criteria
+              </h3>
+              <ul className="text-xs text-blue-700 space-y-1">
+                <li>• Payment must be confirmed</li>
+                <li>• Payment must meet minimum age requirement</li>
+                <li>• Payment must not have been already swept</li>
+              </ul>
+            </div>
+
+            {/* Eligible Payments Table */}
+            {eligiblePayments.length > 0 && (
+              <div>
+                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">
+                  Eligible Payments
+                </h3>
+                <div className="rounded-xl border border-slate-200 overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-200">
+                        <th className="px-4 py-3 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                          Merchant
+                        </th>
+                        <th className="px-4 py-3 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                          Amount
+                        </th>
+                        <th className="px-4 py-3 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                          Status
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {eligiblePayments.map((payment) => (
+                        <tr
+                          key={payment.id}
+                          className="hover:bg-slate-50 transition-colors"
+                        >
+                          <td className="px-4 py-3">
+                            <p className="font-semibold text-slate-900">
+                              {payment.merchantName}
+                            </p>
+                            <p className="text-[11px] text-slate-400 font-mono">
+                              {payment.merchantId}
+                            </p>
+                          </td>
+                          <td className="px-4 py-3 text-right font-mono text-slate-700">
+                            {payment.amount.toFixed(2)} {payment.currency}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className="inline-flex items-center gap-1 text-xs text-emerald-700">
+                              <CheckCircle className="w-3 h-3" />
+                              Eligible
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {eligiblePayments.length === 0 && (
+              <div className="flex items-center gap-3 p-4 bg-amber-50 border border-amber-100 rounded-xl text-amber-700 text-sm font-medium">
+                <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                No eligible payments found for sweep.
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* ── Confirmation Dialog ── */}
+      {showConfirmDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full shadow-xl">
+            <div className="flex items-center gap-3 mb-4">
+              <AlertTriangle className="w-6 h-6 text-amber-500" />
+              <h3 className="text-lg font-bold text-slate-900">
+                Confirm Sweep
+              </h3>
+            </div>
+            <p className="text-sm text-slate-600 mb-4">
+              You are about to execute a real sweep operation. This will process{" "}
+              {eligiblePayments.length} eligible payments totaling approximately{" "}
+              {eligiblePayments
+                .reduce((sum, p) => sum + p.amount, 0)
+                .toFixed(2)}{" "}
+              USDC.
+            </p>
+            <p className="text-sm text-slate-600 mb-6">
+              This action cannot be undone. Are you sure you want to proceed?
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setShowConfirmDialog(false)}
+                className="px-4 py-2 border border-slate-300 rounded-lg text-slate-700 font-medium hover:bg-slate-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleTriggerSweep}
+                className="px-4 py-2 bg-slate-900 text-white rounded-lg font-medium hover:bg-slate-800 transition-colors flex items-center gap-2"
+              >
+                <Play className="w-4 h-4" />
+                Execute Sweep
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -619,13 +858,33 @@ export default function SweepPage() {
       {/* ── Recent Batches ── */}
       {sweepStatus && sweepStatus.recent_batches.length > 0 && (
         <section className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-          <div className="px-6 py-4 border-b border-slate-100">
-            <h2 className="font-bold text-slate-900">
-              Recent Settlement Batches
-            </h2>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Last 5 settlement records
-            </p>
+          <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+            <div>
+              <h2 className="font-bold text-slate-900">
+                Recent Settlement Batches
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">Sweep history</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setHistoryPage(Math.max(1, historyPage - 1))}
+                disabled={historyPage === 1}
+                className="px-3 py-1 text-sm border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50"
+              >
+                Previous
+              </button>
+              <span className="text-sm text-slate-600">Page {historyPage}</span>
+              <button
+                onClick={() => setHistoryPage(historyPage + 1)}
+                disabled={
+                  historyPage * historyPageSize >=
+                  sweepStatus.recent_batches.length
+                }
+                className="px-3 py-1 text-sm border border-slate-200 rounded hover:bg-slate-50 disabled:opacity-50"
+              >
+                Next
+              </button>
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -652,31 +911,36 @@ export default function SweepPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {sweepStatus.recent_batches.map((b) => (
-                  <tr
-                    key={b.id}
-                    className="hover:bg-slate-50 transition-colors"
-                  >
-                    <td className="px-5 py-3 font-mono text-xs text-slate-500 truncate max-w-[120px]">
-                      {b.id}
-                    </td>
-                    <td className="px-5 py-3 text-slate-700 font-medium text-xs font-mono">
-                      {b.merchantId}
-                    </td>
-                    <td className="px-5 py-3 text-right font-mono text-slate-700">
-                      {Number(b.usdc_amount).toFixed(4)}
-                    </td>
-                    <td className="px-5 py-3 text-right font-mono font-bold text-slate-900">
-                      {b.currency} {Number(b.net_amount).toFixed(2)}
-                    </td>
-                    <td className="px-5 py-3">
-                      <StatusPill status={b.status} />
-                    </td>
-                    <td className="px-5 py-3 text-slate-500 text-xs">
-                      {fmtDate(b.processed_date ?? b.created_at)}
-                    </td>
-                  </tr>
-                ))}
+                {sweepStatus.recent_batches
+                  .slice(
+                    (historyPage - 1) * historyPageSize,
+                    historyPage * historyPageSize,
+                  )
+                  .map((b) => (
+                    <tr
+                      key={b.id}
+                      className="hover:bg-slate-50 transition-colors"
+                    >
+                      <td className="px-5 py-3 font-mono text-xs text-slate-500 truncate max-w-[120px]">
+                        {b.id}
+                      </td>
+                      <td className="px-5 py-3 text-slate-700 font-medium text-xs font-mono">
+                        {b.merchantId}
+                      </td>
+                      <td className="px-5 py-3 text-right font-mono text-slate-700">
+                        {Number(b.usdc_amount).toFixed(4)}
+                      </td>
+                      <td className="px-5 py-3 text-right font-mono font-bold text-slate-900">
+                        {b.currency} {Number(b.net_amount).toFixed(2)}
+                      </td>
+                      <td className="px-5 py-3">
+                        <StatusPill status={b.status} />
+                      </td>
+                      <td className="px-5 py-3 text-slate-500 text-xs">
+                        {fmtDate(b.processed_date ?? b.created_at)}
+                      </td>
+                    </tr>
+                  ))}
               </tbody>
             </table>
           </div>
