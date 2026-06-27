@@ -418,11 +418,12 @@ export async function logSettlementBatch(params: {
  */
 export async function updateSettlementBatchCompletion(params: {
   auditLogId: string;
-  status: "completed" | "failed";
+  status: "completed" | "failed" | "partial";
   transactionCount?: number;
   totalAmount?: number;
   currency?: string;
   failureReason?: string;
+  merchantResults?: SettlementBatchDetails["merchant_results"];
 }): Promise<any | null> {
   return await safeAuditLog(async () => {
     const existingLog = await prisma.auditLog.findUnique({
@@ -441,12 +442,13 @@ export async function updateSettlementBatchCompletion(params: {
       currency: params.currency,
       completed_at: new Date().toISOString(),
       failure_reason: params.failureReason,
+      merchant_results: params.merchantResults,
     };
 
     const completionActionType =
-      params.status === "completed"
-        ? AuditActionType.settlement_batch_complete
-        : AuditActionType.settlement_batch_fail;
+      params.status === "failed"
+        ? AuditActionType.settlement_batch_fail
+        : AuditActionType.settlement_batch_complete;
 
     const updatedLog = await prisma.auditLog.update({
       where: { id: params.auditLogId },
@@ -456,7 +458,7 @@ export async function updateSettlementBatchCompletion(params: {
       },
     });
 
-    emitStructuredLog(updatedLog, params.status === "completed");
+    emitStructuredLog(updatedLog, params.status !== "failed");
     return updatedLog;
   }, `update_settlement_batch_completion_${params.auditLogId}`);
 }
@@ -623,5 +625,86 @@ export async function logWebhookSecretRotation(params: {
     entity_type: AuditEntityType.webhook_secret,
     entity_id: params.merchantId,
     details,
+  });
+}
+
+/** Log data export requested */
+export async function logDataExportRequested(params: {
+  actorId: string;
+  merchantId: string;
+  jobId: string;
+  requestedBy: string;
+}): Promise<any | null> {
+  return await createAuditLog({
+    admin_id: params.actorId,
+    action_type: AuditActionType.data_export_requested,
+    entity_type: AuditEntityType.data_export_job,
+    entity_id: params.jobId,
+    details: {
+      merchant_id: params.merchantId,
+      job_id: params.jobId,
+      requested_by: params.requestedBy,
+      timestamp: new Date().toISOString(),
+    },
+  });
+}
+
+export async function logDataExportCompleted(params: {
+  actorId: string;
+  merchantId: string;
+  jobId: string;
+  rowCount: number;
+}): Promise<any | null> {
+  return await createAuditLog({
+    admin_id: params.actorId,
+    action_type: AuditActionType.data_export_completed,
+    entity_type: AuditEntityType.data_export_job,
+    entity_id: params.jobId,
+    details: {
+      merchant_id: params.merchantId,
+      job_id: params.jobId,
+      row_count: params.rowCount,
+      timestamp: new Date().toISOString(),
+    },
+  });
+}
+
+export async function logDataExportFailed(params: {
+  actorId: string;
+  merchantId: string;
+  jobId: string;
+  error: string;
+}): Promise<any | null> {
+  return await createAuditLog({
+    admin_id: params.actorId,
+    action_type: AuditActionType.data_export_failed,
+    entity_type: AuditEntityType.data_export_job,
+    entity_id: params.jobId,
+    details: {
+      merchant_id: params.merchantId,
+      job_id: params.jobId,
+      error: params.error.slice(0, 500),
+      timestamp: new Date().toISOString(),
+    },
+  });
+}
+
+export async function logDataExportDownloaded(params: {
+  actorId: string;
+  merchantId: string;
+  jobId: string;
+  rowCount: number;
+}): Promise<any | null> {
+  return await createAuditLog({
+    admin_id: params.actorId,
+    action_type: AuditActionType.data_export_downloaded,
+    entity_type: AuditEntityType.data_export_job,
+    entity_id: params.jobId,
+    details: {
+      merchant_id: params.merchantId,
+      job_id: params.jobId,
+      row_count: params.rowCount,
+      timestamp: new Date().toISOString(),
+    },
   });
 }

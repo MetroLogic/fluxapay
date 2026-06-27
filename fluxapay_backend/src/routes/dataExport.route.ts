@@ -1,8 +1,7 @@
 import { Router } from "express";
-import { authenticateToken } from "../middleware/auth.middleware";
 import { authenticateApiKey } from "../middleware/apiKeyAuth.middleware";
 import { merchantApiKeyRateLimit } from "../middleware/rateLimit.middleware";
-import { adminAuth } from "../middleware/adminAuth.middleware";
+import { authenticateAdmin, requireAdminRole } from "../middleware/adminRbac.middleware";
 import {
   requestExport,
   getExportStatus,
@@ -89,7 +88,7 @@ router.get("/:jobId/download", authenticateApiKey, merchantApiKeyRateLimit(), do
  *       403:
  *         description: Forbidden
  */
-router.post("/admin/:merchantId", authenticateToken, adminAuth, adminRequestExport);
+router.post("/admin/:merchantId", authenticateAdmin, requireAdminRole("merchants:read"), adminRequestExport);
 /**
  * @swagger
  * /api/v1/merchants/export/admin/{merchantId}/{jobId}/download:
@@ -113,6 +112,6 @@ router.post("/admin/:merchantId", authenticateToken, adminAuth, adminRequestExpo
  *       404:
  *         description: Not found
  */
-router.get("/admin/:merchantId/:jobId/download", authenticateToken, adminAuth, adminDownloadExport);
+router.get("/admin/:merchantId/:jobId/download", authenticateAdmin, requireAdminRole("merchants:read"), adminDownloadExport);
 
 export default router;

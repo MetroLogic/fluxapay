@@ -81,12 +81,22 @@ export interface SweepOperationDetails {
 export interface SettlementBatchDetails {
   batch_id: string;
   initiation_reason: string;
-  status?: "completed" | "failed";
+  status?: "completed" | "failed" | "partial";
   transaction_count?: number;
   total_amount?: number;
   currency?: string;
   completed_at?: string;
   failure_reason?: string;
+  merchant_results?: Array<{
+    merchantId: string;
+    status: string;
+    payment_results?: Array<{
+      paymentId: string;
+      status: string;
+      error?: string;
+      retry_count?: number;
+    }>;
+  }>;
 }
 
 export interface MerchantProfileChangeDetails {

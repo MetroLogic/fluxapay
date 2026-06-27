@@ -37,11 +37,14 @@ import dashboardRoutes from "./routes/dashboard.route";
 import auditRoutes from "./routes/audit.route";
 import merchantDeletionRoutes from "./routes/merchantDeletion.route";
 import dataExportRoutes from "./routes/dataExport.route";
+import usageRoutes from "./routes/usage.route";
+import adminUsageRoutes from "./routes/adminUsage.route";
 import oracleRoutes from "./routes/oracle.route";
 import chargesRoutes from "./routes/charges.route";
 import apiKeyRoutes from "./routes/apiKey.route";
 import authRoutes from "./routes/auth.route";
 import escrowRoutes from "./routes/escrow.route";
+import emailRoutes from "./routes/email.route";
 
 const app = express();
 const prisma = new PrismaClient();
@@ -172,6 +175,7 @@ if (process.env.NODE_ENV !== "production") {
 const merchantRouter = Router();
 merchantRouter.use("/kyc", kycRoutes);
 merchantRouter.use("/export", dataExportRoutes);
+merchantRouter.use("/", usageRoutes);
 merchantRouter.use("/", merchantDeletionRoutes);
 merchantRouter.use("/", merchantRoutes);
 app.use("/api/v1/merchants", merchantRouter);
@@ -196,12 +200,14 @@ app.use("/api/v1/dashboard", merchantRateLimit(), dashboardRoutes);
 
 // ── Admin routes ───────────────────────────────────────────────────────────────
 app.use("/api/v1/admin/reconciliation", reconciliationRoutes);
+app.use("/api/v1/admin/usage", adminUsageRoutes);
 app.use("/api/v1/admin/settlement", settlementBatchRoutes);
 app.use("/api/v1/admin/sweep", sweepRoutes);
 app.use("/api/v1/admin/system", systemRoutes);
 app.use("/api/v1/admin/config", adminConfigRoutes);
 app.use("/api/v1/admin", auditRoutes);
 app.use("/api/v1", oracleRoutes);
+app.use("/api/v1/email", emailRoutes);
 
 // Health probes (no auth, not rate-limited)
 app.use("/health", createHealthRouter(prisma));
