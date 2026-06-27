@@ -119,7 +119,7 @@ export async function uploadKycDocumentService(
   // Validate file size (max 10MB)
   const maxSize = 10 * 1024 * 1024;
   if (file.size > maxSize) {
-    throw apiError(400, ErrorCode.FILE_TOO_LARGE, "File size exceeds 10MB limit");
+    throw apiError(413, ErrorCode.FILE_TOO_LARGE, "File size exceeds 10MB limit");
   }
 
   // Get merchant KYC

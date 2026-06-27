@@ -11,6 +11,7 @@ import {
 import { validate } from "../middleware/validation.middleware";
 import * as kycSchema from "../schemas/kyc.schema";
 import { authenticateToken } from "../middleware/auth.middleware";
+import { multerErrorHandler } from "../middleware/multerError.middleware";
 
 const router = Router();
 
@@ -223,14 +224,28 @@ router.post(
  *                   $ref: '#/components/schemas/KYCDocument'
  *       400:
  *         description: Validation error, invalid file type, or KYC not submitted
+ *       413:
+ *         description: File exceeds 10MB limit
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *             example:
+ *               code: FILE_TOO_LARGE
+ *               message: Uploaded file exceeds the 10mb limit.
  *       401:
  *         description: Unauthorized
  */
 router.post(
   "/documents",
   authenticateToken,
-  upload.single("file"),
-  uploadKycDocument
+  (req, res, next) => {
+    upload.single("file")(req, res, (err) => {
+      if (err) return multerErrorHandler(err, req, res, next);
+      next();
+    });
+  },
+  uploadKycDocument,
 );
 
 /**

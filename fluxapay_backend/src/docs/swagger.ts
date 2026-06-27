@@ -6,7 +6,10 @@ const options: swaggerJsdoc.Options = {
         info: {
             title: 'Fluxapay API',
             version: '1.0.0',
-            description: 'API documentation for Fluxapay Backend',
+            description:
+                'API documentation for Fluxapay Backend.\n\n' +
+                '**Request size limits:** JSON request bodies are limited to **1MB** (`REQUEST_BODY_SIZE_LIMIT`). ' +
+                'Multipart file uploads are limited to **10MB** per file.',
         },
         servers: [
             {
@@ -46,7 +49,8 @@ const options: swaggerJsdoc.Options = {
                             description: 'Machine-readable error code',
                             enum: [
                                 'INVALID_API_KEY', 'MERCHANT_NOT_FOUND', 'PAYMENT_NOT_FOUND',
-                                'RATE_LIMIT_EXCEEDED', 'VALIDATION_ERROR', 'INTERNAL_ERROR',
+                                'RATE_LIMIT_EXCEEDED', 'PLAN_LIMIT_EXCEEDED', 'VALIDATION_ERROR',
+                                'PAYLOAD_TOO_LARGE', 'FILE_TOO_LARGE', 'FORBIDDEN', 'INTERNAL_ERROR',
                             ],
                             example: 'VALIDATION_ERROR',
                         },

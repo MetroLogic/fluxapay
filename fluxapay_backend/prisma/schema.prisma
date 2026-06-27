@@ -67,6 +67,7 @@ model Merchant {
   dailyReconciliationReports DailyReconciliationReport[]
   apiKeys               ApiKey[]
   refreshTokens            RefreshToken[]
+  usagePeriods          MerchantUsagePeriod[]
 }
 
 model Customer {
@@ -157,17 +158,45 @@ model BankAccount {
 }
 
 model Plan {
-  id            String                 @id @default(cuid())
-  name          String
-  slug          String                 @unique
-  description   String?
-  amount        Decimal
-  currency      String
-  interval      String                 // monthly, yearly
-  is_active     Boolean                @default(true)
-  created_at    DateTime               @default(now())
-  updated_at    DateTime               @updatedAt
-  subscriptions MerchantSubscription[]
+  id                      String                 @id @default(cuid())
+  name                    String
+  slug                    String                 @unique
+  description             String?
+  amount                  Decimal
+  currency                String
+  interval                String                 // monthly, yearly
+  is_active               Boolean                @default(true)
+  /** Monthly API call quota (null = unlimited) */
+  api_call_limit          Int?
+  /** Monthly charge creation quota (null = unlimited) */
+  charge_limit            Int?
+  /** Monthly settlement volume quota in USDC (null = unlimited) */
+  settlement_volume_limit Decimal?
+  /** hard_block | soft_overage */
+  overage_mode            String                 @default("hard_block")
+  /** Feature flags, e.g. ["data_export_pii"] */
+  features                Json                   @default("[]")
+  created_at              DateTime               @default(now())
+  updated_at              DateTime               @updatedAt
+  subscriptions           MerchantSubscription[]
+}
+
+/// Per-merchant usage counters for the current billing period.
+model MerchantUsagePeriod {
+  id                 String   @id @default(cuid())
+  merchant           Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  merchantId         String
+  period_start       DateTime
+  period_end         DateTime
+  api_calls          Int      @default(0)
+  charges_created    Int      @default(0)
+  settlement_volume  Decimal  @default(0)
+  warning_80_sent_at DateTime?
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+
+  @@unique([merchantId, period_start])
+  @@index([merchantId])
 }
 
 model MerchantSubscription {
@@ -648,6 +677,10 @@ enum AuditActionType {
   db_backup_success
   db_backup_failed
   db_backup_retention_purge
+  data_export_requested
+  data_export_completed
+  data_export_failed
+  data_export_downloaded
 }
 
 enum AuditEntityType {
@@ -663,6 +696,7 @@ enum AuditEntityType {
   api_key
   webhook_secret
   database_backup
+  data_export_job
 }
 
 /// Tracks a merchant's right-to-erasure request.

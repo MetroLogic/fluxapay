@@ -149,6 +149,8 @@ export const ErrorCode = {
   // Notification preferences
   INVALID_REMINDER_MINUTES: "INVALID_REMINDER_MINUTES",
 
+  PLAN_LIMIT_EXCEEDED: "PLAN_LIMIT_EXCEEDED",
+
   // Misc
   FORBIDDEN: "FORBIDDEN",
   NOT_FOUND: "NOT_FOUND",
