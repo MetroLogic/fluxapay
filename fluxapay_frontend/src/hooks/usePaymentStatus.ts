@@ -12,6 +12,7 @@ interface UsePaymentStatusReturn {
   connectionType: ConnectionType;
   isOffline: boolean;
   retryConnection: () => Promise<void>;
+  serverTimeOffset: number;
 }
 
 /**
@@ -25,6 +26,7 @@ export function usePaymentStatus(paymentId: string): UsePaymentStatusReturn {
   const [error, setError] = useState<string | null>(null);
   const [connectionType, setConnectionType] = useState<ConnectionType>(null);
   const [isOffline, setIsOffline] = useState<boolean>(false);
+  const [serverTimeOffset, setServerTimeOffset] = useState<number>(0);
 
   // Use refs to track mutable state without triggering re-renders or lint issues
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -59,6 +61,15 @@ export function usePaymentStatus(paymentId: string): UsePaymentStatusReturn {
     };
   }, []);
 
+  const calculateServerTimeOffset = (dateHeader: string | null) => {
+    if (dateHeader) {
+      const serverTime = new Date(dateHeader).getTime();
+      const clientTime = new Date().getTime();
+      return serverTime - clientTime;
+    }
+    return 0;
+  };
+
   const fetchPayment = useCallback(async () => {
     try {
       const response = await fetch(`/api/payments/${paymentId}`);
@@ -71,6 +82,11 @@ export function usePaymentStatus(paymentId: string): UsePaymentStatusReturn {
         }
         setLoading(false);
         return;
+      }
+
+      const dateHeader = response.headers.get('date');
+      if (dateHeader) {
+        setServerTimeOffset(calculateServerTimeOffset(dateHeader));
       }
 
       const data = await response.json();
@@ -256,5 +272,5 @@ export function usePaymentStatus(paymentId: string): UsePaymentStatusReturn {
     await fetchPayment();
   }, [fetchPayment]);
 
-  return { payment, loading, error, connectionType, isOffline, retryConnection };
+  return { payment, loading, error, connectionType, isOffline, retryConnection, serverTimeOffset };
 }
