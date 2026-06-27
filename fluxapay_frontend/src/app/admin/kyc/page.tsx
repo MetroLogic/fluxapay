@@ -13,11 +13,15 @@ import {
   Shield,
   User,
   Globe,
+  Trash2,
+  MessageCircle,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { toastApiError } from "@/lib/toastApiError";
 import EmptyState from "@/components/EmptyState";
 import { api } from "@/lib/api";
+import BulkRejectModal from "@/features/admin/kyc/BulkRejectModal";
+import BulkRequestInfoModal from "@/features/admin/kyc/BulkRequestInfoModal";
 import {
   useKycSubmissions,
   useKycDetails,
@@ -43,6 +47,9 @@ const AdminKycPage = () => {
   );
   const [rejectionReason, setRejectionReason] = useState("");
   const [showRejectModal, setShowRejectModal] = useState(false);
+  const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
+  const [showBulkRejectModal, setShowBulkRejectModal] = useState(false);
+  const [showBulkRequestInfoModal, setShowBulkRequestInfoModal] = useState(false);
 
   const { applications, isLoading, mutate } = useKycSubmissions({
     status: statusFilter !== "all" ? statusFilter : undefined,
@@ -129,6 +136,56 @@ const AdminKycPage = () => {
       "rejected",
       rejectionReason,
     );
+  };
+
+  const handleBulkReject = async (reason: string, notes: string) => {
+    const merchantIds = Array.from(selectedRows);
+    if (merchantIds.length === 0) return;
+    try {
+      await api.kyc.admin.bulkReject(merchantIds, reason, notes);
+      toast.success(`${merchantIds.length} applications rejected`);
+      setSelectedRows(new Set());
+      setShowBulkRejectModal(false);
+      void mutate();
+      return { succeeded: merchantIds.length, failed: [] };
+    } catch (err) {
+      toastApiError(err);
+      return { succeeded: 0, failed: merchantIds.map(id => ({ id, error: "Failed" })) };
+    }
+  };
+
+  const handleBulkRequestInfo = async (message: string) => {
+    const merchantIds = Array.from(selectedRows);
+    if (merchantIds.length === 0) return;
+    try {
+      await api.kyc.admin.bulkRequestInfo(merchantIds, message);
+      toast.success(`Requested info from ${merchantIds.length} merchants`);
+      setSelectedRows(new Set());
+      setShowBulkRequestInfoModal(false);
+      void mutate();
+      return { succeeded: merchantIds.length, failed: [] };
+    } catch (err) {
+      toastApiError(err);
+      return { succeeded: 0, failed: merchantIds.map(id => ({ id, error: "Failed" })) };
+    }
+  };
+
+  const toggleRowSelection = (merchantId: string) => {
+    const newSelected = new Set(selectedRows);
+    if (newSelected.has(merchantId)) {
+      newSelected.delete(merchantId);
+    } else {
+      newSelected.add(merchantId);
+    }
+    setSelectedRows(newSelected);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedRows.size === filteredApplications.length) {
+      setSelectedRows(new Set());
+    } else {
+      setSelectedRows(new Set(filteredApplications.map(a => a.merchantId)));
+    }
   };
 
   const filteredApplications = applications.filter((app) => {
@@ -271,12 +328,45 @@ const AdminKycPage = () => {
           </div>
         </div>
 
+        {/* Bulk Actions Bar */}
+        {selectedRows.size > 0 && (
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6 flex items-center justify-between">
+            <span className="text-sm font-medium text-slate-900">
+              {selectedRows.size} application{selectedRows.size !== 1 ? "s" : ""} selected
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowBulkRequestInfoModal(true)}
+                className="px-3 py-1.5 text-sm font-medium text-blue-700 bg-white border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors flex items-center gap-2"
+              >
+                <MessageCircle className="w-4 h-4" />
+                Request Info
+              </button>
+              <button
+                onClick={() => setShowBulkRejectModal(true)}
+                className="px-3 py-1.5 text-sm font-medium text-rose-700 bg-white border border-rose-200 rounded-lg hover:bg-rose-50 transition-colors flex items-center gap-2"
+              >
+                <Trash2 className="w-4 h-4" />
+                Reject
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Table */}
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-slate-200">
               <thead className="bg-slate-50">
                 <tr>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider w-8">
+                    <input
+                      type="checkbox"
+                      checked={selectedRows.size === filteredApplications.length && filteredApplications.length > 0}
+                      onChange={toggleSelectAll}
+                      className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                    />
+                  </th>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-slate-700 uppercase tracking-wider">
                     Reference ID
                   </th>
@@ -304,11 +394,20 @@ const AdminKycPage = () => {
                 ) : (
                   filteredApplications.map((app) => {
                     const statusConfig = getStatusConfig(app.status);
+                    const isSelected = selectedRows.has(app.merchantId);
                     return (
                       <tr
                         key={app.id}
-                        className="hover:bg-slate-50/50 transition-colors"
+                        className={`hover:bg-slate-50/50 transition-colors ${isSelected ? 'bg-blue-50' : ''}`}
                       >
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleRowSelection(app.merchantId)}
+                            className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                          />
+                        </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className="text-sm font-medium text-slate-900 font-mono">
                             {app.id}
@@ -369,6 +468,24 @@ const AdminKycPage = () => {
           </div>
         </div>
       </div>
+
+      {/* Bulk Reject Modal */}
+      {showBulkRejectModal && (
+        <BulkRejectModal
+          count={selectedRows.size}
+          onConfirm={handleBulkReject}
+          onClose={() => setShowBulkRejectModal(false)}
+        />
+      )}
+
+      {/* Bulk Request Info Modal */}
+      {showBulkRequestInfoModal && (
+        <BulkRequestInfoModal
+          count={selectedRows.size}
+          onConfirm={handleBulkRequestInfo}
+          onClose={() => setShowBulkRequestInfoModal(false)}
+        />
+      )}
 
       {/* Application Detail Modal */}
       {selectedApplication && (

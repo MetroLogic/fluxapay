@@ -479,6 +479,16 @@ export const api = {
           method: "PATCH",
           body: JSON.stringify(body),
         }),
+      bulkReject: (merchantIds: string[], reason: string, notes?: string) =>
+        fetchWithAuth("/api/merchants/kyc/admin/bulk-reject", {
+          method: "POST",
+          body: JSON.stringify({ merchantIds, reason, notes }),
+        }),
+      bulkRequestInfo: (merchantIds: string[], message: string) =>
+        fetchWithAuth("/api/merchants/kyc/admin/bulk-request-info", {
+          method: "POST",
+          body: JSON.stringify({ merchantIds, message }),
+        }),
     },
   },
 
