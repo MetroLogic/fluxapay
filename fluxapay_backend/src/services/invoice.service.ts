@@ -225,9 +225,16 @@ export async function updateInvoiceStatusService(
     throw new Error("Invalid status transition");
   }
 
+  // Update invoice with status and paid_at timestamp if transitioning to paid
+  const updateData: any = { status: newStatus as InvoiceStatus };
+  if (newStatus === "paid") {
+    updateData.paid_at = new Date();
+  }
+
   const updatedInvoice = await prisma.invoice.update({
     where: { id: invoiceId },
-    data: { status: newStatus as InvoiceStatus },
+    data: updateData,
+    include: { payment: true },
   });
 
   // Fire webhook for paid / overdue transitions
@@ -237,10 +244,17 @@ export async function updateInvoiceStatusService(
         event: `invoice.${newStatus}`,
         invoice_id: updatedInvoice.id,
         invoice_number: updatedInvoice.invoice_number,
+        merchant_id: merchantId,
         amount: updatedInvoice.amount.toString(),
         currency: updatedInvoice.currency,
         status: newStatus,
         customer_email: updatedInvoice.customer_email,
+        ...(newStatus === "paid" && updatedInvoice.paid_at && {
+          paid_at: updatedInvoice.paid_at.toISOString(),
+        }),
+        ...(newStatus === "paid" && updatedInvoice.payment?.transaction_hash && {
+          payment_tx_hash: updatedInvoice.payment.transaction_hash,
+        }),
         updated_at: updatedInvoice.updated_at.toISOString(),
       };
       await createAndDeliverWebhook(merchantId, `invoice_${newStatus}` as any, payload);

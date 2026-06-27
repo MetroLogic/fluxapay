@@ -2,6 +2,28 @@
  * Webhook Event Mapping Utility
  * Maps between canonical event names (product spec) and legacy names (backend enums)
  * Supports backward compatibility for existing integrations
+ *
+ * Supported Events:
+ * - payment.* — Payment lifecycle events (created, pending, confirmed, failed, settled, etc.)
+ * - refund.* — Refund events (created, completed, failed)
+ * - subscription.* — Subscription events (created, cancelled, renewed)
+ * - invoice.paid — Emitted when an invoice is marked as paid
+ * - invoice.overdue — Emitted when an invoice transitions to overdue status
+ *
+ * Invoice Paid Webhook Payload:
+ * {
+ *   event: "invoice.paid",
+ *   invoice_id: string,
+ *   invoice_number: string,
+ *   merchant_id: string,
+ *   amount: string (in cents),
+ *   currency: string,
+ *   status: "paid",
+ *   customer_email: string,
+ *   paid_at: ISO 8601 timestamp,
+ *   payment_tx_hash: string (blockchain transaction hash),
+ *   updated_at: ISO 8601 timestamp
+ * }
  */
 
 export type CanonicalEventName =

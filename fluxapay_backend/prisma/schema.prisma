@@ -486,6 +486,7 @@ model Invoice {
   status         InvoiceStatus @default(draft)
   due_date       DateTime?
   sent_at        DateTime?
+  paid_at        DateTime?
   voided_at      DateTime?
   created_at     DateTime      @default(now())
   updated_at     DateTime      @updatedAt
