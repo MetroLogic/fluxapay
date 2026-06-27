@@ -1,14 +1,39 @@
 import dotenv from "dotenv";
 import { Resend } from "resend";
 import { isDevEnv } from "../helpers/env.helper";
+import { isEmailSuppressed } from "./emailSuppression.service";
+import { getLogger } from "../utils/logger";
 dotenv.config();
 
 let _resend: Resend | undefined;
+const logger = (getLogger("EmailService") ?? { warn: () => {} }) as { warn: (msg: string, meta?: unknown) => void };
+
 function getResend(): Resend {
   if (!_resend) {
     _resend = new Resend(process.env.RESEND_API_KEY);
   }
   return _resend;
+}
+
+function buildUnsubscribeFooter(email: string): string {
+  const baseUrl = process.env.BASE_URL || "http://localhost:3000";
+  const unsubscribeUrl = `${baseUrl}/api/v1/email/unsubscribe?email=${encodeURIComponent(email)}`;
+  return `
+    <p style="color: #666; font-size: 12px; margin-top: 24px; border-top: 1px solid #eee; padding-top: 16px;">
+      <a href="${unsubscribeUrl}">Unsubscribe</a> from FluxaPay merchant notification emails.
+    </p>
+  `;
+}
+
+async function sendIfNotSuppressed(
+  to: string,
+  sendFn: () => Promise<void>,
+): Promise<void> {
+  if (await isEmailSuppressed(to)) {
+    logger.warn("Skipping email send — address is suppressed", { to });
+    return;
+  }
+  await sendFn();
 }
 
 export async function sendWelcomeEmail(
@@ -18,6 +43,7 @@ export async function sendWelcomeEmail(
   dashboardUrl: string,
 ) {
   try {
+    await sendIfNotSuppressed(to, async () => {
     const response = await getResend().emails.send({
       from: process.env.MAIL_FROM || "noreply@fluxapay.com",
       to,
@@ -50,6 +76,7 @@ export async function sendWelcomeEmail(
       }
       throw new Error("Failed to send welcome email");
     }
+    });
   } catch (err) {
     if (isDevEnv()) {
       console.error("Error sending welcome email:", err);
@@ -60,6 +87,7 @@ export async function sendWelcomeEmail(
 
 export async function sendOtpEmail(to: string, otp: string) {
   try {
+    await sendIfNotSuppressed(to, async () => {
     const response = await getResend().emails.send({
       from: process.env.MAIL_FROM || "noreply@fluxapay.com",
       to,
@@ -72,6 +100,7 @@ export async function sendOtpEmail(to: string, otp: string) {
       }
       throw new Error("Failed to send OTP email");
     }
+    });
   } catch (err) {
     if (isDevEnv()) {
       console.error("Error sending OTP:", err);
@@ -96,6 +125,7 @@ export async function sendCheckoutExpiryReminderEmail(
   details: CheckoutExpiryReminderDetails,
 ) {
   try {
+    await sendIfNotSuppressed(to, async () => {
     const response = await getResend().emails.send({
       from: process.env.MAIL_FROM || "noreply@fluxapay.com",
       to,
@@ -121,6 +151,7 @@ export async function sendCheckoutExpiryReminderEmail(
           </p>
           <p style="color: #666; font-size: 13px;">This is an automated alert. No action is required — this is for your awareness only.</p>
           <p>— The FluxaPay Team</p>
+          ${buildUnsubscribeFooter(to)}
         </div>
       `,
     });
@@ -128,6 +159,7 @@ export async function sendCheckoutExpiryReminderEmail(
       if (isDevEnv()) console.error("Error sending expiry reminder email:", response.error);
       throw new Error("Failed to send expiry reminder email");
     }
+    });
   } catch (err) {
     if (isDevEnv()) console.error("Error sending expiry reminder email:", err);
     throw err;
@@ -149,6 +181,7 @@ export async function sendPaymentConfirmationEmail(
   details: PaymentConfirmationDetails,
 ) {
   try {
+    await sendIfNotSuppressed(to, async () => {
     const response = await getResend().emails.send({
       from: process.env.MAIL_FROM || "noreply@fluxapay.com",
       to,
@@ -194,6 +227,7 @@ export async function sendPaymentConfirmationEmail(
             This is an automated confirmation email. If you have any questions, please contact support.
           </p>
           <p>— The FluxaPay Team</p>
+          ${buildUnsubscribeFooter(to)}
         </div>
       `,
     });
@@ -203,6 +237,7 @@ export async function sendPaymentConfirmationEmail(
       }
       throw new Error("Failed to send payment confirmation email");
     }
+    });
   } catch (err) {
     if (isDevEnv()) {
       console.error("Error sending payment confirmation email:", err);

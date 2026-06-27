@@ -12,6 +12,7 @@ import { uploadToCloudinary, deleteFromCloudinary } from "./cloudinary.service";
 import { SubmitKycInput, UpdateKycStatusInput } from "../schemas/kyc.schema";
 import { logKycDecision } from "./audit.service";
 import { KYCStatus as AuditKYCStatus } from "../types/audit.types";
+import { validateKycUploadFile } from "../utils/kycUploadValidation.util";
 
 const prisma = new PrismaClient();
 
@@ -101,25 +102,9 @@ export async function uploadKycDocumentService(
     size: number;
   }
 ) {
-  // Validate file type
-  const allowedMimeTypes = [
-    "image/jpeg",
-    "image/png",
-    "image/gif",
-    "application/pdf",
-  ];
-  if (!allowedMimeTypes.includes(file.mimetype)) {
-    throw apiError(
-      400,
-      ErrorCode.VALIDATION_ERROR,
-      "Invalid file type. Only JPEG, PNG, GIF, and PDF are allowed.",
-    );
-  }
-
-  // Validate file size (max 10MB)
-  const maxSize = 10 * 1024 * 1024;
-  if (file.size > maxSize) {
-    throw apiError(400, ErrorCode.FILE_TOO_LARGE, "File size exceeds 10MB limit");
+  const validationError = validateKycUploadFile(file);
+  if (validationError) {
+    throw validationError;
   }
 
   // Get merchant KYC

@@ -10,6 +10,42 @@ import {
     rpc,
     BASE_FEE
 } from '@stellar/stellar-sdk';
+import { isSorobanVerificationEnabled } from '../utils/sorobanVerification.util';
+
+export interface SorobanHealthStatus {
+    enabled: boolean;
+    disabled: boolean;
+    last_success: string | null;
+    last_failure: string | null;
+    last_error: string | null;
+}
+
+const sorobanHealthState = {
+    lastSuccess: null as Date | null,
+    lastFailure: null as Date | null,
+    lastError: null as string | null,
+};
+
+export function recordSorobanSuccess(): void {
+    sorobanHealthState.lastSuccess = new Date();
+    sorobanHealthState.lastError = null;
+}
+
+export function recordSorobanFailure(error: string): void {
+    sorobanHealthState.lastFailure = new Date();
+    sorobanHealthState.lastError = error;
+}
+
+export function getSorobanHealthStatus(): SorobanHealthStatus {
+    const enabled = isSorobanVerificationEnabled();
+    return {
+        enabled,
+        disabled: !enabled,
+        last_success: sorobanHealthState.lastSuccess?.toISOString() ?? null,
+        last_failure: sorobanHealthState.lastFailure?.toISOString() ?? null,
+        last_error: sorobanHealthState.lastError,
+    };
+}
 
 export class SorobanService {
     private server: Horizon.Server;
@@ -98,13 +134,22 @@ export class SorobanService {
 
             if (txResult.status !== 'SUCCESS') {
                 console.error('Soroban transaction failed to confirm:', txResult);
+                recordSorobanFailure(`Transaction status: ${txResult.status}`);
                 return false;
             }
 
             // 4. Verify contract state update reflects confirmed
-            return await this.verifyContractState(paymentId);
+            const verified = await this.verifyContractState(paymentId);
+            if (verified) {
+                recordSorobanSuccess();
+            } else {
+                recordSorobanFailure('Contract state verification returned false');
+            }
+            return verified;
         } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
             console.error('Error verifying payment on-chain:', error);
+            recordSorobanFailure(message);
             throw error;
         }
     }

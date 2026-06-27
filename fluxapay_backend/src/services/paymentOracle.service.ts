@@ -20,6 +20,13 @@ import { Decimal } from "@prisma/client/runtime/library";
 import { paymentContractService } from "./paymentContract.service";
 import { getLogger, getMetricsCollector } from "../utils/logger";
 import { createAndDeliverWebhook } from "./webhook.service";
+import {
+  parseHorizonMemo,
+  resolveMemoMatchMode,
+  validateMemoMatch,
+} from "../utils/oracleMemo.util";
+import { isSorobanVerificationEnabled } from "../utils/sorobanVerification.util";
+import { getSorobanHealthStatus } from "./SorobanService";
 
 const prisma = new PrismaClient();
 const logger = getLogger("PaymentOracleService");
@@ -31,7 +38,9 @@ const HORIZON_URL = process.env.STELLAR_HORIZON_URL || "https://horizon-testnet.
 const USDC_ISSUER = process.env.USDC_ISSUER_PUBLIC_KEY || "GBBD47IF6LWK7P7MDEVSCWT73IQIGCEZHR7OMXMBZQ3ZONN2T4U6W23Y";
 const POLLING_INTERVAL_MS = parseInt(process.env.ORACLE_POLLING_INTERVAL_MS || "30000", 10); // 30 seconds default
 const MAX_MISSED_POLLS = parseInt(process.env.ORACLE_MAX_MISSED_POLLS || "5", 10);
-const ENABLE_SMART_CONTRACT_VERIFICATION = process.env.ENABLE_SOROBAN_VERIFICATION === "true";
+const ENABLE_SMART_CONTRACT_VERIFICATION = isSorobanVerificationEnabled();
+const SHARED_DEPOSIT_ADDRESS = process.env.SHARED_DEPOSIT_ADDRESS;
+const ENABLE_ADDRESS_POOL = process.env.ENABLE_ADDRESS_POOL === "true";
 const BATCH_SIZE = parseInt(process.env.ORACLE_BATCH_SIZE || "50", 10);
 const HORIZON_TIMEOUT_MS = parseInt(process.env.ORACLE_HORIZON_TIMEOUT_MS || "10000", 10);
 
@@ -196,6 +205,11 @@ async function verifyPayment(payment: Payment): Promise<PaymentVerification> {
     let latestPayer: string | undefined;
     let latestPagingToken = payment.last_paging_token;
 
+    const memoMatchMode = resolveMemoMatchMode(address, {
+      sharedDepositAddress: SHARED_DEPOSIT_ADDRESS,
+      addressPoolEnabled: ENABLE_ADDRESS_POOL,
+    });
+
     // Process transactions to find valid USDC payments
     for (const record of transactions.records) {
       if (record.paging_token) {
@@ -212,7 +226,55 @@ async function verifyPayment(payment: Payment): Promise<PaymentVerification> {
           paymentRecord.asset_issuer === usdcAsset.issuer &&
           paymentRecord.to === address
         ) {
-          latestTxHash = paymentRecord.transaction_hash;
+          const txHash = paymentRecord.transaction_hash as string | undefined;
+          if (!txHash) {
+            continue;
+          }
+
+          let memoResult;
+          try {
+            const tx = await server.transactions().transaction(txHash).call();
+            const memo = parseHorizonMemo({
+              memo_type: tx.memo_type,
+              memo: tx.memo,
+            });
+            memoResult = validateMemoMatch(payment.id, memo, memoMatchMode);
+          } catch (memoError: any) {
+            logger.warn("Failed to fetch transaction memo for payment attribution", {
+              paymentId: payment.id,
+              transactionHash: txHash,
+              error: memoError.message,
+            });
+            if (memoMatchMode === "required") {
+              continue;
+            }
+            memoResult = validateMemoMatch(
+              payment.id,
+              { type: "none" },
+              memoMatchMode,
+            );
+          }
+
+          if (memoResult.rejected) {
+            logger.warn("Payment memo mismatch — skipping transaction", {
+              paymentId: payment.id,
+              expectedMemo: memoResult.expected,
+              receivedMemo: memoResult.received,
+              transactionHash: txHash,
+            });
+            continue;
+          }
+
+          if (memoMatchMode === "secondary" && !memoResult.matched && memoResult.received) {
+            logger.warn("Payment memo secondary verification failed", {
+              paymentId: payment.id,
+              expectedMemo: memoResult.expected,
+              receivedMemo: memoResult.received,
+              transactionHash: txHash,
+            });
+          }
+
+          latestTxHash = txHash;
           latestPayer = paymentRecord.from;
           break;
         }
@@ -631,6 +693,20 @@ export function getOracleMetrics(): OracleMetrics {
  */
 export function getOracleHealth(): HorizonHealthCheck {
   return oracleState.getHealthCheck();
+}
+
+export interface OracleHealthResponse extends HorizonHealthCheck {
+  soroban: ReturnType<typeof getSorobanHealthStatus>;
+}
+
+/**
+ * Gets combined oracle + Soroban integration health for admin monitoring.
+ */
+export function getOracleHealthWithSoroban(): OracleHealthResponse {
+  return {
+    ...oracleState.getHealthCheck(),
+    soroban: getSorobanHealthStatus(),
+  };
 }
 
 /**
