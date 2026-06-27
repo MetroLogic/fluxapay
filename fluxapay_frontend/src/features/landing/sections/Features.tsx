@@ -1,44 +1,16 @@
 import { Shield, Zap, Globe, BarChart3 } from "lucide-react";
-
-const features = [
-  {
-    title: t("features.instant.title"),
-    description: t("features.instant.description"),
-    icon: Zap,
-    color: "text-yellow-500",
-    bg: "bg-yellow-500/10",
-  },
-  {
-    title: t("features.globalReach.title"),
-    description: t("features.globalReach.description"),
-    icon: Globe,
-    color: "text-blue-500",
-    bg: "bg-blue-500/10",
-  },
-  {
-    title: t("features.security.title"),
-    description: t("features.security.description"),
-    icon: Shield,
-    color: "text-green-500",
-    bg: "bg-green-500/10",
-  },
-  {
-    title: t("features.analytics.title"),
-    description: t("features.analytics.description"),
-    icon: BarChart3,
-    color: "text-purple-500",
-    bg: "bg-purple-500/10",
-  },
-];
+import { useTranslations } from "next-intl";
 
 export const Features = () => {
+  const t = useTranslations('features');
+
   return (
     <section id="features" className="py-24 bg-secondary/30">
       <div className="container mx-auto px-4">
         <div className="text-center max-w-2xl mx-auto mb-16">
-          <h2 className="text-3xl md:text-4xl font-bold mb-4">Built for Global Commerce</h2>
+          <h2 className="text-3xl md:text-4xl font-bold mb-4">{t('sectionTitle')}</h2>
           <p className="text-muted-foreground">
-            Everything you need to accept payments and scale your business internationally.
+            {t('sectionDescription')}
           </p>
         </div>
         
