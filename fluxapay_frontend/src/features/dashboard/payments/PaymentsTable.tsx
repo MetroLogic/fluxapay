@@ -1,5 +1,6 @@
 import { Badge } from "@/components/Badge";
 import { DataTableBodyState } from "@/components/data-table";
+import { VirtualizedTable } from "@/components/VirtualizedTable";
 import { Payment, PaymentStatus } from "./types";
 import { ChevronDown, ChevronUp, Copy, Eye, ExternalLink } from "lucide-react";
 import { useState, useMemo, memo, useCallback } from "react";
@@ -226,6 +227,99 @@ export const PaymentsTable = ({
       return 0;
     });
   }, [payments, sortConfig]);
+
+  // Use virtualized table for large datasets
+  const shouldVirtualize = sortedPayments.length > 100;
+
+  if (shouldVirtualize && sortedPayments.length > 0 && !isLoading && !error) {
+    return (
+      <div className="bg-card overflow-hidden rounded-lg border" role="region" aria-label="Payments table">
+        <div className="border-b bg-muted/50">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-left" role="table">
+              <thead>
+                <tr role="row" className="transition-colors">
+                  <th
+                    role="columnheader"
+                    scope="col"
+                    className="px-4 py-3 font-medium cursor-pointer flex items-center gap-1"
+                    onClick={() => handleSort("id")}
+                    aria-sort={sortConfig?.key === "id" ? (sortConfig.direction === "asc" ? "ascending" : "descending") : "none"}
+                    tabIndex={0}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleSort("id"); } }}
+                  >
+                    Charge ID <SortIcon column="id" sortConfig={sortConfig} />
+                  </th>
+                  <th
+                    role="columnheader"
+                    scope="col"
+                    className="px-4 py-3 font-medium cursor-pointer"
+                    onClick={() => handleSort("amount")}
+                    aria-sort={sortConfig?.key === "amount" ? (sortConfig.direction === "asc" ? "ascending" : "descending") : "none"}
+                    tabIndex={0}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleSort("amount"); } }}
+                  >
+                    <div className="flex items-center gap-1">
+                      Amount (USDC + Fiat) <SortIcon column="amount" sortConfig={sortConfig} />
+                    </div>
+                  </th>
+                  <th
+                    role="columnheader"
+                    scope="col"
+                    className="px-4 py-3 font-medium cursor-pointer"
+                    onClick={() => handleSort("status")}
+                    aria-sort={sortConfig?.key === "status" ? (sortConfig.direction === "asc" ? "ascending" : "descending") : "none"}
+                    tabIndex={0}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleSort("status"); } }}
+                  >
+                    <div className="flex items-center gap-1">
+                      Status <SortIcon column="status" sortConfig={sortConfig} />
+                    </div>
+                  </th>
+                  <th role="columnheader" scope="col" className="px-4 py-3 font-medium">Customer</th>
+                  <th
+                    role="columnheader"
+                    scope="col"
+                    className="px-4 py-3 font-medium cursor-pointer text-right"
+                    onClick={() => handleSort("createdAt")}
+                    aria-sort={sortConfig?.key === "createdAt" ? (sortConfig.direction === "asc" ? "ascending" : "descending") : "none"}
+                    tabIndex={0}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleSort("createdAt"); } }}
+                  >
+                    <div className="flex items-center justify-end gap-1">
+                      Created At <SortIcon column="createdAt" sortConfig={sortConfig} />
+                    </div>
+                  </th>
+                  <th role="columnheader" scope="col" className="px-4 py-3 font-medium">
+                    Stellar TX Hash
+                  </th>
+                  <th role="columnheader" scope="col" className="px-4 py-3 font-medium text-center">Actions</th>
+                </tr>
+              </thead>
+            </table>
+          </div>
+        </div>
+        <VirtualizedTable
+          data={sortedPayments}
+          rowHeight={56}
+          containerHeight={600}
+          renderRow={(payment) => (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left" role="table">
+                <tbody className="divide-y">
+                  <PaymentRow
+                    payment={payment}
+                    onRowClick={onRowClick}
+                  />
+                </tbody>
+              </table>
+            </div>
+          )}
+          className="divide-y"
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="bg-card overflow-hidden" role="region" aria-label="Payments table">
