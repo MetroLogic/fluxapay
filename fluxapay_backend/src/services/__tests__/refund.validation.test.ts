@@ -406,7 +406,7 @@ describe('Refund Service - Validation', () => {
           amount: 50, // Only 40 remaining
         })
       ).rejects.toMatchObject({
-        status: 400,
+        status: 422,
         message: expect.stringContaining('exceeds remaining refundable amount'),
       });
     });
@@ -444,6 +444,174 @@ describe('Refund Service - Validation', () => {
         amount: 60,
       });
 
+      expect(result.message).toBe('Refund created successfully');
+    });
+  });
+
+  describe('Cumulative Partial Refunds', () => {
+    beforeEach(async () => {
+      await prisma.merchant.create({
+        data: {
+          id: 'test-merchant',
+          business_name: 'Test Merchant',
+          email: 'test@example.com',
+          phone_number: uniquePhone(),
+          country: 'US',
+          settlement_currency: 'USD',
+          webhook_secret: 'secret',
+          password: 'hashed_password',
+        },
+      });
+    });
+
+    it('should allow first partial refund', async () => {
+      const payment = await prisma.payment.create({
+        data: {
+          id: 'test-payment',
+          merchantId: 'test-merchant',
+          amount: 100,
+          currency: 'USD',
+          customer_email: 'customer@example.com',
+          metadata: {},
+          expiration: new Date(Date.now() + 86400000),
+          status: 'confirmed',
+          checkout_url: 'https://example.com/checkout',
+        },
+      });
+
+      const result = await createRefundService({
+        merchantId: 'test-merchant',
+        payment_id: payment.id,
+        amount: 30,
+      });
+
+      expect(result.message).toBe('Refund created successfully');
+      expect(Number(result.data.amount)).toBe(30);
+    });
+
+    it('should allow multiple partial refunds as long as total does not exceed payment', async () => {
+      const payment = await prisma.payment.create({
+        data: {
+          id: 'test-payment',
+          merchantId: 'test-merchant',
+          amount: 100,
+          currency: 'USD',
+          customer_email: 'customer@example.com',
+          metadata: {},
+          expiration: new Date(Date.now() + 86400000),
+          status: 'confirmed',
+          checkout_url: 'https://example.com/checkout',
+        },
+      });
+
+      // First refund
+      const refund1 = await createRefundService({
+        merchantId: 'test-merchant',
+        payment_id: payment.id,
+        amount: 30,
+      });
+      expect(refund1.message).toBe('Refund created successfully');
+
+      // Second refund (pending)
+      const refund2 = await createRefundService({
+        merchantId: 'test-merchant',
+        payment_id: payment.id,
+        amount: 40,
+      });
+      expect(refund2.message).toBe('Refund created successfully');
+
+      // Third refund should fail (30 + 40 + 35 = 105 > 100)
+      await expect(
+        createRefundService({
+          merchantId: 'test-merchant',
+          payment_id: payment.id,
+          amount: 35,
+        })
+      ).rejects.toMatchObject({
+        status: 422,
+        message: expect.stringContaining('exceeds remaining refundable amount'),
+      });
+    });
+
+    it('should count pending refunds in cumulative total', async () => {
+      const payment = await prisma.payment.create({
+        data: {
+          id: 'test-payment',
+          merchantId: 'test-merchant',
+          amount: 100,
+          currency: 'USD',
+          customer_email: 'customer@example.com',
+          metadata: {},
+          expiration: new Date(Date.now() + 86400000),
+          status: 'confirmed',
+          checkout_url: 'https://example.com/checkout',
+        },
+      });
+
+      // Create pending refund
+      await prisma.refund.create({
+        data: {
+          merchantId: 'test-merchant',
+          paymentId: payment.id,
+          amount: 60,
+          currency: 'USD',
+          status: 'pending',
+        },
+      });
+
+      // Should reject refund that would exceed (60 + 50 = 110 > 100)
+      await expect(
+        createRefundService({
+          merchantId: 'test-merchant',
+          payment_id: payment.id,
+          amount: 50,
+        })
+      ).rejects.toMatchObject({
+        status: 422,
+        message: expect.stringContaining('exceeds remaining refundable amount'),
+      });
+
+      // But should allow refund within limits (60 + 30 = 90 <= 100)
+      const result = await createRefundService({
+        merchantId: 'test-merchant',
+        payment_id: payment.id,
+        amount: 30,
+      });
+      expect(result.message).toBe('Refund created successfully');
+    });
+
+    it('should reject failed/rejected refunds from cumulative total', async () => {
+      const payment = await prisma.payment.create({
+        data: {
+          id: 'test-payment',
+          merchantId: 'test-merchant',
+          amount: 100,
+          currency: 'USD',
+          customer_email: 'customer@example.com',
+          metadata: {},
+          expiration: new Date(Date.now() + 86400000),
+          status: 'confirmed',
+          checkout_url: 'https://example.com/checkout',
+        },
+      });
+
+      // Create failed refund (should not count in total)
+      await prisma.refund.create({
+        data: {
+          merchantId: 'test-merchant',
+          paymentId: payment.id,
+          amount: 70,
+          currency: 'USD',
+          status: 'failed',
+        },
+      });
+
+      // Should allow new refund since failed refunds don't count
+      const result = await createRefundService({
+        merchantId: 'test-merchant',
+        payment_id: payment.id,
+        amount: 60,
+      });
       expect(result.message).toBe('Refund created successfully');
     });
   });

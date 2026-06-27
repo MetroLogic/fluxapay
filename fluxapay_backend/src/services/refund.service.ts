@@ -63,11 +63,13 @@ async function validatePaymentForRefund(
 }
 
 /**
- * Calculates total refunded amount for a payment
+ * Calculates total refunded/pending amount for a payment
+ * Includes: pending, processing, and completed refunds
+ * Excludes: failed and rejected refunds
  */
 function calculateTotalRefunded(payment: any): number {
   return payment.refunds.reduce((total: number, refund: any) => {
-    if (refund.status === "completed") {
+    if (["pending", "processing", "completed"].includes(refund.status)) {
       return total + Number(refund.amount);
     }
     return total;
@@ -96,8 +98,8 @@ function validateRefundAmount(
 
   if (refundAmount > remainingRefundable) {
     throw apiError(
-      400,
-      ErrorCode.INVALID_AMOUNT,
+      422,
+      "refund_amount_exceeds_refundable_balance",
       `Refund amount (${refundAmount}) exceeds remaining refundable amount (${remainingRefundable}). Already refunded: ${totalRefunded}`,
     );
   }
@@ -133,17 +135,72 @@ export async function createRefundService(params: {
   // Use transaction to ensure atomicity of validation and creation
   const refund = await prisma.$transaction(
     async (tx: Prisma.TransactionClient) => {
-      // Step 1: Validate payment ownership and refundability
-      const payment = await validatePaymentForRefund(
-        payment_id,
-        merchantId,
-        tx,
-      );
+      // Step 1: Lock payment row and validate ownership/refundability
+      // Row-level lock prevents concurrent refund race conditions
+      const payment = await tx.$queryRaw<any[]>`
+        SELECT p.* FROM "Payment" p
+        WHERE p.id = ${payment_id} AND p."merchantId" = ${merchantId}
+        FOR UPDATE
+      `;
 
-      // Step 2: Validate refund amount
-      validateRefundAmount(payment, amount);
+      if (!payment || payment.length === 0) {
+        const paymentExists = await tx.payment.findUnique({
+          where: { id: payment_id },
+        });
 
-      // Step 3: Check for duplicate refund request (idempotency)
+        if (!paymentExists) {
+          throw apiError(404, ErrorCode.PAYMENT_NOT_FOUND, "Payment not found");
+        }
+        throw apiError(403, ErrorCode.FORBIDDEN, "Payment does not belong to your merchant account");
+      }
+
+      const paymentRecord = payment[0];
+
+      // Validate payment status is refundable
+      const refundableStatuses = getRefundableStatuses();
+      if (!refundableStatuses.includes(paymentRecord.status as PaymentStatus)) {
+        throw apiError(
+          400,
+          ErrorCode.VALIDATION_ERROR,
+          `Payment cannot be refunded. Current status: ${paymentRecord.status}. Only ${refundableStatuses.join(" or ")} payments can be refunded.`,
+        );
+      }
+
+      // Check if payment has expired
+      if (paymentRecord.expiration && new Date(paymentRecord.expiration) < new Date()) {
+        throw apiError(400, ErrorCode.PAYMENT_EXPIRED, "Payment has expired and cannot be refunded");
+      }
+
+      // Step 2: Fetch all non-failed/non-rejected refunds for this payment
+      const existingRefunds = await tx.refund.findMany({
+        where: {
+          paymentId: payment_id,
+          status: { in: ["pending", "processing", "completed"] },
+        },
+      });
+
+      // Step 3: Calculate total and validate amount
+      const totalRefunded = existingRefunds.reduce((sum, ref) => sum + Number(ref.amount), 0);
+      const paymentAmount = Number(paymentRecord.amount);
+      const remainingRefundable = paymentAmount - totalRefunded;
+
+      if (amount > paymentAmount) {
+        throw apiError(
+          422,
+          ErrorCode.REFUND_AMOUNT_EXCEEDS_LIMIT,
+          `Refund amount (${amount}) cannot exceed original payment amount (${paymentAmount})`,
+        );
+      }
+
+      if (amount > remainingRefundable) {
+        throw apiError(
+          422,
+          ErrorCode.REFUND_AMOUNT_EXCEEDS_LIMIT,
+          `Refund amount (${amount}) exceeds remaining refundable amount (${remainingRefundable}). Already refunded: ${totalRefunded}`,
+        );
+      }
+
+      // Step 4: Check for duplicate refund request (idempotency)
       if (idempotency_key) {
         const existingRefund = await tx.refund.findFirst({
           where: {
@@ -159,13 +216,13 @@ export async function createRefundService(params: {
         }
       }
 
-      // Step 4: Create the refund
+      // Step 5: Create the refund
       const createdRefund = await tx.refund.create({
         data: {
           merchantId,
-          paymentId: payment.id,
+          paymentId: payment_id,
           amount,
-          currency: payment.currency,
+          currency: paymentRecord.currency,
           reason,
           status: "pending",
         },
