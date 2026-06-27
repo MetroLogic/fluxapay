@@ -21,7 +21,13 @@ export interface WebAppManifest {
   icons: ManifestIcon[];
 }
 
-export type CachingStrategy = "cache-first" | "network-first" | "passthrough";
+export type CachingStrategy = "cache-first" | "network-first" | "stale-while-revalidate" | "network-only" | "passthrough";
+
+export interface CachedResponse {
+  data: unknown;
+  timestamp: number;
+  etag?: string;
+}
 
 /**
  * Returns true when the given value is a structurally valid ManifestIcon entry:

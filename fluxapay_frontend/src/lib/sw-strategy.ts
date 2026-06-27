@@ -9,12 +9,32 @@ export const STATIC_EXTENSIONS =
 /**
  * Determines the caching strategy for a given URL.
  *
- * - "network-first"  → API routes (/api/*)
- * - "cache-first"    → Static assets (JS, CSS, images, fonts, etc.)
- * - "passthrough"    → Everything else (let the browser handle it)
+ * - "stale-while-revalidate" → Dashboard stats and payment list APIs
+ * - "network-only"           → Mutations (POST/PUT/DELETE)
+ * - "cache-first"            → Static assets (JS, CSS, images, fonts, etc.)
+ * - "passthrough"            → Everything else (let the browser handle it)
  */
-export function selectStrategy(url: URL): CachingStrategy {
-  if (url.pathname.startsWith("/api/")) return "network-first";
+export function selectStrategy(url: URL, method: string = "GET"): CachingStrategy {
   if (STATIC_EXTENSIONS.test(url.pathname)) return "cache-first";
+
+  if (url.pathname.startsWith("/api/")) {
+    // Mutations always use network-only
+    if (method && /^(POST|PUT|DELETE|PATCH)$/i.test(method)) {
+      return "network-only";
+    }
+
+    // Dashboard stats and payment list use stale-while-revalidate
+    if (
+      url.pathname.includes("/dashboard") ||
+      url.pathname.includes("/stats") ||
+      url.pathname.includes("/settlements") ||
+      url.pathname.includes("/payments")
+    ) {
+      return "stale-while-revalidate";
+    }
+
+    return "network-first";
+  }
+
   return "passthrough";
 }
