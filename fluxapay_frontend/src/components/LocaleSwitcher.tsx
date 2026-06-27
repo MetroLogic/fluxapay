@@ -1,21 +1,27 @@
-'use client';
+"use client";
 
-import { useLocale } from 'next-intl';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { routing } from '@/i18n/routing';
-import { useState, useTransition } from 'react';
+import { useLocale } from "next-intl";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { routing } from "@/i18n/routing";
+import { useState, useTransition, useEffect } from "react";
 
 const localeNames: Record<string, string> = {
-  en: 'English',
-  fr: 'Français',
-  pt: 'Português',
+  en: "English",
+  fr: "Français",
+  pt: "Português",
+  ar: "العربية",
+  he: "עברית",
 };
 
 const localeFlags: Record<string, string> = {
-  en: '🇬🇧',
-  fr: '🇫🇷',
-  pt: '🇧🇷',
+  en: "🇬🇧",
+  fr: "🇫🇷",
+  pt: "🇧🇷",
+  ar: "🇸🇦",
+  he: "🇮🇱",
 };
+
+const rtlLocales = ["ar", "he"];
 
 export default function LocaleSwitcher() {
   const locale = useLocale();
@@ -25,16 +31,21 @@ export default function LocaleSwitcher() {
   const [isPending, startTransition] = useTransition();
   const [isOpen, setIsOpen] = useState(false);
 
+  useEffect(() => {
+    const isRTL = rtlLocales.includes(locale);
+    document.documentElement.dir = isRTL ? "rtl" : "ltr";
+    document.documentElement.lang = locale;
+  }, [locale]);
+
   function buildLocalizedPath(nextLocale: string) {
-    const currentPath = pathname || '/';
-    const unprefixedPath =
-      currentPath.replace(/^\/(fr|pt)(?=\/|$)/, '') || '/';
+    const currentPath = pathname || "/";
+    const unprefixedPath = currentPath.replace(/^\/(fr|pt)(?=\/|$)/, "") || "/";
 
     if (nextLocale === routing.defaultLocale) {
       return unprefixedPath;
     }
 
-    if (unprefixedPath === '/') {
+    if (unprefixedPath === "/") {
       return `/${nextLocale}`;
     }
 
@@ -48,6 +59,11 @@ export default function LocaleSwitcher() {
       const target = query ? `${nextPath}?${query}` : nextPath;
 
       document.cookie = `NEXT_LOCALE=${nextLocale}; path=/; max-age=31536000`;
+
+      const isRTL = rtlLocales.includes(nextLocale);
+      document.documentElement.dir = isRTL ? "rtl" : "ltr";
+      document.documentElement.lang = nextLocale;
+
       router.replace(target);
       setIsOpen(false);
     });
@@ -64,12 +80,17 @@ export default function LocaleSwitcher() {
         <span className="text-lg">{localeFlags[locale]}</span>
         <span className="text-sm font-medium">{localeNames[locale]}</span>
         <svg
-          className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+          className={`w-4 h-4 transition-transform ${isOpen ? "rotate-180" : ""}`}
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
         >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M19 9l-7 7-7-7"
+          />
         </svg>
       </button>
 
@@ -85,7 +106,7 @@ export default function LocaleSwitcher() {
                 key={loc}
                 onClick={() => onSelectChange(loc)}
                 className={`w-full flex items-center gap-3 px-4 py-2 text-sm hover:bg-gray-50 transition-colors ${
-                  locale === loc ? 'bg-gray-100 font-medium' : ''
+                  locale === loc ? "bg-gray-100 font-medium" : ""
                 }`}
               >
                 <span className="text-lg">{localeFlags[loc]}</span>
