@@ -1,13 +1,13 @@
 import { apiError } from "../helpers/apiError.helper";
 import { ErrorCode } from "../types/errors";
-import { PrismaClient, Prisma, InvoiceStatus } from "../generated/client/client";
+import { Prisma, InvoiceStatus  } from "../generated/client/client";
+import { prisma } from "../config/prisma";
 import crypto from "crypto";
 import { createAndDeliverWebhook } from "./webhook.service";
 import { generateInvoicePdf } from "./invoicePdf.service";
 import { sendInvoiceEmail } from "./email.service";
 import { Readable } from "stream";
 
-const prisma = new PrismaClient();
 
 function buildInvoiceNumber() {
   const d = new Date();

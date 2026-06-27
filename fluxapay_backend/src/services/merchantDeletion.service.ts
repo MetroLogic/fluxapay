@@ -12,7 +12,7 @@ import { ErrorCode } from "../types/errors";
  *   - KYC documents are deleted; KYC record is anonymized.
  *   - OTPs, BankAccount, Customers, Subscriptions are hard-deleted.
  */
-import { PrismaClient } from "../generated/client/client";
+import { prisma } from "../config/prisma";
 import {
   logMerchantDeleted,
   logApiKeysRevoked,
@@ -20,7 +20,6 @@ import {
   logChargesCancelled,
 } from "./audit.service";
 
-const prisma = new PrismaClient();
 
 const ANON_EMAIL = (id: string) => `deleted-${id}@anonymized.invalid`;
 const ANON_PHONE = (id: string) => `+000000${id.slice(-6)}`;

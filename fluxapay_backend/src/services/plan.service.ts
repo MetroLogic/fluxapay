@@ -8,10 +8,9 @@
  */
 
 import { Decimal } from "@prisma/client/runtime/library";
-import { PrismaClient } from "../generated/client/client";
+import { prisma } from "../config/prisma";
 import { createAndDeliverWebhook } from "./webhook.service";
 
-const prisma = new PrismaClient();
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 

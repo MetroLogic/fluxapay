@@ -1,7 +1,7 @@
 import { ErrorCode } from "../types/errors";
 import { apiError, sendApiError } from "../helpers/apiError.helper";
 import { Request, Response } from "express";
-import { PrismaClient } from "../generated/client/client";
+import { prisma } from "../config/prisma";
 import { PaymentService } from "../services/payment.service";
 import { normalizeCheckoutAccentHex } from "../utils/checkout-branding.util";
 import { AuthRequest } from "../types/express";
@@ -9,9 +9,6 @@ import { eventBus, AppEvents } from "../services/EventService";
 import { validateUserId } from "../helpers/request.helper";
 import { MetadataValidationError } from "../utils/metadata.util";
 import { paymentSettlementService } from "../services/paymentSettlement.service";
-
-
-const prisma = new PrismaClient();
 
 export const createPayment = async (req: Request, res: Response) => {
   try {

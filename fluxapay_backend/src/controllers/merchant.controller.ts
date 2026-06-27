@@ -107,9 +107,7 @@ export const rotateWebhookSecret = createController(
 // ── Admin-only controllers ────────────────────────────────────────────────────
 
 import { Request, Response } from "express";
-import { PrismaClient } from "../generated/client/client";
-
-const adminPrisma = new PrismaClient();
+import { prisma } from "../config/prisma";
 
 /** GET /api/merchants/admin/list – paginated merchant list */
 export async function adminListMerchants(req: Request, res: Response) {
@@ -121,7 +119,7 @@ export async function adminListMerchants(req: Request, res: Response) {
     const where = status ? { status: status as any } : {};
 
     const [merchants, total] = await Promise.all([
-      adminPrisma.merchant.findMany({
+      prisma.merchant.findMany({
         where,
         skip: (page - 1) * limit,
         take: limit,
@@ -137,7 +135,7 @@ export async function adminListMerchants(req: Request, res: Response) {
           _count: { select: { payments: true } },
         },
       }),
-      adminPrisma.merchant.count({ where }),
+      prisma.merchant.count({ where }),
     ]);
 
     res.json({ merchants, total, page, limit });
@@ -150,7 +148,7 @@ export async function adminListMerchants(req: Request, res: Response) {
 export async function adminGetMerchant(req: Request, res: Response) {
   try {
     const merchantId = String(req.params.merchantId);
-    const merchant = await adminPrisma.merchant.findUnique({
+    const merchant = await prisma.merchant.findUnique({
       where: { id: merchantId },
       include: {
         kyc: true,
@@ -175,7 +173,7 @@ export async function adminUpdateMerchantStatus(req: Request, res: Response) {
       return sendApiError(res, apiError(400, ErrorCode.INVALID_STATUS_VALUE, "Invalid status value"));
     }
 
-    const merchant = await adminPrisma.merchant.update({
+    const merchant = await prisma.merchant.update({
       where: { id: merchantId },
       data: { status },
       select: { id: true, business_name: true, status: true },
@@ -210,7 +208,7 @@ export async function adminBulkUpdateMerchantStatus(req: Request, res: Response)
 
     for (const id of merchantIds) {
       try {
-        await adminPrisma.merchant.update({
+        await prisma.merchant.update({
           where: { id },
           data: { status },
           select: { id: true },

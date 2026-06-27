@@ -1,11 +1,9 @@
-import { PrismaClient } from './generated/client/client';
+import { prisma } from './config/prisma';
 import { WebhookDispatcher } from './services/webhook.service';
 import { PaymentMonitorService } from './services/payment-monitor.service';
 import { getLogger } from './utils/logger';
 import { requestContextStorage } from './utils/requestContext';
 import { randomUUID } from 'crypto';
-
-const prisma = new PrismaClient();
 const logger = getLogger();
 
 async function main() {

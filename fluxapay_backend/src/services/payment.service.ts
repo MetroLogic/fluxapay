@@ -1,4 +1,4 @@
-import { PrismaClient } from "../generated/client/client";
+import { prisma } from "../config/prisma";
 import crypto from "crypto";
 import { HDWalletService } from "./HDWalletService";
 import { StellarService } from "./StellarService";
@@ -10,7 +10,6 @@ import { trackPaymentCreated } from "../middleware/metrics.middleware";
 import { FxService } from "./fx.service";
 import { DepositAddressService } from "./depositAddress.service";
 
-const prisma = new PrismaClient();
 
 export class PaymentService {
     static getRateLimitWindowSeconds() {

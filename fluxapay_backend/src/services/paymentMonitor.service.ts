@@ -1,6 +1,6 @@
 // Payment Monitor Oracle
 import { Horizon, Asset } from "@stellar/stellar-sdk";
-import { PrismaClient } from "../generated/client/client";
+import { prisma } from "../config/prisma";
 import { Decimal } from "@prisma/client/runtime/library";
 import { paymentContractService } from "./paymentContract.service";
 import { PaymentStatus } from "../types/payment";
@@ -29,7 +29,6 @@ const PARTIAL_PAYMENT_TIMEOUT = parseInt(process.env.PARTIAL_PAYMENT_TIMEOUT_MS 
 const STALE_PAYMENT_TIMEOUT = parseInt(process.env.STALE_PAYMENT_TIMEOUT_MS || '1800000', 10);
 const ACCEPT_OVERPAYMENTS = process.env.ACCEPT_OVERPAYMENTS !== 'false';
 
-const prisma = new PrismaClient();
 const getServer = () => new Horizon.Server(HORIZON_URL());
 const logger = getLogger();
 

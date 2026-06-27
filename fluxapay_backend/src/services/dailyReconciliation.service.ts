@@ -1,9 +1,9 @@
 import { apiError } from "../helpers/apiError.helper";
 import { ErrorCode } from "../types/errors";
-import { PrismaClient, Prisma } from "../generated/client/client";
+import { Prisma  } from "../generated/client/client";
+import { prisma } from "../config/prisma";
 import { sendInvoiceEmail } from "./email.service";
 
-const prisma = new PrismaClient();
 
 export async function generateDailyReconciliationReportService(params: {
   merchantId: string;

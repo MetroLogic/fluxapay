@@ -1,5 +1,5 @@
 import * as StellarSdk from '@stellar/stellar-sdk';
-import { PrismaClient, Payment, WorkerState } from '../generated/client/client';
+import type { PrismaClient, Payment, WorkerState } from '../generated/client/client';
 import { WebhookDispatcher } from './webhook.service';
 import { PaymentStatus } from '../types/payment';
 

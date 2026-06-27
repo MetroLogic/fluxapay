@@ -7,9 +7,8 @@ import {
   Contract,
 } from "@stellar/stellar-sdk";
 import { isDevEnv } from "../helpers/env.helper";
-import { PrismaClient } from "../generated/client/client";
+import { prisma } from "../config/prisma";
 
-const prisma = new PrismaClient();
 
 export class MerchantRegistryService {
   private rpcUrl: string;

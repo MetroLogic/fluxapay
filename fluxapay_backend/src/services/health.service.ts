@@ -1,4 +1,4 @@
-import { PrismaClient } from "../generated/client/client";
+import type { PrismaClient } from "../generated/client/client";
 import { getRedisClient } from "../sms/otpSmsRateLimiter";
 
 export const DEPENDENCY_TIMEOUT_MS = 200;

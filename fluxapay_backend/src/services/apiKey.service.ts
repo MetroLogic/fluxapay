@@ -14,11 +14,11 @@
  *  - Audit logging for create/revoke operations
  */
 
-import { PrismaClient, Prisma } from "../generated/client/client";
+import { Prisma  } from "../generated/client/client";
+import { prisma } from "../config/prisma";
 import crypto from "crypto";
 import { AuditActionType, AuditEntityType } from "../types/audit.types";
 
-const prisma = new PrismaClient();
 
 /** Maximum active keys per merchant */
 const MAX_ACTIVE_KEYS = 5;

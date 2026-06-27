@@ -6,14 +6,13 @@ import {
   TransactionBuilder,
   Networks,
 } from "@stellar/stellar-sdk";
-import { PrismaClient } from "../generated/client/client";
+import { prisma } from "../config/prisma";
 import { Decimal } from "@prisma/client/runtime/library";
 import { HDWalletService } from "./HDWalletService";
 import { logSweepTrigger, updateSweepCompletion } from "./audit.service";
 import { getLogger, getMetricsCollector } from "../utils/logger";
 import { sweepQueue } from "./sweepQueue.service";
 
-const prisma = new PrismaClient();
 
 export interface SweepOptions {
   /** Max number of payments to sweep per run (defensive). */

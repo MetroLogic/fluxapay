@@ -1,12 +1,9 @@
 import { apiError } from "../helpers/apiError.helper";
 import { ErrorCode } from "../types/errors";
-import {
-  AlertSeverity,
-  PrismaClient,
-  ReconciliationStatus,
-} from "../generated/client/client";
+import { AlertSeverity,, ,
+  ReconciliationStatus, } from "../generated/client/client";
+import { prisma } from "../config/prisma";
 
-const prisma = new PrismaClient();
 
 function toNumber(value: unknown): number {
   if (typeof value === "number") {
