@@ -320,3 +320,91 @@ describe("buildPublicCheckoutDto — DTO shape and PII safety", () => {
     expect(dto.amount).toBe(99.99);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Issue #627 — Idempotency tests
+// ---------------------------------------------------------------------------
+
+jest.mock("../../middleware/idempotency.middleware", () => ({
+  storeIdempotentResponse: jest.fn(),
+}));
+
+import { storeIdempotentResponse } from "../../middleware/idempotency.middleware";
+
+describe("createPayment controller — idempotency", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("should store idempotent response when idempotency key is present", async () => {
+    (PaymentService.checkRateLimit as jest.Mock).mockResolvedValue(true);
+    (PaymentService.createPayment as jest.Mock).mockResolvedValue({
+      id: "pay_123",
+      amount: 100,
+      currency: "USDC",
+      customer_email: "test@example.com",
+      status: "pending",
+      checkout_url: "https://checkout.example.com/pay_123",
+    });
+
+    const req: any = {
+      merchantId: "merchant_1",
+      idempotencyKey: "idem-key-123",
+      body: {
+        amount: 100,
+        currency: "USDC",
+        customer_email: "test@example.com",
+        metadata: {},
+      },
+    };
+
+    const res: any = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn(),
+    };
+
+    await createPayment(req, res);
+
+    expect(storeIdempotentResponse).toHaveBeenCalledWith(
+      "idem-key-123",
+      req.body,
+      201,
+      expect.objectContaining({ id: "pay_123" }),
+      "merchant_1"
+    );
+    expect(res.status).toHaveBeenCalledWith(201);
+  });
+
+  it("should not store idempotent response when idempotency key is absent", async () => {
+    (PaymentService.checkRateLimit as jest.Mock).mockResolvedValue(true);
+    (PaymentService.createPayment as jest.Mock).mockResolvedValue({
+      id: "pay_456",
+      amount: 200,
+      currency: "USDC",
+      customer_email: "test2@example.com",
+      status: "pending",
+      checkout_url: "https://checkout.example.com/pay_456",
+    });
+
+    const req: any = {
+      merchantId: "merchant_1",
+      idempotencyKey: undefined,
+      body: {
+        amount: 200,
+        currency: "USDC",
+        customer_email: "test2@example.com",
+        metadata: {},
+      },
+    };
+
+    const res: any = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn(),
+    };
+
+    await createPayment(req, res);
+
+    expect(storeIdempotentResponse).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(201);
+  });
+});
