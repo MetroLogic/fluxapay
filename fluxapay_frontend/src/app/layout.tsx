@@ -1,13 +1,15 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "@/styles/globals.css";
 import { Providers } from "./providers";
 import { Toaster } from "react-hot-toast";
-import { baseMetadata, generateJsonLd } from "@/lib/seo";
+import { baseMetadata, baseViewport, generateJsonLd } from "@/lib/seo";
 import { ServiceWorkerRegistration } from "./sw-register";
 
 export const metadata: Metadata = {
   ...baseMetadata,
 };
+
+export const viewport: Viewport = baseViewport;
 
 export default function RootLayout({
   children,

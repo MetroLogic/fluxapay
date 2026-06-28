@@ -16,12 +16,14 @@ import { specs } from '../src/docs/swagger';
 /** Must stay in sync with `src/app.ts` mount paths (path after `/api/v1`). */
 const ROUTE_FILE_MOUNT_PREFIX: Record<string, string> = {
     'addressPool.route.ts': '/admin/address-pool',
+    'adminConfig.route.ts': '/admin/config',
     'apiKey.route.ts': '/api-keys',
     'audit.route.ts': '/admin',
     'customer.route.ts': '/customers',
     'dailyReconciliation.route.ts': '/reports/reconciliation',
     'dashboard.route.ts': '/dashboard',
     'dataExport.route.ts': '/merchants/export',
+    'email.route.ts': '/email',
     'fx.route.ts': '/fx-rates',
     'invoice.route.ts': '/invoices',
     'keys.route.ts': '/keys',

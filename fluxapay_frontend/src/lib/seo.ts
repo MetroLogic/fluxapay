@@ -1,4 +1,4 @@
-import { Metadata } from "next";
+import { Metadata, Viewport } from "next";
 
 export const SITE_BASE_URL =
   process.env.NEXT_PUBLIC_SITE_URL || "https://fluxapay.com";
@@ -84,6 +84,9 @@ export const baseMetadata: Metadata = {
       { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
     ],
   },
+};
+
+export const baseViewport: Viewport = {
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#FED449" },
     { media: "(prefers-color-scheme: dark)", color: "#2E3539" },

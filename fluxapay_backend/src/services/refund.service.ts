@@ -99,7 +99,7 @@ function validateRefundAmount(
   if (refundAmount > remainingRefundable) {
     throw apiError(
       422,
-      "refund_amount_exceeds_refundable_balance",
+      ErrorCode.REFUND_AMOUNT_EXCEEDS_REFUNDABLE_BALANCE,
       `Refund amount (${refundAmount}) exceeds remaining refundable amount (${remainingRefundable}). Already refunded: ${totalRefunded}`,
     );
   }

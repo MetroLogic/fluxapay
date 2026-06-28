@@ -2,14 +2,14 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { subDays, startOfDay } from 'date-fns';
-import { ReconciliationRecord } from '../../../types/reconciliation';
-import { ReconciliationSummary } from '../../../components/reconciliation/ReconciliationSummary';
-import { ReconciliationTable } from '../../../components/reconciliation/ReconciliationTable';
-import { StatementDownload } from '../../../components/reconciliation/StatementDownload';
-import { DiscrepancyAlert } from '../../../components/reconciliation/DiscrepancyAlert';
-import { useReconciliation } from '../../../hooks/useReconciliation';
-import { exportToPDF, exportToCSV } from '../../../utils/exportHelpers';
-import { api, ApiError } from '../../../lib/api';
+import { ReconciliationRecord } from '@/types/reconciliation';
+import { ReconciliationSummary } from '@/components/reconciliation/ReconciliationSummary';
+import { ReconciliationTable } from '@/components/reconciliation/ReconciliationTable';
+import { StatementDownload } from '@/components/reconciliation/StatementDownload';
+import { DiscrepancyAlert } from '@/components/reconciliation/DiscrepancyAlert';
+import { useReconciliation } from '@/hooks/useReconciliation';
+import { exportToPDF, exportToCSV } from '@/utils/exportHelpers';
+import { api, ApiError } from '@/lib/api';
 
 export default function ReconciliationPage() {
     const [dateRangeFilter, setDateRangeFilter] = useState<'today' | '7days' | '30days'>('30days');

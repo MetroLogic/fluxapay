@@ -140,7 +140,7 @@ const AdminKycPage = () => {
 
   const handleBulkReject = async (reason: string, notes: string) => {
     const merchantIds = Array.from(selectedRows);
-    if (merchantIds.length === 0) return;
+    if (merchantIds.length === 0) return { succeeded: 0, failed: [] };
     try {
       await api.kyc.admin.bulkReject(merchantIds, reason, notes);
       toast.success(`${merchantIds.length} applications rejected`);
@@ -156,7 +156,7 @@ const AdminKycPage = () => {
 
   const handleBulkRequestInfo = async (message: string) => {
     const merchantIds = Array.from(selectedRows);
-    if (merchantIds.length === 0) return;
+    if (merchantIds.length === 0) return { succeeded: 0, failed: [] };
     try {
       await api.kyc.admin.bulkRequestInfo(merchantIds, message);
       toast.success(`Requested info from ${merchantIds.length} merchants`);

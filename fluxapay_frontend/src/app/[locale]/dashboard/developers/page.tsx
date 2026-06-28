@@ -425,6 +425,7 @@ function CreateApiKeyModal({
   const [error, setError] = useState<string | null>(null);
   const [createdSecret, setCreatedSecret] = useState<string | null>(null);
   const [existingNames, setExistingNames] = useState<Set<string>>(new Set());
+  const [copied, setCopied] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -670,7 +671,8 @@ export default function DevelopersPage() {
   const [activeEndpoint, setActiveEndpoint] = useState<Endpoint>("create");
   const [apiKey, setApiKey] = useState("Loading...");
   const [showCreateKeyModal, setShowCreateKeyModal] = useState(false);
-  const [apiKeys, setApiKeys] = useState<Array<{ id: string; name: string; masked: string; createdAt: string }>([]);
+  type ApiKeyEntry = { id: string; name: string; masked: string; createdAt: string };
+  const [apiKeys, setApiKeys] = useState<ApiKeyEntry[]>([]);
 
   // Rotation state
   const [rotatingApiKey, setRotatingApiKey] = useState(false);

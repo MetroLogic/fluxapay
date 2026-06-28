@@ -41,8 +41,9 @@ export const kycGateMiddleware = async (
       where: { id: merchantId },
       select: {
         id: true,
-        kyc_status: true,
-        is_internal: true,
+        kyc: {
+          select: { kyc_status: true },
+        },
       },
     });
 
@@ -51,13 +52,10 @@ export const kycGateMiddleware = async (
       return;
     }
 
-    // Admin bypass: internal/test merchants skip KYC check
-    if (merchant.is_internal) {
-      return next();
-    }
+    const kycStatus = merchant.kyc?.kyc_status ?? "not_submitted";
 
     // Check KYC status
-    if (merchant.kyc_status === "approved") {
+    if (kycStatus === "approved") {
       return next();
     }
 
@@ -69,10 +67,12 @@ export const kycGateMiddleware = async (
       apiError(
         403,
         ErrorCode.KYC_REQUIRED,
-        `Merchant KYC status is '${merchant.kyc_status}'. Payment creation requires approved KYC.`,
+        `Merchant KYC status is '${kycStatus}'. Payment creation requires approved KYC.`,
         {
-          kyc_status: merchant.kyc_status,
-          kyc_submission_url: kycSubmissionUrl,
+          details: {
+            kyc_status: kycStatus,
+            kyc_submission_url: kycSubmissionUrl,
+          },
         }
       )
     );

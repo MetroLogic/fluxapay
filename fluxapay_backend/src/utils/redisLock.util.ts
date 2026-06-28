@@ -8,6 +8,7 @@
  * Pattern: lock_key = `cron:lock:${jobName}`
  */
 
+import os from "os";
 import { redisClient } from "../middleware/redisIdempotency.middleware";
 
 interface RedisLockOptions {
@@ -22,7 +23,6 @@ const LOCK_PREFIX = "cron:lock:";
  * Generate a lock owner identifier
  */
 function getLockOwner(): string {
-  const os = require("os");
   return `${os.hostname()}:${process.pid}:${Date.now()}`;
 }
 

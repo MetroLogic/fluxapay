@@ -23,7 +23,7 @@ class GlobalErrorBoundary extends React.Component<Props, State> {
 
   componentDidCatch(error: Error, info: React.ErrorInfo): void {
     console.error(error, info);
-    Sentry.captureException(error, { contexts: { react: info } });
+    Sentry.captureException(error, { contexts: { react: info as unknown as Record<string, unknown> } });
   }
 
   handleReset(): void {

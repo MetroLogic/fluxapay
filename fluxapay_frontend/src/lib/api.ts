@@ -49,13 +49,16 @@ export interface ListRefundsParams {
 }
 
 class ApiError extends Error {
+  public retryAfterSeconds?: number;
   constructor(
     public status: number,
     message: string,
     public code?: string,
+    retryAfterSeconds?: number,
   ) {
     super(message);
     this.name = "ApiError";
+    this.retryAfterSeconds = retryAfterSeconds;
   }
 }
 
@@ -129,11 +132,12 @@ async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
     const error = await response
       .json()
       .catch(() => ({ message: "An error occurred" }));
-    const body = error as { message?: string; code?: string };
+    const body = error as { message?: string; code?: string; retry_after?: number };
     throw new ApiError(
       response.status,
       body.message || "Request failed",
       body.code,
+      body.retry_after,
     );
   }
 
@@ -321,6 +325,12 @@ export const api = {
         method: "POST",
         headers: adminHeaders(),
         body: JSON.stringify({ dry_run: dryRun || false }),
+      }),
+
+    /** Preview eligible payments before running a sweep */
+    previewSweep: (): Promise<Response> =>
+      fetch(`${API_BASE_URL}/api/v1/admin/sweep/preview`, {
+        headers: adminHeaders(),
       }),
   },
 
@@ -823,6 +833,7 @@ export const api = {
         if (params?.date_to) sp.set("date_to", params.date_to);
         return fetchWithAuth(`/api/v1/admin/payments?${sp.toString()}`);
       },
+    },
     addressPool: {
       stats: () => fetchWithAuth("/api/v1/admin/address-pool/stats"),
     },

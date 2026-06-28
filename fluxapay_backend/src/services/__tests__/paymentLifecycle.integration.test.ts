@@ -5,7 +5,7 @@ const mockLoadAccount = jest.fn();
 // Mock Horizon/Stellar SDK before other modules import it
 jest.mock('@stellar/stellar-sdk', () => {
   // Set environment variables inside the hoisted mock block so they are ready before any imports run
-  process.env.DATABASE_URL = 'postgresql://anchorpoint:anchorpoint@localhost:5432/fluxapay_test?schema=public';
+  process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/fluxapay_test?schema=public';
   process.env.USDC_ISSUER_PUBLIC_KEY = 'GBBD47IF6LWK7P7MDEVSCWT73IQIGCEZHR7OMXMBZQ3ZONN2T4U6W23Y';
   process.env.DISABLE_STELLAR_PREPARE = 'true';
   process.env.EXCHANGE_PARTNER = 'mock';

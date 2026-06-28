@@ -4,6 +4,37 @@ import { useTranslations } from "next-intl";
 export const Features = () => {
   const t = useTranslations('features');
 
+  const features = [
+    {
+      icon: Zap,
+      title: t('instant.title'),
+      description: t('instant.description'),
+      bg: "bg-amber-500/10 text-amber-500",
+      color: "text-amber-500"
+    },
+    {
+      icon: Globe,
+      title: t('globalReach.title'),
+      description: t('globalReach.description'),
+      bg: "bg-blue-500/10 text-blue-500",
+      color: "text-blue-500"
+    },
+    {
+      icon: Shield,
+      title: t('security.title'),
+      description: t('security.description'),
+      bg: "bg-emerald-500/10 text-emerald-500",
+      color: "text-emerald-500"
+    },
+    {
+      icon: BarChart3,
+      title: t('analytics.title'),
+      description: t('analytics.description'),
+      bg: "bg-purple-500/10 text-purple-500",
+      color: "text-purple-500"
+    }
+  ];
+
   return (
     <section id="features" className="py-24 bg-secondary/30">
       <div className="container mx-auto px-4">

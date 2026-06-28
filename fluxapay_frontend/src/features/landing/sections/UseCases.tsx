@@ -2,7 +2,8 @@
 
 import Image from "next/image";
 import { Link } from "@/i18n/routing";
-import { track, useTranslations } from "@/lib/analytics";
+import { track } from "@/lib/analytics";
+import { useTranslations } from "next-intl";
 
 interface UseCase {
   title: string;
@@ -42,6 +43,7 @@ const UseCaseCard = ({ title, description, bgColor, textColor, image }: UseCase)
 
 export const UseCases = () => {
     const t = useTranslations('useCases');
+    const useCases: UseCase[] = [
     {
       image: "/usecaseframe/frame1.png",
       title: "",

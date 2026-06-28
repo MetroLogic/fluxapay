@@ -35,7 +35,7 @@ describe("Consolidated Rate Limiting - Header Standards", () => {
 
     mockReq = {
       ip: "192.168.1.100",
-      socket: { remoteAddress: "192.168.1.100" },
+      socket: { remoteAddress: "192.168.1.100" } as any,
       path: "/api/test",
     };
 
