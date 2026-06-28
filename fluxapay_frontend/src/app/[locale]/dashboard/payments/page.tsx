@@ -16,9 +16,11 @@ import { Button } from "@/components/Button";
 import { Download, Plus, Wifi, WifiOff } from "lucide-react";
 import { Suspense } from "react";
 import toast from "react-hot-toast";
-import { api } from "@/lib/api";
+import { api, type MerchantExportFormat } from "@/lib/api";
 import { QRCodeCanvas } from "qrcode.react";
 import { DataTableCard, TablePaginationBar } from "@/components/data-table";
+import { ExportActionButtons } from "@/components/data-table/ExportActionButtons";
+import { useMerchantDataExport } from "@/hooks/useMerchantDataExport";
 
 const PAGE_SIZE = 20;
 
@@ -133,6 +135,7 @@ function PaymentsContent() {
   const [recentLinks, setRecentLinks] = useState<
     { id: string; url: string; amount: number; currency: string; description?: string; createdAt: string }[]
   >([]);
+  const { exportData, exportingFormat } = useMerchantDataExport();
 
   // Debounce search
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -211,24 +214,22 @@ function PaymentsContent() {
     setDrawerPayment(null);
   }, []);
 
-  const handleExportCSV = async () => {
-    try {
-      const blob = await api.payments.export({
+  const handleExport = (format: MerchantExportFormat) => {
+    exportData({
+      resource: "payments",
+      format,
+      filters: {
         status: statusFilter,
         currency: currencyFilter,
         search: debouncedSearch || undefined,
         date_from: dateFrom || undefined,
         date_to: dateTo || undefined,
-      });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `payments_export_${new Date().toISOString().split("T")[0]}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch {
-      toast.error("Export failed. Please try again.");
-    }
+        amount_min: amountMin || undefined,
+        amount_max: amountMax || undefined,
+      },
+      page,
+      limit: PAGE_SIZE,
+    });
   };
 
   const handleOpenCreateLink = () => {
@@ -328,10 +329,7 @@ function PaymentsContent() {
           <Button variant="secondary" className="gap-2" onClick={() => router.push("/dashboard/refunds")}>
             Refunds
           </Button>
-          <Button variant="secondary" className="gap-2" onClick={handleExportCSV}>
-            <Download className="h-4 w-4" />
-            Export CSV
-          </Button>
+          <ExportActionButtons onExport={handleExport} exportingFormat={exportingFormat} />
           <Button className="gap-2" onClick={handleOpenCreateLink}>
             <Plus className="h-4 w-4" />
             New Payment

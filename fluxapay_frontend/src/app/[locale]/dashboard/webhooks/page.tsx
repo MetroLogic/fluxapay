@@ -9,9 +9,11 @@ import { WebhookTest } from "@/features/webhooks/WebhookTest";
 import { Button } from "@/components/Button";
 import { Send } from "lucide-react";
 import { toastApiError } from "@/lib/toastApiError";
-import { api } from "@/lib/api";
+import { api, type MerchantExportFormat } from "@/lib/api";
 import { WebhookEvent } from "@/features/webhooks/types";
 import { DataTableCard, TablePaginationBar } from "@/components/data-table";
+import { ExportActionButtons } from "@/components/data-table/ExportActionButtons";
+import { useMerchantDataExport } from "@/hooks/useMerchantDataExport";
 
 export default function WebhooksPage() {
     const [search, setSearch] = useState("");
@@ -26,6 +28,7 @@ export default function WebhooksPage() {
     const [total, setTotal] = useState(0);
     const [refreshKey, setRefreshKey] = useState(0);
     const pageSize = 50;
+    const { exportData, exportingFormat } = useMerchantDataExport();
 
     const [selectedWebhook, setSelectedWebhook] = useState<WebhookEvent | null>(
         null
@@ -94,6 +97,24 @@ export default function WebhooksPage() {
     }, [search, statusFilter, eventTypeFilter, dateFrom, dateTo]);
 
     const filteredWebhooks = webhooks;
+    const handleExport = (format: MerchantExportFormat) => {
+        const date_from = dateFrom ? new Date(dateFrom).toISOString() : undefined;
+        const date_to = dateTo ? new Date(dateTo).toISOString() : undefined;
+
+        exportData({
+            resource: "webhooks",
+            format,
+            filters: {
+                search: search || undefined,
+                status: statusFilter,
+                event_type: eventTypeFilter,
+                date_from,
+                date_to,
+            },
+            page,
+            limit: pageSize,
+        });
+    };
 
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
@@ -102,14 +123,17 @@ export default function WebhooksPage() {
                     title="Webhooks"
                     description="Monitor and manage your webhook deliveries across all events."
                 />
-                <Button
-                    variant="default"
-                    className="gap-2 shrink-0"
-                    onClick={() => setIsTestModalOpen(true)}
-                >
-                    <Send className="h-4 w-4" />
-                    Test Webhook
-                </Button>
+                <div className="flex flex-wrap items-center gap-2">
+                    <ExportActionButtons onExport={handleExport} exportingFormat={exportingFormat} />
+                    <Button
+                        variant="default"
+                        className="gap-2 shrink-0"
+                        onClick={() => setIsTestModalOpen(true)}
+                    >
+                        <Send className="h-4 w-4" />
+                        Test Webhook
+                    </Button>
+                </div>
             </div>
 
             <DataTableCard
