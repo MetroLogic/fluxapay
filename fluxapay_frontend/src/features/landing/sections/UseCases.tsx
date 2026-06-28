@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { Link } from "@/i18n/routing";
-import { track } from "@/lib/analytics";
+import { track, useTranslations } from "@/lib/analytics";
 
 interface UseCase {
   title: string;
@@ -41,7 +41,7 @@ const UseCaseCard = ({ title, description, bgColor, textColor, image }: UseCase)
 );
 
 export const UseCases = () => {
-  const useCases: UseCase[] = [
+    const t = useTranslations('useCases');
     {
       image: "/usecaseframe/frame1.png",
       title: "",
@@ -50,8 +50,8 @@ export const UseCases = () => {
       textColor: "text-[#2E3539]"
     },
     {
-      title: "Business Transfers",
-      description: "Boss Moves? We've got your business transfers handled.",
+      title: t('business.title'),
+      description: t('business.description'),
       bgColor: "bg-[#F5A623]",
       textColor: "text-white"
     },
@@ -63,8 +63,8 @@ export const UseCases = () => {
       textColor: "text-[#2E3539]"
     },
     {
-      title: "Personal Transfers",
-      description: "Send Love, Send Support, Send Smiles!",
+      title: t('personal.title'),
+      description: t('personal.description'),
       bgColor: "bg-[#5B3EC1]",
       textColor: "text-white"
     },
@@ -76,8 +76,8 @@ export const UseCases = () => {
       textColor: "text-[#2E3539]"
     },
     {
-      title: "Currency exchange",
-      description: "Unlock the best exchange rates, and say hello to savings.",
+      title: t('exchange.title'),
+      description: t('exchange.description'),
       bgColor: "bg-[#E5325A]",
       textColor: "text-white"
     }
@@ -133,7 +133,7 @@ export const UseCases = () => {
               onClick={handleGetOnboardedClick}
               className="px-10 py-3 rounded-xl bg-white text-[#121521] font-semibold shadow-md transition-all duration-300 hover:scale-105 hover:shadow-xl"
             >
-              Get onboarded
+                {t('cta')}
             </button>
           </Link>
         </div>
