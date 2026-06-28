@@ -285,6 +285,11 @@ export const api = {
         method: "POST",
         body: JSON.stringify(data),
       }),
+
+    requestDeletion: () =>
+      fetchWithAuth("/api/v1/merchants/me/deletion-request", {
+        method: "POST",
+      }),
   },
 
   // API Keys endpoints
@@ -823,6 +828,7 @@ export const api = {
         if (params?.date_to) sp.set("date_to", params.date_to);
         return fetchWithAuth(`/api/v1/admin/payments?${sp.toString()}`);
       },
+    },
     addressPool: {
       stats: () => fetchWithAuth("/api/v1/admin/address-pool/stats"),
     },
