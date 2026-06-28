@@ -48,6 +48,24 @@ export interface ListRefundsParams {
   limit?: number;
 }
 
+export type MerchantExportResource = "payments" | "settlements" | "webhooks";
+export type MerchantExportFormat = "csv" | "pdf";
+
+export interface MerchantExportRequest {
+  resource: MerchantExportResource;
+  format: MerchantExportFormat;
+  filters?: Record<string, unknown>;
+  page?: number;
+  limit?: number;
+}
+
+export interface MerchantExportJobStatus {
+  jobId: string;
+  status: "pending" | "processing" | "completed" | "failed";
+  expires_at?: string;
+  error?: string;
+}
+
 class ApiError extends Error {
   public retryAfterSeconds?: number;
   constructor(
@@ -289,6 +307,18 @@ export const api = {
         method: "POST",
         body: JSON.stringify(data),
       }),
+  },
+
+  merchantExports: {
+    request: (data: MerchantExportRequest): Promise<MerchantExportJobStatus> =>
+      fetchWithAuth("/api/v1/merchants/export", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }) as Promise<MerchantExportJobStatus>,
+    status: (jobId: string): Promise<MerchantExportJobStatus> =>
+      fetchWithAuth(`/api/v1/merchants/export/${encodeURIComponent(jobId)}`) as Promise<MerchantExportJobStatus>,
+    download: (jobId: string): Promise<Record<string, unknown>> =>
+      fetchWithAuth(`/api/v1/merchants/export/${encodeURIComponent(jobId)}/download`) as Promise<Record<string, unknown>>,
   },
 
   // API Keys endpoints
