@@ -14,7 +14,17 @@ test.describe("Invoice creation flow", () => {
     const qty = "5";
     const price = "100";
 
-    const mockInvoices: any[] = [
+    const mockInvoices: {
+      id: string;
+      invoice_number: string;
+      customer_email: string;
+      amount: number;
+      currency: string;
+      due_date: string;
+      status: string;
+      payment_link: string;
+      created_at: string;
+    }[] = [
       {
         id: "inv_existing",
         invoice_number: "INV-001",

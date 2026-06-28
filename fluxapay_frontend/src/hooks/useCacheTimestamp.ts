@@ -6,6 +6,12 @@ export function useCacheTimestamp(key: string) {
   const [timestamp, setTimestamp] = useState<number | null>(null);
   const [minutesAgo, setMinutesAgo] = useState<number | null>(null);
 
+  const updateMinutesAgo = (ts: number) => {
+    const now = Date.now();
+    const minutes = Math.floor((now - ts) / 60000);
+    setMinutesAgo(minutes);
+  };
+
   useEffect(() => {
     const stored = localStorage.getItem(`cache_timestamp_${key}`);
     if (stored) {
@@ -13,7 +19,7 @@ export function useCacheTimestamp(key: string) {
       setTimestamp(ts);
       updateMinutesAgo(ts);
     }
-  }, [key]);
+  }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!timestamp) return;
@@ -23,13 +29,7 @@ export function useCacheTimestamp(key: string) {
     }, 10000);
 
     return () => clearInterval(interval);
-  }, [timestamp]);
-
-  function updateMinutesAgo(ts: number) {
-    const now = Date.now();
-    const minutes = Math.floor((now - ts) / 60000);
-    setMinutesAgo(minutes);
-  }
+  }, [timestamp]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function recordTimestamp() {
     const now = Date.now();

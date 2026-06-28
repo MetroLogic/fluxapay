@@ -4,8 +4,26 @@ import useSWR from "swr";
 import { api } from "@/lib/api";
 import { Payment, PaymentStatus, PaymentEvent } from "@/features/admin/payments/types";
 
+interface BackendPayment {
+  id: string;
+  merchantId: string;
+  merchant?: { business_name?: string };
+  amount: number | string;
+  currency: string;
+  status: string;
+  transaction_hash?: string;
+  sweep_tx_hash?: string;
+  verification_error?: string;
+  createdAt: string;
+  updatedAt?: string;
+  confirmed_at?: string;
+  swept_at?: string;
+  settled_at?: string;
+  settlementId?: string;
+}
+
 interface AdminPaymentsResponse {
-  data: any[];
+  data: BackendPayment[];
   meta: {
     total: number;
     page: number;
@@ -23,7 +41,7 @@ interface UseAdminPaymentsParams {
   date_to?: string;
 }
 
-function mapBackendPayment(p: any): Payment {
+function mapBackendPayment(p: BackendPayment): Payment {
   const events: PaymentEvent[] = [];
 
   if (p.createdAt) {

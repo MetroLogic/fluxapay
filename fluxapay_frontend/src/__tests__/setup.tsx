@@ -3,6 +3,21 @@ import { vi } from 'vitest';
 import en from '../../messages/en.json';
 import React from 'react';
 
+// jsdom doesn't implement matchMedia
+Object.defineProperty(window, 'matchMedia', {
+  writable: true,
+  value: vi.fn((query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  })),
+});
+
 // Global mocks
 vi.mock('next/navigation', () => ({
   useRouter: () => ({

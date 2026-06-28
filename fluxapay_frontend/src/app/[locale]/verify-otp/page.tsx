@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
 import { toastApiError } from "@/lib/toastApiError";
@@ -19,6 +19,14 @@ export default function VerifyOtpPage() {
   const channel = (searchParams.get("channel") as "email" | "phone") || "email";
 
   const [otp, setOtp] = useState("");
+  const otpRef = useRef("");
+  const isVerifyingRef = useRef(false);
+
+  const updateOtp = useCallback((value: string) => {
+    otpRef.current = value;
+    setOtp(value);
+  }, []);
+
   const [isVerifying, setIsVerifying] = useState(false);
   const [isResending, setIsResending] = useState(false);
   const [cooldown, setCooldown] = useState(0);
@@ -46,12 +54,17 @@ export default function VerifyOtpPage() {
     async (e?: React.FormEvent) => {
       e?.preventDefault();
 
+      if (isVerifyingRef.current) return;
+      isVerifyingRef.current = true;
+
       if (!merchantId) {
+        isVerifyingRef.current = false;
         setError("Missing merchant ID. Please sign up again.");
         return;
       }
 
-      if (otp.length !== 6) {
+      if (otpRef.current.length !== 6) {
+        isVerifyingRef.current = false;
         setError("Please enter a valid 6-digit OTP.");
         return;
       }
@@ -63,26 +76,21 @@ export default function VerifyOtpPage() {
         await api.auth.verifyOtp({
           merchantId,
           channel,
-          otp,
+          otp: otpRef.current,
         });
 
         toast.success("Account verified successfully!");
         router.push("/login");
       } catch (err) {
         if (err instanceof ApiError) {
-          // Handle expired OTP
           if (err.code === "OTP_EXPIRED" || err.message.toLowerCase().includes("expired")) {
             setIsExpiredOtp(true);
             setError(err.message);
-          }
-          // Handle rate limit (429)
-          else if (err.status === 429) {
+          } else if (err.status === 429) {
             const retryAfter = err.retryAfterSeconds || 60;
             setRateLimitCooldown(retryAfter);
             setError(`Too many attempts. Please try again in ${retryAfter} seconds.`);
-          }
-          // Handle other errors
-          else {
+          } else {
             setError(err.message);
             setIsExpiredOtp(false);
           }
@@ -91,9 +99,10 @@ export default function VerifyOtpPage() {
         }
       } finally {
         setIsVerifying(false);
+        isVerifyingRef.current = false;
       }
     },
-    [merchantId, channel, otp, router],
+    [merchantId, channel, router],
   );
 
   // Auto-verify when 6 digits are entered
@@ -101,7 +110,8 @@ export default function VerifyOtpPage() {
     if (otp.length === 6) {
       handleVerify();
     }
-  }, [otp, handleVerify]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [otp]);
 
   const handleResend = useCallback(async () => {
     if (!merchantId) {
@@ -188,7 +198,7 @@ export default function VerifyOtpPage() {
                 </label>
                 <OtpInput
                   value={otp}
-                  onChange={setOtp}
+                  onChange={updateOtp}
                   error={!!error}
                   disabled={isVerifying || isExpiredOtp}
                 />
