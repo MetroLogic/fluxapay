@@ -143,6 +143,13 @@ export class SweepService {
 
         if (params.mergeDestination) {
           builder.addOperation(
+            Operation.changeTrust({
+              asset: this.usdcAsset,
+              limit: "0",
+            }),
+          );
+
+          builder.addOperation(
             Operation.accountMerge({
               destination: params.mergeDestination,
             }),
