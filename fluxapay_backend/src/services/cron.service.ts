@@ -32,6 +32,7 @@ import { runInvoiceOverdueJob } from "./invoiceOverdue.service";
 import { cleanupExpiredIdempotencyRecords } from "../middleware/idempotency.middleware";
 import { DepositAddressService } from "./depositAddress.service";
 import { getSweepCronInterval, logSweepConfigAtStartup } from "../config/sweep.config";
+import { acquireCronLock, releaseCronLock } from "../utils/redisLock.util";
 
 const SETTLEMENT_CRON_EXPR = process.env.SETTLEMENT_CRON ?? "0 0 * * *";
 const BILLING_CRON_EXPR = process.env.BILLING_CRON ?? "0 1 * * *";
@@ -67,22 +68,36 @@ export function startCronJobs(): void {
   // ── Daily Settlement Batch ─────────────────────────────────────────────────
   settlementTask = schedule(SETTLEMENT_CRON_EXPR, async () => {
     console.log(`[Cron] ⏰ Settlement batch triggered at ${new Date().toISOString()}`);
+    const acquired = await acquireCronLock("settlement");
+    if (!acquired) {
+      console.warn(`[Cron] ⚠️ Settlement batch lock held by another instance – skipping tick.`);
+      return;
+    }
     try {
       const result = await runSettlementBatch();
       console.log(`[Cron] ✅ Settlement batch ${result.batchId} finished – ${result.totalMerchantsSucceeded}/${result.totalMerchantsProcessed} merchants settled.`);
     } catch (err: any) {
       console.error(`[Cron] ❌ Settlement batch failed: ${err.message}`);
+    } finally {
+      await releaseCronLock("settlement");
     }
   }, { timezone: "UTC" });
 
   // ── Billing cycle ──────────────────────────────────────────────────────────
   billingTask = schedule(BILLING_CRON_EXPR, async () => {
     console.log(`[Cron] ⏰ Billing cycle triggered at ${new Date().toISOString()}`);
+    const acquired = await acquireCronLock("billing");
+    if (!acquired) {
+      console.warn(`[Cron] ⚠️ Billing cycle lock held by another instance – skipping tick.`);
+      return;
+    }
     try {
       const result = await processBillingCycle();
       console.log(`[Cron] ✅ Billing cycle finished – ${result.renewed}/${result.processed} renewed.`);
     } catch (err: any) {
       console.error(`[Cron] ❌ Billing cycle failed: ${err.message}`);
+    } finally {
+      await releaseCronLock("billing");
     }
   }, { timezone: "UTC" });
 
@@ -108,6 +123,11 @@ export function startCronJobs(): void {
 
   // ── Checkout Expiry Reminder ───────────────────────────────────────────────
   checkoutReminderTask = schedule(CHECKOUT_REMINDER_CRON_EXPR, async () => {
+    const acquired = await acquireCronLock("checkout_reminder");
+    if (!acquired) {
+      console.warn(`[Cron] ⚠️ Checkout reminder lock held by another instance – skipping tick.`);
+      return;
+    }
     try {
       const result = await runPaymentExpiryReminderJob();
       if (result.processed > 0) {
@@ -115,6 +135,8 @@ export function startCronJobs(): void {
       }
     } catch (err: any) {
       console.error(`[Cron] ❌ Checkout reminder job failed: ${err.message}`);
+    } finally {
+      await releaseCronLock("checkout_reminder");
     }
   }, { timezone: "UTC" });
 
@@ -124,6 +146,11 @@ export function startCronJobs(): void {
       paymentExpiryTask = schedule(
         PAYMENT_EXPIRY_CRON_EXPR,
         async () => {
+          const acquired = await acquireCronLock("payment_expiry");
+          if (!acquired) {
+            console.warn(`[Cron] ⚠️ Payment expiry lock held by another instance – skipping tick.`);
+            return;
+          }
           try {
             const result = await runPaymentExpiryJob();
             if (result.processed > 0) {
@@ -135,6 +162,8 @@ export function startCronJobs(): void {
           } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err);
             console.error(`[Cron] ❌ Payment expiry job failed: ${msg}`);
+          } finally {
+            await releaseCronLock("payment_expiry");
           }
         },
         { timezone: "UTC" },
@@ -150,11 +179,25 @@ export function startCronJobs(): void {
   // ── Database Daily Backup ──────────────────────────────────────────────────
   dbBackupTask = schedule(DB_BACKUP_CRON_EXPR, async () => {
     console.log(`[Cron] ⏰ Database backup triggered at ${new Date().toISOString()}`);
-    await performDatabaseBackup();
+    const acquired = await acquireCronLock("db_backup");
+    if (!acquired) {
+      console.warn(`[Cron] ⚠️ Database backup lock held by another instance – skipping tick.`);
+      return;
+    }
+    try {
+      await performDatabaseBackup();
+    } finally {
+      await releaseCronLock("db_backup");
+    }
   }, { timezone: "UTC" });
 
   // ── Invoice Overdue Check ──────────────────────────────────────────────────
   invoiceOverdueTask = schedule(INVOICE_OVERDUE_CRON_EXPR, async () => {
+    const acquired = await acquireCronLock("invoice_overdue");
+    if (!acquired) {
+      console.warn(`[Cron] ⚠️ Invoice overdue lock held by another instance – skipping tick.`);
+      return;
+    }
     try {
       const result = await runInvoiceOverdueJob();
       if (result.updated > 0) {
@@ -162,22 +205,36 @@ export function startCronJobs(): void {
       }
     } catch (err: any) {
       console.error(`[Cron] ❌ Invoice overdue job failed: ${err.message}`);
+    } finally {
+      await releaseCronLock("invoice_overdue");
     }
   }, { timezone: "UTC" });
 
   // ── Idempotency Cleanup ────────────────────────────────────────────────────
   idempotencyCleanupTask = schedule(IDEMPOTENCY_CLEANUP_CRON_EXPR, async () => {
     console.log(`[Cron] ⏰ Idempotency cleanup triggered at ${new Date().toISOString()}`);
+    const acquired = await acquireCronLock("idempotency_cleanup");
+    if (!acquired) {
+      console.warn(`[Cron] ⚠️ Idempotency cleanup lock held by another instance – skipping tick.`);
+      return;
+    }
     try {
       const deletedCount = await cleanupExpiredIdempotencyRecords();
       console.log(`[Cron] ✅ Idempotency cleanup — ${deletedCount} expired records deleted.`);
     } catch (err: any) {
       console.error(`[Cron] ❌ Idempotency cleanup failed: ${err.message}`);
+    } finally {
+      await releaseCronLock("idempotency_cleanup");
     }
   }, { timezone: "UTC" });
 
   // ── Address Pool ───────────────────────────────────────────────────────────
   addressPoolTask = schedule(ADDRESS_POOL_CRON_EXPR, async () => {
+    const acquired = await acquireCronLock("address_pool");
+    if (!acquired) {
+      console.warn(`[Cron] ⚠️ Address pool lock held by another instance – skipping tick.`);
+      return;
+    }
     try {
       const recycled = await DepositAddressService.recycleAddresses();
       if (recycled > 0) {
@@ -191,6 +248,8 @@ export function startCronJobs(): void {
       }
     } catch (err: any) {
       console.error(`[Cron] ❌ Address pool job failed: ${err.message}`);
+    } finally {
+      await releaseCronLock("address_pool");
     }
   }, { timezone: "UTC" });
 

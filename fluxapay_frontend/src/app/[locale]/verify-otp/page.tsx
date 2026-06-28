@@ -23,14 +23,24 @@ export default function VerifyOtpPage() {
   const [isResending, setIsResending] = useState(false);
   const [cooldown, setCooldown] = useState(0);
   const [error, setError] = useState("");
+  const [isExpiredOtp, setIsExpiredOtp] = useState(false);
+  const [rateLimitCooldown, setRateLimitCooldown] = useState(0);
 
-  // Cooldown timer
+  // Resend cooldown timer
   useEffect(() => {
     if (cooldown > 0) {
       const timer = setTimeout(() => setCooldown(cooldown - 1), 1000);
       return () => clearTimeout(timer);
     }
   }, [cooldown]);
+
+  // Rate limit cooldown timer
+  useEffect(() => {
+    if (rateLimitCooldown > 0) {
+      const timer = setTimeout(() => setRateLimitCooldown(rateLimitCooldown - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [rateLimitCooldown]);
 
   const handleVerify = useCallback(
     async (e?: React.FormEvent) => {
@@ -60,7 +70,22 @@ export default function VerifyOtpPage() {
         router.push("/login");
       } catch (err) {
         if (err instanceof ApiError) {
-          setError(err.message);
+          // Handle expired OTP
+          if (err.code === "OTP_EXPIRED" || err.message.toLowerCase().includes("expired")) {
+            setIsExpiredOtp(true);
+            setError(err.message);
+          }
+          // Handle rate limit (429)
+          else if (err.status === 429) {
+            const retryAfter = err.retryAfterSeconds || 60;
+            setRateLimitCooldown(retryAfter);
+            setError(`Too many attempts. Please try again in ${retryAfter} seconds.`);
+          }
+          // Handle other errors
+          else {
+            setError(err.message);
+            setIsExpiredOtp(false);
+          }
         } else {
           toastApiError(err);
         }
@@ -161,16 +186,33 @@ export default function VerifyOtpPage() {
                 <label className="block text-sm font-semibold text-slate-700">
                   Verification Code
                 </label>
-                <OtpInput 
-                  value={otp} 
-                  onChange={setOtp} 
+                <OtpInput
+                  value={otp}
+                  onChange={setOtp}
                   error={!!error}
-                  disabled={isVerifying}
+                  disabled={isVerifying || isExpiredOtp}
                 />
                 {error && (
-                  <div className="flex items-center gap-2 text-red-500 animate-in fade-in slide-in-from-top-1">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                    <p className="text-sm font-medium">{error}</p>
+                  <div className="space-y-3 animate-in fade-in slide-in-from-top-1">
+                    <div className="flex items-center gap-2 text-red-500">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                      <p className="text-sm font-medium">{error}</p>
+                    </div>
+                    {isExpiredOtp && (
+                      <button
+                        type="button"
+                        onClick={handleResend}
+                        disabled={isResending}
+                        className="text-sm font-semibold text-indigo-600 hover:text-indigo-700 transition-colors"
+                      >
+                        {isResending ? "Requesting new OTP..." : "Request new OTP"}
+                      </button>
+                    )}
+                    {rateLimitCooldown > 0 && (
+                      <p className="text-xs text-slate-500">
+                        Try again in {rateLimitCooldown} seconds.
+                      </p>
+                    )}
                   </div>
                 )}
               </div>

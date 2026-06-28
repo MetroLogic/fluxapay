@@ -31,11 +31,16 @@ export function shouldOpenInNewTab(): boolean {
 /**
  * Build a Stellar Expert transaction URL for the given hash.
  *
+ * @param txHash - The transaction hash
+ * @param network - Optional network override. If not provided, uses NEXT_PUBLIC_STELLAR_NETWORK
+ *
  * @example
  * getStellarExpertTxUrl("abc123")
  * // → "https://stellar.expert/explorer/testnet/tx/abc123"
+ * getStellarExpertTxUrl("abc123", "public")
+ * // → "https://stellar.expert/explorer/public/tx/abc123"
  */
-export function getStellarExpertTxUrl(txHash: string): string {
-  const network = getStellarNetwork();
-  return `${STELLAR_EXPERT_BASE}/${network}/tx/${txHash}`;
+export function getStellarExpertTxUrl(txHash: string, network?: StellarNetwork): string {
+  const resolvedNetwork = network || getStellarNetwork();
+  return `${STELLAR_EXPERT_BASE}/${resolvedNetwork}/tx/${txHash}`;
 }

@@ -9,6 +9,7 @@ import { eventBus, AppEvents } from "../services/EventService";
 import { validateUserId } from "../helpers/request.helper";
 import { MetadataValidationError } from "../utils/metadata.util";
 import { paymentSettlementService } from "../services/paymentSettlement.service";
+import { IdempotentRequest, storeIdempotentResponse } from "../middleware/idempotency.middleware";
 
 
 const prisma = new PrismaClient();
@@ -86,7 +87,16 @@ export const createPayment = async (req: Request, res: Response) => {
       checkout_url: payment.checkout_url,
     };
 
-
+    const idempotentReq = req as IdempotentRequest;
+    if (idempotentReq.idempotencyKey) {
+      await storeIdempotentResponse(
+        idempotentReq.idempotencyKey,
+        req.body,
+        201,
+        responseBody,
+        merchantId
+      );
+    }
 
     res.status(201).json(responseBody);
   } catch (error: unknown) {

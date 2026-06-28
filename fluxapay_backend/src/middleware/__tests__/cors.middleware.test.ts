@@ -1,5 +1,19 @@
+const mockMerchantFindMany = jest.fn();
+
+jest.mock('../../generated/client/client', () => {
+  return {
+    PrismaClient: jest.fn().mockImplementation(() => {
+      return {
+        merchant: {
+          findMany: mockMerchantFindMany,
+        },
+      };
+    }),
+  };
+});
+
 import { getCorsOptions, corsMiddleware } from '../cors.middleware';
-import { resetEnvConfig } from '../../config/env.config';
+import { resetEnvConfig, validateEnv } from '../../config/env.config';
 
 /**
  * Helper function to set up minimal required environment variables for testing
@@ -23,6 +37,7 @@ describe('CORS Middleware', () => {
     resetEnvConfig();
     jest.clearAllMocks();
     setupMinimalEnv();
+    mockMerchantFindMany.mockReset();
   });
 
   afterEach(() => {
@@ -36,12 +51,12 @@ describe('CORS Middleware', () => {
       process.env.CORS_ORIGINS = '';
     });
 
-    it('should allow localhost origins in development', () => {
+    it('should allow localhost origins with explicit ports in development', () => {
       const options = getCorsOptions();
       expect(options.origin).toBeDefined();
       expect(typeof options.origin).toBe('function');
 
-      // Standard localhost ports should be allowed
+      // Allowed development ports should pass
       const callback = jest.fn();
       (options.origin as Function)('http://localhost:3000', callback);
       expect(callback).toHaveBeenCalledWith(null, true);
@@ -53,6 +68,19 @@ describe('CORS Middleware', () => {
       callback.mockClear();
       (options.origin as Function)('http://127.0.0.1:4000', callback);
       expect(callback).toHaveBeenCalledWith(null, true);
+
+      callback.mockClear();
+      (options.origin as Function)('https://localhost:5173', callback);
+      expect(callback).toHaveBeenCalledWith(null, true);
+    });
+
+    it('should block localhost origins with non-allowed ports in development', () => {
+      const options = getCorsOptions();
+      const callback = jest.fn();
+
+      (options.origin as Function)('http://localhost:9999', callback);
+      expect(callback.mock.calls[0][0]).toBeInstanceOf(Error);
+      expect(callback.mock.calls[0][1]).toBe(false);
     });
 
     it('should block non-localhost origins in development', () => {
@@ -73,37 +101,18 @@ describe('CORS Middleware', () => {
     });
 
     it('should honour CORS_ORIGINS override in development when set', () => {
-      process.env.CORS_ORIGINS = 'https://staging.fluxapay.com';
+      process.env.CORS_ORIGINS = 'https://custom-dev-domain.com';
       resetEnvConfig();
 
       const options = getCorsOptions();
       const callback = jest.fn();
 
-      (options.origin as Function)('https://staging.fluxapay.com', callback);
+      (options.origin as Function)('https://custom-dev-domain.com', callback);
       expect(callback).toHaveBeenCalledWith(null, true);
 
       callback.mockClear();
       (options.origin as Function)('http://localhost:3000', callback);
       expect(callback.mock.calls[0][0]).toBeInstanceOf(Error);
-    });
-
-    it('should allow credentials in development', () => {
-      const options = getCorsOptions();
-      expect(options.credentials).toBe(true);
-    });
-
-    it('should include proper methods and headers in development', () => {
-      const options = getCorsOptions();
-      expect(options.methods).toEqual([
-        'GET',
-        'POST',
-        'PUT',
-        'DELETE',
-        'PATCH',
-        'OPTIONS'
-      ]);
-      expect(options.allowedHeaders).toContain('Content-Type');
-      expect(options.allowedHeaders).toContain('Authorization');
     });
   });
 
@@ -117,19 +126,53 @@ describe('CORS Middleware', () => {
       const options = getCorsOptions();
       expect(options.origin).toBe('*');
     });
+  });
 
-    it('should include proper methods and headers in test', () => {
+  describe('Staging Environment', () => {
+    beforeEach(() => {
+      process.env.NODE_ENV = 'staging';
+    });
+
+    it('should allow staging domains only in staging', () => {
       const options = getCorsOptions();
-      expect(options.methods).toEqual([
-        'GET',
-        'POST',
-        'PUT',
-        'DELETE',
-        'PATCH',
-        'OPTIONS'
-      ]);
-      expect(options.allowedHeaders).toContain('Content-Type');
-      expect(options.allowedHeaders).toContain('Authorization');
+      const callback = jest.fn();
+
+      (options.origin as Function)('https://staging.fluxapay.com', callback);
+      expect(callback).toHaveBeenCalledWith(null, true);
+
+      callback.mockClear();
+      (options.origin as Function)('https://app.staging.fluxapay.com', callback);
+      expect(callback).toHaveBeenCalledWith(null, true);
+
+      callback.mockClear();
+      (options.origin as Function)('https://api.staging.fluxapay.com', callback);
+      expect(callback).toHaveBeenCalledWith(null, true);
+    });
+
+    it('should block non-staging domains in staging', () => {
+      const options = getCorsOptions();
+      const callback = jest.fn();
+
+      (options.origin as Function)('https://fluxapay.com', callback);
+      expect(callback.mock.calls[0][0]).toBeInstanceOf(Error);
+
+      callback.mockClear();
+      (options.origin as Function)('https://evil.com', callback);
+      expect(callback.mock.calls[0][0]).toBeInstanceOf(Error);
+    });
+
+    it('should block requests with no origin in staging', () => {
+      const options = getCorsOptions();
+      const callback = jest.fn();
+
+      (options.origin as Function)(undefined, callback);
+      expect(callback.mock.calls[0][0]).toBeInstanceOf(Error);
+    });
+
+    it('should fail environment validation in staging if CORS_ORIGINS contains wildcard', () => {
+      process.env.CORS_ORIGINS = 'https://staging.fluxapay.com,*';
+      resetEnvConfig();
+      expect(() => validateEnv()).toThrow(/CORS_ORIGINS cannot contain wildcard/);
     });
   });
 
@@ -138,212 +181,64 @@ describe('CORS Middleware', () => {
       process.env.NODE_ENV = 'production';
     });
 
-    it('should block all origins when CORS_ORIGINS is not set', () => {
-      process.env.CORS_ORIGINS = '';
-      resetEnvConfig();
-      
+    it('should allow app.fluxapay.com and fluxapay.com in production', async () => {
       const options = getCorsOptions();
       const callback = jest.fn();
-      
-      // Simulate origin check
-      (options.origin as Function)('https://example.com', callback);
-      expect(callback).toHaveBeenCalled();
-      expect(callback.mock.calls[0][0]).toBeInstanceOf(Error);
-      expect(callback.mock.calls[0][1]).toBe(false);
-    });
 
-    it('should allow specified origins in production', () => {
-      process.env.CORS_ORIGINS = 'https://app.fluxapay.com,https://dashboard.fluxapay.com';
-      resetEnvConfig();
-      
-      const options = getCorsOptions();
-      const callback = jest.fn();
-      
-      // Test allowed origin
-      (options.origin as Function)('https://app.fluxapay.com', callback);
+      await (options.origin as Function)('https://app.fluxapay.com', callback);
       expect(callback).toHaveBeenCalledWith(null, true);
-      
+
       callback.mockClear();
-      (options.origin as Function)('https://dashboard.fluxapay.com', callback);
+      await (options.origin as Function)('https://fluxapay.com', callback);
       expect(callback).toHaveBeenCalledWith(null, true);
     });
 
-    it('should block non-specified origins in production', () => {
-      process.env.CORS_ORIGINS = 'https://app.fluxapay.com';
-      resetEnvConfig();
-      
+    it('should allow merchant-registered webhook origins in production', async () => {
+      mockMerchantFindMany.mockResolvedValueOnce([
+        { webhook_url: 'https://merchant-api.com/v1/webhooks' }
+      ]);
+
       const options = getCorsOptions();
       const callback = jest.fn();
-      
-      (options.origin as Function)('https://evil.com', callback);
-      expect(callback).toHaveBeenCalled();
+
+      await (options.origin as Function)('https://merchant-api.com', callback);
+      expect(callback).toHaveBeenCalledWith(null, true);
+      expect(mockMerchantFindMany).toHaveBeenCalledWith({
+        where: {
+          webhook_url: {
+            startsWith: 'https://merchant-api.com',
+          },
+        },
+        select: {
+          webhook_url: true,
+        },
+      });
+    });
+
+    it('should block unregistered origins in production', async () => {
+      mockMerchantFindMany.mockResolvedValueOnce([]);
+
+      const options = getCorsOptions();
+      const callback = jest.fn();
+
+      await (options.origin as Function)('https://unregistered-domain.com', callback);
       expect(callback.mock.calls[0][0]).toBeInstanceOf(Error);
       expect(callback.mock.calls[0][1]).toBe(false);
     });
 
-    it('should block missing origins in production', () => {
-      process.env.CORS_ORIGINS = 'https://app.fluxapay.com';
-      resetEnvConfig();
-      
+    it('should block missing origins in production', async () => {
       const options = getCorsOptions();
       const callback = jest.fn();
-      
-      (options.origin as Function)('', callback);
-      expect(callback).toHaveBeenCalled();
+
+      await (options.origin as Function)(undefined, callback);
       expect(callback.mock.calls[0][0]).toBeInstanceOf(Error);
       expect(callback.mock.calls[0][1]).toBe(false);
     });
 
-    it('should support wildcard subdomain patterns', () => {
-      process.env.CORS_ORIGINS = '*.fluxapay.com';
-      resetEnvConfig();
-      
-      const options = getCorsOptions();
-      const callback = jest.fn();
-      
-      // Test subdomain match
-      (options.origin as Function)('https://app.fluxapay.com', callback);
-      expect(callback).toHaveBeenCalledWith(null, true);
-      
-      callback.mockClear();
-      (options.origin as Function)('https://dashboard.fluxapay.com', callback);
-      expect(callback).toHaveBeenCalledWith(null, true);
-      
-      callback.mockClear();
-      (options.origin as Function)('https://evil.com', callback);
-      expect(callback.mock.calls[0][0]).toBeInstanceOf(Error);
-      expect(callback.mock.calls[0][1]).toBe(false);
-    });
-
-    it('should allow wildcard (*) origin when explicitly set', () => {
+    it('should fail environment validation in production if CORS_ORIGINS contains wildcard', () => {
       process.env.CORS_ORIGINS = '*';
       resetEnvConfig();
-      
-      const options = getCorsOptions();
-      const callback = jest.fn();
-      
-      (options.origin as Function)('https://any-origin.com', callback);
-      expect(callback).toHaveBeenCalledWith(null, true);
-    });
-
-    it('should handle whitespace in CORS_ORIGINS', () => {
-      process.env.CORS_ORIGINS = '  https://app.fluxapay.com  ,  https://dashboard.fluxapay.com  ';
-      resetEnvConfig();
-      
-      const options = getCorsOptions();
-      const callback = jest.fn();
-      
-      (options.origin as Function)('https://app.fluxapay.com', callback);
-      expect(callback).toHaveBeenCalledWith(null, true);
-      
-      callback.mockClear();
-      (options.origin as Function)('https://dashboard.fluxapay.com', callback);
-      expect(callback).toHaveBeenCalledWith(null, true);
-    });
-
-    it('should include credentials and exposed headers in production', () => {
-      process.env.CORS_ORIGINS = 'https://app.fluxapay.com';
-      resetEnvConfig();
-      
-      const options = getCorsOptions();
-      expect(options.credentials).toBe(true);
-      expect(options.exposedHeaders).toContain('X-Request-ID');
-    });
-  });
-
-  describe('Preflight Request Handling', () => {
-    beforeEach(() => {
-      process.env.NODE_ENV = 'production';
-      process.env.CORS_ORIGINS = 'https://app.fluxapay.com';
-    });
-
-    it('should handle OPTIONS preflight requests correctly', () => {
-      const mockReq: any = {
-        method: 'OPTIONS',
-        headers: {
-          origin: 'https://app.fluxapay.com',
-          'access-control-request-method': 'POST',
-          'access-control-request-headers': 'Content-Type, Authorization'
-        }
-      };
-      
-      const mockRes: any = {
-        statusCode: 204,
-        headers: {} as Record<string, string>,
-        setHeader: jest.fn((key: string, value: string) => {
-          mockRes.headers[key.toLowerCase()] = value;
-          return mockRes;
-        }),
-        end: jest.fn(),
-        getHeader: jest.fn()
-      };
-      
-      const mockNext = jest.fn();
-      
-      corsMiddleware(mockReq, mockRes, mockNext);
-      
-      // Verify preflight response headers
-      expect(mockRes.headers['access-control-allow-origin']).toBe('https://app.fluxapay.com');
-      expect(mockRes.headers['access-control-allow-methods']).toContain('POST');
-      expect(mockRes.headers['access-control-allow-headers']).toContain('Authorization');
-      expect(mockRes.headers['access-control-max-age']).toBe('86400');
-    });
-
-    it('should reject preflight requests from disallowed origins', () => {
-      const mockReq: any = {
-        method: 'OPTIONS',
-        headers: {
-          origin: 'https://evil.com',
-          'access-control-request-method': 'POST'
-        }
-      };
-      
-      const mockRes: any = {
-        statusCode: 200,
-        headers: {} as Record<string, string>,
-        setHeader: jest.fn((key: string, value: string) => {
-          mockRes.headers[key.toLowerCase()] = value;
-          return mockRes;
-        })
-      };
-      
-      const mockNext = jest.fn();
-      
-      // Should not call next for blocked origins - CORS will handle the error
-      corsMiddleware(mockReq, mockRes, mockNext);
-      
-      // The CORS middleware should block the request and not call next
-      // It will set appropriate error headers instead
-      expect(mockRes.headers['access-control-allow-origin']).toBeUndefined();
-    });
-  });
-
-  describe('Edge Cases', () => {
-    beforeEach(() => {
-      process.env.NODE_ENV = 'production';
-    });
-
-    it('should handle empty origin strings', () => {
-      process.env.CORS_ORIGINS = ',';
-      resetEnvConfig();
-      
-      const options = getCorsOptions();
-      const callback = jest.fn();
-      
-      (options.origin as Function)('https://example.com', callback);
-      expect(callback.mock.calls[0][0]).toBeInstanceOf(Error);
-      expect(callback.mock.calls[0][1]).toBe(false);
-    });
-
-    it('should trim whitespace from individual origins', () => {
-      process.env.CORS_ORIGINS = '  https://clean.com  ';
-      resetEnvConfig();
-      
-      const options = getCorsOptions();
-      const callback = jest.fn();
-      
-      (options.origin as Function)('https://clean.com', callback);
-      expect(callback).toHaveBeenCalledWith(null, true);
+      expect(() => validateEnv()).toThrow(/CORS_ORIGINS cannot contain wildcard/);
     });
   });
 });

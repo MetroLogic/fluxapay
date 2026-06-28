@@ -209,4 +209,105 @@ describe("HDWalletService – BIP44 Derivation", () => {
       await expect(service.decryptKeyData(tampered)).rejects.toThrow();
     });
   });
+
+  describe("index persistence and restart simulation", () => {
+    it("should persist merchant_index across service restart", async () => {
+      // First instance: derive address for merchant_restart_test
+      const result1 = await service.derivePaymentAddress(
+        "merchant_restart_test",
+        "payment_1"
+      );
+      const merchantIndex1 = result1.merchantIndex;
+
+      // Simulate restart by creating a new service instance
+      const newService = new HDWalletService("test-master-seed-bip44-deterministic-1234567890abcdef");
+
+      // Second instance: derive another address for same merchant
+      const result2 = await newService.derivePaymentAddress(
+        "merchant_restart_test",
+        "payment_2"
+      );
+      const merchantIndex2 = result2.merchantIndex;
+
+      // merchant_index should be the same (persisted in DB)
+      expect(merchantIndex1).toBe(merchantIndex2);
+    });
+
+    it("should increment payment_counter across restart", async () => {
+      const merchantId = "merchant_counter_test";
+
+      // First instance: derive first address
+      const result1 = await service.derivePaymentAddress(merchantId, "pay_1");
+      expect(result1.paymentIndex).toBe(0);
+
+      // Second instance (simulated restart)
+      const newService = new HDWalletService("test-master-seed-bip44-deterministic-1234567890abcdef");
+
+      // Derive second address - should increment payment counter
+      const result2 = await newService.derivePaymentAddress(merchantId, "pay_2");
+      expect(result2.paymentIndex).toBe(1);
+
+      // Third address - should increment again
+      const result3 = await newService.derivePaymentAddress(merchantId, "pay_3");
+      expect(result3.paymentIndex).toBe(2);
+    });
+
+    it("should not reset global merchant_index counter on restart", async () => {
+      // First instance: assign indices to multiple merchants
+      const merchant1 = await service.derivePaymentAddress("new_merchant_1", "pay_1");
+      const merchant2 = await service.derivePaymentAddress("new_merchant_2", "pay_1");
+      const merchant3 = await service.derivePaymentAddress("new_merchant_3", "pay_1");
+
+      // All should have different merchant indices
+      expect(merchant1.merchantIndex).not.toBe(merchant2.merchantIndex);
+      expect(merchant2.merchantIndex).not.toBe(merchant3.merchantIndex);
+      expect(merchant1.merchantIndex).not.toBe(merchant3.merchantIndex);
+
+      // Second instance (simulated restart): new merchant should get next index
+      const newService = new HDWalletService("test-master-seed-bip44-deterministic-1234567890abcdef");
+      const merchant4 = await newService.derivePaymentAddress("new_merchant_4", "pay_1");
+
+      // Should get a higher merchant_index, not restart from 0
+      expect(merchant4.merchantIndex).toBeGreaterThan(merchant3.merchantIndex);
+    });
+
+    it("should produce same public key after restart when using same indices", async () => {
+      const derivedAddress = await service.derivePaymentAddress("merchant_pk_test", "pay_1");
+      const publicKey1 = derivedAddress.publicKey;
+      const merchantIndex = derivedAddress.merchantIndex;
+      const paymentIndex = derivedAddress.paymentIndex;
+
+      // Simulate restart: create new service and regenerate with same indices
+      const newService = new HDWalletService("test-master-seed-bip44-deterministic-1234567890abcdef");
+      const { publicKey: publicKey2 } = await newService.regenerateKeypair(
+        merchantIndex,
+        paymentIndex
+      );
+
+      // Should produce the same public key
+      expect(publicKey1).toBe(publicKey2);
+    });
+
+    it("should log derived address with index for audit", async () => {
+      const logSpy = jest.spyOn(console, "log").mockImplementation();
+
+      const result = await service.derivePaymentAddress("merchant_audit", "pay_audit");
+
+      // Verify audit log was created
+      expect(logSpy).toHaveBeenCalledWith(
+        expect.stringContaining("HD wallet address derived")
+      );
+      expect(logSpy).toHaveBeenCalledWith(
+        expect.stringContaining(result.publicKey)
+      );
+      expect(logSpy).toHaveBeenCalledWith(
+        expect.stringContaining(`"merchantIndex":${result.merchantIndex}`)
+      );
+      expect(logSpy).toHaveBeenCalledWith(
+        expect.stringContaining(`"paymentIndex":${result.paymentIndex}`)
+      );
+
+      logSpy.mockRestore();
+    });
+  });
 });

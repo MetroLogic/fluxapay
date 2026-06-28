@@ -3,8 +3,9 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
+import { isAdmin } from "@/lib/auth";
 
-const ROUTES = [
+const BASE_ROUTES = [
   { label: "Overview", path: "/dashboard" },
   { label: "Payments", path: "/dashboard/payments" },
   { label: "Payment Links", path: "/dashboard/payment-links" },
@@ -15,18 +16,38 @@ const ROUTES = [
   { label: "Analytics", path: "/dashboard/analytics" },
   { label: "Settings", path: "/dashboard/settings" },
   { label: "Developers", path: "/dashboard/developers" },
-  { label: "Admin", path: "/admin/overview" },
+];
+
+const ADMIN_ROUTES = [
+  { label: "Admin Overview", path: "/admin/overview" },
+  { label: "Force Oracle Sync", path: "/admin/overview?action=force-oracle-sync" },
+  { label: "Flush Webhook Queue", path: "/admin/overview?action=flush-webhooks" },
+  { label: "View KYC Queue", path: "/admin/overview?action=kyc-queue" },
 ];
 
 export function CommandPalette() {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
+  const [isAdminUser, setIsAdminUser] = useState(false);
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
-  const filtered = ROUTES.filter((r) =>
+  const routes = isAdminUser ? [...BASE_ROUTES, ...ADMIN_ROUTES] : BASE_ROUTES;
+
+  // Initialize admin status and recent searches
+  useEffect(() => {
+    setIsAdminUser(isAdmin());
+    const saved = sessionStorage.getItem("commandPaletteSearches");
+    if (saved) {
+      setRecentSearches(JSON.parse(saved));
+    }
+  }, []);
+
+  const filtered = routes.filter((r) =>
     r.label.toLowerCase().includes(query.toLowerCase())
   );
 
@@ -36,12 +57,24 @@ export function CommandPalette() {
     setActive(0);
   }, []);
 
+  const saveSearch = useCallback((searchQuery: string) => {
+    if (!searchQuery.trim()) return;
+    setRecentSearches((prev) => {
+      const updated = [searchQuery, ...prev.filter((s) => s !== searchQuery)].slice(0, 10);
+      sessionStorage.setItem("commandPaletteSearches", JSON.stringify(updated));
+      return updated;
+    });
+  }, []);
+
   const navigate = useCallback(
     (path: string) => {
+      if (query.trim()) {
+        saveSearch(query);
+      }
       close();
       router.push(path);
     },
-    [close, router]
+    [close, router, query, saveSearch]
   );
 
   useEffect(() => {
@@ -54,6 +87,20 @@ export function CommandPalette() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+
+  // Focus trap implementation
+  useEffect(() => {
+    if (!open || !dialogRef.current) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        close();
+      }
+    };
+
+    dialogRef.current.addEventListener("keydown", handleKeyDown);
+    return () => dialogRef.current?.removeEventListener("keydown", handleKeyDown);
+  }, [open, close]);
 
   useEffect(() => {
     if (!open) return;
@@ -88,9 +135,12 @@ export function CommandPalette() {
 
   return (
     <div
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-label="Command palette"
+      aria-live="polite"
+      aria-busy={filtered.length === 0 && query.length > 0}
       className="fixed inset-0 z-50 flex items-start justify-center pt-[20vh] bg-black/50 backdrop-blur-sm"
       onMouseDown={(e) => e.target === e.currentTarget && close()}
     >
@@ -143,7 +193,9 @@ export function CommandPalette() {
             ))}
           </ul>
         ) : (
-          <p className="px-4 py-3 text-sm text-muted-foreground">No results.</p>
+          <p className="px-4 py-3 text-sm text-muted-foreground" role="status">
+            {query ? "No results." : "Type to search…"}
+          </p>
         )}
       </div>
     </div>

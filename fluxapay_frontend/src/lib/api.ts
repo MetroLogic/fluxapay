@@ -293,6 +293,11 @@ export const api = {
       fetchWithAuth("/api/v1/keys/regenerate", {
         method: "POST",
       }),
+    createKey: (data: { name: string }) =>
+      fetchWithAuth("/api/merchants/keys/create", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
     rotateApiKey: () =>
       fetchWithAuth("/api/merchants/keys/rotate-api-key", {
         method: "POST",
@@ -473,6 +478,16 @@ export const api = {
         fetchWithAuth(`/api/merchants/kyc/admin/${merchantId}/status`, {
           method: "PATCH",
           body: JSON.stringify(body),
+        }),
+      bulkReject: (merchantIds: string[], reason: string, notes?: string) =>
+        fetchWithAuth("/api/merchants/kyc/admin/bulk-reject", {
+          method: "POST",
+          body: JSON.stringify({ merchantIds, reason, notes }),
+        }),
+      bulkRequestInfo: (merchantIds: string[], message: string) =>
+        fetchWithAuth("/api/merchants/kyc/admin/bulk-request-info", {
+          method: "POST",
+          body: JSON.stringify({ merchantIds, message }),
         }),
     },
   },
@@ -812,6 +827,19 @@ export const api = {
       stats: () => fetchWithAuth("/api/v1/admin/address-pool/stats"),
     },
   },
+};
+
+// Public pricing config endpoint (no auth required)
+export const fetchPricingConfig = async () => {
+  try {
+    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/v1/public/pricing-config`, {
+      headers: { "Content-Type": "application/json" },
+    });
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
 };
 
 export { ApiError };

@@ -77,9 +77,31 @@ export const ChartsSection = () => {
     if (isLoading) {
         return (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7 mt-4">
-                {[1, 2, 3].map((i) => (
-                    <div key={i} className="rounded-xl border bg-card p-6 h-[300px] animate-pulse lg:col-span-4" />
-                ))}
+                {/* Line chart skeleton — matches lg:col-span-4 */}
+                <div className="rounded-xl border bg-card p-6 h-[300px] animate-pulse lg:col-span-4">
+                    <div className="h-6 w-48 bg-muted rounded mb-4" />
+                    <div className="space-y-2 h-[260px] flex flex-col justify-between">
+                        <div className="h-2 bg-muted rounded" />
+                        <div className="h-2 bg-muted rounded" />
+                        <div className="h-2 bg-muted rounded" />
+                    </div>
+                </div>
+                {/* Bar chart skeleton — matches lg:col-span-3 */}
+                <div className="rounded-xl border bg-card p-6 h-[300px] animate-pulse lg:col-span-3">
+                    <div className="h-6 w-40 bg-muted rounded mb-4" />
+                    <div className="space-y-2 h-[260px] flex flex-col justify-between">
+                        <div className="h-2 bg-muted rounded" />
+                        <div className="h-2 bg-muted rounded" />
+                        <div className="h-2 bg-muted rounded" />
+                    </div>
+                </div>
+                {/* Pie chart skeleton — matches lg:col-span-3 */}
+                <div className="rounded-xl border bg-card p-6 h-[300px] animate-pulse lg:col-span-3">
+                    <div className="h-6 w-40 bg-muted rounded mb-4" />
+                    <div className="flex items-center justify-center h-[260px]">
+                        <div className="w-32 h-32 bg-muted rounded-full" />
+                    </div>
+                </div>
             </div>
         );
     }

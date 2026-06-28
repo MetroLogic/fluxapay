@@ -410,6 +410,257 @@ function getWebhookPayload(): string {
 // "refund_failed"    — refund could not be processed`;
 }
 
+// ─── Create API Key Modal ────────────────────────────────────────────────────
+function CreateApiKeyModal({
+  isOpen,
+  onClose,
+  onCreateSuccess,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onCreateSuccess: (key: { id: string; name: string; masked: string; secret: string }) => void;
+}) {
+  const [name, setName] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [createdSecret, setCreatedSecret] = useState<string | null>(null);
+  const [existingNames, setExistingNames] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (isOpen) {
+      setName("");
+      setError(null);
+      setCreatedSecret(null);
+    }
+  }, [isOpen]);
+
+  const validateName = (value: string): string | null => {
+    if (!value.trim()) return "Key name is required";
+    if (value.length > 50) return "Key name must be 50 characters or less";
+    if (existingNames.has(value.toLowerCase())) return "Key name already exists";
+    return null;
+  };
+
+  const handleCreateKey = async () => {
+    const nameError = validateName(name);
+    if (nameError) {
+      setError(nameError);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const res = await api.keys.createKey({ name: name.trim() });
+      setCreatedSecret(res.secret || res.apiKey);
+      onCreateSuccess({
+        id: res.id,
+        name: name.trim(),
+        masked: `sk_live_${res.lastFour}`,
+        secret: res.secret || res.apiKey,
+      });
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to create API key");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: "rgba(0, 0, 0, 0.5)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 1000,
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          backgroundColor: "#ffffff",
+          borderRadius: "0.75rem",
+          padding: "2rem",
+          maxWidth: "500px",
+          width: "90%",
+          boxShadow: "0 20px 25px rgba(0, 0, 0, 0.15)",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
+          <h2 style={{ fontSize: "1.5rem", fontWeight: "bold", color: "#1a1a3e", margin: 0 }}>
+            Create API Key
+          </h2>
+          <button
+            onClick={onClose}
+            style={{ background: "none", border: "none", cursor: "pointer", color: "#6b7280" }}
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        {createdSecret ? (
+          <div>
+            <div style={{ backgroundColor: "#f0fdf4", border: "1px solid #86efac", borderRadius: "0.5rem", padding: "1rem", marginBottom: "1rem" }}>
+              <p style={{ fontSize: "0.875rem", fontWeight: 600, color: "#166534", margin: 0, marginBottom: "0.5rem" }}>
+                ✓ API key created successfully!
+              </p>
+              <p style={{ fontSize: "0.75rem", color: "#16a34a", margin: 0 }}>
+                Copy your secret key now — it won&apos;t be shown again.
+              </p>
+            </div>
+
+            <label style={{ display: "block", fontSize: "0.875rem", fontWeight: 500, color: "#1a1a3e", marginBottom: "0.5rem" }}>
+              Your Secret Key
+            </label>
+            <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", marginBottom: "1rem" }}>
+              <input
+                type="text"
+                value={createdSecret}
+                readOnly
+                style={{
+                  flex: 1,
+                  backgroundColor: "#dcfce7",
+                  border: "1px solid #86efac",
+                  borderRadius: "0.375rem",
+                  padding: "0.625rem 0.75rem",
+                  color: "#166534",
+                  fontFamily: "monospace",
+                  fontSize: "0.8125rem",
+                  outline: "none",
+                }}
+              />
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(createdSecret);
+                  setCopied("new-key-secret");
+                  setTimeout(() => setCopied(null), 2000);
+                }}
+                style={{
+                  padding: "0.625rem",
+                  backgroundColor: "#16a34a",
+                  border: "none",
+                  borderRadius: "0.375rem",
+                  cursor: "pointer",
+                  color: "#fff",
+                }}
+              >
+                {copied === "new-key-secret" ? <Check size={14} /> : <Copy size={14} />}
+              </button>
+            </div>
+
+            <button
+              onClick={onClose}
+              style={{
+                width: "100%",
+                padding: "0.625rem",
+                backgroundColor: "#16a34a",
+                color: "#fff",
+                border: "none",
+                borderRadius: "0.375rem",
+                cursor: "pointer",
+                fontWeight: 600,
+                fontSize: "0.875rem",
+              }}
+            >
+              Done
+            </button>
+          </div>
+        ) : (
+          <div>
+            <label style={{ display: "block", fontSize: "0.875rem", fontWeight: 500, color: "#1a1a3e", marginBottom: "0.5rem" }}>
+              Key Name
+            </label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => {
+                setName(e.target.value);
+                setError(null);
+              }}
+              placeholder="e.g., Production, Integration Test"
+              style={{
+                width: "100%",
+                padding: "0.75rem",
+                border: "1px solid #d1d5db",
+                borderRadius: "0.375rem",
+                fontSize: "0.875rem",
+                marginBottom: "0.5rem",
+                outline: "none",
+                boxSizing: "border-box",
+              }}
+              onBlur={() => {
+                const nameError = validateName(name);
+                if (nameError) setError(nameError);
+              }}
+            />
+            {error && (
+              <p style={{ fontSize: "0.75rem", color: "#dc2626", marginBottom: "1rem", margin: 0 }}>
+                {error}
+              </p>
+            )}
+
+            <div style={{ backgroundColor: "#fef3c7", border: "1px solid #fcd34d", borderRadius: "0.375rem", padding: "0.75rem", marginBottom: "1.5rem" }}>
+              <p style={{ fontSize: "0.75rem", color: "#92400e", margin: 0, lineHeight: 1.4 }}>
+                ⚠️ You will only see the full secret key once. Store it securely.
+              </p>
+            </div>
+
+            <div style={{ display: "flex", gap: "0.75rem" }}>
+              <button
+                onClick={() => {
+                  handleCreateKey();
+                }}
+                disabled={loading || !name.trim()}
+                style={{
+                  flex: 1,
+                  padding: "0.75rem",
+                  backgroundColor: loading || !name.trim() ? "#d1d5db" : "#fbbf24",
+                  color: "#1a1a3e",
+                  border: "none",
+                  borderRadius: "0.375rem",
+                  cursor: loading || !name.trim() ? "not-allowed" : "pointer",
+                  fontWeight: 600,
+                  fontSize: "0.875rem",
+                  opacity: loading ? 0.7 : 1,
+                }}
+              >
+                {loading ? "Creating..." : "Create Key"}
+              </button>
+              <button
+                onClick={onClose}
+                disabled={loading}
+                style={{
+                  flex: 1,
+                  padding: "0.75rem",
+                  backgroundColor: "#f3f4f6",
+                  color: "#1a1a3e",
+                  border: "1px solid #d1d5db",
+                  borderRadius: "0.375rem",
+                  cursor: "pointer",
+                  fontWeight: 600,
+                  fontSize: "0.875rem",
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function DevelopersPage() {
   const [copied, setCopied] = useState<string | null>(null);
@@ -418,6 +669,8 @@ export default function DevelopersPage() {
   const [activeTab, setActiveTab] = useState<Lang>("curl");
   const [activeEndpoint, setActiveEndpoint] = useState<Endpoint>("create");
   const [apiKey, setApiKey] = useState("Loading...");
+  const [showCreateKeyModal, setShowCreateKeyModal] = useState(false);
+  const [apiKeys, setApiKeys] = useState<Array<{ id: string; name: string; masked: string; createdAt: string }>([]);
 
   // Rotation state
   const [rotatingApiKey, setRotatingApiKey] = useState(false);
@@ -999,6 +1252,76 @@ export default function DevelopersPage() {
           </div>
         </section>
 
+        {/* ── API Keys Management ── */}
+        <section style={{ ...card, marginTop: "3rem" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
+            <h2 style={{ fontSize: "1.875rem", fontWeight: "bold", color: "#1a1a3e", margin: 0 }}>
+              API Keys
+            </h2>
+            <button
+              onClick={() => setShowCreateKeyModal(true)}
+              style={{
+                padding: "0.625rem 1rem",
+                backgroundColor: "#fbbf24",
+                color: "#1a1a3e",
+                border: "none",
+                borderRadius: "0.375rem",
+                cursor: "pointer",
+                fontWeight: 600,
+                fontSize: "0.875rem",
+              }}
+            >
+              + Create Key
+            </button>
+          </div>
+
+          {apiKeys.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "2rem", backgroundColor: "#f9fafb", borderRadius: "0.5rem", border: "1px solid #e5e7eb" }}>
+              <p style={{ fontSize: "0.875rem", color: "#6b7280", margin: 0 }}>
+                No API keys yet. Create your first key to get started.
+              </p>
+            </div>
+          ) : (
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr style={{ borderBottom: "2px solid #e5e7eb", backgroundColor: "#f9fafb" }}>
+                    <th style={{ textAlign: "left", padding: "0.75rem", fontSize: "0.875rem", fontWeight: 600, color: "#1a1a3e" }}>Name</th>
+                    <th style={{ textAlign: "left", padding: "0.75rem", fontSize: "0.875rem", fontWeight: 600, color: "#1a1a3e" }}>Key</th>
+                    <th style={{ textAlign: "left", padding: "0.75rem", fontSize: "0.875rem", fontWeight: 600, color: "#1a1a3e" }}>Created</th>
+                    <th style={{ textAlign: "center", padding: "0.75rem", fontSize: "0.875rem", fontWeight: 600, color: "#1a1a3e" }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {apiKeys.map((key) => (
+                    <tr key={key.id} style={{ borderBottom: "1px solid #e5e7eb" }}>
+                      <td style={{ padding: "0.75rem", fontSize: "0.875rem", color: "#1a1a3e" }}>{key.name}</td>
+                      <td style={{ padding: "0.75rem", fontSize: "0.875rem", color: "#1a1a3e", fontFamily: "monospace" }}>{key.masked}</td>
+                      <td style={{ padding: "0.75rem", fontSize: "0.875rem", color: "#6b7280" }}>{key.createdAt}</td>
+                      <td style={{ padding: "0.75rem", textAlign: "center" }}>
+                        <button
+                          style={{
+                            padding: "0.375rem 0.75rem",
+                            backgroundColor: "#fee2e2",
+                            color: "#b91c1c",
+                            border: "none",
+                            borderRadius: "0.375rem",
+                            cursor: "pointer",
+                            fontSize: "0.75rem",
+                            fontWeight: 600,
+                          }}
+                        >
+                          Revoke
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
         {/* ── Need Help ── */}
         <section style={{ ...card, marginTop: "3rem" }}>
           <h2 style={{ fontSize: "1.875rem", fontWeight: "bold", color: "#1a1a3e", marginBottom: "1.5rem" }}>Need Help?</h2>
@@ -1025,6 +1348,15 @@ export default function DevelopersPage() {
           </div>
         </section>
       </main>
+
+      <CreateApiKeyModal
+        isOpen={showCreateKeyModal}
+        onClose={() => setShowCreateKeyModal(false)}
+        onCreateSuccess={(key) => {
+          setApiKeys([...apiKeys, { ...key, createdAt: new Date().toLocaleDateString() }]);
+          setShowCreateKeyModal(false);
+        }}
+      />
     </div>
   );
 }

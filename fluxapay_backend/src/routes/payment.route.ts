@@ -17,6 +17,7 @@ import { authenticateApiKey } from '../middleware/apiKeyAuth.middleware';
 import { merchantApiKeyRateLimit } from '../middleware/rateLimit.middleware';
 import { idempotencyMiddleware } from '../middleware/idempotency.middleware';
 import { simpleRateLimit } from "../middleware/simpleRateLimit.middleware";
+import { kycGateMiddleware } from '../middleware/kycGate.middleware';
 
 const router = Router();
 
@@ -129,6 +130,14 @@ router.get('/:id/stream', publicPaymentStreamRateLimit, streamPaymentStatus);
  *     tags: [Payments]
  *     security:
  *       - apiKeyAuth: []
+ *     parameters:
+ *       - in: header
+ *         name: Idempotency-Key
+ *         required: false
+ *         schema:
+ *           type: string
+ *           maxLength: 255
+ *         description: Optional unique key for idempotent request handling. If provided, duplicate requests within 24h return the cached response.
  *     requestBody:
  *       required: true
  *       content:
@@ -138,6 +147,10 @@ router.get('/:id/stream', publicPaymentStreamRateLimit, streamPaymentStatus);
  *     responses:
  *       201:
  *         description: Payment created
+ *       200:
+ *         description: Payment response replayed from cache (when duplicate Idempotency-Key within 24h)
+ *       400:
+ *         description: Bad request or invalid idempotency key
  *       429:
  *         description: Rate limit exceeded
  */
@@ -201,7 +214,7 @@ router.get('/checkout/:id/stream', (_req, res) => {
 router.get('/checkout/:id/status', getPublicCheckoutPaymentStatus);
 router.get('/checkout/:id', getPublicCheckoutPayment);
 
-router.post('/', authenticateApiKey, merchantApiKeyRateLimit(), idempotencyMiddleware, validatePayment, createPayment);
+router.post('/', authenticateApiKey, kycGateMiddleware, merchantApiKeyRateLimit(), idempotencyMiddleware, validatePayment, createPayment);
 
 /**
  * @swagger

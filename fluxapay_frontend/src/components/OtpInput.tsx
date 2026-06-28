@@ -21,7 +21,7 @@ export const OtpInput = ({
   const [digits, setDigits] = useState<string[]>(new Array(length).fill(""));
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
-  // Initialize digits from value prop
+  // Initialize digits from value prop and auto-focus first input
   useEffect(() => {
     if (value.length <= length) {
       const newDigits = new Array(length).fill("");
@@ -31,6 +31,11 @@ export const OtpInput = ({
       setDigits(newDigits);
     }
   }, [value, length]);
+
+  // Auto-focus first input on mount
+  useEffect(() => {
+    inputRefs.current[0]?.focus();
+  }, []);
 
   const handleChange = (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getFxRates } from "../controllers/fx.controller";
+import { getFxRates, getCachedFxRates } from "../controllers/fx.controller";
 
 const router = Router();
 
@@ -21,5 +21,17 @@ const router = Router();
  *         description: FX rate retrieved successfully
  */
 router.get("/", getFxRates);
+
+/**
+ * @swagger
+ * /api/v1/fx-rates/cached:
+ *   get:
+ *     summary: Get all cached FX rates (USDC to fiat)
+ *     tags: [FX Rates]
+ *     responses:
+ *       200:
+ *         description: Cached FX rates retrieved successfully
+ */
+router.get("/cached", getCachedFxRates);
 
 export default router;
