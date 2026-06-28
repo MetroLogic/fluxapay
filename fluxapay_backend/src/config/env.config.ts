@@ -10,7 +10,7 @@ import { z } from 'zod';
 // Define the environment schema
 const envSchema = z.object({
     // Server
-    NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+    NODE_ENV: z.enum(['development', 'production', 'staging', 'test']).default('development'),
     PORT: z.coerce.number().int().positive().default(3000),
     BASE_URL: z.string().url().default('http://localhost:3000'),
     PAY_CHECKOUT_BASE: z.string().url().optional(),
@@ -182,6 +182,17 @@ export function validateEnv(): EnvConfig {
 
     // Validate conditional requirements
     const conditionalErrors: string[] = [];
+
+    // CORS validation
+    if (config.NODE_ENV === 'production' || config.NODE_ENV === 'staging') {
+        if (config.CORS_ORIGINS) {
+            const origins = config.CORS_ORIGINS.split(',').map((o) => o.trim());
+            if (origins.includes('*')) {
+                conditionalErrors.push('  • CORS_ORIGINS cannot contain wildcard (*) in production or staging');
+            }
+        }
+    }
+
 
     // AWS KMS validation
     if (config.KMS_PROVIDER === 'aws' && !config.AWS_KMS_KEY_ID) {

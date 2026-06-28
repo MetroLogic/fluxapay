@@ -616,6 +616,7 @@ enum DocumentType {
 
 enum WebhookEventType {
   payment_completed
+  payment_confirmed
   payment_failed
   payment_pending
   payment_expired
