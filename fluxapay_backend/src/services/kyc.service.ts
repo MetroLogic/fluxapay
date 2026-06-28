@@ -121,6 +121,8 @@ export async function uploadKycDocumentService(
   const maxSize = 10 * 1024 * 1024;
   if (file.size > maxSize) {
     throw apiError(413, ErrorCode.FILE_TOO_LARGE, "File size exceeds 10MB limit");
+  }
+
   const validationError = validateKycUploadFile(file);
   if (validationError) {
     throw validationError;

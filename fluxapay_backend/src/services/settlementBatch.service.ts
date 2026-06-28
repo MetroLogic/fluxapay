@@ -20,6 +20,7 @@ import { Merchant, PrismaClient, Prisma } from "../generated/client/client";
 import { getExchangePartner } from "./exchange.service";
 import { createAndDeliverWebhook } from "./webhook.service";
 import { logSettlementBatch, updateSettlementBatchCompletion } from "./audit.service";
+import { sendSettlementFailureAlert } from "./settlementAlert.service";
 
 const prisma = new PrismaClient();
 
@@ -335,7 +336,7 @@ async function settleSinglePayment(
                 },
             });
 
-            await prisma.settlement.create({
+            const failedSettlement = await prisma.settlement.create({
                 data: {
                     merchantId: merchant.id,
                     usdc_amount: new Decimal(totalUsdc),
@@ -355,24 +356,41 @@ async function settleSinglePayment(
                 },
             });
 
-            if (!markedForRetry && merchant.webhook_url) {
-                createAndDeliverWebhook(
-                    merchant.id,
-                    "settlement_failed",
-                    {
-                        event: "settlement.failed",
-                        merchant_id: merchant.id,
-                        payment_ids: [paymentId],
-                        usdc_amount: totalUsdc,
-                        error: errMsg,
-                        retry_count: newRetryCount,
-                        failed_at: now.toISOString(),
-                    },
-                ).catch(() => { });
+            if (!markedForRetry) {
+                if (merchant.webhook_url) {
+                    createAndDeliverWebhook(
+                        merchant.id,
+                        "settlement_failed",
+                        {
+                            event: "settlement.failed",
+                            merchant_id: merchant.id,
+                            payment_ids: [paymentId],
+                            usdc_amount: totalUsdc,
+                            error: errMsg,
+                            retry_count: newRetryCount,
+                            failed_at: now.toISOString(),
+                        },
+                    ).catch(() => { });
+                }
 
                 console.error(
                     `[SettlementBatch] [OPS ALERT] Payment ${paymentId} permanently failed after ${MAX_SETTLEMENT_RETRY_ATTEMPTS} retries`,
                 );
+
+                sendSettlementFailureAlert({
+                    merchantId: merchant.id,
+                    settlementId: failedSettlement.id,
+                    paymentId,
+                    amount: totalUsdc,
+                    currency: settlementCurrency,
+                    error: errMsg,
+                    retryCount: newRetryCount,
+                }).catch((alertErr) => {
+                    console.error(
+                        `[SettlementBatch] Failed to send settlement alert for payment ${paymentId}:`,
+                        alertErr,
+                    );
+                });
             }
         } catch (recordErr) {
             console.error(
