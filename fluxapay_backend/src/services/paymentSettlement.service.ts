@@ -24,6 +24,7 @@ import { Decimal } from "@prisma/client/runtime/library";
 import { getExchangePartner, ExchangeQuoteResult, PayoutResult } from "./exchange.service";
 import { createAndDeliverWebhook } from "./webhook.service";
 import { eventBus, AppEvents } from "./EventService";
+import { sendSettlementFailureAlert } from "./settlementAlert.service";
 
 const prisma = new PrismaClient();
 
@@ -101,7 +102,17 @@ export class PaymentSettlementService {
           setTimeout(() => this.settlePayment(paymentId, (result.retryCount || 0) + 1), retryDelay);
         } else {
           console.error(`[PaymentSettlement] Max retries exceeded for payment ${paymentId}, alerting required`);
-          // TODO: Send alert to admin
+          sendSettlementFailureAlert({
+            merchantId: result.merchantId || payment.merchantId,
+            settlementId: result.settlementId,
+            paymentId,
+            amount: payment.amount,
+            currency: payment.currency,
+            error: result.error || "Unknown settlement error",
+            retryCount: result.retryCount,
+          }).catch((err) => {
+            console.error(`[PaymentSettlement] Failed to send settlement alert for payment ${paymentId}:`, err);
+          });
         }
       }
     } catch (error) {
