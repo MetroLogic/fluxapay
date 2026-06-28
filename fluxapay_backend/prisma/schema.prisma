@@ -326,7 +326,7 @@ model WebhookLog {
   retryAttempts   WebhookRetryAttempt[]
 
   @@index([merchantId, created_at(sort: Desc)])
-  @@index([merchantId, status])
+  @@index([merchantId, status, created_at(sort: Desc)])
   @@index([status, failed_at])
 }
 
