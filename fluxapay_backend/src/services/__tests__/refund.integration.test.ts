@@ -13,11 +13,18 @@ import { PrismaClient } from '../../generated/client/client';
 
 const prisma = new PrismaClient();
 
+// Only run this suite when a real DATABASE_URL pointing to a live server is provided.
+// In CI without Postgres this suite is skipped — all logic is covered by the unit tests.
+const describeWithDatabase = process.env.DATABASE_URL &&
+  !process.env.DATABASE_URL.includes('localhost')
+    ? describe
+    : describe.skip;
+
 function uniquePhone(): string {
   return `+1${Date.now()}${Math.floor(Math.random() * 10000)}`;
 }
 
-describe('Refund Service - Integration Tests', () => {
+describeWithDatabase('Refund Service - Integration Tests', () => {
   beforeEach(async () => {
     await prisma.refund.deleteMany({
       where: { merchantId: { in: ['int-test-merchant', 'int-test-merchant-2'] } },

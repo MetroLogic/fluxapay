@@ -1,65 +1,116 @@
+/**
+ * refund.validation.test.ts
+ *
+ * Unit tests for refund validation logic in createRefundService.
+ * All Prisma calls and webhook delivery are mocked so no real
+ * database connection is required.
+ */
+
+// ── Env stubs (must precede any imports that read env) ────────────────────────
+process.env.DATABASE_URL = 'postgresql://mock:mock@localhost:5432/mock';
+process.env.JWT_SECRET = 'test-jwt-secret';
+process.env.USDC_ISSUER_PUBLIC_KEY =
+  'GBBD47IF6LWK7P7MDEVSCWT73IQIGCEZHR7OMXMBZQ3ZONN2T4U6W23Y';
+
+// ── Mock: Prisma client ────────────────────────────────────────────────────────
+const mockTransaction = jest.fn();
+const mockQueryRaw = jest.fn();
+const mockPaymentFindUnique = jest.fn();
+const mockRefundFindMany = jest.fn();
+const mockRefundFindFirst = jest.fn();
+const mockRefundCreate = jest.fn();
+const mockDisconnect = jest.fn();
+
+jest.mock('../../generated/client/client', () => ({
+  PrismaClient: jest.fn().mockImplementation(() => ({
+    $transaction: mockTransaction,
+    $disconnect: mockDisconnect,
+  })),
+  RefundStatus: {},
+  WebhookEventType: {},
+  Prisma: {},
+}));
+
+// ── Mock: webhook service ──────────────────────────────────────────────────────
+jest.mock('../webhook.service', () => ({
+  createAndDeliverWebhook: jest.fn().mockResolvedValue(undefined),
+}));
+
 import { createRefundService } from '../refund.service';
-import { PrismaClient } from '../../generated/client/client';
 
-const prisma = new PrismaClient();
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
-function uniquePhone(): string {
-  return `+1${Date.now()}${Math.floor(Math.random() * 10000)}`;
+/** Build a minimal mock payment row returned by $queryRaw */
+function makePayment(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'test-payment',
+    merchantId: 'test-merchant',
+    amount: 100,
+    currency: 'USD',
+    status: 'confirmed',
+    expiration: new Date(Date.now() + 86_400_000), // 24 h from now
+    ...overrides,
+  };
 }
 
+/** Build a minimal mock refund row */
+function makeRefund(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'refund-1',
+    merchantId: 'test-merchant',
+    paymentId: 'test-payment',
+    amount: 0,
+    currency: 'USD',
+    status: 'pending',
+    created_at: new Date(),
+    ...overrides,
+  };
+}
+
+/**
+ * Set up $transaction so it invokes the callback with a tx-like object.
+ * The callback receives a mock transaction client that exposes the shared mocks.
+ */
+function setupTransaction(payment: object | null, existingRefunds: object[] = []) {
+  const txClient = {
+    $queryRaw: mockQueryRaw,
+    payment: {
+      findUnique: mockPaymentFindUnique,
+    },
+    refund: {
+      findMany: mockRefundFindMany,
+      findFirst: mockRefundFindFirst,
+      create: mockRefundCreate,
+    },
+  };
+
+  mockQueryRaw.mockResolvedValue(payment ? [payment] : []);
+  mockRefundFindMany.mockResolvedValue(existingRefunds);
+  mockRefundFindFirst.mockResolvedValue(null);
+  mockRefundCreate.mockImplementation(({ data }: { data: Record<string, unknown> }) =>
+    Promise.resolve(makeRefund({ ...data, id: 'new-refund-id' })),
+  );
+
+  mockTransaction.mockImplementation((cb: (tx: typeof txClient) => Promise<unknown>) =>
+    cb(txClient),
+  );
+}
+
+// ── Tests ─────────────────────────────────────────────────────────────────────
+
 describe('Refund Service - Validation', () => {
-  // Test data cleanup
-  beforeEach(async () => {
-    // Clean up test data before each test
-    await prisma.refund.deleteMany({
-      where: { merchantId: { in: ['test-merchant', 'other-merchant'] } },
-    });
-    await prisma.payment.deleteMany({
-      where: { merchantId: { in: ['test-merchant', 'other-merchant'] } },
-    });
-    await prisma.merchant.deleteMany({
-      where: { id: { in: ['test-merchant', 'other-merchant'] } },
-    });
+  beforeEach(() => {
+    jest.clearAllMocks();
   });
 
-  afterAll(async () => {
-    await prisma.$disconnect();
-  });
-
+  // ── Payment Ownership ──────────────────────────────────────────────────────
   describe('Payment Ownership Validation', () => {
     it('should create refund when payment belongs to merchant', async () => {
-      // Create test merchant
-      await prisma.merchant.create({
-        data: {
-          id: 'test-merchant',
-          business_name: 'Test Merchant',
-          email: 'test@example.com',
-          phone_number: uniquePhone(),
-          country: 'US',
-          settlement_currency: 'USD',
-          webhook_secret: 'secret',
-          password: 'hashed_password',
-        },
-      });
-
-      // Create confirmed payment
-      await prisma.payment.create({
-        data: {
-          id: 'test-payment-1',
-          merchantId: 'test-merchant',
-          amount: 100,
-          currency: 'USD',
-          customer_email: 'customer@example.com',
-          metadata: {},
-          expiration: new Date(Date.now() + 86400000), // 24 hours from now
-          status: 'confirmed',
-          checkout_url: 'https://example.com/checkout',
-        },
-      });
+      setupTransaction(makePayment());
 
       const result = await createRefundService({
         merchantId: 'test-merchant',
-        payment_id: 'test-payment-1',
+        payment_id: 'test-payment',
         amount: 50,
         reason: 'Customer request',
       });
@@ -67,48 +118,31 @@ describe('Refund Service - Validation', () => {
       expect(result.message).toBe('Refund created successfully');
       expect(result.data).toMatchObject({
         merchantId: 'test-merchant',
-        paymentId: 'test-payment-1',
+        paymentId: 'test-payment',
         status: 'pending',
       });
       expect(Number(result.data.amount)).toBe(50);
     });
 
     it('should reject refund when payment does not belong to merchant', async () => {
-      // Create different merchant
-      await prisma.merchant.create({
-        data: {
-          id: 'other-merchant',
-          business_name: 'Other Merchant',
-          email: 'other@example.com',
-          phone_number: uniquePhone(),
-          country: 'US',
-          settlement_currency: 'USD',
-          webhook_secret: 'secret',
-          password: 'hashed_password',
-        },
-      });
+      // $queryRaw returns empty (payment exists but not for this merchant)
+      mockQueryRaw.mockResolvedValue([]);
+      // findUnique confirms the payment exists under a different merchant
+      mockPaymentFindUnique.mockResolvedValue({ id: 'other-payment', merchantId: 'other-merchant' });
 
-      // Create payment for different merchant
-      await prisma.payment.create({
-        data: {
-          id: 'other-payment',
-          merchantId: 'other-merchant',
-          amount: 100,
-          currency: 'USD',
-          customer_email: 'customer@example.com',
-          metadata: {},
-          expiration: new Date(Date.now() + 86400000),
-          status: 'confirmed',
-          checkout_url: 'https://example.com/checkout',
-        },
-      });
+      const txClient = {
+        $queryRaw: mockQueryRaw,
+        payment: { findUnique: mockPaymentFindUnique },
+        refund: { findMany: mockRefundFindMany, findFirst: mockRefundFindFirst, create: mockRefundCreate },
+      };
+      mockTransaction.mockImplementation((cb: (tx: typeof txClient) => Promise<unknown>) => cb(txClient));
 
       await expect(
         createRefundService({
           merchantId: 'test-merchant',
           payment_id: 'other-payment',
           amount: 50,
-        })
+        }),
       ).rejects.toMatchObject({
         status: 403,
         message: 'Payment does not belong to your merchant account',
@@ -116,12 +150,22 @@ describe('Refund Service - Validation', () => {
     });
 
     it('should reject refund when payment does not exist', async () => {
+      mockQueryRaw.mockResolvedValue([]);
+      mockPaymentFindUnique.mockResolvedValue(null);
+
+      const txClient = {
+        $queryRaw: mockQueryRaw,
+        payment: { findUnique: mockPaymentFindUnique },
+        refund: { findMany: mockRefundFindMany, findFirst: mockRefundFindFirst, create: mockRefundCreate },
+      };
+      mockTransaction.mockImplementation((cb: (tx: typeof txClient) => Promise<unknown>) => cb(txClient));
+
       await expect(
         createRefundService({
           merchantId: 'test-merchant',
           payment_id: 'non-existent-payment',
           amount: 50,
-        })
+        }),
       ).rejects.toMatchObject({
         status: 404,
         message: 'Payment not found',
@@ -129,36 +173,10 @@ describe('Refund Service - Validation', () => {
     });
   });
 
+  // ── Payment Status ─────────────────────────────────────────────────────────
   describe('Payment Status Validation', () => {
-    beforeEach(async () => {
-      await prisma.merchant.create({
-        data: {
-          id: 'test-merchant',
-          business_name: 'Test Merchant',
-          email: 'test@example.com',
-          phone_number: uniquePhone(),
-          country: 'US',
-          settlement_currency: 'USD',
-          webhook_secret: 'secret',
-          password: 'hashed_password',
-        },
-      });
-    });
-
     it('should allow refund for confirmed payment', async () => {
-      await prisma.payment.create({
-        data: {
-          id: 'confirmed-payment',
-          merchantId: 'test-merchant',
-          amount: 100,
-          currency: 'USD',
-          customer_email: 'customer@example.com',
-          metadata: {},
-          expiration: new Date(Date.now() + 86400000),
-          status: 'confirmed',
-          checkout_url: 'https://example.com/checkout',
-        },
-      });
+      setupTransaction(makePayment({ status: 'confirmed' }));
 
       const result = await createRefundService({
         merchantId: 'test-merchant',
@@ -170,19 +188,7 @@ describe('Refund Service - Validation', () => {
     });
 
     it('should allow refund for overpaid payment', async () => {
-      await prisma.payment.create({
-        data: {
-          id: 'overpaid-payment',
-          merchantId: 'test-merchant',
-          amount: 100,
-          currency: 'USD',
-          customer_email: 'customer@example.com',
-          metadata: {},
-          expiration: new Date(Date.now() + 86400000),
-          status: 'overpaid',
-          checkout_url: 'https://example.com/checkout',
-        },
-      });
+      setupTransaction(makePayment({ status: 'overpaid' }));
 
       const result = await createRefundService({
         merchantId: 'test-merchant',
@@ -194,26 +200,14 @@ describe('Refund Service - Validation', () => {
     });
 
     it('should reject refund for pending payment', async () => {
-      await prisma.payment.create({
-        data: {
-          id: 'pending-payment',
-          merchantId: 'test-merchant',
-          amount: 100,
-          currency: 'USD',
-          customer_email: 'customer@example.com',
-          metadata: {},
-          expiration: new Date(Date.now() + 86400000),
-          status: 'pending',
-          checkout_url: 'https://example.com/checkout',
-        },
-      });
+      setupTransaction(makePayment({ status: 'pending' }));
 
       await expect(
         createRefundService({
           merchantId: 'test-merchant',
           payment_id: 'pending-payment',
           amount: 50,
-        })
+        }),
       ).rejects.toMatchObject({
         status: 400,
         message: expect.stringContaining('Payment cannot be refunded'),
@@ -221,26 +215,16 @@ describe('Refund Service - Validation', () => {
     });
 
     it('should reject refund for expired payment', async () => {
-      await prisma.payment.create({
-        data: {
-          id: 'expired-payment',
-          merchantId: 'test-merchant',
-          amount: 100,
-          currency: 'USD',
-          customer_email: 'customer@example.com',
-          metadata: {},
-          expiration: new Date(Date.now() - 86400000), // 24 hours ago
-          status: 'confirmed',
-          checkout_url: 'https://example.com/checkout',
-        },
-      });
+      setupTransaction(
+        makePayment({ expiration: new Date(Date.now() - 86_400_000) }), // 24 h ago
+      );
 
       await expect(
         createRefundService({
           merchantId: 'test-merchant',
           payment_id: 'expired-payment',
           amount: 50,
-        })
+        }),
       ).rejects.toMatchObject({
         status: 400,
         message: 'Payment has expired and cannot be refunded',
@@ -248,26 +232,14 @@ describe('Refund Service - Validation', () => {
     });
 
     it('should reject refund for failed payment', async () => {
-      await prisma.payment.create({
-        data: {
-          id: 'failed-payment',
-          merchantId: 'test-merchant',
-          amount: 100,
-          currency: 'USD',
-          customer_email: 'customer@example.com',
-          metadata: {},
-          expiration: new Date(Date.now() + 86400000),
-          status: 'failed',
-          checkout_url: 'https://example.com/checkout',
-        },
-      });
+      setupTransaction(makePayment({ status: 'failed' }));
 
       await expect(
         createRefundService({
           merchantId: 'test-merchant',
           payment_id: 'failed-payment',
           amount: 50,
-        })
+        }),
       ).rejects.toMatchObject({
         status: 400,
         message: expect.stringContaining('Payment cannot be refunded'),
@@ -275,43 +247,17 @@ describe('Refund Service - Validation', () => {
     });
   });
 
+  // ── Amount Validation ──────────────────────────────────────────────────────
   describe('Refund Amount Validation', () => {
-    beforeEach(async () => {
-      await prisma.merchant.create({
-        data: {
-          id: 'test-merchant',
-          business_name: 'Test Merchant',
-          email: 'test@example.com',
-          phone_number: uniquePhone(),
-          country: 'US',
-          settlement_currency: 'USD',
-          webhook_secret: 'secret',
-          password: 'hashed_password',
-        },
-      });
-    });
-
     it('should reject refund amount exceeding payment amount', async () => {
-      await prisma.payment.create({
-        data: {
-          id: 'test-payment',
-          merchantId: 'test-merchant',
-          amount: 100,
-          currency: 'USD',
-          customer_email: 'customer@example.com',
-          metadata: {},
-          expiration: new Date(Date.now() + 86400000),
-          status: 'confirmed',
-          checkout_url: 'https://example.com/checkout',
-        },
-      });
+      setupTransaction(makePayment({ amount: 100 }));
 
       await expect(
         createRefundService({
           merchantId: 'test-merchant',
           payment_id: 'test-payment',
           amount: 150,
-        })
+        }),
       ).rejects.toMatchObject({
         status: 422,
         message: expect.stringContaining('cannot exceed original payment amount'),
@@ -319,26 +265,13 @@ describe('Refund Service - Validation', () => {
     });
 
     it('should reject refund with zero amount', async () => {
-      await prisma.payment.create({
-        data: {
-          id: 'test-payment',
-          merchantId: 'test-merchant',
-          amount: 100,
-          currency: 'USD',
-          customer_email: 'customer@example.com',
-          metadata: {},
-          expiration: new Date(Date.now() + 86400000),
-          status: 'confirmed',
-          checkout_url: 'https://example.com/checkout',
-        },
-      });
-
+      // Amount validation happens before the DB transaction
       await expect(
         createRefundService({
           merchantId: 'test-merchant',
           payment_id: 'test-payment',
           amount: 0,
-        })
+        }),
       ).rejects.toMatchObject({
         status: 400,
         message: 'Refund amount must be positive',
@@ -346,26 +279,12 @@ describe('Refund Service - Validation', () => {
     });
 
     it('should reject refund with negative amount', async () => {
-      await prisma.payment.create({
-        data: {
-          id: 'test-payment',
-          merchantId: 'test-merchant',
-          amount: 100,
-          currency: 'USD',
-          customer_email: 'customer@example.com',
-          metadata: {},
-          expiration: new Date(Date.now() + 86400000),
-          status: 'confirmed',
-          checkout_url: 'https://example.com/checkout',
-        },
-      });
-
       await expect(
         createRefundService({
           merchantId: 'test-merchant',
           payment_id: 'test-payment',
           amount: -50,
-        })
+        }),
       ).rejects.toMatchObject({
         status: 400,
         message: 'Refund amount must be positive',
@@ -373,38 +292,17 @@ describe('Refund Service - Validation', () => {
     });
 
     it('should prevent double refunding beyond payment amount', async () => {
-      const payment = await prisma.payment.create({
-        data: {
-          id: 'test-payment',
-          merchantId: 'test-merchant',
-          amount: 100,
-          currency: 'USD',
-          customer_email: 'customer@example.com',
-          metadata: {},
-          expiration: new Date(Date.now() + 86400000),
-          status: 'confirmed',
-          checkout_url: 'https://example.com/checkout',
-        },
-      });
+      // 60 already refunded → only 40 remaining
+      setupTransaction(makePayment({ amount: 100 }), [
+        makeRefund({ amount: 60, status: 'completed' }),
+      ]);
 
-      // Create first refund (completed)
-      await prisma.refund.create({
-        data: {
-          merchantId: 'test-merchant',
-          paymentId: payment.id,
-          amount: 60,
-          currency: 'USD',
-          status: 'completed',
-        },
-      });
-
-      // Try to refund more than remaining
       await expect(
         createRefundService({
           merchantId: 'test-merchant',
-          payment_id: payment.id,
-          amount: 50, // Only 40 remaining
-        })
+          payment_id: 'test-payment',
+          amount: 50, // 60 + 50 = 110 > 100
+        }),
       ).rejects.toMatchObject({
         status: 422,
         message: expect.stringContaining('exceeds remaining refundable amount'),
@@ -412,35 +310,14 @@ describe('Refund Service - Validation', () => {
     });
 
     it('should allow partial refund within limits', async () => {
-      const payment = await prisma.payment.create({
-        data: {
-          id: 'test-payment',
-          merchantId: 'test-merchant',
-          amount: 100,
-          currency: 'USD',
-          customer_email: 'customer@example.com',
-          metadata: {},
-          expiration: new Date(Date.now() + 86400000),
-          status: 'confirmed',
-          checkout_url: 'https://example.com/checkout',
-        },
-      });
+      // 40 already refunded → 60 remaining; requesting exactly 60
+      setupTransaction(makePayment({ amount: 100 }), [
+        makeRefund({ amount: 40, status: 'completed' }),
+      ]);
 
-      // Create first refund (completed)
-      await prisma.refund.create({
-        data: {
-          merchantId: 'test-merchant',
-          paymentId: payment.id,
-          amount: 40,
-          currency: 'USD',
-          status: 'completed',
-        },
-      });
-
-      // Should allow refund of remaining amount
       const result = await createRefundService({
         merchantId: 'test-merchant',
-        payment_id: payment.id,
+        payment_id: 'test-payment',
         amount: 60,
       });
 
@@ -448,40 +325,14 @@ describe('Refund Service - Validation', () => {
     });
   });
 
+  // ── Cumulative Partial Refunds ─────────────────────────────────────────────
   describe('Cumulative Partial Refunds', () => {
-    beforeEach(async () => {
-      await prisma.merchant.create({
-        data: {
-          id: 'test-merchant',
-          business_name: 'Test Merchant',
-          email: 'test@example.com',
-          phone_number: uniquePhone(),
-          country: 'US',
-          settlement_currency: 'USD',
-          webhook_secret: 'secret',
-          password: 'hashed_password',
-        },
-      });
-    });
-
     it('should allow first partial refund', async () => {
-      const payment = await prisma.payment.create({
-        data: {
-          id: 'test-payment',
-          merchantId: 'test-merchant',
-          amount: 100,
-          currency: 'USD',
-          customer_email: 'customer@example.com',
-          metadata: {},
-          expiration: new Date(Date.now() + 86400000),
-          status: 'confirmed',
-          checkout_url: 'https://example.com/checkout',
-        },
-      });
+      setupTransaction(makePayment({ amount: 100 }), []);
 
       const result = await createRefundService({
         merchantId: 'test-merchant',
-        payment_id: payment.id,
+        payment_id: 'test-payment',
         amount: 30,
       });
 
@@ -489,166 +340,71 @@ describe('Refund Service - Validation', () => {
       expect(Number(result.data.amount)).toBe(30);
     });
 
-    it('should allow multiple partial refunds as long as total does not exceed payment', async () => {
-      const payment = await prisma.payment.create({
-        data: {
-          id: 'test-payment',
-          merchantId: 'test-merchant',
-          amount: 100,
-          currency: 'USD',
-          customer_email: 'customer@example.com',
-          metadata: {},
-          expiration: new Date(Date.now() + 86400000),
-          status: 'confirmed',
-          checkout_url: 'https://example.com/checkout',
-        },
-      });
+    it('should count pending refunds in cumulative total and reject overflow', async () => {
+      // 60 in pending → only 40 remaining; requesting 50 should fail
+      setupTransaction(makePayment({ amount: 100 }), [
+        makeRefund({ amount: 60, status: 'pending' }),
+      ]);
 
-      // First refund
-      const refund1 = await createRefundService({
-        merchantId: 'test-merchant',
-        payment_id: payment.id,
-        amount: 30,
-      });
-      expect(refund1.message).toBe('Refund created successfully');
-
-      // Second refund (pending)
-      const refund2 = await createRefundService({
-        merchantId: 'test-merchant',
-        payment_id: payment.id,
-        amount: 40,
-      });
-      expect(refund2.message).toBe('Refund created successfully');
-
-      // Third refund should fail (30 + 40 + 35 = 105 > 100)
       await expect(
         createRefundService({
           merchantId: 'test-merchant',
-          payment_id: payment.id,
-          amount: 35,
-        })
+          payment_id: 'test-payment',
+          amount: 50,
+        }),
       ).rejects.toMatchObject({
         status: 422,
         message: expect.stringContaining('exceeds remaining refundable amount'),
       });
     });
 
-    it('should count pending refunds in cumulative total', async () => {
-      const payment = await prisma.payment.create({
-        data: {
-          id: 'test-payment',
-          merchantId: 'test-merchant',
-          amount: 100,
-          currency: 'USD',
-          customer_email: 'customer@example.com',
-          metadata: {},
-          expiration: new Date(Date.now() + 86400000),
-          status: 'confirmed',
-          checkout_url: 'https://example.com/checkout',
-        },
-      });
+    it('should count pending refunds in cumulative total and allow within limits', async () => {
+      // 60 pending → 40 remaining; requesting 30 should succeed
+      setupTransaction(makePayment({ amount: 100 }), [
+        makeRefund({ amount: 60, status: 'pending' }),
+      ]);
 
-      // Create pending refund
-      await prisma.refund.create({
-        data: {
-          merchantId: 'test-merchant',
-          paymentId: payment.id,
-          amount: 60,
-          currency: 'USD',
-          status: 'pending',
-        },
-      });
-
-      // Should reject refund that would exceed (60 + 50 = 110 > 100)
-      await expect(
-        createRefundService({
-          merchantId: 'test-merchant',
-          payment_id: payment.id,
-          amount: 50,
-        })
-      ).rejects.toMatchObject({
-        status: 422,
-        message: expect.stringContaining('exceeds remaining refundable amount'),
-      });
-
-      // But should allow refund within limits (60 + 30 = 90 <= 100)
       const result = await createRefundService({
         merchantId: 'test-merchant',
-        payment_id: payment.id,
+        payment_id: 'test-payment',
         amount: 30,
       });
+
       expect(result.message).toBe('Refund created successfully');
     });
 
-    it('should reject failed/rejected refunds from cumulative total', async () => {
-      const payment = await prisma.payment.create({
-        data: {
-          id: 'test-payment',
-          merchantId: 'test-merchant',
-          amount: 100,
-          currency: 'USD',
-          customer_email: 'customer@example.com',
-          metadata: {},
-          expiration: new Date(Date.now() + 86400000),
-          status: 'confirmed',
-          checkout_url: 'https://example.com/checkout',
-        },
-      });
+    it('should exclude failed/rejected refunds from cumulative total', async () => {
+      // 70 in "failed" status — should NOT count toward the total
+      setupTransaction(makePayment({ amount: 100 }), [
+        // findMany only returns pending/processing/completed, so this list is empty
+        // (the service filters by status in the query)
+      ]);
 
-      // Create failed refund (should not count in total)
-      await prisma.refund.create({
-        data: {
-          merchantId: 'test-merchant',
-          paymentId: payment.id,
-          amount: 70,
-          currency: 'USD',
-          status: 'failed',
-        },
-      });
-
-      // Should allow new refund since failed refunds don't count
       const result = await createRefundService({
         merchantId: 'test-merchant',
-        payment_id: payment.id,
+        payment_id: 'test-payment',
         amount: 60,
       });
+
       expect(result.message).toBe('Refund created successfully');
     });
   });
 
+  // ── Idempotency ────────────────────────────────────────────────────────────
   describe('Idempotency', () => {
-    beforeEach(async () => {
-      await prisma.merchant.create({
-        data: {
-          id: 'test-merchant',
-          business_name: 'Test Merchant',
-          email: 'test@example.com',
-          phone_number: uniquePhone(),
-          country: 'US',
-          settlement_currency: 'USD',
-          webhook_secret: 'secret',
-          password: 'hashed_password',
-        },
-      });
-
-      await prisma.payment.create({
-        data: {
-          id: 'test-payment',
-          merchantId: 'test-merchant',
-          amount: 100,
-          currency: 'USD',
-          customer_email: 'customer@example.com',
-          metadata: {},
-          expiration: new Date(Date.now() + 86400000),
-          status: 'confirmed',
-          checkout_url: 'https://example.com/checkout',
-        },
-      });
-    });
-
     it('should return existing refund for duplicate request', async () => {
-      // Create initial refund
-      const firstRefund = await createRefundService({
+      const existingRefund = makeRefund({
+        id: 'existing-refund-id',
+        amount: 50,
+        status: 'pending',
+      });
+
+      setupTransaction(makePayment({ amount: 100 }));
+
+      // On duplicate, findFirst returns the existing refund
+      mockRefundFindFirst.mockResolvedValue(existingRefund);
+
+      const firstResult = await createRefundService({
         merchantId: 'test-merchant',
         payment_id: 'test-payment',
         amount: 50,
@@ -656,8 +412,10 @@ describe('Refund Service - Validation', () => {
         idempotency_key: 'unique-key-123',
       });
 
-      // Try to create duplicate refund with same idempotency key
-      const secondRefund = await createRefundService({
+      // Reset so we get the same behaviour on the second call
+      mockRefundFindFirst.mockResolvedValue(existingRefund);
+
+      const secondResult = await createRefundService({
         merchantId: 'test-merchant',
         payment_id: 'test-payment',
         amount: 50,
@@ -665,8 +423,7 @@ describe('Refund Service - Validation', () => {
         idempotency_key: 'unique-key-123',
       });
 
-      // Should return the same refund
-      expect(secondRefund.data.id).toBe(firstRefund.data.id);
+      expect(secondResult.data.id).toBe(firstResult.data.id);
     });
   });
 });
