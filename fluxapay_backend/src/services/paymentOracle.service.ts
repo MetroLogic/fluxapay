@@ -201,6 +201,8 @@ async function verifyPayment(payment: Payment): Promise<PaymentVerification> {
     const transactions = await paymentsQuery.call();
     let latestPagingToken = payment.last_paging_token;
     const matchedPayments: MatchedStellarPayment[] = [];
+    let latestTxHash: string | undefined;
+    let latestPayer: string | undefined;
 
     // Collect all valid USDC payments to this address (not just the first)
     const memoMatchMode = resolveMemoMatchMode(address, {
@@ -305,8 +307,12 @@ async function verifyPayment(payment: Payment): Promise<PaymentVerification> {
 
     const duplicateAnalysis = analyzeDuplicatePayments(expectedAmount, matchedPayments);
     const latestTx = matchedPayments[0];
-    const latestTxHash = latestTx?.transactionHash;
-    const latestPayer = latestTx?.payer;
+    if (!latestTxHash) {
+      latestTxHash = latestTx?.transactionHash;
+    }
+    if (!latestPayer) {
+      latestPayer = latestTx?.payer;
+    }
 
     const actualAmount = duplicateAnalysis.totalReceived.gt(0)
       ? duplicateAnalysis.totalReceived
@@ -411,7 +417,6 @@ async function updatePaymentStatus(verification: PaymentVerification): Promise<v
   const updateData: any = {
     status: verification.status,
     paid_amount: verification.actualAmount,
-    updated_at: new Date(),
   };
 
   if (verification.transactionHash) {
