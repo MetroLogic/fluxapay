@@ -78,6 +78,18 @@
     "settlement": {
       "title": "Flexible Settlement",
       "description": "Choose how and when you get paid"
+    },
+    "realtime": {
+      "title": "Real-Time Settlement",
+      "description": "Funds move instantly on the Stellar network, no waiting days for clearance"
+    },
+    "emerging": {
+      "title": "Emerging Market Ready",
+      "description": "Built for high-growth regions where crypto adoption is outpacing traditional banking"
+    },
+    "stripe": {
+      "title": "Stripe-Simple Integration",
+      "description": "A familiar developer experience — REST API, webhooks, and SDKs you already know"
     }
   },
   "globalReach": {

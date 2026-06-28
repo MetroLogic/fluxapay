@@ -78,6 +78,18 @@
     "settlement": {
       "title": "Règlement Flexible",
       "description": "Choisissez comment et quand vous êtes payé"
+    },
+    "realtime": {
+      "title": "Règlement en Temps Réel",
+      "description": "Les fonds circulent instantanément sur le réseau Stellar, sans attendre des jours"
+    },
+    "emerging": {
+      "title": "Prêt pour les Marchés Émergents",
+      "description": "Conçu pour les régions à forte croissance où l'adoption crypto devance la banque traditionnelle"
+    },
+    "stripe": {
+      "title": "Intégration Simple comme Stripe",
+      "description": "Une expérience développeur familière — API REST, webhooks et SDK que vous connaissez déjà"
     }
   },
   "globalReach": {

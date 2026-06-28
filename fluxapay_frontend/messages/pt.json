@@ -78,6 +78,18 @@
     "settlement": {
       "title": "Liquidação Flexível",
       "description": "Escolha como e quando você recebe"
+    },
+    "realtime": {
+      "title": "Liquidação em Tempo Real",
+      "description": "Os fundos circulam instantaneamente na rede Stellar, sem esperar dias"
+    },
+    "emerging": {
+      "title": "Pronto para Mercados Emergentes",
+      "description": "Construído para regiões de alto crescimento onde a adoção de cripto supera o banco tradicional"
+    },
+    "stripe": {
+      "title": "Integração Simples como Stripe",
+      "description": "Uma experiência de desenvolvedor familiar — API REST, webhooks e SDKs que você já conhece"
     }
   },
   "globalReach": {
