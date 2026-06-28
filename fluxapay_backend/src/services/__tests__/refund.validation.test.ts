@@ -313,7 +313,7 @@ describe('Refund Service - Validation', () => {
           amount: 150,
         })
       ).rejects.toMatchObject({
-        status: 400,
+        status: 422,
         message: expect.stringContaining('cannot exceed original payment amount'),
       });
     });
