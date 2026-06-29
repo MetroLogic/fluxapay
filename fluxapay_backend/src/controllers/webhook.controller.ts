@@ -11,6 +11,8 @@ import {
   getDeadLetterQueueService,
   requeueWebhookService,
   exportWebhookLogsService,
+  adminGetWebhookLogsService,
+  adminRetryWebhookService,
 } from "../services/webhook.service";
 import { WebhookEventType, WebhookStatus } from "../generated/client/client";
 import { AuthRequest } from "../types/express";
@@ -156,6 +158,42 @@ export async function requeueWebhook(req: Request, res: Response) {
     }
 
     const result = await requeueWebhookService({ log_id });
+    res.status(200).json(result);
+  } catch (err: any) {
+    console.error(err);
+    sendApiError(res, err);
+  }
+}
+
+export async function adminGetWebhookLogs(req: Request, res: Response) {
+  try {
+    const query = req.query as any;
+    const result = await adminGetWebhookLogsService({
+      page: Number(query.page) || 1,
+      limit: Number(query.limit) || 10,
+      date_from: query.date_from,
+      date_to: query.date_to,
+      merchant_id: query.merchant_id,
+      event_type: query.event_type as WebhookEventType | undefined,
+      status: query.status as WebhookStatus | undefined,
+      search: query.search,
+    });
+    res.status(200).json(result);
+  } catch (err: any) {
+    console.error(err);
+    sendApiError(res, err);
+  }
+}
+
+export async function adminRetryWebhook(req: Request, res: Response) {
+  try {
+    const { log_id } = req.params;
+
+    if (!log_id || Array.isArray(log_id)) {
+      return sendApiError(res, apiError(400, ErrorCode.LOG_ID_REQUIRED, "Log ID is required"));
+    }
+
+    const result = await adminRetryWebhookService({ log_id });
     res.status(200).json(result);
   } catch (err: any) {
     console.error(err);

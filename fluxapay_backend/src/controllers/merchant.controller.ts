@@ -234,6 +234,28 @@ export async function adminBulkUpdateMerchantStatus(req: Request, res: Response)
     sendApiError(res, err);
   }
 }
+
+/** PATCH /api/merchants/admin/:merchantId/webhook – update webhook URL */
+export async function adminUpdateMerchantWebhook(req: Request, res: Response) {
+  try {
+    const merchantId = String(req.params.merchantId);
+    const { webhook_url } = req.body as { webhook_url: string };
+
+    if (typeof webhook_url !== "string") {
+      return sendApiError(res, apiError(400, ErrorCode.INVALID_INPUT, "webhook_url must be a string"));
+    }
+
+    const merchant = await adminPrisma.merchant.update({
+      where: { id: merchantId },
+      data: { webhook_url },
+      select: { id: true, business_name: true, webhook_url: true },
+    });
+
+    res.json({ message: "Merchant webhook updated", merchant });
+  } catch (err: any) {
+    sendApiError(res, err);
+  }
+}
 export const updateSettlementSchedule = createController(
   async (
     body: { settlement_schedule: "daily" | "weekly"; settlement_day?: number },

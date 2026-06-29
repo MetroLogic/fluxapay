@@ -7,6 +7,8 @@ import {
   getDeadLetterQueue,
   requeueWebhook,
   exportWebhookLogs,
+  adminGetWebhookLogs,
+  adminRetryWebhook,
 } from "../controllers/webhook.controller";
 import { validate, validateQuery } from "../middleware/validation.middleware";
 import * as webhookSchema from "../schemas/webhook.schema";
@@ -457,6 +459,95 @@ router.post(
   "/admin/dead-letter-queue/:log_id/requeue",
   adminAuth,
   requeueWebhook
+);
+
+/**
+ * @swagger
+ * /api/v1/webhooks/admin/logs:
+ *   get:
+ *     summary: Get webhook logs list across all merchants
+ *     tags: [Webhooks — Admin]
+ *     security:
+ *       - adminSecret: []
+ *     parameters:
+ *       - in: query
+ *         name: merchant_id
+ *         schema:
+ *           type: string
+ *         description: Filter by merchant ID
+ *       - in: query
+ *         name: event_type
+ *         schema:
+ *           type: string
+ *         description: Filter by event type
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *         description: Filter by webhook status
+ *       - in: query
+ *         name: date_from
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *       - in: query
+ *         name: date_to
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *     responses:
+ *       200:
+ *         description: Webhook logs retrieved successfully
+ *       401:
+ *         description: Unauthorized
+ */
+router.get(
+  "/admin/logs",
+  adminAuth,
+  adminGetWebhookLogs
+);
+
+/**
+ * @swagger
+ * /api/v1/webhooks/admin/logs/{log_id}/retry:
+ *   post:
+ *     summary: Retry a webhook across any merchant
+ *     tags: [Webhooks — Admin]
+ *     security:
+ *       - adminSecret: []
+ *     parameters:
+ *       - in: path
+ *         name: log_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The webhook log ID to retry
+ *     responses:
+ *       200:
+ *         description: Webhook retry initiated
+ *       404:
+ *         description: Webhook log not found
+ *       401:
+ *         description: Unauthorized
+ */
+router.post(
+  "/admin/logs/:log_id/retry",
+  adminAuth,
+  adminRetryWebhook
 );
 
 export default router;
