@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
     Search,
     Filter,
@@ -157,17 +158,69 @@ const formatDate = (dateString: string) => {
 
 // -- Main Component --
 
-export default function AdminAuditLogsPage() {
+function AdminAuditLogsContent() {
+    const router = useRouter();
+    const searchParams = useSearchParams();
+    const limit = 20;
+
+    const page = Math.max(1, Number(searchParams.get('page') || '1') || 1);
+    const actionFilter = searchParams.get('action') || 'all';
+    const dateFrom = searchParams.get('from') || '';
+    const dateTo = searchParams.get('to') || '';
+    const actorFromUrl = searchParams.get('actor') || '';
+
+    const [adminIdFilter, setAdminIdFilter] = useState(actorFromUrl);
+    const actorDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
     const [logs, setLogs] = useState<AuditLogEntry[]>([]);
     const [loading, setLoading] = useState(true);
-    const [actionFilter, setActionFilter] = useState('all');
-    const [adminIdFilter, setAdminIdFilter] = useState('');
-    const [dateFrom, setDateFrom] = useState('');
-    const [dateTo, setDateTo] = useState('');
     const [selectedLog, setSelectedLog] = useState<AuditLogEntry | null>(null);
-    const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
-    const limit = 20;
+
+    const updateSearchParams = useCallback((updates: Record<string, string | number | null | undefined>) => {
+        const params = new URLSearchParams(searchParams.toString());
+
+        Object.entries(updates).forEach(([key, value]) => {
+            const shouldRemove =
+                value == null ||
+                value === '' ||
+                value === 'all' ||
+                (key === 'page' && Number(value) <= 1);
+
+            if (shouldRemove) {
+                params.delete(key);
+            } else {
+                params.set(key, String(value));
+            }
+        });
+
+        const query = params.toString();
+        router.replace(query ? `/admin/audit-logs?${query}` : '/admin/audit-logs');
+    }, [router, searchParams]);
+
+    useEffect(() => {
+        setAdminIdFilter(actorFromUrl);
+    }, [actorFromUrl]);
+
+    useEffect(() => {
+        return () => {
+            if (actorDebounceRef.current) clearTimeout(actorDebounceRef.current);
+        };
+    }, []);
+
+    const handleActorChange = (value: string) => {
+        setAdminIdFilter(value);
+        if (actorDebounceRef.current) clearTimeout(actorDebounceRef.current);
+        actorDebounceRef.current = setTimeout(() => {
+            updateSearchParams({ actor: value || null, page: 1 });
+        }, 300);
+    };
+
+    const clearFilters = () => {
+        if (actorDebounceRef.current) clearTimeout(actorDebounceRef.current);
+        setAdminIdFilter('');
+        router.replace('/admin/audit-logs');
+    };
 
     const fetchLogs = useCallback(async () => {
         try {
@@ -176,7 +229,7 @@ export default function AdminAuditLogsPage() {
                 page,
                 limit,
                 action_type: actionFilter === 'all' ? undefined : actionFilter,
-                admin_id: adminIdFilter || undefined,
+                admin_id: actorFromUrl || undefined,
                 date_from: dateFrom || undefined,
                 date_to: dateTo || undefined,
             });
@@ -191,7 +244,7 @@ export default function AdminAuditLogsPage() {
         } finally {
             setLoading(false);
         }
-    }, [page, actionFilter, adminIdFilter, dateFrom, dateTo]);
+    }, [page, actionFilter, actorFromUrl, dateFrom, dateTo]);
 
     useEffect(() => {
         fetchLogs();
@@ -246,6 +299,16 @@ export default function AdminAuditLogsPage() {
                 
                 {/* Filters */}
                 <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 mb-6">
+                    <div className="flex flex-col gap-4">
+                        <div className="flex justify-end">
+                            <button
+                                type="button"
+                                onClick={clearFilters}
+                                className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
+                            >
+                                Clear filters
+                            </button>
+                        </div>
                     <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-end">
                         <div className="lg:col-span-1">
                             <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Search Admin</label>
@@ -256,10 +319,7 @@ export default function AdminAuditLogsPage() {
                                     placeholder="Admin ID or Email..."
                                     className="w-full pl-10 pr-4 py-2.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900/5 focus:border-slate-900 transition-all shadow-sm"
                                     value={adminIdFilter}
-                                    onChange={(e) => {
-                                        setAdminIdFilter(e.target.value);
-                                        setPage(1);
-                                    }}
+                                    onChange={(e) => handleActorChange(e.target.value)}
                                 />
                             </div>
                         </div>
@@ -271,10 +331,7 @@ export default function AdminAuditLogsPage() {
                                 <select
                                     className="w-full pl-10 pr-4 py-2.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900/5 focus:border-slate-900 bg-white appearance-none"
                                     value={actionFilter}
-                                    onChange={(e) => {
-                                        setActionFilter(e.target.value);
-                                        setPage(1);
-                                    }}
+                                    onChange={(e) => updateSearchParams({ action: e.target.value, page: 1 })}
                                 >
                                     <option value="all">All Actions</option>
                                     {Object.entries(ACTION_MAP).map(([val, label]) => (
@@ -293,10 +350,7 @@ export default function AdminAuditLogsPage() {
                                     className="w-full pl-10 pr-4 py-2.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900/5 focus:border-slate-900"
                                     value={dateFrom}
                                     max={dateTo}
-                                    onChange={(e) => {
-                                        setDateFrom(e.target.value);
-                                        setPage(1);
-                                    }}
+                                    onChange={(e) => updateSearchParams({ from: e.target.value || null, page: 1 })}
                                 />
                             </div>
                         </div>
@@ -310,13 +364,11 @@ export default function AdminAuditLogsPage() {
                                     className="w-full pl-10 pr-4 py-2.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900/5 focus:border-slate-900"
                                     value={dateTo}
                                     min={dateFrom}
-                                    onChange={(e) => {
-                                        setDateTo(e.target.value);
-                                        setPage(1);
-                                    }}
+                                    onChange={(e) => updateSearchParams({ to: e.target.value || null, page: 1 })}
                                 />
                             </div>
                         </div>
+                    </div>
                     </div>
                 </div>
 
@@ -431,7 +483,7 @@ export default function AdminAuditLogsPage() {
                     <div className="flex items-center gap-2">
                         <button
                             disabled={page === 1 || loading}
-                            onClick={() => setPage(prev => prev - 1)}
+                            onClick={() => updateSearchParams({ page: page - 1 })}
                             className="flex items-center gap-2 px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors text-sm font-medium"
                         >
                             <ChevronLeft className="w-4 h-4" />
@@ -439,7 +491,7 @@ export default function AdminAuditLogsPage() {
                         </button>
                         <button
                             disabled={page === totalPages || loading}
-                            onClick={() => setPage(prev => prev + 1)}
+                            onClick={() => updateSearchParams({ page: page + 1 })}
                             className="flex items-center gap-2 px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors text-sm font-medium"
                         >
                             Next
@@ -457,5 +509,17 @@ export default function AdminAuditLogsPage() {
                 />
             )}
         </div>
+    );
+}
+
+export default function AdminAuditLogsPage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+                <Loader2 className="w-8 h-8 text-slate-400 animate-spin" />
+            </div>
+        }>
+            <AdminAuditLogsContent />
+        </Suspense>
     );
 }
