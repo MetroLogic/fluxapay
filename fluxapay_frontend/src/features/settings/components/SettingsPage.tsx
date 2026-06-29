@@ -19,6 +19,7 @@ import {
   CalendarClock,
   Clock,
   Palette,
+  AlertTriangle,
 } from "lucide-react";
 
 export default function SettingsPage() {
@@ -52,6 +53,11 @@ export default function SettingsPage() {
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [isSigningOutAll, setIsSigningOutAll] = useState(false);
   const [sessionNote, setSessionNote] = useState<string>("Current session active");
+  const [showDeletionModal, setShowDeletionModal] = useState(false);
+  const [isRequestingDeletion, setIsRequestingDeletion] = useState(false);
+  const [deletionRequestScheduled, setDeletionRequestScheduled] =
+    useState(false);
+  const [deletionRequestError, setDeletionRequestError] = useState("");
 
   // Hosted checkout branding
   const [checkoutLogoUrl, setCheckoutLogoUrl] = useState("");
@@ -318,6 +324,25 @@ export default function SettingsPage() {
       }
     } finally {
       logout();
+    }
+  };
+
+  const handleRequestDeletion = async () => {
+    setIsRequestingDeletion(true);
+    setDeletionRequestError("");
+
+    try {
+      await api.merchant.requestDeletion();
+      setDeletionRequestScheduled(true);
+      setShowDeletionModal(false);
+    } catch (error) {
+      const message =
+        error instanceof ApiError
+          ? error.message
+          : "Failed to request account deletion";
+      setDeletionRequestError(message);
+    } finally {
+      setIsRequestingDeletion(false);
     }
   };
 
@@ -898,6 +923,54 @@ export default function SettingsPage() {
         </div>
       </div>
 
+      {/* Danger Zone Section */}
+      <div className="space-y-4 p-6 rounded-2xl border bg-muted/20">
+        <div className="flex items-center gap-2 text-red-700 font-semibold mb-4">
+          <AlertTriangle className="h-5 w-5" />
+          <h3 className="text-lg">Danger Zone</h3>
+        </div>
+
+        <div className="rounded-lg border bg-background p-4">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="font-medium">Request account deletion</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Schedule your account for admin review, deletion, and PII
+                anonymization.
+              </p>
+            </div>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                setDeletionRequestError("");
+                setShowDeletionModal(true);
+              }}
+              disabled={deletionRequestScheduled}
+              className="shrink-0"
+            >
+              {deletionRequestScheduled
+                ? "Deletion Requested"
+                : "Request Account Deletion"}
+            </Button>
+          </div>
+
+          {deletionRequestScheduled && (
+            <div className="mt-4 flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 p-3 text-green-800">
+              <CheckCircle2 className="h-4 w-4" />
+              <p className="text-sm font-medium">
+                Account deletion request scheduled for admin review.
+              </p>
+            </div>
+          )}
+
+          {deletionRequestError && (
+            <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-red-800">
+              <p className="text-sm">{deletionRequestError}</p>
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* API Key Regeneration Modal */}
       <Modal
         isOpen={showRegenerateModal}
@@ -938,6 +1011,62 @@ export default function SettingsPage() {
                 </svg>
               )}
               {isRegenerating ? "Regenerating..." : "Regenerate"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Account Deletion Request Modal */}
+      <Modal
+        isOpen={showDeletionModal}
+        onClose={() => {
+          if (!isRequestingDeletion) setShowDeletionModal(false);
+        }}
+        title="Request Account Deletion"
+      >
+        <div className="space-y-4">
+          <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-red-800">
+            <div className="flex gap-2">
+              <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+              <p className="text-sm">
+                This starts an admin review for account deletion and PII
+                anonymization. You may lose access to account data after the
+                request is processed.
+              </p>
+            </div>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            The request will be submitted to FluxaPay admins for review before
+            any account deletion or anonymization action is completed.
+          </p>
+          <div className="flex gap-3 pt-4">
+            <Button
+              variant="outline"
+              onClick={() => setShowDeletionModal(false)}
+              className="flex-1"
+              disabled={isRequestingDeletion}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleRequestDeletion}
+              className="flex-1 gap-2"
+              disabled={isRequestingDeletion}
+            >
+              {isRequestingDeletion && (
+                <svg
+                  className="h-4 w-4 animate-spin"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="3"
+                >
+                  <circle cx="12" cy="12" r="10" className="opacity-30" />
+                  <path d="M22 12a10 10 0 0 1-10 10" />
+                </svg>
+              )}
+              {isRequestingDeletion ? "Submitting..." : "Submit Request"}
             </Button>
           </div>
         </div>

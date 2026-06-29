@@ -307,6 +307,11 @@ export const api = {
         method: "POST",
         body: JSON.stringify(data),
       }),
+
+    requestDeletion: () =>
+      fetchWithAuth("/api/v1/merchants/me/deletion-request", {
+        method: "POST",
+      }),
   },
 
   merchantExports: {
