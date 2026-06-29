@@ -106,8 +106,6 @@ export class SorobanService {
                 .setTimeout(30)
                 .build();
 
-            txn.sign(this.oracleKeypair);
-
             // 1. Simulation
             const simulation = await this.rpcServer.simulateTransaction(txn);
             if (!rpc.Api.isSimulationSuccess(simulation)) {
@@ -115,14 +113,18 @@ export class SorobanService {
                 return false;
             }
 
-            // 2. Submission
-            const response = await this.rpcServer.sendTransaction(txn);
+            // 2. Assemble resources from simulation, then sign
+            const preparedTxn = rpc.assembleTransaction(txn, simulation).build();
+            preparedTxn.sign(this.oracleKeypair);
+
+            // 3. Submission
+            const response = await this.rpcServer.sendTransaction(preparedTxn);
             if (response.status !== 'PENDING') {
                 console.error('Soroban transaction submission failed:', response);
                 return false;
             }
 
-            // 3. Polling for transaction status
+            // 4. Polling for transaction status
             let txResult = await this.rpcServer.getTransaction(response.hash);
             let attempts = 0;
             while (txResult.status === 'NOT_FOUND' || txResult.status === 'SUCCESS' && (txResult as any).resultMetaXdr === undefined) {
@@ -138,7 +140,7 @@ export class SorobanService {
                 return false;
             }
 
-            // 4. Verify contract state update reflects confirmed
+            // 5. Verify contract state update reflects confirmed
             const verified = await this.verifyContractState(paymentId);
             if (verified) {
                 recordSorobanSuccess();

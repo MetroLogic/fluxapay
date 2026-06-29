@@ -142,7 +142,7 @@ export async function runPaymentMonitorTick(): Promise<void> {
       // Use cursor (last_paging_token) to only fetch transactions newer than last seen
       let paymentsQuery = getServer().payments()
         .forAccount(address)
-        .order('desc')
+        .order('asc')
         .limit(10);
 
       if (payment.last_paging_token) {
