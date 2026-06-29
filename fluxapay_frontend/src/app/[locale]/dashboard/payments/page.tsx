@@ -136,15 +136,10 @@ function PaymentsContent() {
     { id: string; url: string; amount: number; currency: string; description?: string; createdAt: string }[]
   >([]);
   const { exportData, exportingFormat } = useMerchantDataExport();
-
-  // Debounce search
-  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const fetchAbortRef = useRef<AbortController | null>(null);
 
   const handleSearchChange = useCallback((value: string) => {
     setSearch(value);
-    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
-    searchDebounceRef.current = setTimeout(() => setDebouncedSearch(value), 400);
   }, []);
 
   // Real-time payment updates via SSE
@@ -173,6 +168,10 @@ function PaymentsContent() {
   });
 
   const fetchPayments = useCallback(async () => {
+    fetchAbortRef.current?.abort();
+    const controller = new AbortController();
+    fetchAbortRef.current = controller;
+
     setLoading(true);
     setLoadError(null);
     try {
@@ -181,28 +180,39 @@ function PaymentsContent() {
         limit: PAGE_SIZE,
         status: statusFilter,
         currency: currencyFilter,
-        search: debouncedSearch || undefined,
+        search: search || undefined,
         date_from: dateFrom || undefined,
         date_to: dateTo || undefined,
-      })) as { data: BackendPayment[]; meta: { total: number } };
+      }, { signal: controller.signal })) as { data: BackendPayment[]; meta: { total: number } };
       setPayments(result.data.map(mapBackendPayment));
       setTotal(result.meta.total);
-    } catch {
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        return;
+      }
       const msg = "Failed to load payments.";
       setLoadError(msg);
       toast.error(msg);
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted) {
+        setLoading(false);
+      }
     }
-  }, [page, statusFilter, currencyFilter, debouncedSearch, dateFrom, dateTo]);
+  }, [page, statusFilter, currencyFilter, search, dateFrom, dateTo]);
 
   useEffect(() => {
     setPage(1);
-  }, [statusFilter, currencyFilter, debouncedSearch, dateFrom, dateTo, amountMin, amountMax]);
+  }, [statusFilter, currencyFilter, search, dateFrom, dateTo, amountMin, amountMax]);
 
   useEffect(() => {
     fetchPayments();
   }, [fetchPayments]);
+
+  useEffect(() => {
+    return () => {
+      fetchAbortRef.current?.abort();
+    };
+  }, []);
 
   const handleRowClick = useCallback((payment: Payment) => {
     setDrawerPayment(payment);
@@ -221,7 +231,7 @@ function PaymentsContent() {
       filters: {
         status: statusFilter,
         currency: currencyFilter,
-        search: debouncedSearch || undefined,
+        search: search || undefined,
         date_from: dateFrom || undefined,
         date_to: dateTo || undefined,
         amount_min: amountMin || undefined,

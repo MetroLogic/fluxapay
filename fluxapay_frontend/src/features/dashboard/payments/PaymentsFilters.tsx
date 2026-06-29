@@ -5,6 +5,7 @@ import { Button } from "@/components/Button";
 import { Search, Save, XCircle } from "lucide-react";
 import { memo, useCallback, useEffect, useState, type ChangeEvent } from "react";
 import toast from "react-hot-toast";
+import { useDebounce } from "@/hooks/useDebounce";
 
 interface PaymentsFiltersProps {
     searchValue: string;
@@ -51,6 +52,26 @@ export const PaymentsFilters = memo(({
 }: PaymentsFiltersProps) => {
     const [presets, setPresets] = useState<SavedPreset[]>([]);
     const [selectedPresetId, setSelectedPresetId] = useState<string>("default");
+    const [localSearch, setLocalSearch] = useState(searchValue);
+    const debouncedSearch = useDebounce(localSearch, 300);
+    const debouncedAmountMin = useDebounce(amountMin, 300);
+    const debouncedAmountMax = useDebounce(amountMax, 300);
+
+    useEffect(() => {
+        setLocalSearch(searchValue);
+    }, [searchValue]);
+
+    useEffect(() => {
+        onSearchChange(debouncedSearch);
+    }, [debouncedSearch, onSearchChange]);
+
+    useEffect(() => {
+        onAmountMinChange(debouncedAmountMin);
+    }, [debouncedAmountMin, onAmountMinChange]);
+
+    useEffect(() => {
+        onAmountMaxChange(debouncedAmountMax);
+    }, [debouncedAmountMax, onAmountMaxChange]);
 
     // Load presets on mount
     useEffect(() => {
@@ -72,9 +93,9 @@ export const PaymentsFilters = memo(({
     };
 
     const handleSearchChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
-        onSearchChange(e.target.value);
+        setLocalSearch(e.target.value);
         setSelectedPresetId("custom");
-    }, [onSearchChange]);
+    }, []);
 
     const handleStatusChange = useCallback((e: ChangeEvent<HTMLSelectElement>) => {
         onStatusChange(e.target.value);
@@ -110,6 +131,7 @@ export const PaymentsFilters = memo(({
         setSelectedPresetId(id);
         
         if (id === "default") {
+            setLocalSearch("");
             onSearchChange("");
             onStatusChange("all");
             onCurrencyChange("all");
@@ -120,6 +142,7 @@ export const PaymentsFilters = memo(({
 
         const preset = presets.find(p => p.id === id);
         if (preset) {
+            setLocalSearch(preset.search);
             onSearchChange(preset.search);
             onStatusChange(preset.status);
             onCurrencyChange(preset.currency);
@@ -129,6 +152,7 @@ export const PaymentsFilters = memo(({
     };
 
     const handleReset = () => {
+        setLocalSearch("");
         onSearchChange("");
         onStatusChange("all");
         onCurrencyChange("all");
@@ -185,7 +209,7 @@ export const PaymentsFilters = memo(({
                     <Input
                         placeholder="Search by ID, Order ID, or customer..."
                         className="pl-10"
-                        value={searchValue}
+                        value={localSearch}
                         onChange={handleSearchChange}
                     />
                 </div>

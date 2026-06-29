@@ -582,7 +582,7 @@ export const api = {
       search?: string;
       date_from?: string;
       date_to?: string;
-    }) => {
+    }, init?: RequestInit) => {
       const sp = new URLSearchParams();
       if (params?.page != null) sp.set("page", String(params.page));
       if (params?.limit != null) sp.set("limit", String(params.limit));
@@ -591,7 +591,7 @@ export const api = {
       if (params?.search) sp.set("search", params.search);
       if (params?.date_from) sp.set("date_from", params.date_from);
       if (params?.date_to) sp.set("date_to", params.date_to);
-      return fetchWithAuth(`/api/v1/payments?${sp.toString()}`);
+      return fetchWithAuth(`/api/v1/payments?${sp.toString()}`, init);
     },
 
     getById: (paymentId: string) =>
