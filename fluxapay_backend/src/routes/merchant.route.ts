@@ -13,6 +13,7 @@ import {
   adminGetMerchant,
   adminUpdateMerchantStatus,
   adminBulkUpdateMerchantStatus,
+  adminUpdateMerchantWebhook,
   updateSettlementSchedule,
   addBankAccount,
   updateBankAccount,
@@ -372,6 +373,40 @@ router.get("/admin/:merchantId", adminAuth, adminGetMerchant);
  *         description: Merchant not found
  */
 router.patch("/admin/:merchantId/status", adminAuth, adminUpdateMerchantStatus);
+
+/**
+ * @swagger
+ * /api/v1/merchants/admin/{merchantId}/webhook:
+ *   patch:
+ *     summary: Update merchant webhook URL (Admin only)
+ *     tags: [Admin - Merchants]
+ *     security:
+ *       - adminSecret: []
+ *     parameters:
+ *       - in: path
+ *         name: merchantId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [webhook_url]
+ *             properties:
+ *               webhook_url:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Webhook URL updated
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Merchant not found
+ */
+router.patch("/admin/:merchantId/webhook", adminAuth, adminUpdateMerchantWebhook);
 
 /**
  * @swagger
