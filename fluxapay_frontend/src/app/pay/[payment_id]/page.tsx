@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -19,46 +19,7 @@ import {
   DEFAULT_ACCENT,
 } from '@/components/checkout/CheckoutBrandingShell';
 import { FiatEquivalent } from '@/components/checkout/FiatEquivalent';
-
-function CopyField({
-  label,
-  value,
-  truncate,
-  required,
-}: {
-  label: string;
-  value: string;
-  truncate?: boolean;
-  required?: boolean;
-}) {
-  const [copied, setCopied] = useState(false);
-  const handleCopy = async () => {
-    await navigator.clipboard.writeText(value);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  return (
-    <div className="rounded-lg border bg-gray-50 p-3">
-      <div className="flex items-center justify-between mb-1">
-        <p className="text-xs font-medium text-gray-500">
-          {label}
-          {required && <span className="text-red-500 ml-1">*Required</span>}
-        </p>
-        <button
-          onClick={handleCopy}
-          className="text-xs font-medium text-[color:var(--checkout-accent)] hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--checkout-accent)] rounded"
-          aria-label={`Copy ${label}`}
-        >
-          {copied ? '✓ Copied' : 'Copy'}
-        </button>
-      </div>
-      <p className={`font-mono text-sm break-all ${truncate ? 'truncate' : ''}`}>
-        {value}
-      </p>
-    </div>
-  );
-}
+import { CopyField } from '@/components/checkout/CopyField';
 
 /**
  * Main checkout page for FluxaPay payment gateway
@@ -406,7 +367,8 @@ export default function CheckoutPage() {
 
             <div
               className="mb-8 text-center"
-              aria-label={`${t('checkout.amountToPay')}: ${payment.amount} ${payment.currency}`}
+              role="region"
+              aria-label={`Payment amount: ${payment.amount} ${payment.currency}`}
             >
               <p className="mb-2 text-sm text-gray-500">{t('checkout.amountToPay')}</p>
               <p className="text-3xl font-bold text-gray-900 sm:text-4xl">
@@ -429,13 +391,21 @@ export default function CheckoutPage() {
             </div>
 
             <div className="mb-8 space-y-4">
-              <CopyField label="Payment Address" value={payment.address} truncate />
+              <CopyField
+                label="Payment Address"
+                value={payment.address}
+                truncate
+                copyAriaLabel="Copy deposit address"
+                fieldId="deposit-address"
+              />
 
               {payment.memo && (
                 <CopyField
                   label={`Memo (${payment.memoType?.replace('MEMO_', '') || 'TEXT'})`}
                   value={payment.memo}
                   required={payment.memoRequired}
+                  copyAriaLabel="Copy memo"
+                  fieldId="payment-memo"
                 />
               )}
             </div>
