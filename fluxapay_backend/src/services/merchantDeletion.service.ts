@@ -9,7 +9,7 @@ import { ErrorCode } from "../types/errors";
  *   - PII fields on Merchant are overwritten with anonymized placeholders.
  *   - Active API keys are revoked; webhook endpoints deactivated.
  *   - Pending webhook deliveries are cancelled; active charges cancelled.
- *   - KYC documents are deleted; KYC record is anonymized.
+ *   - KYC documents are purged from Cloudinary then deleted from DB; KYC record is anonymized.
  *   - OTPs, BankAccount, Customers, Subscriptions are hard-deleted.
  */
 import { PrismaClient } from "../generated/client/client";
@@ -19,6 +19,8 @@ import {
   logWebhooksDeactivated,
   logChargesCancelled,
 } from "./audit.service";
+import { deleteFromCloudinary } from "./cloudinary.service";
+import { logger } from "../utils/logger";
 
 const prisma = new PrismaClient();
 
@@ -143,7 +145,33 @@ export async function executeDeletion(
       },
     });
 
-    // 6. Delete KYC documents
+    // 6. Purge KYC document files from Cloudinary, then delete DB records.
+    //    Query public_ids BEFORE the transaction deletes the rows.
+    const kycDocs = await tx.kYCDocument.findMany({
+      where: { kyc: { merchantId } },
+      select: { id: true, public_id: true },
+    });
+
+    // Purge each file from Cloudinary; log failures so operators can reconcile.
+    const cloudinaryResults = await Promise.allSettled(
+      kycDocs.map((doc) => deleteFromCloudinary(doc.public_id)),
+    );
+    cloudinaryResults.forEach((result, idx) => {
+      if (result.status === "rejected") {
+        logger.error(
+          {
+            event: "cloudinary_purge_failed",
+            merchantId,
+            docId: kycDocs[idx]?.id,
+            public_id: kycDocs[idx]?.public_id,
+            error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+          },
+          "ALERT: Cloudinary KYC document purge failed — manual reconciliation required",
+        );
+      }
+    });
+
+    // Delete the DB rows regardless of Cloudinary outcome (PII must be removed).
     await tx.kYCDocument.deleteMany({ where: { kyc: { merchantId } } });
 
     // 7. Clear webhook log endpoint URLs (may contain PII in query params)

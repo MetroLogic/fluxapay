@@ -553,6 +553,8 @@ enum PaymentStatus {
   paid
   completed
   cancelled
+  refunded
+  partially_refunded
 }
 
 model CronLock {

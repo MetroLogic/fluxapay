@@ -11,6 +11,9 @@ export enum PaymentStatus {
   FAILED = 'failed',
   PAID = 'paid',
   COMPLETED = 'completed',
+  CANCELLED = 'cancelled',
+  REFUNDED = 'refunded',
+  PARTIALLY_REFUNDED = 'partially_refunded',
 }
 
 /**
@@ -41,6 +44,9 @@ export function getTerminalPaymentStatuses(): PaymentStatus[] {
     PaymentStatus.FAILED,
     PaymentStatus.PAID,
     PaymentStatus.COMPLETED,
+    PaymentStatus.REFUNDED,
+    PaymentStatus.PARTIALLY_REFUNDED,
+    PaymentStatus.CANCELLED,
   ];
 }
 

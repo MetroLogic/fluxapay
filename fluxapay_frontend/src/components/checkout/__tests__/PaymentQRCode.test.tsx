@@ -33,4 +33,22 @@ describe('PaymentQRCode', () => {
       screen.getByRole('button', { name: 'Copy deposit address' }),
     ).toBeInTheDocument();
   });
+
+  it('re-renders QR code when depositAddress prop changes', () => {
+    const { rerender } = render(<PaymentQRCode address={address} amount={25} />);
+
+    const canvas1 = screen.getByTestId('qr-canvas');
+    // The value prop on the canvas encodes the Stellar URI — capture it
+    const initialValue = canvas1.getAttribute('value');
+
+    const newAddress = 'GNEWADDRESS99999STELLARADDR';
+    rerender(<PaymentQRCode address={newAddress} amount={25} />);
+
+    const canvas2 = screen.getByTestId('qr-canvas');
+    const updatedValue = canvas2.getAttribute('value');
+
+    // The QR value must have changed to reflect the new deposit address
+    expect(updatedValue).not.toBe(initialValue);
+    expect(updatedValue).toContain(newAddress);
+  });
 });

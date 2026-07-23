@@ -81,6 +81,8 @@ interface UsePaymentStatusReturn {
   isOffline: boolean;
   retryConnection: () => Promise<void>;
   serverTimeOffset: number;
+  /** True for one render cycle when the deposit address has just changed */
+  depositAddressUpdated: boolean;
 }
 
 /**
@@ -95,6 +97,7 @@ export function usePaymentStatus(paymentId: string): UsePaymentStatusReturn {
   const [connectionType, setConnectionType] = useState<ConnectionType>(null);
   const [isOffline, setIsOffline] = useState<boolean>(false);
   const [serverTimeOffset, setServerTimeOffset] = useState<number>(0);
+  const [depositAddressUpdated, setDepositAddressUpdated] = useState<boolean>(false);
 
   // Use refs to track mutable state without triggering re-renders or lint issues
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -195,8 +198,21 @@ export function usePaymentStatus(paymentId: string): UsePaymentStatusReturn {
         if (!prev) return prev;
         const statusChanged = prev.status !== data.status;
         const paidAmountChanged = data.paidAmount !== undefined && prev.paidAmount !== data.paidAmount;
-        if (statusChanged || paidAmountChanged) {
-          return { ...prev, status: data.status, ...(data.paidAmount !== undefined ? { paidAmount: data.paidAmount } : {}) };
+        const addressChanged =
+          data.address !== undefined &&
+          typeof data.address === 'string' &&
+          data.address !== '' &&
+          prev.address !== data.address;
+        if (statusChanged || paidAmountChanged || addressChanged) {
+          if (addressChanged) {
+            setDepositAddressUpdated(true);
+          }
+          return {
+            ...prev,
+            status: data.status,
+            ...(data.paidAmount !== undefined ? { paidAmount: data.paidAmount } : {}),
+            ...(addressChanged ? { address: data.address as string } : {}),
+          };
         }
         return prev;
       });
@@ -269,8 +285,21 @@ export function usePaymentStatus(paymentId: string): UsePaymentStatusReturn {
               if (!prev) return prev;
               const statusChanged = prev.status !== data.status;
               const paidAmountChanged = data.paidAmount !== undefined && prev.paidAmount !== data.paidAmount;
-              if (statusChanged || paidAmountChanged) {
-                return { ...prev, status: data.status, ...(data.paidAmount !== undefined ? { paidAmount: data.paidAmount } : {}) };
+              const addressChanged =
+                data.address !== undefined &&
+                typeof data.address === 'string' &&
+                data.address !== '' &&
+                prev.address !== data.address;
+              if (statusChanged || paidAmountChanged || addressChanged) {
+                if (addressChanged) {
+                  setDepositAddressUpdated(true);
+                }
+                return {
+                  ...prev,
+                  status: data.status,
+                  ...(data.paidAmount !== undefined ? { paidAmount: data.paidAmount } : {}),
+                  ...(addressChanged ? { address: data.address as string } : {}),
+                };
               }
               return prev;
             });
@@ -321,5 +350,13 @@ export function usePaymentStatus(paymentId: string): UsePaymentStatusReturn {
     await fetchPayment();
   }, [fetchPayment]);
 
-  return { payment, loading, error, connectionType, isOffline, retryConnection, serverTimeOffset };
+  // Auto-clear the depositAddressUpdated flag after one tick so consumers
+  // can use it as a one-shot signal without managing their own reset.
+  useEffect(() => {
+    if (!depositAddressUpdated) return;
+    const id = setTimeout(() => setDepositAddressUpdated(false), 0);
+    return () => clearTimeout(id);
+  }, [depositAddressUpdated]);
+
+  return { payment, loading, error, connectionType, isOffline, retryConnection, serverTimeOffset, depositAddressUpdated };
 }
