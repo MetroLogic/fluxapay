@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   quality-and-build:
-    name: Backend Quality & Build
+    name: Quality & Build
     runs-on: ubuntu-latest
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/fluxapay_ci_placeholder?schema=public
@@ -25,11 +25,9 @@ jobs:
         working-directory: ./fluxapay_backend
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: "npm"
@@ -44,20 +42,20 @@ jobs:
       - name: Generate Prisma Client
         run: npx prisma generate
 
-      - name: Format Check (Lint)
+      - name: Lint
         run: npm run lint
 
-      - name: Validate OpenAPI Specification
+      - name: Validate OpenAPI spec
         run: npm run validate:openapi
 
-      - name: Check Route Documentation Coverage
+      - name: Check route documentation coverage
         run: npm run check:route-coverage -- --ci
 
-      - name: Build Check
+      - name: Build
         run: npm run build
 
   unit-and-contract-tests:
-    name: Backend Unit & Contract Tests
+    name: Unit & Contract Tests
     runs-on: ubuntu-latest
     env:
       NODE_ENV: test
@@ -97,11 +95,9 @@ jobs:
         working-directory: ./fluxapay_backend
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: "npm"
@@ -127,11 +123,10 @@ jobs:
       - name: Sync database schema
         run: npx prisma db push
 
-      - name: Run Unit Tests
+      - name: Run unit tests
         run: npm test
 
-      - name: Run Contract Tests
+      - name: Run contract tests
         run: npm run test:contract
         env:
-          # Contract suite runs after the full unit suite; avoid merchant create rate limit.
           PAYMENT_RATE_LIMIT_PER_MINUTE: "10000"
