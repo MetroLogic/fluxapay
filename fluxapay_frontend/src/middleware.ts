@@ -44,13 +44,12 @@ const PROTECTED_PREFIXES = [
 ];
 
 /**
- * Admin-only path prefixes — a subset of PROTECTED_PREFIXES that also
- * require the `admin` role flag encoded in the token. Role validation
- * beyond token presence is enforced client-side by AdminGuard and on
- * the server by the backend; middleware only blocks obviously
- * unauthenticated requests to reduce flash of protected content.
+ * Admin-only path prefixes — a subset of PROTECTED_PREFIXES. Role validation
+ * beyond token presence is enforced client-side by AdminGuard and on the
+ * server by the backend; middleware only blocks unauthenticated requests.
+ * Kept here for documentation and future middleware-level role checks.
  */
-const ADMIN_PREFIXES = ["/admin"];
+// const ADMIN_PREFIXES = ["/admin"];
 
 /** Extract the path without locale prefix, e.g. /en/dashboard → /dashboard */
 function stripLocale(pathname: string): string {

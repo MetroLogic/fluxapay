@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState } from "react";
 import { Payment } from "./types";
 import { Badge } from "@/components/Badge";
 import {
