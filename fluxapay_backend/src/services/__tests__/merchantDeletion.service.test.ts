@@ -7,6 +7,12 @@ jest.mock("../audit.service", () => ({
   logChargesCancelled: jest.fn().mockResolvedValue({}),
 }));
 
+// Mock Cloudinary service so unit tests don't make real HTTP calls.
+const mockDeleteFromCloudinary = jest.fn().mockResolvedValue(undefined);
+jest.mock("../cloudinary.service", () => ({
+  deleteFromCloudinary: (...args: unknown[]) => mockDeleteFromCloudinary(...args),
+}));
+
 const merchant = { findUnique: jest.fn(), update: jest.fn() };
 const merchantDeletionRequest = {
   upsert: jest.fn(),
@@ -14,7 +20,7 @@ const merchantDeletionRequest = {
   update: jest.fn(),
 };
 const merchantKYC = { updateMany: jest.fn() };
-const kYCDocument = { deleteMany: jest.fn() };
+const kYCDocument = { findMany: jest.fn(), deleteMany: jest.fn() };
 const webhookLog = { updateMany: jest.fn() };
 const oTP = { deleteMany: jest.fn() };
 const bankAccount = { deleteMany: jest.fn() };
@@ -104,6 +110,8 @@ describe("executeDeletion", () => {
     });
     merchant.update.mockResolvedValue({});
     merchantKYC.updateMany.mockResolvedValue({});
+    // Default: no KYC docs — override per-test to simulate documents.
+    kYCDocument.findMany.mockResolvedValue([]);
     kYCDocument.deleteMany.mockResolvedValue({});
     webhookLog.updateMany.mockResolvedValue({ count: 2 });
     oTP.deleteMany.mockResolvedValue({});
@@ -114,6 +122,7 @@ describe("executeDeletion", () => {
     merchantDeletionRequest.update.mockResolvedValue({});
     apiKey.updateMany.mockResolvedValue({ count: 3 });
     payment.updateMany.mockResolvedValue({ count: 1 });
+    mockDeleteFromCloudinary.mockResolvedValue(undefined);
   });
 
   it("revokes API keys, cancels webhooks/charges, and emits audit events", async () => {
@@ -178,5 +187,81 @@ describe("getDeletionRequest", () => {
   it("throws 404 when not found", async () => {
     merchantDeletionRequest.findUnique.mockResolvedValue(null);
     await expect(getDeletionRequest(MERCHANT_ID)).rejects.toMatchObject({ status: 404 });
+  });
+});
+
+// ─── Issue #720: Cloudinary KYC document purge on merchant deletion ───────────
+
+describe("executeDeletion — Cloudinary KYC purge (#720)", () => {
+  beforeEach(() => {
+    merchant.findUnique.mockResolvedValue(activeMerchant);
+    merchantDeletionRequest.findUnique.mockResolvedValue({
+      id: "req-1",
+      merchantId: MERCHANT_ID,
+      reason: "gdpr request",
+    });
+    merchant.update.mockResolvedValue({});
+    merchantKYC.updateMany.mockResolvedValue({});
+    kYCDocument.deleteMany.mockResolvedValue({});
+    webhookLog.updateMany.mockResolvedValue({ count: 0 });
+    oTP.deleteMany.mockResolvedValue({});
+    bankAccount.deleteMany.mockResolvedValue({});
+    merchantSubscription.deleteMany.mockResolvedValue({});
+    customer.deleteMany.mockResolvedValue({});
+    refreshToken.deleteMany.mockResolvedValue({});
+    merchantDeletionRequest.update.mockResolvedValue({});
+    apiKey.updateMany.mockResolvedValue({ count: 0 });
+    payment.updateMany.mockResolvedValue({ count: 0 });
+  });
+
+  it("calls deleteFromCloudinary for each KYC document public_id before deleting DB rows", async () => {
+    const docs = [
+      { id: "doc-1", public_id: "kyc-documents/merchant-1-passport" },
+      { id: "doc-2", public_id: "kyc-documents/merchant-1-address-proof" },
+    ];
+    kYCDocument.findMany.mockResolvedValue(docs);
+    mockDeleteFromCloudinary.mockResolvedValue(undefined);
+
+    await executeDeletion(MERCHANT_ID, ADMIN_ID);
+
+    expect(kYCDocument.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { kyc: { merchantId: MERCHANT_ID } },
+        select: { id: true, public_id: true },
+      }),
+    );
+
+    // One call per document
+    expect(mockDeleteFromCloudinary).toHaveBeenCalledTimes(docs.length);
+    expect(mockDeleteFromCloudinary).toHaveBeenCalledWith(docs[0]!.public_id);
+    expect(mockDeleteFromCloudinary).toHaveBeenCalledWith(docs[1]!.public_id);
+
+    // DB rows are deleted regardless of Cloudinary outcome
+    expect(kYCDocument.deleteMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { kyc: { merchantId: MERCHANT_ID } } }),
+    );
+  });
+
+  it("still deletes DB rows and completes deletion even when Cloudinary purge fails", async () => {
+    const docs = [{ id: "doc-1", public_id: "kyc-documents/merchant-1-passport" }];
+    kYCDocument.findMany.mockResolvedValue(docs);
+    // Simulate a Cloudinary API error
+    mockDeleteFromCloudinary.mockRejectedValue(new Error("Cloudinary 503 Service Unavailable"));
+
+    // Deletion must not throw — Cloudinary failure is logged but non-fatal
+    await expect(executeDeletion(MERCHANT_ID, ADMIN_ID)).resolves.toBeUndefined();
+
+    // DB rows are still deleted so PII is removed
+    expect(kYCDocument.deleteMany).toHaveBeenCalled();
+  });
+
+  it("skips Cloudinary calls and DB delete when merchant has no KYC documents", async () => {
+    kYCDocument.findMany.mockResolvedValue([]);
+
+    await executeDeletion(MERCHANT_ID, ADMIN_ID);
+
+    expect(mockDeleteFromCloudinary).not.toHaveBeenCalled();
+    // deleteMany is still called (no-op is fine; it won't error)
+    expect(kYCDocument.deleteMany).toHaveBeenCalled();
   });
 });

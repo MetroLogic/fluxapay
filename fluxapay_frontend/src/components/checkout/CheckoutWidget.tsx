@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import Image from "next/image";
 import { useTranslations } from "next-intl";
 import { X } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -145,7 +146,7 @@ export function CheckoutWidget({
             <div className="flex items-center justify-between p-4 border-b border-slate-100">
               <div className="flex items-center gap-3">
                 {customization?.logoUrl && (
-                  <img src={customization.logoUrl} alt="" className="h-8 w-auto max-w-[120px] object-contain" />
+                  <Image src={customization.logoUrl} alt="" width={120} height={32} className="h-8 w-auto max-w-[120px] object-contain" />
                 )}
                 <div>
                   {merchantName && (
