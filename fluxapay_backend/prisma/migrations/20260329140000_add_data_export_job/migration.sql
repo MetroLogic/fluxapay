@@ -2,7 +2,7 @@
 CREATE TYPE "DataExportStatus" AS ENUM ('pending', 'processing', 'completed', 'failed');
 
 -- CreateTable
-CREATE TABLE "DataExportJob" (
+CREATE TABLE IF NOT EXISTS "DataExportJob" (
     "id" TEXT NOT NULL,
     "merchantId" TEXT NOT NULL,
     "status" "DataExportStatus" NOT NULL DEFAULT 'pending',
@@ -17,7 +17,7 @@ CREATE TABLE "DataExportJob" (
 );
 
 -- CreateIndex
-CREATE INDEX "DataExportJob_merchantId_idx" ON "DataExportJob"("merchantId");
+CREATE INDEX IF NOT EXISTS "DataExportJob_merchantId_idx" ON "DataExportJob"("merchantId");
 
 -- AddForeignKey
 ALTER TABLE "DataExportJob" ADD CONSTRAINT "DataExportJob_merchantId_fkey"
