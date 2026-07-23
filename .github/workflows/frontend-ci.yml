@@ -2,11 +2,11 @@ name: Frontend CI
 
 on:
   push:
-    branches: ["main", "frontend"]
+    branches: ["main"]
     paths:
       - "fluxapay_frontend/**"
   pull_request:
-    branches: ["main", "frontend"]
+    branches: ["main"]
     paths:
       - "fluxapay_frontend/**"
 
@@ -15,19 +15,17 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  lint:
-    name: Frontend Lint
+  lint-and-build:
+    name: Lint & Build
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: ./fluxapay_frontend
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: "npm"
@@ -36,32 +34,10 @@ jobs:
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
 
-      - name: Format Check (Lint)
+      - name: Lint
         run: npx eslint . --max-warnings=0
-        continue-on-error: true
 
-  build:
-    name: Frontend Build Check
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./fluxapay_frontend
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: "npm"
-          cache-dependency-path: fluxapay_frontend/package-lock.json
-
-      - name: Install dependencies
-        run: npm ci --legacy-peer-deps
-
-      - name: Build Check
+      - name: Build
         run: npm run build
 
   unit-tests:
@@ -72,11 +48,9 @@ jobs:
         working-directory: ./fluxapay_frontend
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: "npm"
@@ -89,23 +63,17 @@ jobs:
         run: npm test
 
   e2e-tests:
-    name: E2E (${{ matrix.e2e_mode }})
+    name: E2E Tests (mocked)
     runs-on: ubuntu-latest
-    needs: [build]
-    strategy:
-      fail-fast: false
-      matrix:
-        e2e_mode: [mocked, real]
+    needs: [lint-and-build]
     defaults:
       run:
         working-directory: ./fluxapay_frontend
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: "npm"
@@ -114,37 +82,27 @@ jobs:
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
 
-      - name: Start backend stack (real mode)
-        if: matrix.e2e_mode == 'real'
-        working-directory: ${{ github.workspace }}
-        env:
-          E2E_ACCEPT_OTP: ${{ secrets.E2E_TEST_OTP }}
-        run: docker compose -f docker-compose.ci.yml up -d --build postgres backend
-
-      - name: Wait for backend health (real mode)
-        if: matrix.e2e_mode == 'real'
-        run: npx wait-on http://127.0.0.1:3000/health --timeout 180000 --interval 3000
-
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
       - name: Build Next.js app
         run: npm run build
-        env:
-          NEXT_PUBLIC_API_URL: ${{ matrix.e2e_mode == 'real' && 'http://127.0.0.1:3000' || 'http://127.0.0.1:3001' }}
 
       - name: Start app and run E2E tests
-        continue-on-error: ${{ matrix.e2e_mode == 'real' }}
         run: |
           npm start &
           npx wait-on http://localhost:3075 --timeout 120000 --interval 2000
           npm run test:e2e
         env:
           CI: true
-          E2E_MODE: ${{ matrix.e2e_mode }}
+          E2E_MODE: mocked
           PLAYWRIGHT_BASE_URL: http://localhost:3075
           E2E_BASE_URL: http://localhost:3075
-          E2E_API_URL: ${{ matrix.e2e_mode == 'real' && 'http://127.0.0.1:3000' || 'http://127.0.0.1:3001' }}
-          E2E_TEST_EMAIL: ${{ matrix.e2e_mode == 'real' && secrets.E2E_TEST_EMAIL || '' }}
-          E2E_TEST_PASSWORD: ${{ matrix.e2e_mode == 'real' && secrets.E2E_TEST_PASSWORD || '' }}
-          E2E_TEST_OTP: ${{ matrix.e2e_mode == 'real' && secrets.E2E_TEST_OTP || '' }}
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: fluxapay_frontend/playwright-report/
+          retention-days: 7

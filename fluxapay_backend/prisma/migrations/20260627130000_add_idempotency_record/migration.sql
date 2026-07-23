@@ -1,5 +1,5 @@
 -- CreateTable
-CREATE TABLE "IdempotencyRecord" (
+CREATE TABLE IF NOT EXISTS "IdempotencyRecord" (
     "idempotency_key" TEXT NOT NULL,
     "user_id" TEXT,
     "request_hash" TEXT NOT NULL,
@@ -12,7 +12,7 @@ CREATE TABLE "IdempotencyRecord" (
 );
 
 -- CreateIndex
-CREATE INDEX "IdempotencyRecord_user_id_idx" ON "IdempotencyRecord"("user_id");
+CREATE INDEX IF NOT EXISTS "IdempotencyRecord_user_id_idx" ON "IdempotencyRecord"("user_id");
 
 -- CreateIndex
-CREATE INDEX "IdempotencyRecord_created_at_idx" ON "IdempotencyRecord"("created_at");
+CREATE INDEX IF NOT EXISTS "IdempotencyRecord_created_at_idx" ON "IdempotencyRecord"("created_at");

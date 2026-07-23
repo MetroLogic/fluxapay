@@ -4,14 +4,14 @@ import { useEffect } from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { Loader2, XCircle, CheckCircle, AlertCircle, RefreshCw } from 'lucide-react';
+import { Loader2, XCircle, CheckCircle, AlertCircle } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { usePaymentStatus } from '@/hooks/usePaymentStatus';
 import { useOfflineSync } from '@/hooks/useOfflineSync';
 import { TxHashLink } from '@/components/TxHashLink';
 import { PaymentQRCode } from '@/components/checkout/PaymentQRCode';
 import { PaymentTimer } from '@/components/checkout/PaymentTimer';
 import { PaymentStatus } from '@/components/checkout/PaymentStatus';
-import { StellarPayButton } from '@/components/checkout/StellarPayButton';
 import { BrowserWalletButtons } from '@/components/checkout/BrowserWalletButtons';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import {
@@ -33,8 +33,19 @@ export default function CheckoutPage() {
   const searchParams = useSearchParams();
   const paymentId = params.payment_id as string;
   
-  const { payment, loading, error, isOffline, retryConnection } =
+  const { payment, loading, error, isOffline, retryConnection, depositAddressUpdated } =
     usePaymentStatus(paymentId);
+
+  // Notify the customer when the deposit address has changed (e.g. after timeout reset).
+  useEffect(() => {
+    if (depositAddressUpdated) {
+      toast('Address updated — please use the new address shown below.', {
+        icon: '🔄',
+        duration: 5000,
+        id: 'address-updated',
+      });
+    }
+  }, [depositAddressUpdated]);
 
   const { pendingCount, queueAction } = useOfflineSync(paymentId, retryConnection);
 

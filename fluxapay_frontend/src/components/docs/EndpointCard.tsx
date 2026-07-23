@@ -83,7 +83,7 @@ export function EndpointCard({
             if (param.type === "number" || param.type === "integer") body[param.name] = Number(val);
             else if (param.type === "boolean") body[param.name] = val === "true";
             else if (param.type === "object" || param.type === "array") {
-              try { body[param.name] = JSON.parse(val); } catch (err) { body[param.name] = val; }
+              try { body[param.name] = JSON.parse(val); } catch { body[param.name] = val; }
             }
             else body[param.name] = val;
           }

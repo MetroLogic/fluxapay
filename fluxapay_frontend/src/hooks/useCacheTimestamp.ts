@@ -19,7 +19,7 @@ export function useCacheTimestamp(key: string) {
       setTimestamp(ts);
       updateMinutesAgo(ts);
     }
-  }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [key]);
 
   useEffect(() => {
     if (!timestamp) return;
@@ -29,7 +29,7 @@ export function useCacheTimestamp(key: string) {
     }, 10000);
 
     return () => clearInterval(interval);
-  }, [timestamp]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [timestamp]);
 
   function recordTimestamp() {
     const now = Date.now();

@@ -30,7 +30,6 @@ export function CommandPalette() {
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const [isAdminUser, setIsAdminUser] = useState(false);
-  const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -38,13 +37,9 @@ export function CommandPalette() {
 
   const routes = isAdminUser ? [...BASE_ROUTES, ...ADMIN_ROUTES] : BASE_ROUTES;
 
-  // Initialize admin status and recent searches
+  // Initialize admin status
   useEffect(() => {
     setIsAdminUser(isAdmin());
-    const saved = sessionStorage.getItem("commandPaletteSearches");
-    if (saved) {
-      setRecentSearches(JSON.parse(saved));
-    }
   }, []);
 
   const filtered = routes.filter((r) =>
@@ -59,11 +54,12 @@ export function CommandPalette() {
 
   const saveSearch = useCallback((searchQuery: string) => {
     if (!searchQuery.trim()) return;
-    setRecentSearches((prev) => {
-      const updated = [searchQuery, ...prev.filter((s) => s !== searchQuery)].slice(0, 10);
-      sessionStorage.setItem("commandPaletteSearches", JSON.stringify(updated));
-      return updated;
-    });
+    const prev: string[] = (() => {
+      try { return JSON.parse(sessionStorage.getItem("commandPaletteSearches") ?? "[]"); }
+      catch { return []; }
+    })();
+    const updated = [searchQuery, ...prev.filter((s) => s !== searchQuery)].slice(0, 10);
+    sessionStorage.setItem("commandPaletteSearches", JSON.stringify(updated));
   }, []);
 
   const navigate = useCallback(
@@ -91,6 +87,7 @@ export function CommandPalette() {
   // Focus trap implementation
   useEffect(() => {
     if (!open || !dialogRef.current) return;
+    const dialog = dialogRef.current;
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -98,8 +95,8 @@ export function CommandPalette() {
       }
     };
 
-    dialogRef.current.addEventListener("keydown", handleKeyDown);
-    return () => dialogRef.current?.removeEventListener("keydown", handleKeyDown);
+    dialog.addEventListener("keydown", handleKeyDown);
+    return () => dialog.removeEventListener("keydown", handleKeyDown);
   }, [open, close]);
 
   useEffect(() => {

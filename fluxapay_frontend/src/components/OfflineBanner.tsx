@@ -1,7 +1,7 @@
 "use client";
 
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
-import { AlertCircle, Wifi } from "lucide-react";
+import { AlertCircle } from "lucide-react";
 
 export function OfflineBanner() {
   const isOnline = useOnlineStatus();

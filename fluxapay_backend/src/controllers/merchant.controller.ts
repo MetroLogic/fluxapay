@@ -242,7 +242,7 @@ export async function adminUpdateMerchantWebhook(req: Request, res: Response) {
     const { webhook_url } = req.body as { webhook_url: string };
 
     if (typeof webhook_url !== "string") {
-      return sendApiError(res, apiError(400, ErrorCode.INVALID_INPUT, "webhook_url must be a string"));
+      return sendApiError(res, apiError(400, ErrorCode.INVALID_REQUEST_BODY, "webhook_url must be a string"));
     }
 
     const merchant = await adminPrisma.merchant.update({

@@ -5,7 +5,7 @@ import Link from "next/link";
 import Input from "@/components/Input";
 import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
-import { api, ApiError, clearToken } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import { logout, getToken } from "@/lib/auth";
 import { DOCS_URLS } from "@/lib/docs";
 import { isValidHttpsWebhookUrl } from "@/lib/webhookUrl";
