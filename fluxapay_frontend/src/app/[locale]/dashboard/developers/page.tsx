@@ -424,7 +424,6 @@ function CreateApiKeyModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [createdSecret, setCreatedSecret] = useState<string | null>(null);
-  const [existingNames, setExistingNames] = useState<Set<string>>(new Set());
   const [copied, setCopied] = useState<string | null>(null);
 
   useEffect(() => {

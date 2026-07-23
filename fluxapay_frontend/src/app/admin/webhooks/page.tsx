@@ -69,8 +69,8 @@ export default function WebhooksPage() {
       await api.admin.webhooks.retry(logId);
       toast.success(`Retry initiated for webhook ${logId}`, { id: logId });
       mutate();
-    } catch (err: any) {
-      toast.error(err.message || "Failed to retry webhook", { id: logId });
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to retry webhook", { id: logId });
     }
   }, [mutate]);
 
@@ -82,8 +82,8 @@ export default function WebhooksPage() {
       await api.admin.merchants.disableWebhook(merchantId);
       toast.success(`Webhooks disabled for ${merchantName || merchantId}`, { id: toastId });
       mutate();
-    } catch (err: any) {
-      toast.error(err.message || "Failed to disable webhooks");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to disable webhooks");
     }
   }, [mutate]);
 

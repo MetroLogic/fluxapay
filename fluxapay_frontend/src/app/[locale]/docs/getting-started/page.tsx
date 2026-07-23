@@ -4,7 +4,7 @@ import { DocsLayout } from "@/components/docs/DocsLayout";
 import { CodeBlock } from "@/components/docs/CodeBlock";
 import { EditOnGitHub } from "@/components/docs/EditOnGitHub";
 import { generatePageMetadata } from "@/lib/seo";
-import { CheckCircle, ArrowRight, Key, Shield, Zap, Globe } from "lucide-react";
+import { ArrowRight, Key, Shield, Zap, Globe } from "lucide-react";
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
   const { locale } = await params;

@@ -1,6 +1,5 @@
 import { test, expect } from "@playwright/test";
 import { loginAndNavigate } from "./helpers/dashboard";
-import { isRealMode } from "./helpers/mode";
 import { setupMocks } from "./helpers/mocks";
 
 test.describe("Invoice creation flow", () => {
