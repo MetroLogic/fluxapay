@@ -19,6 +19,7 @@ dist/
 .next/
 out/
 coverage/
+fluxapay_backend/swagger.json
 
 # TypeScript
 *.tsbuildinfo

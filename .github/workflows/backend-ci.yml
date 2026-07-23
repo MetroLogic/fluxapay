@@ -55,7 +55,7 @@ jobs:
         run: npm run build
 
   unit-and-contract-tests:
-    name: Unit & Contract Tests
+    name: Unit, Contract & Smoke Tests
     runs-on: ubuntu-latest
     env:
       NODE_ENV: test
@@ -130,3 +130,12 @@ jobs:
         run: npm run test:contract
         env:
           PAYMENT_RATE_LIMIT_PER_MINUTE: "10000"
+
+      - name: Build backend & run smoke tests
+        run: |
+          npm run build
+          npm start &
+          npx --yes wait-on@9.0.4 http://localhost:3000/health --timeout 120000 --interval 2000
+          npm run test:smoke
+        env:
+          API_BASE_URL: http://localhost:3000

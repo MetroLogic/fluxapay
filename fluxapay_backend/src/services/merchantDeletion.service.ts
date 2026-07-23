@@ -20,7 +20,9 @@ import {
   logChargesCancelled,
 } from "./audit.service";
 import { deleteFromCloudinary } from "./cloudinary.service";
-import { logger } from "../utils/logger";
+import { getLogger } from "../utils/logger";
+
+const logger = getLogger();
 
 const prisma = new PrismaClient();
 
@@ -158,16 +160,13 @@ export async function executeDeletion(
     );
     cloudinaryResults.forEach((result, idx) => {
       if (result.status === "rejected") {
-        logger.error(
-          {
-            event: "cloudinary_purge_failed",
-            merchantId,
-            docId: kycDocs[idx]?.id,
-            public_id: kycDocs[idx]?.public_id,
-            error: result.reason instanceof Error ? result.reason.message : String(result.reason),
-          },
-          "ALERT: Cloudinary KYC document purge failed — manual reconciliation required",
-        );
+        logger.error("ALERT: Cloudinary KYC document purge failed — manual reconciliation required", {
+          event: "cloudinary_purge_failed",
+          merchantId,
+          docId: kycDocs[idx]?.id,
+          public_id: kycDocs[idx]?.public_id,
+          error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+        });
       }
     });
 
