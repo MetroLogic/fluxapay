@@ -272,6 +272,17 @@ export function EndpointCard({
                         code={sandboxResponse.data ? JSON.stringify(sandboxResponse.data, null, 2) : "No content"} 
                         language="json" 
                       />
+                      {sandboxResponse.status === 401 && (
+                        <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm">
+                          <p className="font-medium text-amber-800 mb-1">Authentication Failed</p>
+                          <ul className="text-amber-700 text-xs space-y-1 list-disc list-inside">
+                            <li>Verify your sandbox API key starts with <code className="font-mono bg-amber-100 px-1 rounded">sk_test_</code></li>
+                            <li>Ensure the key is valid and not expired</li>
+                            <li>Copy the full key from your FluxaPay dashboard under API Keys</li>
+                            <li>Check for extra whitespace or missing characters</li>
+                          </ul>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

@@ -17,7 +17,7 @@ interface RevenueTrendsChartProps {
 
 export function RevenueTrendsChart({ data }: RevenueTrendsChartProps) {
     return (
-        <div className="h-[300px] w-full">
+        <div className="h-[300px] w-full" role="img" aria-label="Revenue trends chart showing daily revenue over the selected period">
             <ResponsiveContainer width="100%" height="100%">
                 <AreaChart
                     data={data}

@@ -876,6 +876,10 @@ export const api = {
         if (params?.date_to) sp.set("date_to", params.date_to);
         return fetchWithAuth(`/api/v1/admin/payments?${sp.toString()}`);
       },
+      verify: (paymentId: string) =>
+        fetchWithAuth(`/api/v1/admin/payments/${encodeURIComponent(paymentId)}/verify`, {
+          method: "POST",
+        }),
     },
     addressPool: {
       stats: () => fetchWithAuth("/api/v1/admin/address-pool/stats"),
