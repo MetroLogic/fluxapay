@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, Suspense } from "react";
-import { Invoice, InvoiceStatus } from "@/features/dashboard/invoices/invoices-mock";
+import { Invoice, InvoiceStatus } from "@/features/dashboard/invoices/types";
 import { InvoicesTable } from "@/features/dashboard/invoices/InvoicesTable";
 import { InvoiceDetails } from "@/features/dashboard/invoices/InvoiceDetails";
 import { InvoiceForm } from "@/features/dashboard/invoices/InvoiceForm";

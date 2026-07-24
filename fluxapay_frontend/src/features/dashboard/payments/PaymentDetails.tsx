@@ -16,7 +16,7 @@ import { Input } from "@/components/Input";
 import { Select } from "@/components/Select";
 import { TxHashLink } from "@/components/TxHashLink";
 import { getStellarExpertTxUrl } from "@/lib/stellar";
-import type { RefundRecord, RefundReason } from "../refunds/refunds-mock";
+import type { RefundRecord, RefundReason } from "../refunds/types";
 import { QRCodeCanvas } from "qrcode.react";
 import toast from "react-hot-toast";
 
@@ -77,7 +77,7 @@ export const PaymentDetails = ({
   );
 
   const hasActiveRefund = paymentRefunds.some((refund) =>
-    ["initiated", "processing", "completed"].includes(refund.status),
+    ["pending", "processing", "completed"].includes(refund.status),
   );
   const canRefundCurrency = payment.currency === "USDC" || payment.currency === "XLM";
   const canInitiateRefund =
@@ -86,7 +86,7 @@ export const PaymentDetails = ({
   const getRefundStatusBadge = (status: RefundRecord["status"]) => {
     if (status === "completed") return <Badge variant="success">Completed</Badge>;
     if (status === "processing") return <Badge variant="warning">Processing</Badge>;
-    if (status === "initiated") return <Badge variant="info">Initiated</Badge>;
+    if (status === "pending") return <Badge variant="info">Pending</Badge>;
     return <Badge variant="error">Failed</Badge>;
   };
 

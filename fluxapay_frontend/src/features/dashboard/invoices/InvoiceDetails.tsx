@@ -1,4 +1,4 @@
-import { Invoice, InvoiceStatus } from "./invoices-mock";
+import { Invoice, InvoiceStatus } from "./types";
 import { Badge } from "@/components/Badge";
 import { Button } from "@/components/Button";
 import { Copy, ExternalLink, User, Receipt, Calendar, Download, Mail } from "lucide-react";

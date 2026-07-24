@@ -1,6 +1,6 @@
 import { Badge } from "@/components/Badge";
 import { DataTableBodyState } from "@/components/data-table";
-import { Invoice, InvoiceStatus } from "./invoices-mock";
+import { Invoice, InvoiceStatus } from "./types";
 import { ChevronDown, ChevronUp, Copy, Eye } from "lucide-react";
 import { useState } from "react";
 
