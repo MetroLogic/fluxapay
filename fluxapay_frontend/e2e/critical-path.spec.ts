@@ -14,7 +14,7 @@ const CP_PAYMENT_ID = "pay_e2e_critical";
 
 test.describe("Critical path (signup → OTP → login → payment → checkout → confirm)", () => {
   test("@critical full merchant journey", async ({ page }) => {
-    test.setTimeout(180_000);
+    test.setTimeout(45_000);
 
     const email = getTestEmail();
     const password = getTestPassword();

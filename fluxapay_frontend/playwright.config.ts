@@ -5,8 +5,8 @@ export default defineConfig({
   testDir: './e2e',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
-  /** Retry twice in CI to reduce flakiness; no retries locally. */
-  retries: process.env.CI ? 2 : 0,
+  /** Retry once in CI to catch genuine transient flakes; no retries locally. */
+  retries: process.env.CI ? 1 : 0,
   workers: process.env.CI ? 1 : undefined,
   reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : 'list',
 
