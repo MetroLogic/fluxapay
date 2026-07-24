@@ -1,6 +1,7 @@
 "use client";
 
 import useSWR from "swr";
+import { useState, useCallback, useMemo } from "react";
 import { api } from "@/lib/api";
 
 type NotificationCategory = "webhook_failure" | "payout";
@@ -14,11 +15,13 @@ export interface DashboardNotification {
   description: string;
   timestamp: string;
   href: string;
+  read?: boolean;
 }
 
 interface UseDashboardNotificationsOptions {
   webhookLimit?: number;
   payoutLimit?: number;
+  categoryFilter?: NotificationCategory | "all";
 }
 
 interface WebhookLogRow {
@@ -48,13 +51,39 @@ function toNumber(value: unknown): number {
   return Number.isFinite(num) ? num : 0;
 }
 
+const READ_KEY = "dashboard-notifications-read";
+
+function getReadIds(): Set<string> {
+  try {
+    const stored = localStorage.getItem(READ_KEY);
+    return stored ? new Set(JSON.parse(stored)) : new Set();
+  } catch {
+    return new Set();
+  }
+}
+
+function markAsRead(id: string) {
+  const readIds = getReadIds();
+  readIds.add(id);
+  localStorage.setItem(READ_KEY, JSON.stringify([...readIds]));
+}
+
+function markAllAsRead(ids: string[]) {
+  const readIds = getReadIds();
+  ids.forEach(id => readIds.add(id));
+  localStorage.setItem(READ_KEY, JSON.stringify([...readIds]));
+}
+
 export function useDashboardNotifications(
   options: UseDashboardNotificationsOptions = {},
 ) {
   const webhookLimit = options.webhookLimit ?? 10;
   const payoutLimit = options.payoutLimit ?? 10;
+  const categoryFilter = options.categoryFilter ?? "all";
 
-  const key = ["dashboard-notifications", webhookLimit, payoutLimit];
+  const [readVersion, setReadVersion] = useState(0);
+
+  const key = ["dashboard-notifications", webhookLimit, payoutLimit, readVersion];
 
   const { data, error, isLoading, mutate } = useSWR<DashboardNotification[]>(
     key,
@@ -73,6 +102,8 @@ export function useDashboardNotifications(
       const settlements =
         settlementRes?.settlements ?? settlementRes?.data?.settlements ?? [];
 
+      const readIds = getReadIds();
+
       const webhookNotifications: DashboardNotification[] = webhookLogs.map(
         (log) => ({
           id: `webhook-${log.id}`,
@@ -82,6 +113,7 @@ export function useDashboardNotifications(
           description: `${log.event_type ?? "Event"} to ${log.endpoint_url ?? "endpoint"}`,
           timestamp: toIso(log.updated_at ?? log.created_at),
           href: "/dashboard/webhooks",
+          read: readIds.has(`webhook-${log.id}`),
         }),
       );
 
@@ -95,9 +127,10 @@ export function useDashboardNotifications(
           const status = String(row.status ?? "pending").toLowerCase();
           const amount = toNumber(row.amount);
           const currency = row.currency ?? "USD";
+          const notifId = `payout-${row.id}`;
 
           return {
-            id: `payout-${row.id}`,
+            id: notifId,
             category: "payout",
             severity:
               status === "failed"
@@ -114,6 +147,7 @@ export function useDashboardNotifications(
             description: `${amount.toLocaleString()} ${currency} • Settlement ${row.id}`,
             timestamp: toIso(row.created_at),
             href: "/dashboard/settlements",
+            read: readIds.has(notifId),
           } as DashboardNotification;
         });
 
@@ -129,15 +163,36 @@ export function useDashboardNotifications(
   );
 
   const notifications = data ?? [];
+
+  const filteredNotifications = useMemo(() => {
+    if (categoryFilter === "all") return notifications;
+    return notifications.filter(n => n.category === categoryFilter);
+  }, [notifications, categoryFilter]);
+
   const unreadCount = notifications.filter(
-    (item) => item.severity === "critical" || item.severity === "warning",
+    (item) => !item.read && (item.severity === "critical" || item.severity === "warning"),
   ).length;
 
+  const handleMarkAsRead = useCallback((id: string) => {
+    markAsRead(id);
+    setReadVersion(v => v + 1);
+    mutate();
+  }, [mutate]);
+
+  const handleMarkAllAsRead = useCallback(() => {
+    markAllAsRead(notifications.map(n => n.id));
+    setReadVersion(v => v + 1);
+    mutate();
+  }, [notifications, mutate]);
+
   return {
-    notifications,
+    notifications: filteredNotifications,
+    allNotifications: notifications,
     unreadCount,
     isLoading,
     error,
     refresh: mutate,
+    markAsRead: handleMarkAsRead,
+    markAllAsRead: handleMarkAllAsRead,
   };
 }

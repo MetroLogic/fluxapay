@@ -16,11 +16,11 @@ interface RevenueByCountryChartProps {
     data: RevenueByCountry[];
 }
 
-const COLORS = ['#6366f1', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6'];
+const COLORS = ['#0072B2', '#E69F00', '#009E73', '#CC79A7', '#56B4E9'];
 
 export function RevenueByCountryChart({ data }: RevenueByCountryChartProps) {
     return (
-        <div className="h-[300px] w-full">
+        <div className="h-[300px] w-full" role="img" aria-label="Revenue by country bar chart comparing geographic performance">
             <ResponsiveContainer width="100%" height="100%">
                 <BarChart
                     data={data}

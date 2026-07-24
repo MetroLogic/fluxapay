@@ -8,7 +8,9 @@ import { PaymentDetails } from './components/PaymentDetails';
 import { Modal } from '@/components/Modal';
 import { useAdminPayments } from '@/hooks/useAdminPayments';
 import { Button } from '@/components/Button';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, RefreshCw, ShieldCheck, Loader2 } from 'lucide-react';
+import { api } from '@/lib/api';
+import toast from 'react-hot-toast';
 
 export default function PaymentMonitor() {
     const [filters, setFilters] = useState<PaymentFilterState>({
@@ -17,6 +19,7 @@ export default function PaymentMonitor() {
     });
     const [page, setPage] = useState(1);
     const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
+    const [verifyingId, setVerifyingId] = useState<string | null>(null);
 
     // Reset to page 1 on filter changes
     useEffect(() => {
@@ -27,7 +30,7 @@ export default function PaymentMonitor() {
     const date_from = filters.dateRange?.from ? filters.dateRange.from.toISOString() : undefined;
     const date_to = filters.dateRange?.to ? filters.dateRange.to.toISOString() : undefined;
 
-    const { payments, meta, isLoading, error } = useAdminPayments({
+    const { payments, meta, isLoading, error, mutate } = useAdminPayments({
         page,
         limit: 20,
         status: filters.status,
@@ -38,13 +41,39 @@ export default function PaymentMonitor() {
 
     const totalPages = Math.ceil(meta.total / meta.limit) || 1;
 
+    const handleManualVerify = async (paymentId: string) => {
+        setVerifyingId(paymentId);
+        try {
+            await api.admin.payments.verify(paymentId);
+            toast.success(`Verification triggered for ${paymentId}`);
+            mutate();
+        } catch {
+            toast.error('Failed to trigger verification');
+        } finally {
+            setVerifyingId(null);
+        }
+    };
+
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
-            <div className="flex flex-col gap-1">
-                <h1 className="text-2xl font-bold tracking-tight">Payments Monitor</h1>
-                <p className="text-muted-foreground">
-                    Real-time monitoring of all platform payments and settlement statuses.
-                </p>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div className="flex flex-col gap-1">
+                    <h1 className="text-2xl font-bold tracking-tight">Payments Monitor</h1>
+                    <p className="text-muted-foreground">
+                        Real-time monitoring of all platform payments and settlement statuses.
+                    </p>
+                </div>
+                <div className="flex items-center gap-2">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => mutate()}
+                        className="gap-2"
+                    >
+                        <RefreshCw className="h-4 w-4" />
+                        Refresh
+                    </Button>
+                </div>
             </div>
 
             <div className="space-y-4">
@@ -99,7 +128,13 @@ export default function PaymentMonitor() {
                 onClose={() => setSelectedPayment(null)}
                 title="Payment Details"
             >
-                {selectedPayment && <PaymentDetails payment={selectedPayment} />}
+                {selectedPayment && (
+                    <PaymentDetails
+                        payment={selectedPayment}
+                        onVerify={handleManualVerify}
+                        verifyingId={verifyingId}
+                    />
+                )}
             </Modal>
         </div>
     );

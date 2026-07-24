@@ -1,5 +1,6 @@
 'use client';
 
+import { useCallback, useState } from 'react';
 import { RevenueByCountryChart } from '@/features/analytics/components/RevenueByCountryChart';
 import { PaymentMethodsChart } from '@/features/analytics/components/PaymentMethodsChart';
 import { RevenueTrendsChart } from '@/features/analytics/components/RevenueTrendsChart';
@@ -15,6 +16,8 @@ import {
     Loader2,
     AlertCircle,
     BarChart2,
+    Download,
+    Check,
 } from 'lucide-react';
 
 function EmptyChart({ label }: { label: string }) {
@@ -66,6 +69,49 @@ function SummaryCard({ title, value, description, icon }: {
     );
 }
 
+function ExportCsvButton({ data }: { data: { summary: ReturnType<typeof useDashboardAnalytics>['summary']; revenueTrends: ReturnType<typeof useDashboardAnalytics>['revenueTrends']; paymentDistribution: ReturnType<typeof useDashboardAnalytics>['paymentDistribution']; revenueByCountry: ReturnType<typeof useDashboardAnalytics>['revenueByCountry'] } }) {
+    const [exported, setExported] = useState(false);
+
+    const handleExport = useCallback(() => {
+        const rows: string[] = [];
+        rows.push('Date,Revenue,Target');
+        data.revenueTrends.forEach(r => {
+            rows.push(`${r.date},${r.revenue},${r.target ?? ''}`);
+        });
+        rows.push('');
+        rows.push('Method,Distribution %');
+        data.paymentDistribution.forEach(p => {
+            rows.push(`${p.method},${p.value}`);
+        });
+        rows.push('');
+        rows.push('Country,Revenue');
+        data.revenueByCountry.forEach(c => {
+            rows.push(`${c.country},${c.revenue}`);
+        });
+        const csv = rows.join('\n');
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `analytics-export-${new Date().toISOString().slice(0, 10)}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+        setExported(true);
+        setTimeout(() => setExported(false), 2000);
+    }, [data]);
+
+    return (
+        <button
+            onClick={handleExport}
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition-colors"
+            aria-label="Export analytics data as CSV"
+        >
+            {exported ? <Check className="h-4 w-4 text-green-600" /> : <Download className="h-4 w-4" />}
+            {exported ? 'Exported' : 'Export CSV'}
+        </button>
+    );
+}
+
 function AnalyticsContent() {
     const { dateRange } = useDashboardDateRange();
     const { summary, revenueTrends, paymentDistribution, revenueByCountry, isLoading, error } =
@@ -89,7 +135,10 @@ function AnalyticsContent() {
                     <h2 className="text-3xl font-bold tracking-tight">Analytics Dashboard</h2>
                     <p className="text-muted-foreground">Comprehensive insights into your business metrics and growth.</p>
                 </div>
-                <DateRangePicker />
+                <div className="flex items-center gap-3">
+                    <ExportCsvButton data={{ summary, revenueTrends, paymentDistribution, revenueByCountry }} />
+                    <DateRangePicker />
+                </div>
             </div>
 
             {/* KPI Cards */}
