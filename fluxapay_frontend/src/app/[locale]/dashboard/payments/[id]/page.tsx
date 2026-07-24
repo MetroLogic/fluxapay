@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { api, ApiError, InitiateRefundRequest } from "@/lib/api";
 import { PaymentDetails } from "@/features/dashboard/payments/PaymentDetails";
 import { type Payment } from "@/features/dashboard/payments/types";
-import { type RefundRecord } from "@/features/dashboard/refunds/refunds-mock";
+import { type RefundRecord } from "@/features/dashboard/refunds/types";
 import { Button } from "@/components/Button";
 import { ChevronLeft, Loader2, RefreshCw } from "lucide-react";
 import toast from "react-hot-toast";

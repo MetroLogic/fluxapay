@@ -38,7 +38,7 @@ export interface InitiateRefundRequest {
   reasonNote?: string;
 }
 
-export type RefundStatus = "initiated" | "processing" | "completed" | "failed";
+export type RefundStatus = "pending" | "processing" | "completed" | "failed";
 
 export interface ListRefundsParams {
   paymentId?: string;
