@@ -10,6 +10,7 @@ import { validateUserId } from "../helpers/request.helper";
 import { MetadataValidationError } from "../utils/metadata.util";
 import { paymentSettlementService } from "../services/paymentSettlement.service";
 import { IdempotentRequest, storeIdempotentResponse } from "../middleware/idempotency.middleware";
+import { isTerminalStatus, PaymentStatus } from "../types/payment";
 
 
 const prisma = new PrismaClient();
@@ -357,8 +358,11 @@ export const streamPaymentStatus = async (req: Request, res: Response) => {
         `data: ${JSON.stringify({ status: updatedPayment.status })}\n\n`,
       );
 
-      // If terminal status reached, we could potentially close the stream
-      // but usually let the client handle it.
+      if (isTerminalStatus(updatedPayment.status as PaymentStatus)) {
+        res.write(`data: ${JSON.stringify({ event: "done" })}\n\n`);
+        eventBus.off(AppEvents.PAYMENT_UPDATED, onPaymentUpdate);
+        res.end();
+      }
     }
   };
 
