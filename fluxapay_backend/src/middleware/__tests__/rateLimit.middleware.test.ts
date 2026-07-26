@@ -1,3 +1,8 @@
+jest.mock("ioredis", () => ({
+  __esModule: true,
+  default: jest.fn(),
+}));
+
 import {
   globalRateLimit,
   merchantRateLimit,
@@ -8,8 +13,11 @@ import {
   isEmergencyBlocked,
   addEmergencyBlock,
   captchaCheck,
+  setRedisClientForTests,
+  resetRedisClientForTests,
 } from "../rateLimit.middleware";
 import { Request, Response, NextFunction } from "express";
+import Redis from "ioredis";
 
 describe("Rate Limit Middleware", () => {
   let mockReq: any;
@@ -21,6 +29,7 @@ describe("Rate Limit Middleware", () => {
       ip: "127.0.0.1",
       path: "/api/v1/test",
     };
+    resetRedisClientForTests();
     mockRes = {
       setHeader: jest.fn(),
       status: jest.fn().mockReturnThis(),
@@ -31,20 +40,21 @@ describe("Rate Limit Middleware", () => {
 
   afterEach(() => {
     jest.clearAllMocks();
+    resetRedisClientForTests();
   });
 
   describe("globalRateLimit", () => {
-    it("should allow requests within limit", () => {
+    it("should allow requests within limit", async () => {
       const middleware = globalRateLimit();
-      middleware(mockReq as Request, mockRes as Response, mockNext);
+      await middleware(mockReq as Request, mockRes as Response, mockNext);
 
       expect(mockNext).toHaveBeenCalled();
       expect(mockRes.status).not.toHaveBeenCalled();
     });
 
-    it("should set rate limit headers on all responses", () => {
+    it("should set rate limit headers on all responses", async () => {
       const middleware = globalRateLimit();
-      middleware(mockReq as Request, mockRes as Response, mockNext);
+      await middleware(mockReq as Request, mockRes as Response, mockNext);
 
       expect(mockRes.setHeader).toHaveBeenCalledWith("X-RateLimit-Limit", "100");
       expect(mockRes.setHeader).toHaveBeenCalledWith("X-RateLimit-Remaining", expect.any(String));
@@ -56,11 +66,30 @@ describe("Rate Limit Middleware", () => {
       
       // Make 101 requests to exceed the limit of 100
       for (let i = 0; i < 101; i++) {
-        middleware(mockReq as Request, mockRes as Response, mockNext);
+        await middleware(mockReq as Request, mockRes as Response, mockNext);
       }
 
       expect(mockRes.status).toHaveBeenCalledWith(429);
       expect(mockRes.setHeader).toHaveBeenCalledWith("Retry-After", expect.any(String));
+    });
+
+    it("uses Redis-backed counters for shared rate-limit state", async () => {
+      const redisMock = {
+        incr: jest.fn().mockResolvedValueOnce(1).mockResolvedValueOnce(2),
+        expire: jest.fn().mockResolvedValue(1),
+        ttl: jest.fn().mockResolvedValue(30),
+        get: jest.fn(),
+        set: jest.fn(),
+        del: jest.fn(),
+        on: jest.fn(),
+      };
+      setRedisClientForTests(redisMock as unknown as Redis);
+
+      const middleware = globalRateLimit();
+      await middleware(mockReq as Request, mockRes as Response, mockNext);
+      await middleware(mockReq as Request, mockRes as Response, mockNext);
+
+      expect(redisMock.incr).toHaveBeenCalled();
     });
   });
 
