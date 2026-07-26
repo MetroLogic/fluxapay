@@ -3,7 +3,7 @@ import { ErrorCode } from "../types/errors";
 import { PrismaClient, Prisma, InvoiceStatus } from "../generated/client/client";
 import crypto from "crypto";
 import { createAndDeliverWebhook } from "./webhook.service";
-import { generateInvoicePdf } from "./invoicePdf.service";
+import { startInvoicePdfGeneration } from "./invoicePdf.service";
 import { sendInvoiceEmail } from "./email.service";
 import { Readable } from "stream";
 
@@ -387,7 +387,7 @@ export async function voidInvoiceService(merchantId: string, invoiceId: string) 
 export type ExportFormat = "csv" | "json" | "pdf";
 
 export type ExportResult =
-  | { format: "pdf"; stream: Readable; filename: string; contentType: string }
+  | { format: "pdf"; status: "accepted"; jobId: string; filename: string; contentType: string }
   | { format: "csv" | "json"; filename: string; content: string | object; contentType: string };
 
 export async function exportInvoiceService(
@@ -411,31 +411,38 @@ export async function exportInvoiceService(
 
   // ── PDF ──────────────────────────────────────────────────────────────────
   if (format === "pdf") {
-    const stream = generateInvoicePdf({
-      invoice_number: invoice.invoice_number,
-      id: invoice.id,
-      amount: Number(invoice.amount),
-      currency: invoice.currency,
-      customer_email: invoice.customer_email,
-      status: invoice.status,
-      due_date: invoice.due_date,
-      created_at: invoice.created_at,
-      payment_link: invoice.payment_link,
-      merchant_name: invoice.merchant?.business_name,
-      payment: payment
-        ? {
-          id: payment.id,
-          status: payment.status,
-          amount: Number(payment.amount),
-          currency: payment.currency,
-        }
-        : null,
-    });
+    const filename = `invoice-${invoice.invoice_number}.pdf`;
+    const job = startInvoicePdfGeneration(
+      {
+        invoice_number: invoice.invoice_number,
+        id: invoice.id,
+        amount: Number(invoice.amount),
+        currency: invoice.currency,
+        customer_email: invoice.customer_email,
+        status: invoice.status,
+        due_date: invoice.due_date,
+        created_at: invoice.created_at,
+        payment_link: invoice.payment_link,
+        merchant_name: invoice.merchant?.business_name,
+        payment: payment
+          ? {
+            id: payment.id,
+            status: payment.status,
+            amount: Number(payment.amount),
+            currency: payment.currency,
+          }
+          : null,
+      },
+      filename,
+      merchantId,
+      invoiceId,
+    );
 
     return {
       format: "pdf",
-      stream,
-      filename: `invoice-${invoice.invoice_number}.pdf`,
+      status: "accepted",
+      jobId: job.id,
+      filename,
       contentType: "application/pdf",
     };
   }

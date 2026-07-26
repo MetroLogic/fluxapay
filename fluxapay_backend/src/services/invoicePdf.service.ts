@@ -1,5 +1,10 @@
 import PDFDocument from "pdfkit";
 import { Readable } from "stream";
+import { Worker } from "worker_threads";
+import path from "path";
+import os from "os";
+import fs from "fs";
+import crypto from "crypto";
 
 export interface InvoicePdfData {
     invoice_number: string;
@@ -20,13 +25,22 @@ export interface InvoicePdfData {
     } | null;
 }
 
-/**
- * Generates a PDF invoice and returns it as a readable stream.
- * Uses pdfkit — no headless browser required.
- */
-export function generateInvoicePdf(data: InvoicePdfData): Readable {
-    const doc = new PDFDocument({ margin: 50, size: "A4" });
+export interface InvoicePdfJob {
+    id: string;
+    status: "processing" | "completed" | "failed";
+    filename: string;
+    contentType: string;
+    filePath?: string;
+    error?: string;
+    createdAt: Date;
+    completedAt?: Date;
+    merchantId: string;
+    invoiceId: string;
+}
 
+const invoicePdfJobs = new Map<string, InvoicePdfJob>();
+
+export function renderInvoicePdf(doc: PDFDocument, data: InvoicePdfData): void {
     // ── Header ──────────────────────────────────────────────────────────────
     doc
         .fontSize(24)
@@ -161,9 +175,87 @@ export function generateInvoicePdf(data: InvoicePdfData): Readable {
             pageHeight - 60,
             { align: "center", width: 495 },
         );
+}
 
+/**
+ * Generates a PDF invoice and returns it as a readable stream.
+ * Uses pdfkit — no headless browser required.
+ */
+export function generateInvoicePdf(data: InvoicePdfData): Readable {
+    const doc = new PDFDocument({ margin: 50, size: "A4" });
+    renderInvoicePdf(doc, data);
     doc.end();
     return doc as unknown as Readable;
+}
+
+export function startInvoicePdfGeneration(data: InvoicePdfData, filename: string, merchantId: string, invoiceId: string): InvoicePdfJob {
+    const jobId = crypto.randomUUID();
+    const outputPath = path.join(os.tmpdir(), `fluxapay-invoice-${jobId}.pdf`);
+    const job: InvoicePdfJob = {
+        id: jobId,
+        status: "processing",
+        filename,
+        contentType: "application/pdf",
+        filePath: outputPath,
+        createdAt: new Date(),
+        merchantId,
+        invoiceId,
+    };
+
+    invoicePdfJobs.set(jobId, job);
+
+    const possibleWorkerPaths = [
+        path.resolve(__dirname, "invoicePdf.worker.js"),
+        path.resolve(__dirname, "..", "..", "src", "services", "invoicePdf.worker.js"),
+        path.resolve(__dirname, "..", "..", "dist", "services", "invoicePdf.worker.js"),
+    ];
+    const workerPath = possibleWorkerPaths.find((candidate) => fs.existsSync(candidate)) ?? possibleWorkerPaths[0];
+    const worker = new Worker(workerPath, {
+        workerData: { outputPath, data, jobId },
+    });
+
+    worker.on("message", (message: { jobId: string; status: "completed" | "failed"; filePath?: string; error?: string }) => {
+        const currentJob = invoicePdfJobs.get(message.jobId);
+        if (!currentJob) {
+            return;
+        }
+
+        if (message.status === "completed") {
+            currentJob.status = "completed";
+            currentJob.filePath = message.filePath;
+            currentJob.completedAt = new Date();
+        } else {
+            currentJob.status = "failed";
+            currentJob.error = message.error ?? "Failed to generate PDF";
+            currentJob.completedAt = new Date();
+        }
+    });
+
+    worker.on("error", (error: Error) => {
+        const currentJob = invoicePdfJobs.get(jobId);
+        if (currentJob) {
+            currentJob.status = "failed";
+            currentJob.error = error.message;
+            currentJob.completedAt = new Date();
+        }
+    });
+
+    worker.on("exit", (code) => {
+        if (code !== 0) {
+            const currentJob = invoicePdfJobs.get(jobId);
+            if (currentJob && currentJob.status === "processing") {
+                currentJob.status = "failed";
+                currentJob.error = `Worker exited with code ${code}`;
+                currentJob.completedAt = new Date();
+            }
+        }
+    });
+
+    return job;
+}
+
+export function getInvoicePdfJob(jobId: string): InvoicePdfJob | undefined {
+    return invoicePdfJobs.get(jobId);
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
