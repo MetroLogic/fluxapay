@@ -153,9 +153,16 @@ export class DepositAddressService {
 
   /**
    * Local AES-256-GCM encrypt (used when no KMS encrypt available)
+   * Requires HD_WALLET_SEED to be set — fails loudly if missing.
    */
   private static _localEncrypt(plaintext: string): string {
-    const seed = process.env.HD_WALLET_SEED || "default-hd-key";
+    const seed = process.env.HD_WALLET_SEED;
+    if (!seed) {
+      throw new Error(
+        "HD_WALLET_SEED is required for local encryption. " +
+        "Set it in production or configure a KMS provider with an encrypt() method.",
+      );
+    }
     const key = crypto
       .createHash("sha256")
       .update(seed + ":hd-key-data")
