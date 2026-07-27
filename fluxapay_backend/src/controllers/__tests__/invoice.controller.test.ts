@@ -150,18 +150,14 @@ describe("exportInvoice controller", () => {
     expect(res.status).toHaveBeenCalledWith(404);
   });
 
-  it("should default to PDF format when format query param is missing", async () => {
-    const mockStream = {
-      pipe: jest.fn(),
-      on: jest.fn(),
-    };
-
+  it("should accept PDF export requests asynchronously and return a job ID", async () => {
     (validateUserId as jest.Mock).mockResolvedValue("merchant_1");
     exportInvoiceServiceMock.mockResolvedValue({
       format: "pdf",
       filename: "invoice-INV-20260329-ABC123.pdf",
       contentType: "application/pdf",
-      stream: mockStream,
+      status: "accepted",
+      jobId: "job_pdf_123",
     });
 
     const req: any = {
@@ -182,7 +178,12 @@ describe("exportInvoice controller", () => {
       "inv_123",
       "pdf",
     );
-    expect(res.setHeader).toHaveBeenCalledWith("Content-Type", "application/pdf");
-    expect(mockStream.pipe).toHaveBeenCalledWith(res);
+    expect(res.status).toHaveBeenCalledWith(202);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+      jobId: "job_pdf_123",
+      status: "accepted",
+      filename: "invoice-INV-20260329-ABC123.pdf",
+      contentType: "application/pdf",
+    }));
   });
 });

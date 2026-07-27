@@ -2,7 +2,7 @@ import { Router } from "express";
 import { authenticateApiKey } from "../middleware/apiKeyAuth.middleware";
 import { merchantApiKeyRateLimit } from "../middleware/rateLimit.middleware";
 import { validate, validateQuery } from "../middleware/validation.middleware";
-import { createInvoice, listInvoices, getInvoiceById, updateInvoiceStatus, exportInvoice, sendInvoice, voidInvoice } from "../controllers/invoice.controller";
+import { createInvoice, listInvoices, getInvoiceById, updateInvoiceStatus, exportInvoice, getInvoiceExportStatus, downloadInvoiceExport, sendInvoice, voidInvoice } from "../controllers/invoice.controller";
 import {
   createInvoiceSchema,
   listInvoicesQuerySchema,
@@ -234,5 +234,7 @@ router.post("/:invoice_id/void", authenticateApiKey, merchantApiKeyRateLimit(), 
  *         description: Invoice not found
  */
 router.get("/:invoice_id/export", authenticateApiKey, merchantApiKeyRateLimit(), validate(exportInvoiceSchema), exportInvoice);
+router.get("/:invoice_id/export/:jobId/status", authenticateApiKey, merchantApiKeyRateLimit(), validate(getInvoiceByIdSchema), getInvoiceExportStatus);
+router.get("/:invoice_id/export/:jobId/download", authenticateApiKey, merchantApiKeyRateLimit(), validate(getInvoiceByIdSchema), downloadInvoiceExport);
 
 export default router;
