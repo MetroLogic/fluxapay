@@ -11,6 +11,7 @@ import { MetadataValidationError } from "../utils/metadata.util";
 import { paymentSettlementService } from "../services/paymentSettlement.service";
 import { IdempotentRequest, storeIdempotentResponse } from "../middleware/idempotency.middleware";
 import { isTerminalStatus, PaymentStatus } from "../types/payment";
+import { assertValidPositiveAmount, AmountValidationError } from "../utils/amount.util";
 
 
 const prisma = new PrismaClient();
@@ -36,6 +37,18 @@ export const createPayment = async (req: Request, res: Response) => {
         res,
         apiError(401, ErrorCode.UNAUTHORIZED, "Unauthorized: Merchant ID missing"),
       );
+    }
+
+    try {
+      assertValidPositiveAmount(amount, "amount");
+    } catch (validationError) {
+      if (validationError instanceof AmountValidationError) {
+        return sendApiError(
+          res,
+          apiError(400, ErrorCode.INVALID_AMOUNT, validationError.message),
+        );
+      }
+      throw validationError;
     }
 
     let linkedCustomerId: string | undefined;
