@@ -2,6 +2,14 @@
  * Payment Oracle Service Tests
  */
 
+const mockFindUnique = jest.fn();
+const mockFindMany = jest.fn();
+const mockCount = jest.fn();
+const mockUpdateMany = jest.fn();
+const mockRedisGet = jest.fn().mockResolvedValue(null);
+const mockRedisSet = jest.fn().mockResolvedValue("OK");
+const mockRedisDel = jest.fn().mockResolvedValue(1);
+
 jest.mock("@stellar/stellar-sdk", () => {
   const actual = jest.requireActual("@stellar/stellar-sdk");
   return {
@@ -19,17 +27,25 @@ jest.mock("@stellar/stellar-sdk", () => {
   };
 });
 
-import { PrismaClient } from "../../generated/client/client";
-import {
-  startPaymentOracle,
-  stopPaymentOracle,
-  getOracleMetrics,
-  getOracleHealth,
-  manualVerifyPayment,
-} from "../../services/paymentOracle.service";
+jest.mock("../../middleware/redisIdempotency.middleware", () => ({
+  redisClient: {
+    get: (...args: unknown[]) => mockRedisGet(...args),
+    set: (...args: unknown[]) => mockRedisSet(...args),
+    del: (...args: unknown[]) => mockRedisDel(...args),
+  },
+}));
 
-// Mock dependencies
-jest.mock("../../generated/client/client");
+jest.mock("../../generated/client/client", () => ({
+  PrismaClient: jest.fn().mockImplementation(() => ({
+    payment: {
+      findUnique: mockFindUnique,
+      findMany: mockFindMany,
+      count: mockCount,
+      updateMany: mockUpdateMany,
+    },
+  })),
+}));
+
 jest.mock("../../utils/logger", () => ({
   getLogger: jest.fn(() => ({
     info: jest.fn(),
@@ -47,17 +63,26 @@ jest.mock("../../utils/logger", () => ({
 }));
 jest.mock("../../services/paymentContract.service");
 jest.mock("../../services/webhook.service");
+jest.mock("../../services/SorobanService", () => ({
+  getSorobanHealthStatus: jest.fn(() => ({ healthy: true })),
+}));
 
-const mockPrisma = new PrismaClient() as jest.Mocked<PrismaClient>;
-const mockFindUnique = jest.fn();
+import {
+  startPaymentOracle,
+  stopPaymentOracle,
+  getOracleMetrics,
+  getOracleHealth,
+  manualVerifyPayment,
+  fetchPendingPaymentsPage,
+} from "../../services/paymentOracle.service";
 
 describe("PaymentOracleService", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    (mockPrisma as unknown as { payment: { findUnique: jest.Mock } }).payment = {
-      findUnique: mockFindUnique,
-    };
-    stopPaymentOracle(); // Ensure clean state
+    mockRedisGet.mockResolvedValue(null);
+    mockRedisSet.mockResolvedValue("OK");
+    mockRedisDel.mockResolvedValue(1);
+    stopPaymentOracle();
   });
 
   afterEach(() => {
@@ -73,7 +98,7 @@ describe("PaymentOracleService", () => {
 
     it("should not start if already running", () => {
       startPaymentOracle();
-      startPaymentOracle(); // Second call should be ignored
+      startPaymentOracle();
       const metrics = getOracleMetrics();
       expect(metrics.pollsCompleted).toBe(0);
     });
@@ -124,6 +149,58 @@ describe("PaymentOracleService", () => {
       await expect(manualVerifyPayment("non-existent-id")).rejects.toThrow(
         "Payment non-existent-id not found"
       );
+    });
+  });
+
+  describe("fetchPendingPaymentsPage cursor pagination", () => {
+    const batchSize = parseInt(process.env.ORACLE_BATCH_SIZE || "50", 10);
+
+    it("never loads more than ORACLE_BATCH_SIZE rows per cycle", async () => {
+      const page = Array.from({ length: batchSize }, (_, i) => ({
+        id: `pay_${String(i).padStart(3, "0")}`,
+      }));
+      mockFindMany.mockResolvedValue(page);
+
+      const result = await fetchPendingPaymentsPage(new Date());
+      expect(result.length).toBeLessThanOrEqual(batchSize);
+      expect(mockFindMany).toHaveBeenCalledWith(
+        expect.objectContaining({ take: batchSize, orderBy: { id: "asc" } }),
+      );
+      expect(mockRedisSet).toHaveBeenCalledWith(
+        "oracle:pending_payments_cursor",
+        page[page.length - 1].id,
+      );
+    });
+
+    it("processes 200 pending payments across 4 cycles of 50", async () => {
+      const all = Array.from({ length: 200 }, (_, i) => ({
+        id: `pay_${String(i).padStart(3, "0")}`,
+      }));
+      let cursor: string | null = null;
+      mockRedisGet.mockImplementation(async () => cursor);
+      mockRedisSet.mockImplementation(async (_key: string, value: string) => {
+        cursor = value;
+        return "OK";
+      });
+      mockFindMany.mockImplementation(async ({ where, take }: any) => {
+        const startId = where?.id?.gt;
+        const filtered = startId
+          ? all.filter((p) => p.id > startId)
+          : all;
+        return filtered.slice(0, take);
+      });
+
+      const seen = new Set<string>();
+      for (let cycle = 0; cycle < 4; cycle++) {
+        const page = await fetchPendingPaymentsPage(new Date());
+        expect(page.length).toBe(50);
+        expect(page.length).toBeLessThanOrEqual(batchSize);
+        for (const p of page) {
+          expect(seen.has(p.id)).toBe(false);
+          seen.add(p.id);
+        }
+      }
+      expect(seen.size).toBe(200);
     });
   });
 });

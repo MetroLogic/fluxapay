@@ -176,6 +176,8 @@ model Plan {
   overage_mode            String                 @default("hard_block")
   /** Feature flags, e.g. ["data_export_pii"] */
   features                Json                   @default("[]")
+  /** Max payment expiry window in seconds (also used as plan default expiry) */
+  max_payment_expiry_seconds Int?
   created_at              DateTime               @default(now())
   updated_at              DateTime               @updatedAt
   subscriptions           MerchantSubscription[]
