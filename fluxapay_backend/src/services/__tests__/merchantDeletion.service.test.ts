@@ -265,3 +265,94 @@ describe("executeDeletion — Cloudinary KYC purge (#720)", () => {
     expect(kYCDocument.deleteMany).toHaveBeenCalled();
   });
 });
+
+// ─── Issue #812: In-flight settlement guard ───────────────────────────────────
+
+describe("executeDeletion — in-flight settlement guard (#812)", () => {
+  const settlement = { findMany: jest.fn() };
+
+  // Extend the prisma mock to include `settlement`
+  beforeAll(() => {
+    const { PrismaClient } = jest.requireMock("../../generated/client/client") as any;
+    const instance = new PrismaClient();
+    Object.assign(instance, { settlement });
+    // Re-apply so the module under test uses the updated mock instance.
+    // Because PrismaClient is called once at module load, we patch the prototype instead.
+    PrismaClient.mockImplementation(() => ({
+      ...txClient,
+      settlement,
+      $transaction: jest.fn((fn: (tx: typeof txClient) => Promise<void>) => fn(txClient)),
+    }));
+  });
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+
+    merchant.findUnique.mockResolvedValue(activeMerchant);
+    merchantDeletionRequest.findUnique.mockResolvedValue({
+      id: "req-1",
+      merchantId: MERCHANT_ID,
+      reason: "test",
+    });
+    merchant.update.mockResolvedValue({});
+    merchantKYC.updateMany.mockResolvedValue({});
+    kYCDocument.findMany.mockResolvedValue([]);
+    kYCDocument.deleteMany.mockResolvedValue({});
+    webhookLog.updateMany.mockResolvedValue({ count: 0 });
+    oTP.deleteMany.mockResolvedValue({});
+    bankAccount.deleteMany.mockResolvedValue({});
+    merchantSubscription.deleteMany.mockResolvedValue({});
+    customer.deleteMany.mockResolvedValue({});
+    refreshToken.deleteMany.mockResolvedValue({});
+    merchantDeletionRequest.update.mockResolvedValue({});
+    apiKey.updateMany.mockResolvedValue({ count: 0 });
+    payment.updateMany.mockResolvedValue({ count: 0 });
+    mockDeleteFromCloudinary.mockResolvedValue(undefined);
+  });
+
+  it("throws 409 INFLIGHT_SETTLEMENTS when pending settlements exist and force=false", async () => {
+    settlement.findMany.mockResolvedValue([
+      { id: "settle-1", status: "pending" },
+    ]);
+
+    await expect(executeDeletion(MERCHANT_ID, ADMIN_ID)).rejects.toMatchObject({
+      status: 409,
+      code: "INFLIGHT_SETTLEMENTS",
+    });
+  });
+
+  it("throws 409 INFLIGHT_SETTLEMENTS when processing settlements exist and force=false", async () => {
+    settlement.findMany.mockResolvedValue([
+      { id: "settle-2", status: "processing" },
+    ]);
+
+    await expect(executeDeletion(MERCHANT_ID, ADMIN_ID)).rejects.toMatchObject({
+      status: 409,
+      code: "INFLIGHT_SETTLEMENTS",
+    });
+  });
+
+  it("proceeds with deletion when no in-flight settlements exist (force=false)", async () => {
+    settlement.findMany.mockResolvedValue([]);
+
+    await expect(executeDeletion(MERCHANT_ID, ADMIN_ID)).resolves.toBeUndefined();
+  });
+
+  it("proceeds with deletion when force=true even if settlements are in progress", async () => {
+    settlement.findMany.mockResolvedValue([
+      { id: "settle-3", status: "pending" },
+    ]);
+
+    // force=true bypasses the guard
+    await expect(executeDeletion(MERCHANT_ID, ADMIN_ID, true)).resolves.toBeUndefined();
+  });
+
+  it("does not query settlements at all when force=true", async () => {
+    settlement.findMany.mockResolvedValue([{ id: "settle-4", status: "pending" }]);
+
+    await executeDeletion(MERCHANT_ID, ADMIN_ID, true);
+
+    // Guard is skipped — settlement.findMany should NOT have been called
+    expect(settlement.findMany).not.toHaveBeenCalled();
+  });
+});

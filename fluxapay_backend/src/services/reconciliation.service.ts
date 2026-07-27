@@ -121,7 +121,7 @@ async function reconcileMerchant(
   periodStart: Date,
   periodEnd: Date
 ) {
-  const [paymentAggregate, settlementAggregate, thresholdConfig] = await Promise.all([
+  const [paymentAggregate, settlementAggregate, refundAggregate, thresholdConfig] = await Promise.all([
     prisma.payment.aggregate({
       where: {
         merchantId,
@@ -144,10 +144,26 @@ async function reconcileMerchant(
       },
       _sum: { amount: true },
     }),
+    // Sum refunds that completed within the period so partial refunds do not
+    // produce false-positive discrepancy alerts.
+    prisma.refund.aggregate({
+      where: {
+        merchantId,
+        status: "completed",
+        created_at: {
+          gte: periodStart,
+          lte: periodEnd,
+        },
+      },
+      _sum: { amount: true },
+    }),
     getThresholdForMerchant(merchantId),
   ]);
 
-  const expectedTotal = toNumber(paymentAggregate._sum.amount);
+  const grossPayments = toNumber(paymentAggregate._sum.amount);
+  const totalRefunds = toNumber(refundAggregate._sum.amount);
+  // Expected on-chain balance = confirmed payments minus completed refunds.
+  const expectedTotal = grossPayments - totalRefunds;
   const actualTotal = toNumber(settlementAggregate._sum.amount);
   const discrepancyAmount = Math.abs(expectedTotal - actualTotal);
   const discrepancyPercent =

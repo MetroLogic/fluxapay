@@ -65,10 +65,13 @@ export async function requestDeletion(
  *
  * Financial records (payments, settlements, refunds, invoices) are retained.
  * PII is overwritten. Cascades revoke keys, deactivate webhooks, cancel charges.
+ *
+ * @param force - When true, skip the in-flight settlement guard (use with care).
  */
 export async function executeDeletion(
   merchantId: string,
   adminId: string,
+  force = false,
 ): Promise<void> {
   const merchant = await prisma.merchant.findUnique({ where: { id: merchantId } });
   if (!merchant) throw apiError(404, ErrorCode.MERCHANT_NOT_FOUND, "Merchant not found");
@@ -78,6 +81,33 @@ export async function executeDeletion(
     where: { merchantId },
   });
   if (!deletionReq) throw apiError(400, ErrorCode.NO_DELETION_REQUEST, "No deletion request found for this merchant");
+
+  // Guard: refuse if any settlements are still in progress unless force=true.
+  if (!force) {
+    const inflightSettlements = await prisma.settlement.findMany({
+      where: {
+        merchantId,
+        status: { in: ["pending", "processing"] },
+      },
+      select: { id: true, status: true },
+    });
+
+    if (inflightSettlements.length > 0) {
+      const ids = inflightSettlements.map((s) => s.id).join(", ");
+      logger.warn("executeDeletion blocked — in-flight settlements exist", {
+        event: "deletion_blocked_inflight_settlements",
+        merchantId,
+        settlementIds: ids,
+      });
+      throw apiError(
+        409,
+        ErrorCode.INFLIGHT_SETTLEMENTS,
+        `Cannot delete merchant while settlements are in progress. ` +
+          `Pending/processing settlement IDs: ${ids}. ` +
+          `Wait for them to complete or use force=true to override.`,
+      );
+    }
+  }
 
   await prisma.$transaction(async (tx) => {
     // 1. Revoke all active API keys
