@@ -18,7 +18,8 @@ const prisma = new PrismaClient();
  * 2. merchantRateLimit()          - Per-merchant (200 req/60s) — UNUSED (legacy)
  * 3. authRateLimit()              - Auth endpoints by IP (10 req/15m) — auth.route.ts
  * 4. merchantApiKeyRateLimit()    - Per-merchant API key (200 req/60s) — payment.route.ts
- * 5. captchaCheck()               - CAPTCHA requirement check — payment.controller.ts
+ * 5. adminRateLimit()             - Admin routes by IP (60 req/60s) - app.ts
+ * 6. captchaCheck()               - CAPTCHA requirement check — payment.controller.ts
  *
  * For public endpoints, see simpleRateLimit.middleware.ts instead.
  *
@@ -392,6 +393,52 @@ export function merchantApiKeyRateLimit(): RequestHandler {
           429,
           ErrorCode.RATE_LIMIT_EXCEEDED,
           "API rate limit for this key exceeded. Please slow down.",
+          { retryAfterSeconds },
+        ),
+      );
+    }
+
+    next();
+  };
+}
+
+/**
+ * Rate limit for admin routes protected by X-Admin-Secret.
+ *
+ * Default: 60 requests per 60 seconds per IP.
+ * Configurable via env vars:
+ *   ADMIN_RATE_LIMIT_MAX
+ *   ADMIN_RATE_LIMIT_WINDOW_MS
+ */
+export function adminRateLimit(): RequestHandler {
+  const max = parseInt(process.env.ADMIN_RATE_LIMIT_MAX || "60", 10);
+  const windowMs = parseInt(process.env.ADMIN_RATE_LIMIT_WINDOW_MS || "60000", 10);
+
+  return (req: Request, res: Response, next: NextFunction) => {
+    const ip = getIp(req);
+    const key = `admin:${ip}`;
+    const { allowed, retryAfterSeconds, remaining } = checkLimit(key, max, windowMs);
+
+    res.setHeader("X-RateLimit-Limit", String(max));
+    res.setHeader("X-RateLimit-Remaining", String(remaining));
+    res.setHeader("X-RateLimit-Window", String(windowMs / 1000));
+
+    if (!allowed) {
+      res.setHeader("Retry-After", String(retryAfterSeconds));
+
+      logRateLimitEvent({
+        ipAddress: ip,
+        endpoint: req.path,
+        limitType: "admin",
+        retryAfterSeconds,
+      });
+
+      return sendApiError(
+        res,
+        apiError(
+          429,
+          ErrorCode.RATE_LIMIT_EXCEEDED,
+          "Admin rate limit exceeded. Please slow down.",
           { retryAfterSeconds },
         ),
       );

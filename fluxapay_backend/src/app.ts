@@ -12,7 +12,7 @@ import {
 } from "./middleware/requestLogging.middleware";
 import { metricsMiddleware } from "./middleware/metrics.middleware";
 import { corsMiddleware } from "./middleware/cors.middleware";
-import { globalRateLimit, merchantRateLimit, authRateLimit } from "./middleware/rateLimit.middleware";
+import { adminRateLimit, globalRateLimit, merchantRateLimit } from "./middleware/rateLimit.middleware";
 
 import merchantRoutes from "./routes/merchant.route";
 import { createHealthRouter } from "./routes/health.route";
@@ -192,20 +192,20 @@ app.use("/api/v1/customers", customerRoutes);
 app.use("/api/v1/payment-links", paymentLinkRoutes);
 app.use("/api/v1/reports/reconciliation", dailyReconciliationRoutes);
 app.use("/api/v1/refunds", refundRoutes);
-app.use("/api/v1/admin/address-pool", addressPoolRoutes);
+app.use("/api/v1/admin/address-pool", adminRateLimit(), addressPoolRoutes);
 app.use("/api/v1/fx-rates", fxRoutes);
 app.use("/api/v1/keys", keysRoutes);
 app.use("/api/v1/api-keys", apiKeyRoutes);
 app.use("/api/v1/dashboard", merchantRateLimit(), dashboardRoutes);
 
 // ── Admin routes ───────────────────────────────────────────────────────────────
-app.use("/api/v1/admin/reconciliation", reconciliationRoutes);
-app.use("/api/v1/admin/usage", adminUsageRoutes);
-app.use("/api/v1/admin/settlement", settlementBatchRoutes);
-app.use("/api/v1/admin/sweep", sweepRoutes);
-app.use("/api/v1/admin/system", systemRoutes);
-app.use("/api/v1/admin/config", adminConfigRoutes);
-app.use("/api/v1/admin", auditRoutes);
+app.use("/api/v1/admin/reconciliation", adminRateLimit(), reconciliationRoutes);
+app.use("/api/v1/admin/usage", adminRateLimit(), adminUsageRoutes);
+app.use("/api/v1/admin/settlement", adminRateLimit(), settlementBatchRoutes);
+app.use("/api/v1/admin/sweep", adminRateLimit(), sweepRoutes);
+app.use("/api/v1/admin/system", adminRateLimit(), systemRoutes);
+app.use("/api/v1/admin/config", adminRateLimit(), adminConfigRoutes);
+app.use("/api/v1/admin", adminRateLimit(), auditRoutes);
 app.use("/api/v1", oracleRoutes);
 app.use("/api/v1/email", emailRoutes);
 
