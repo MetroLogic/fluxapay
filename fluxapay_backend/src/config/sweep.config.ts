@@ -6,12 +6,15 @@
 
 const DEFAULT_SWEEP_CRON_INTERVAL = "0 * * * *";
 const DEFAULT_SWEEP_MIN_BALANCE_USDC = 0.5;
+const DEFAULT_MAX_SWEEP_RETRY_ATTEMPTS = 5;
 
 export interface SweepConfig {
   /** Cron expression for the scheduled sweep job. */
   cronInterval: string;
   /** Minimum on-chain USDC balance required before sweeping an address. */
   minBalanceUsdc: number;
+  /** Failed sweeps past this many attempts are flagged for manual review instead of retried. */
+  maxSweepRetryAttempts: number;
 }
 
 export function getSweepCronInterval(): string {
@@ -34,21 +37,36 @@ export function getSweepMinBalanceUsdc(): number {
   return parsed;
 }
 
+export function getMaxSweepRetryAttempts(): number {
+  const raw = process.env.MAX_SWEEP_RETRY_ATTEMPTS;
+  if (raw === undefined || raw === "") {
+    return DEFAULT_MAX_SWEEP_RETRY_ATTEMPTS;
+  }
+  const parsed = parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return DEFAULT_MAX_SWEEP_RETRY_ATTEMPTS;
+  }
+  return parsed;
+}
+
 export function getSweepConfig(): SweepConfig {
   return {
     cronInterval: getSweepCronInterval(),
     minBalanceUsdc: getSweepMinBalanceUsdc(),
+    maxSweepRetryAttempts: getMaxSweepRetryAttempts(),
   };
 }
 
 export function logSweepConfigAtStartup(): void {
-  const { cronInterval, minBalanceUsdc } = getSweepConfig();
+  const { cronInterval, minBalanceUsdc, maxSweepRetryAttempts } =
+    getSweepConfig();
   console.log(
     JSON.stringify({
       level: "info",
       message: "Sweep configuration loaded",
       sweepCronInterval: cronInterval,
       sweepMinBalanceUsdc: minBalanceUsdc,
+      maxSweepRetryAttempts,
     }),
   );
 }

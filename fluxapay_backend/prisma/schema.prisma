@@ -374,6 +374,10 @@ model Payment {
   settled            Boolean  @default(false)
   swept_at           DateTime?
   sweep_tx_hash      String?
+  sweep_retry_count         Int      @default(0)
+  sweep_last_error          String?
+  sweep_failed_at           DateTime?
+  sweep_needs_manual_review Boolean  @default(false)
   confirmed_at       DateTime?
   settled_at         DateTime?
   settlement_ref     String?
@@ -403,7 +407,7 @@ model Payment {
   escrow_contract_address  String?
   escrow_status            String?
 
-  @@index([swept, status])
+  @@index([swept, status, sweep_needs_manual_review])
   @@index([customerId])
   @@index([merchantId, createdAt(sort: Desc)])
   @@index([merchantId, status, createdAt(sort: Desc)])
