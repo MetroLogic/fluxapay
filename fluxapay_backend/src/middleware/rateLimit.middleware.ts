@@ -41,6 +41,8 @@ export function getRedisClientForRateLimit(): Redis {
       lazyConnect: true,
       maxRetriesPerRequest: 2,
       enableOfflineQueue: false,
+      connectTimeout: 2000,
+      retryStrategy: () => null,
     });
 
     redisClient.on("error", (err) => {
