@@ -210,6 +210,12 @@ model MerchantSubscription {
   current_period_start DateTime
   current_period_end   DateTime
   next_billing_date    DateTime
+  /** Plan amount actually charged/applied for the current period, captured
+   *  fresh from Plan.amount at subscription creation and on every renewal. */
+  current_period_amount        Decimal?
+  /** Set once a price-increase notice email has been sent for the
+   *  upcoming renewal, so the 7-day-prior notice job doesn't resend it. */
+  price_change_notice_sent_at  DateTime?
   created_at           DateTime @default(now())
   updated_at           DateTime @updatedAt
 }
