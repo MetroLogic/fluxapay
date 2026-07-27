@@ -13,7 +13,11 @@ export class WebhookDispatcher {
     this.prisma = prismaClient;
   }
 
-  public async sendPaymentWebhook(payment: Payment, merchant: Merchant): Promise<void> {
+  public async sendPaymentWebhook(
+    payment: Payment,
+    merchant: Merchant,
+    eventType: WebhookEventType | string = "payment_confirmed",
+  ): Promise<void> {
     if (!merchant.webhook_url) {
       console.log(`[WebhookDispatcher] No webhook_url configured for merchant ${merchant.id}. Skipping.`);
       return;
@@ -24,16 +28,17 @@ export class WebhookDispatcher {
       return;
     }
 
+    const canonicalEvent = normalizeEventName(eventType as any);
     const timestamp = new Date().toISOString();
     const payload = JSON.stringify({
-      event: 'payment.confirmed',
+      event: canonicalEvent,
       event_id: crypto.randomUUID(),
       timestamp,
       data: {
         payment_id: payment.id,
         amount: payment.amount.toString(),
         currency: payment.currency,
-        status: 'CONFIRMED',
+        status: payment.status,
         transaction_hash: payment.transaction_hash,
       }
     });

@@ -24,6 +24,7 @@ import { analyzeDuplicatePayments, MatchedStellarPayment } from "../utils/duplic
 import {parseHorizonMemo, resolveMemoMatchMode, validateMemoMatch } from "../utils/oracleMemo.util";
 import { isSorobanVerificationEnabled } from "../utils/sorobanVerification.util";
 import { getSorobanHealthStatus } from "./SorobanService";
+import { redisClient } from "../middleware/redisIdempotency.middleware";
 
 const prisma = new PrismaClient();
 const logger = getLogger("PaymentOracleService");
@@ -40,6 +41,7 @@ const SHARED_DEPOSIT_ADDRESS = process.env.SHARED_DEPOSIT_ADDRESS;
 const ENABLE_ADDRESS_POOL = process.env.ENABLE_ADDRESS_POOL === "true";
 const BATCH_SIZE = parseInt(process.env.ORACLE_BATCH_SIZE || "50", 10);
 const HORIZON_TIMEOUT_MS = parseInt(process.env.ORACLE_HORIZON_TIMEOUT_MS || "10000", 10);
+const ORACLE_PENDING_CURSOR_KEY = "oracle:pending_payments_cursor";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -556,10 +558,71 @@ async function processBatch(payments: Payment[]): Promise<void> {
   }
 }
 
+function activePendingWhere(now: Date) {
+  return {
+    status: { in: ["pending", "partially_paid"] as PaymentStatus[] },
+    expiration: { gt: now },
+    stellar_address: { not: null },
+  };
+}
+
+/**
+ * Cursor-paginated fetch of pending payments (max ORACLE_BATCH_SIZE per cycle).
+ * Cursor is stored in Redis so subsequent ticks resume where the last left off.
+ */
+export async function fetchPendingPaymentsPage(now: Date = new Date()): Promise<Payment[]> {
+  const baseWhere = activePendingWhere(now);
+  let lastCursor: string | null = null;
+
+  try {
+    lastCursor = await redisClient.get(ORACLE_PENDING_CURSOR_KEY);
+  } catch (error: any) {
+    logger.warn("Failed to read oracle pending cursor from Redis", {
+      error: error?.message,
+    });
+  }
+
+  const queryPage = (cursor: string | null) =>
+    prisma.payment.findMany({
+      where: cursor
+        ? { ...baseWhere, id: { gt: cursor } }
+        : baseWhere,
+      take: BATCH_SIZE,
+      orderBy: { id: "asc" },
+    });
+
+  let payments = await queryPage(lastCursor);
+
+  // Wrap to the start when the cursor is past the end of the backlog
+  if (payments.length === 0 && lastCursor) {
+    payments = await queryPage(null);
+  }
+
+  try {
+    if (payments.length > 0) {
+      await redisClient.set(ORACLE_PENDING_CURSOR_KEY, payments[payments.length - 1].id);
+    } else {
+      await redisClient.del(ORACLE_PENDING_CURSOR_KEY);
+    }
+  } catch (error: any) {
+    logger.warn("Failed to persist oracle pending cursor to Redis", {
+      error: error?.message,
+    });
+  }
+
+  if (payments.length > BATCH_SIZE) {
+    throw new Error(
+      `Oracle page size ${payments.length} exceeds ORACLE_BATCH_SIZE ${BATCH_SIZE}`,
+    );
+  }
+
+  return payments;
+}
+
 /**
  * Main oracle polling tick - runs on schedule
  */
-async function runOracleTick(): Promise<void> {
+export async function runOracleTick(): Promise<void> {
   const startTime = Date.now();
   const now = new Date();
 
@@ -599,20 +662,18 @@ async function runOracleTick(): Promise<void> {
       data: { status: "expired" },
     });
 
-    // 2. Fetch active payments to monitor
-    const payments = await prisma.payment.findMany({
-      where: {
-        status: { in: ["pending", "partially_paid"] },
-        expiration: { gt: now },
-        stellar_address: { not: null },
-      },
-      take: BATCH_SIZE,
-      orderBy: { createdAt: "asc" },
+    // 2. Emit backlog gauge, then fetch one cursor page of active payments
+    const backlog = await prisma.payment.count({
+      where: activePendingWhere(now),
     });
+    metrics.gauge("oracle_pending_payments_backlog", backlog);
+
+    const payments = await fetchPendingPaymentsPage(now);
 
     logger.info("Oracle monitoring active payments", {
       count: payments.length,
       batchSize: BATCH_SIZE,
+      backlog,
     });
 
     if (payments.length === 0) {

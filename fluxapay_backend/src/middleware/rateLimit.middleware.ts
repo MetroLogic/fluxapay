@@ -41,6 +41,8 @@ export function getRedisClientForRateLimit(): Redis {
       lazyConnect: true,
       maxRetriesPerRequest: 2,
       enableOfflineQueue: false,
+      connectTimeout: 2000,
+      retryStrategy: () => null,
     });
 
     redisClient.on("error", (err) => {
@@ -458,10 +460,10 @@ export function adminRateLimit(): RequestHandler {
   const max = parseInt(process.env.ADMIN_RATE_LIMIT_MAX || "60", 10);
   const windowMs = parseInt(process.env.ADMIN_RATE_LIMIT_WINDOW_MS || "60000", 10);
 
-  return (req: Request, res: Response, next: NextFunction) => {
+  return async (req: Request, res: Response, next: NextFunction) => {
     const ip = getIp(req);
     const key = `admin:${ip}`;
-    const { allowed, retryAfterSeconds, remaining } = checkLimit(key, max, windowMs);
+    const { allowed, retryAfterSeconds, remaining } = await checkLimit(key, max, windowMs);
 
     res.setHeader("X-RateLimit-Limit", String(max));
     res.setHeader("X-RateLimit-Remaining", String(remaining));

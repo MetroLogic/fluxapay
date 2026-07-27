@@ -28,6 +28,7 @@ export const createPayment = async (req: Request, res: Response) => {
       success_url,
       cancel_url,
       customer_id,
+      expires_in_seconds,
     } = req.body;
     const authReq = req as AuthRequest;
     const merchantId = authReq.merchantId;
@@ -94,6 +95,8 @@ export const createPayment = async (req: Request, res: Response) => {
       success_url,
       cancel_url,
       customerId: linkedCustomerId,
+      expires_in_seconds:
+        expires_in_seconds !== undefined ? Number(expires_in_seconds) : undefined,
     });
 
     const responseBody = {
