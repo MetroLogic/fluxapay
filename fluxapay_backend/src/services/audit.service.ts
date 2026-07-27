@@ -392,6 +392,36 @@ export async function updateSweepCompletion(params: {
 }
 
 /**
+ * Log a single payment's sweep failure. Called per-payment from within the
+ * sweep batch loop, so callers must catch/ignore rejections themselves
+ * (safeAuditLog throws after exhausting retries) rather than letting a
+ * logging failure abort the batch.
+ */
+export async function logSweepFailure(params: {
+  paymentId: string;
+  error: string;
+  retryCount: number;
+  flaggedForManualReview: boolean;
+}): Promise<any | null> {
+  const details: SweepOperationDetails = {
+    sweep_type: "payment_sweep",
+    trigger_reason: params.paymentId,
+    status: "failed",
+    failure_reason: params.error,
+    retry_count: params.retryCount,
+    flagged_for_manual_review: params.flaggedForManualReview,
+  };
+
+  return await createAuditLog({
+    admin_id: "system",
+    action_type: AuditActionType.sweep_fail,
+    entity_type: AuditEntityType.sweep_operation,
+    entity_id: params.paymentId,
+    details,
+  });
+}
+
+/**
  * Log settlement batch initiation
  */
 export async function logSettlementBatch(params: {

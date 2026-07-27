@@ -9,10 +9,17 @@ import {
 import { PrismaClient } from "../generated/client/client";
 import { Decimal } from "@prisma/client/runtime/library";
 import { HDWalletService } from "./HDWalletService";
-import { logSweepTrigger, updateSweepCompletion } from "./audit.service";
+import {
+  logSweepFailure,
+  logSweepTrigger,
+  updateSweepCompletion,
+} from "./audit.service";
 import { getLogger, getMetricsCollector } from "../utils/logger";
 import { sweepQueue } from "./sweepQueue.service";
-import { getSweepMinBalanceUsdc } from "../config/sweep.config";
+import {
+  getMaxSweepRetryAttempts,
+  getSweepMinBalanceUsdc,
+} from "../config/sweep.config";
 
 const prisma = new PrismaClient();
 
@@ -102,13 +109,17 @@ export class SweepService {
     this.hdWalletService = new HDWalletService();
   }
 
-  /** Identify eligible payments: confirmed/overpaid/paid, not swept, has derived address. */
+  /**
+   * Identify eligible payments: confirmed/overpaid/paid, not swept, has derived
+   * address, and not already flagged for manual review after exhausting retries.
+   */
   private async getUnsweptPaidPayments(limit: number) {
     return prisma.payment.findMany({
       where: {
         swept: false,
         stellar_address: { not: null },
         status: { in: ["confirmed", "overpaid", "paid"] },
+        sweep_needs_manual_review: false,
       },
       orderBy: { confirmed_at: "asc" },
       take: limit,
@@ -247,6 +258,7 @@ export class SweepService {
     });
 
     const payments = await this.getUnsweptPaidPayments(limit);
+    const maxSweepRetryAttempts = getMaxSweepRetryAttempts();
 
     const txHashes: string[] = [];
     const skipped: Array<{ paymentId: string; reason: string }> = [];
@@ -376,8 +388,55 @@ export class SweepService {
         } catch (err: unknown) {
           const msg = err instanceof Error ? err.message : String(err);
           skipped.push({ paymentId: p.id, reason: msg });
-          if (dryRun)
+
+          if (dryRun) {
             decisions.push({ paymentId: p.id, action: "skip", reason: msg });
+            return;
+          }
+
+          // Per-payment error isolation (#824): a failed sweep must never
+          // abort the batch. Persisting the retry count / manual-review flag
+          // and writing the audit log are themselves guarded so that a
+          // failure in this bookkeeping can't become a new way to do that.
+          const nextRetryCount = (p.sweep_retry_count ?? 0) + 1;
+          const needsManualReview = nextRetryCount >= maxSweepRetryAttempts;
+
+          try {
+            await prisma.payment.update({
+              where: { id: p.id },
+              data: {
+                sweep_retry_count: nextRetryCount,
+                sweep_last_error: msg.slice(0, 500),
+                sweep_failed_at: new Date(),
+                sweep_needs_manual_review: needsManualReview,
+              },
+            });
+          } catch (updateErr: unknown) {
+            this.logger.error("Failed to persist sweep retry tracking", {
+              paymentId: p.id,
+              error:
+                updateErr instanceof Error
+                  ? updateErr.message
+                  : String(updateErr),
+            });
+          }
+
+          try {
+            await logSweepFailure({
+              paymentId: p.id,
+              error: msg,
+              retryCount: nextRetryCount,
+              flaggedForManualReview: needsManualReview,
+            });
+          } catch (auditErr: unknown) {
+            this.logger.error("Failed to write sweep failure audit log", {
+              paymentId: p.id,
+              error:
+                auditErr instanceof Error
+                  ? auditErr.message
+                  : String(auditErr),
+            });
+          }
         }
       };
 
