@@ -6,7 +6,12 @@ import { AuthRequest } from "../types/express";
 import { v4 as uuidv4, validate as validateUUID } from "uuid";
 
 // Initialize Redis connection. Adjust the URL based on env vars if needed.
-export const redisClient = new Redis(process.env.REDIS_URL || "redis://localhost:6379");
+// Fail fast when Redis is down (no offline queue) so tests/CI do not hang indefinitely.
+export const redisClient = new Redis(process.env.REDIS_URL || "redis://localhost:6379", {
+  maxRetriesPerRequest: 1,
+  enableOfflineQueue: false,
+  connectTimeout: 2000,
+});
 
 export const redisIdempotencyMiddleware = async (
   req: Request,
