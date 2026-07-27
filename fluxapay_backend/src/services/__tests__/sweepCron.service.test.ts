@@ -6,12 +6,17 @@
 
 const mockPrisma = {
   $executeRaw: jest.fn(),
+  $queryRaw: jest.fn().mockResolvedValue([]),
 };
 
 jest.mock("../../generated/client/client", () => ({
   PrismaClient: jest.fn(() => mockPrisma),
 }));
-jest.mock("../sweep.service");
+jest.mock("../sweep.service", () => ({
+  sweepService: {
+    sweepPaidPayments: jest.fn(),
+  },
+}));
 jest.mock("../audit.service");
 
 import { runSweepWithLock } from "../sweepCron.service";

@@ -30,7 +30,6 @@ export function CommandPalette() {
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const [isAdminUser, setIsAdminUser] = useState(false);
-  const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -38,13 +37,9 @@ export function CommandPalette() {
 
   const routes = isAdminUser ? [...BASE_ROUTES, ...ADMIN_ROUTES] : BASE_ROUTES;
 
-  // Initialize admin status and recent searches
+  // Initialize admin status
   useEffect(() => {
     setIsAdminUser(isAdmin());
-    const saved = sessionStorage.getItem("commandPaletteSearches");
-    if (saved) {
-      setRecentSearches(JSON.parse(saved));
-    }
   }, []);
 
   const filtered = routes.filter((r) =>
@@ -59,11 +54,12 @@ export function CommandPalette() {
 
   const saveSearch = useCallback((searchQuery: string) => {
     if (!searchQuery.trim()) return;
-    setRecentSearches((prev) => {
-      const updated = [searchQuery, ...prev.filter((s) => s !== searchQuery)].slice(0, 10);
-      sessionStorage.setItem("commandPaletteSearches", JSON.stringify(updated));
-      return updated;
-    });
+    const prev: string[] = (() => {
+      try { return JSON.parse(sessionStorage.getItem("commandPaletteSearches") ?? "[]"); }
+      catch { return []; }
+    })();
+    const updated = [searchQuery, ...prev.filter((s) => s !== searchQuery)].slice(0, 10);
+    sessionStorage.setItem("commandPaletteSearches", JSON.stringify(updated));
   }, []);
 
   const navigate = useCallback(
@@ -88,27 +84,96 @@ export function CommandPalette() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  // Focus trap implementation
+  /**
+   * Focus trap (#834).
+   *
+   * The previous implementation listened for Escape and otherwise called
+   * `e.preventDefault()` on every Tab. That is not a trap — it disables Tab
+   * outright, so focus cannot move *within* the palette either, and the moment
+   * focus sat anywhere but the input, Tab escaped to the dashboard behind it.
+   *
+   * This cycles focus across the palette's own focusable elements and wraps at
+   * both ends, so Tab and Shift+Tab stay inside while remaining useful.
+   */
   useEffect(() => {
     if (!open || !dialogRef.current) return;
+    const dialog = dialogRef.current;
+
+    const focusable = () =>
+      Array.from(
+        dialog.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter((el) => el.offsetParent !== null || el.getClientRects().length > 0);
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         close();
+        return;
+      }
+      if (e.key !== "Tab") return;
+
+      // Recomputed per keypress: the result list re-renders as the query
+      // changes, so a list captured on open would immediately go stale.
+      const items = focusable();
+      if (items.length === 0) {
+        e.preventDefault();
+        return;
+      }
+
+      const first = items[0];
+      const last = items[items.length - 1];
+
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
       }
     };
 
-    dialogRef.current.addEventListener("keydown", handleKeyDown);
-    return () => dialogRef.current?.removeEventListener("keydown", handleKeyDown);
+    dialog.addEventListener("keydown", handleKeyDown);
+    return () => dialog.removeEventListener("keydown", handleKeyDown);
   }, [open, close]);
 
+  /**
+   * Hide the background from assistive tech while the palette is open (#834),
+   * and restore focus to whatever opened it on close.
+   *
+   * `inert` is set alongside `aria-hidden` because aria-hidden alone still
+   * leaves background controls clickable and focusable by pointer — it hides
+   * them from screen readers without actually making them inert.
+   */
   useEffect(() => {
     if (!open) return;
+
+    const opener = document.activeElement as HTMLElement | null;
+    const root = document.getElementById("__next") ?? document.body;
+    const siblings = Array.from(root.children).filter(
+      (el) => el !== dialogRef.current && !el.contains(dialogRef.current),
+    ) as HTMLElement[];
+
+    for (const el of siblings) {
+      el.setAttribute("aria-hidden", "true");
+      el.setAttribute("inert", "");
+    }
+
     const id = requestAnimationFrame(() => {
       setActive(0);
       queueMicrotask(() => inputRef.current?.focus());
     });
-    return () => cancelAnimationFrame(id);
+
+    return () => {
+      cancelAnimationFrame(id);
+      for (const el of siblings) {
+        el.removeAttribute("aria-hidden");
+        el.removeAttribute("inert");
+      }
+      // Returning focus to the trigger is what stops a keyboard user being
+      // dumped at the top of the document every time they dismiss the palette.
+      if (opener?.isConnected) opener.focus();
+    };
   }, [open]);
 
   useEffect(() => {
@@ -126,8 +191,6 @@ export function CommandPalette() {
       setActive((i) => (i - 1 + filtered.length) % filtered.length);
     } else if (e.key === "Enter" && filtered[active]) {
       navigate(filtered[active].path);
-    } else if (e.key === "Tab") {
-      e.preventDefault();
     }
   };
 

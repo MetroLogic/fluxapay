@@ -1,8 +1,7 @@
 "use client";
 
 import { useFxRate } from "@/hooks/useFxRate";
-import { Coins, Loader2, AlertCircle } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Coins, AlertCircle } from "lucide-react";
 
 export function FxRateBadge({ currency }: { currency?: string }) {
   // If no currency is passed, we could read it from the user context. For now, default to NGN or USD.

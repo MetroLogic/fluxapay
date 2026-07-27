@@ -74,6 +74,8 @@ interface MerchantSettlementResult {
     exchangeRef?: string;
     transferRef?: string;
     paymentCount?: number;
+    /** Payments beyond BATCH_PAYMENT_LIMIT deferred to the next batch cycle. */
+    paymentsDeferred: number;
     paymentResults?: PaymentSettlementResult[];
     error?: string;
 }
@@ -120,8 +122,15 @@ interface MerchantAggregate {
     merchantId: string;
     paymentIds: string[];
     totalUsdc: number;
+    /** Payments beyond BATCH_PAYMENT_LIMIT that carry over to the next batch cycle. */
+    paymentsDeferred: number;
 }
 
+/**
+ * BATCH_PAYMENT_LIMIT is a per-merchant cap: each merchant's payments must be
+ * queried (and capped) independently, otherwise a single high-volume merchant
+ * can consume the whole limit and starve every other merchant due in this run.
+ */
 async function getUnsettledPaymentsByMerchant(runAt: Date): Promise<MerchantAggregate[]> {
     // Pre-compute which merchant IDs are due today so we skip loading
     // payments for merchants whose schedule doesn't fall on this run date.
@@ -141,43 +150,51 @@ async function getUnsettledPaymentsByMerchant(runAt: Date): Promise<MerchantAggr
 
     if (dueMerchants.length === 0) return [];
 
-    const dueMerchantIds = dueMerchants.map((m) => m.id);
+    const aggregates: MerchantAggregate[] = [];
 
-    // Raw grouping query – Prisma's groupBy aggregation doesn't easily return ids,
-    // so we fetch payment rows and group in-process.
-    const payments = await prisma.payment.findMany({
-        where: {
+    for (const { id: merchantId } of dueMerchants) {
+        const where = {
             swept: true,
             settled: false,
-            merchantId: { in: dueMerchantIds },
-        },
-        select: {
-            id: true,
-            merchantId: true,
-            amount: true,
-        },
-        orderBy: { createdAt: "asc" },
-        take: BATCH_PAYMENT_LIMIT,
-    });
+            merchantId,
+        };
 
-    // Group by merchantId
-    const map = new Map<string, MerchantAggregate>();
-    for (const p of payments) {
-        const existing = map.get(p.merchantId);
-        const amt = Number(p.amount as Decimal);
-        if (existing) {
-            existing.paymentIds.push(p.id);
-            existing.totalUsdc = parseFloat((existing.totalUsdc + amt).toFixed(7));
-        } else {
-            map.set(p.merchantId, {
-                merchantId: p.merchantId,
-                paymentIds: [p.id],
-                totalUsdc: amt,
-            });
+        const [payments, totalUnsettled] = await Promise.all([
+            prisma.payment.findMany({
+                where,
+                select: {
+                    id: true,
+                    merchantId: true,
+                    amount: true,
+                },
+                orderBy: { createdAt: "asc" },
+                take: BATCH_PAYMENT_LIMIT,
+            }),
+            prisma.payment.count({ where }),
+        ]);
+
+        if (payments.length === 0) continue;
+
+        const paymentsDeferred = Math.max(0, totalUnsettled - payments.length);
+        if (paymentsDeferred > 0) {
+            console.warn(
+                `[SettlementBatch] settlement.overflow: merchant ${merchantId} has ${totalUnsettled} ` +
+                `unsettled payments but BATCH_PAYMENT_LIMIT=${BATCH_PAYMENT_LIMIT} — settling ` +
+                `${payments.length} now, deferring ${paymentsDeferred} to the next batch cycle.`,
+            );
         }
+
+        let totalUsdc = 0;
+        const paymentIds: string[] = [];
+        for (const p of payments) {
+            paymentIds.push(p.id);
+            totalUsdc = parseFloat((totalUsdc + Number(p.amount as Decimal)).toFixed(7));
+        }
+
+        aggregates.push({ merchantId, paymentIds, totalUsdc, paymentsDeferred });
     }
 
-    return Array.from(map.values());
+    return aggregates;
 }
 
 // ─── Retry helpers (stored in Payment.metadata) ──────────────────────────────
@@ -415,7 +432,7 @@ async function settleMerchant(
     aggregate: MerchantAggregate,
     now: Date,
 ): Promise<MerchantSettlementResult> {
-    const { merchantId, paymentIds, totalUsdc } = aggregate;
+    const { merchantId, paymentIds, totalUsdc, paymentsDeferred } = aggregate;
 
     // 1. Load merchant + bank account (include schedule fields)
     const merchant = await prisma.merchant.findUnique({
@@ -429,6 +446,7 @@ async function settleMerchant(
             businessName: "Unknown",
             status: "failed",
             error: "Merchant not found in database",
+            paymentsDeferred,
         };
     }
 
@@ -443,6 +461,7 @@ async function settleMerchant(
             businessName: merchant.business_name,
             status: "skipped",
             error: `Not due today (schedule=${schedule}, settlement_day=${settlementDay ?? "n/a"})`,
+            paymentsDeferred,
         };
     }
 
@@ -453,6 +472,7 @@ async function settleMerchant(
             businessName: merchant.business_name,
             status: "skipped",
             error: "No bank account on file – settlement skipped",
+            paymentsDeferred,
         };
     }
 
@@ -462,6 +482,7 @@ async function settleMerchant(
             businessName: merchant.business_name,
             status: "skipped",
             error: "Zero USDC to settle",
+            paymentsDeferred,
         };
     }
 
@@ -533,6 +554,7 @@ async function settleMerchant(
         fiatCurrency: settlementCurrency,
         netAmount: totalNet,
         paymentCount: paymentIds.length,
+        paymentsDeferred,
         paymentResults,
         error: failedPayments.length > 0
             ? `${failedPayments.length} payment(s) failed`

@@ -415,16 +415,17 @@ function CreateApiKeyModal({
   isOpen,
   onClose,
   onCreateSuccess,
+  existingNames,
 }: {
   isOpen: boolean;
   onClose: () => void;
   onCreateSuccess: (key: { id: string; name: string; masked: string; secret: string }) => void;
+  existingNames: Set<string>;
 }) {
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [createdSecret, setCreatedSecret] = useState<string | null>(null);
-  const [existingNames, setExistingNames] = useState<Set<string>>(new Set());
   const [copied, setCopied] = useState<string | null>(null);
 
   useEffect(() => {
@@ -1354,6 +1355,7 @@ export default function DevelopersPage() {
       <CreateApiKeyModal
         isOpen={showCreateKeyModal}
         onClose={() => setShowCreateKeyModal(false)}
+        existingNames={new Set(apiKeys.map((k) => k.name.toLowerCase()))}
         onCreateSuccess={(key) => {
           setApiKeys([...apiKeys, { ...key, createdAt: new Date().toLocaleDateString() }]);
           setShowCreateKeyModal(false);

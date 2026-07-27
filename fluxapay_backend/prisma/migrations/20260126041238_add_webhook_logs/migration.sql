@@ -11,7 +11,7 @@ CREATE TYPE "WebhookEventType" AS ENUM ('payment_completed', 'payment_failed', '
 CREATE TYPE "WebhookStatus" AS ENUM ('pending', 'delivered', 'failed', 'retrying');
 
 -- CreateTable
-CREATE TABLE "Merchant" (
+CREATE TABLE IF NOT EXISTS "Merchant" (
     "id" TEXT NOT NULL,
     "business_name" TEXT NOT NULL,
     "email" TEXT NOT NULL,
@@ -27,7 +27,7 @@ CREATE TABLE "Merchant" (
 );
 
 -- CreateTable
-CREATE TABLE "OTP" (
+CREATE TABLE IF NOT EXISTS "OTP" (
     "id" TEXT NOT NULL,
     "merchantId" TEXT NOT NULL,
     "channel" "OTPChannel" NOT NULL,
@@ -39,7 +39,7 @@ CREATE TABLE "OTP" (
 );
 
 -- CreateTable
-CREATE TABLE "WebhookLog" (
+CREATE TABLE IF NOT EXISTS "WebhookLog" (
     "id" TEXT NOT NULL,
     "merchantId" TEXT NOT NULL,
     "event_type" "WebhookEventType" NOT NULL,
@@ -59,7 +59,7 @@ CREATE TABLE "WebhookLog" (
 );
 
 -- CreateTable
-CREATE TABLE "WebhookRetryAttempt" (
+CREATE TABLE IF NOT EXISTS "WebhookRetryAttempt" (
     "id" TEXT NOT NULL,
     "webhookLogId" TEXT NOT NULL,
     "attempt_number" INTEGER NOT NULL,
@@ -72,28 +72,28 @@ CREATE TABLE "WebhookRetryAttempt" (
 );
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Merchant_email_key" ON "Merchant"("email");
+CREATE UNIQUE INDEX IF NOT EXISTS "Merchant_email_key" ON "Merchant"("email");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Merchant_phone_number_key" ON "Merchant"("phone_number");
+CREATE UNIQUE INDEX IF NOT EXISTS "Merchant_phone_number_key" ON "Merchant"("phone_number");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "OTP_merchantId_channel_key" ON "OTP"("merchantId", "channel");
+CREATE UNIQUE INDEX IF NOT EXISTS "OTP_merchantId_channel_key" ON "OTP"("merchantId", "channel");
 
 -- CreateIndex
-CREATE INDEX "WebhookLog_merchantId_idx" ON "WebhookLog"("merchantId");
+CREATE INDEX IF NOT EXISTS "WebhookLog_merchantId_idx" ON "WebhookLog"("merchantId");
 
 -- CreateIndex
-CREATE INDEX "WebhookLog_event_type_idx" ON "WebhookLog"("event_type");
+CREATE INDEX IF NOT EXISTS "WebhookLog_event_type_idx" ON "WebhookLog"("event_type");
 
 -- CreateIndex
-CREATE INDEX "WebhookLog_status_idx" ON "WebhookLog"("status");
+CREATE INDEX IF NOT EXISTS "WebhookLog_status_idx" ON "WebhookLog"("status");
 
 -- CreateIndex
-CREATE INDEX "WebhookLog_payment_id_idx" ON "WebhookLog"("payment_id");
+CREATE INDEX IF NOT EXISTS "WebhookLog_payment_id_idx" ON "WebhookLog"("payment_id");
 
 -- CreateIndex
-CREATE INDEX "WebhookRetryAttempt_webhookLogId_idx" ON "WebhookRetryAttempt"("webhookLogId");
+CREATE INDEX IF NOT EXISTS "WebhookRetryAttempt_webhookLogId_idx" ON "WebhookRetryAttempt"("webhookLogId");
 
 -- AddForeignKey
 ALTER TABLE "OTP" ADD CONSTRAINT "OTP_merchantId_fkey" FOREIGN KEY ("merchantId") REFERENCES "Merchant"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

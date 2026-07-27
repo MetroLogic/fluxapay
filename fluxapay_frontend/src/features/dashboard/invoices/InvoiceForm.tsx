@@ -1,17 +1,23 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Invoice, LineItem } from "./invoices-mock";
+import { useState, useEffect, useCallback } from "react";
+import { Invoice, LineItem } from "./types";
 import { Button } from "@/components/Button";
-import { ChevronUp, ChevronDown } from "lucide-react";
+import { ChevronUp, ChevronDown, RefreshCw } from "lucide-react";
+import { useFxRate } from "@/hooks/useFxRate";
 
 interface InvoiceFormProps {
   onSubmit: (invoice: Omit<Invoice, "id" | "invoice_number" | "payment_link" | "created_at">) => void;
   onCancel: () => void;
 }
 
-const CURRENCIES = ["USD", "EUR", "GBP", "NGN", "KES", "GHS"];
+const FIAT_CURRENCIES = ["USD", "EUR", "GBP", "NGN", "KES", "GHS"];
+const CRYPTO_CURRENCIES = ["USDC", "XLM"];
+const ALL_CURRENCIES = [...FIAT_CURRENCIES, ...CRYPTO_CURRENCIES];
 const DRAFT_KEY = "invoice_form_draft";
+
+const isCrypto = (c: string) => CRYPTO_CURRENCIES.includes(c);
+const getDecimalPlaces = (c: string) => (c === "XLM" ? 7 : c === "USDC" ? 7 : 2);
 
 const emptyLineItem = (): LineItem => ({ description: "", quantity: 1, unit_price: 0 });
 
@@ -38,7 +44,7 @@ function saveDraft(state: DraftState) {
   try {
     localStorage.setItem(DRAFT_KEY, JSON.stringify(state));
   } catch {
-    // storage quota exceeded — silently ignore
+    // storage quota exceeded
   }
 }
 
@@ -62,7 +68,8 @@ export const InvoiceForm = ({ onSubmit, onCancel }: InvoiceFormProps) => {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [hasDraft, setHasDraft] = useState(!!draft);
 
-  // Persist draft whenever form state changes
+  const { rateData, isLoading: isRateLoading, mutate: refreshRate } = useFxRate(currency);
+
   useEffect(() => {
     saveDraft({ customerName, customerEmail, currency, dueDate, notes, lineItems });
   }, [customerName, customerEmail, currency, dueDate, notes, lineItems]);
@@ -88,10 +95,26 @@ export const InvoiceForm = ({ onSubmit, onCancel }: InvoiceFormProps) => {
     });
   };
 
-  const total = lineItems.reduce(
-    (sum, item) => sum + Number(item.quantity) * Number(item.unit_price),
-    0
+  const convertPrice = useCallback(
+    (fiatPrice: number): number => {
+      if (!isCrypto(currency) || !rateData?.rate || rateData.rate === 0) return fiatPrice;
+      return fiatPrice / rateData.rate;
+    },
+    [currency, rateData?.rate],
   );
+
+  const convertedTotal = lineItems.reduce(
+    (sum, item) => sum + Number(item.quantity) * convertPrice(Number(item.unit_price)),
+    0,
+  );
+
+  const fiatTotal = lineItems.reduce(
+    (sum, item) => sum + Number(item.quantity) * Number(item.unit_price),
+    0,
+  );
+
+  const decimalPlaces = getDecimalPlaces(currency);
+  const displayTotal = isCrypto(currency) ? convertedTotal : fiatTotal;
 
   const validate = () => {
     const errs: Record<string, string> = {};
@@ -121,9 +144,11 @@ export const InvoiceForm = ({ onSubmit, onCancel }: InvoiceFormProps) => {
       line_items: lineItems.map((item) => ({
         description: item.description,
         quantity: Number(item.quantity),
-        unit_price: Number(item.unit_price),
+        unit_price: isCrypto(currency)
+          ? Number(convertPrice(Number(item.unit_price)).toFixed(decimalPlaces))
+          : Number(item.unit_price),
       })),
-      total_amount: total,
+      total_amount: Number(displayTotal.toFixed(decimalPlaces)),
       currency,
       due_date: new Date(dueDate).toISOString(),
       notes: notes || undefined,
@@ -147,6 +172,10 @@ export const InvoiceForm = ({ onSubmit, onCancel }: InvoiceFormProps) => {
     setHasDraft(false);
   };
 
+  const handleCurrencyChange = (newCurrency: string) => {
+    setCurrency(newCurrency);
+  };
+
   const inputClass =
     "h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring";
   const labelClass = "mb-1 block text-sm font-medium";
@@ -154,7 +183,6 @@ export const InvoiceForm = ({ onSubmit, onCancel }: InvoiceFormProps) => {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5 max-h-[70vh] overflow-y-auto pr-1">
-      {/* Draft restore banner */}
       {hasDraft && (
         <div className="flex items-center justify-between rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-800">
           <span>Draft restored from a previous session.</span>
@@ -199,11 +227,18 @@ export const InvoiceForm = ({ onSubmit, onCancel }: InvoiceFormProps) => {
           <select
             className={inputClass}
             value={currency}
-            onChange={(e) => setCurrency(e.target.value)}
+            onChange={(e) => handleCurrencyChange(e.target.value)}
           >
-            {CURRENCIES.map((c) => (
-              <option key={c} value={c}>{c}</option>
-            ))}
+            <optgroup label="Fiat">
+              {FIAT_CURRENCIES.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </optgroup>
+            <optgroup label="Crypto">
+              {CRYPTO_CURRENCIES.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </optgroup>
           </select>
         </div>
         <div>
@@ -217,6 +252,34 @@ export const InvoiceForm = ({ onSubmit, onCancel }: InvoiceFormProps) => {
           {errors.dueDate && <p className={errorClass}>{errors.dueDate}</p>}
         </div>
       </div>
+
+      {/* FX Rate Banner */}
+      {isCrypto(currency) && (
+        <div className="flex items-center justify-between rounded-lg border border-primary/20 bg-primary/5 px-4 py-3 text-sm">
+          <div>
+            <p className="font-medium">
+              1 {currency} ≈ {rateData?.rate?.toFixed(2) ?? "—"} {FIAT_CURRENCIES[0]}
+            </p>
+            {isRateLoading && (
+              <p className="text-xs text-muted-foreground">Fetching live rate...</p>
+            )}
+            {rateData?.updatedAt && !isRateLoading && (
+              <p className="text-xs text-muted-foreground">
+                Updated {new Date(rateData.updatedAt).toLocaleTimeString()}
+              </p>
+            )}
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => refreshRate()}
+            disabled={isRateLoading}
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${isRateLoading ? "animate-spin" : ""}`} />
+          </Button>
+        </div>
+      )}
 
       {/* Line Items */}
       <div>
@@ -233,7 +296,6 @@ export const InvoiceForm = ({ onSubmit, onCancel }: InvoiceFormProps) => {
         <div className="space-y-3">
           {lineItems.map((item, index) => (
             <div key={index} className="grid grid-cols-[20px_1fr_80px_90px_32px] gap-2 items-start">
-              {/* Reorder controls */}
               <div className="flex flex-col gap-0.5 pt-1">
                 <button
                   type="button"
@@ -285,7 +347,7 @@ export const InvoiceForm = ({ onSubmit, onCancel }: InvoiceFormProps) => {
                   className={inputClass}
                   placeholder="Unit price"
                   min={0}
-                  step="0.01"
+                  step={isCrypto(currency) ? "0.0000001" : "0.01"}
                   value={item.unit_price}
                   onChange={(e) => updateLineItem(index, "unit_price", e.target.value)}
                 />
@@ -308,12 +370,29 @@ export const InvoiceForm = ({ onSubmit, onCancel }: InvoiceFormProps) => {
       </div>
 
       {/* Total */}
-      <div className="rounded-lg border bg-muted/30 px-4 py-3 flex items-center justify-between">
-        <span className="text-sm text-muted-foreground">Total</span>
-        <span className="text-lg font-bold">
-          {total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{" "}
-          {currency}
-        </span>
+      <div className="rounded-lg border bg-muted/30 px-4 py-3 space-y-1">
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-muted-foreground">Total</span>
+          <span className="text-lg font-bold">
+            {displayTotal.toLocaleString(undefined, {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: decimalPlaces,
+            })}{" "}
+            {currency}
+          </span>
+        </div>
+        {isCrypto(currency) && rateData?.rate && (
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span>Fiat equivalent</span>
+            <span>
+              {fiatTotal.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}{" "}
+              {FIAT_CURRENCIES[0]}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Notes */}

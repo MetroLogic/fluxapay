@@ -1,14 +1,15 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import Input from "@/components/Input";
 import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
-import { api, ApiError, clearToken } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import { logout, getToken } from "@/lib/auth";
 import { DOCS_URLS } from "@/lib/docs";
 import { isValidHttpsWebhookUrl } from "@/lib/webhookUrl";
+import { SettingsTabs, type TabId } from "./SettingsTabs";
 
 import {
   Copy,
@@ -23,6 +24,8 @@ import {
 } from "lucide-react";
 
 export default function SettingsPage() {
+  const [activeTab, setActiveTab] = useState<TabId>("profile");
+
   // Account Details State
   const [businessName, setBusinessName] = useState("");
   const [contactEmail, setContactEmail] = useState("");
@@ -32,8 +35,11 @@ export default function SettingsPage() {
   const [settlementSchedule, setSettlementSchedule] = useState<
     "daily" | "weekly"
   >("daily");
-  const [settlementDay, setSettlementDay] = useState<number>(1); // Default to Monday
+  const [settlementDay, setSettlementDay] = useState<number>(1);
   const [nextSettlementDate, setNextSettlementDate] = useState<string>("");
+
+  // Initial snapshot for dirty tracking
+  const [initialSnapshot, setInitialSnapshot] = useState<string>("");
 
   // API Key State
   const [apiKey, setApiKey] = useState("Loading...");
@@ -81,7 +87,38 @@ export default function SettingsPage() {
   // Loading state
   const [isLoading, setIsLoading] = useState(true);
 
-  // Load merchant data on mount
+  const currentSnapshot = useMemo(
+    () =>
+      JSON.stringify({
+        businessName,
+        contactEmail,
+        settlementSchedule,
+        settlementDay,
+        checkoutLogoUrl,
+        checkoutAccentColor,
+        webhookUrl,
+        accountName,
+        accountNumber,
+        bankName,
+        bankCode,
+      }),
+    [
+      businessName,
+      contactEmail,
+      settlementSchedule,
+      settlementDay,
+      checkoutLogoUrl,
+      checkoutAccentColor,
+      webhookUrl,
+      accountName,
+      accountNumber,
+      bankName,
+      bankCode,
+    ],
+  );
+
+  const hasUnsavedChanges = initialSnapshot !== "" && currentSnapshot !== initialSnapshot;
+
   useEffect(() => {
     loadMerchantData();
     setSessionNote(getSessionNote());
@@ -89,22 +126,15 @@ export default function SettingsPage() {
 
   const getSessionNote = () => {
     if (typeof window === "undefined") return "Current session active";
-
     try {
       const token = getToken();
       if (!token) return "No active session token found";
-
       const payloadSegment = token.split(".")[1];
       if (!payloadSegment) return "Current session active";
-
       const base64 = payloadSegment.replace(/-/g, "+").replace(/_/g, "/");
-      const normalized = base64.padEnd(
-        Math.ceil(base64.length / 4) * 4,
-        "=",
-      );
+      const normalized = base64.padEnd(Math.ceil(base64.length / 4) * 4, "=");
       const payload = JSON.parse(atob(normalized)) as { iat?: number };
       if (!payload.iat) return "Current session active";
-
       return `Last login: ${new Date(payload.iat * 1000).toLocaleString()}`;
     } catch {
       return "Current session active";
@@ -151,7 +181,6 @@ export default function SettingsPage() {
       );
       setCheckoutLogoError("");
 
-      // Fetch settlement summary for next settlement date
       try {
         const summary = await api.settlements.summary();
         if (summary.next_settlement_date) {
@@ -167,11 +196,9 @@ export default function SettingsPage() {
     }
   };
 
-  // Handle Account Details Save
   const handleAccountSave = async () => {
     setIsSavingAccount(true);
     setAccountError("");
-    
     try {
       await api.merchant.updateProfile({
         business_name: businessName,
@@ -180,14 +207,13 @@ export default function SettingsPage() {
         settlement_day:
           settlementSchedule === "weekly" ? settlementDay : undefined,
       });
-      
       setAccountSaved(true);
       setTimeout(() => setAccountSaved(false), 3000);
+      setInitialSnapshot(currentSnapshot);
     } catch (error) {
       const message =
         error instanceof ApiError ? error.message : "Failed to save changes";
       setAccountError(message);
-      console.error("Failed to save account details:", error);
     } finally {
       setIsSavingAccount(false);
     }
@@ -196,7 +222,6 @@ export default function SettingsPage() {
   const handleBankSave = async () => {
     setIsSavingBank(true);
     setBankError("");
-    
     try {
       await api.merchant.addBankAccount({
         account_name: accountName,
@@ -206,9 +231,9 @@ export default function SettingsPage() {
         currency,
         country,
       });
-      
       setBankSaved(true);
       setTimeout(() => setBankSaved(false), 3000);
+      setInitialSnapshot(currentSnapshot);
     } catch (error) {
       const message =
         error instanceof ApiError ? error.message : "Failed to save bank details";
@@ -239,6 +264,7 @@ export default function SettingsPage() {
       });
       setCheckoutBrandingSaved(true);
       setTimeout(() => setCheckoutBrandingSaved(false), 3000);
+      setInitialSnapshot(currentSnapshot);
     } catch (error) {
       const message =
         error instanceof ApiError ? error.message : "Failed to save branding";
@@ -248,21 +274,17 @@ export default function SettingsPage() {
     }
   };
 
-  // Handle API Key Copy
   const handleCopyApiKey = () => {
     navigator.clipboard.writeText(apiKey);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // Handle API Key Regeneration
   const handleRegenerateApiKey = async () => {
     setIsRegenerating(true);
-    
     try {
       const response = await api.keys.regenerate();
       setApiKey(response.api_key);
-      
       setShowRegenerateModal(false);
       setKeyRegenerated(true);
       setTimeout(() => setKeyRegenerated(false), 5000);
@@ -274,7 +296,6 @@ export default function SettingsPage() {
     }
   };
 
-  // Handle Webhook URL Change
   const handleWebhookUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setWebhookUrl(value);
@@ -286,23 +307,20 @@ export default function SettingsPage() {
     setWebhookError(v.ok ? "" : v.message);
   };
 
-  // Handle Webhook Save
   const handleWebhookSave = async () => {
     if (webhookError) return;
     setIsSavingWebhook(true);
-    
     try {
       await api.merchant.updateWebhook(webhookUrl);
-      
       setWebhookSaved(true);
       setTimeout(() => setWebhookSaved(false), 3000);
+      setInitialSnapshot(currentSnapshot);
     } catch (error) {
       const message =
         error instanceof ApiError
           ? error.message
           : "Failed to save webhook URL";
       setWebhookError(message);
-      console.error("Failed to save webhook URL:", error);
     } finally {
       setIsSavingWebhook(false);
     }
@@ -318,7 +336,6 @@ export default function SettingsPage() {
     try {
       await api.auth.logoutAllSessions();
     } catch (error) {
-      // Backend support is optional; still clear local session.
       if (error instanceof ApiError && error.status !== 404) {
         console.error("Logout-all request failed:", error);
       }
@@ -330,7 +347,6 @@ export default function SettingsPage() {
   const handleRequestDeletion = async () => {
     setIsRequestingDeletion(true);
     setDeletionRequestError("");
-
     try {
       await api.merchant.requestDeletion();
       setDeletionRequestScheduled(true);
@@ -345,6 +361,10 @@ export default function SettingsPage() {
       setIsRequestingDeletion(false);
     }
   };
+
+  const handleTabChange = useCallback((tab: TabId) => {
+    setActiveTab(tab);
+  }, []);
 
   if (isLoading) {
     return (
@@ -367,609 +387,492 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Page Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Settings</h2>
-          <p className="text-muted-foreground">
-            Manage your account preferences and configurations.
-          </p>
-        </div>
-      </div>
-
-      {/* Account Details Section */}
-      <div className="space-y-4 p-6 rounded-2xl border bg-muted/20">
-        <div className="flex items-center gap-2 text-primary font-semibold mb-4">
-          <Shield className="h-5 w-5" />
-          <h3 className="text-lg">Account Details</h3>
-        </div>
-
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium mb-2">
-              Business Name
-            </label>
-            <Input
-              type="text"
-              value={businessName}
-              onChange={(e) => setBusinessName(e.target.value)}
-              placeholder="Enter your business name"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium mb-2">
-              Contact Email
-            </label>
-            <Input
-              type="email"
-              value={contactEmail}
-              onChange={(e) => setContactEmail(e.target.value)}
-              placeholder="contact@example.com"
-            />
-          </div>
-
-          <div className="flex items-center gap-3 pt-2">
-            <Button
-              variant="dark"
-              onClick={handleAccountSave}
-              disabled={isSavingAccount}
-              className="gap-2"
-            >
-              {isSavingAccount && (
-                <svg
-                  className="h-4 w-4 animate-spin"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="3"
-                >
-                  <circle cx="12" cy="12" r="10" className="opacity-30" />
-                  <path d="M22 12a10 10 0 0 1-10 10" />
-                </svg>
-              )}
-              {accountSaved && <CheckCircle2 className="h-4 w-4" />}
-              {isSavingAccount
-                ? "Saving..."
-                : accountSaved
-                  ? "Saved!"
-                  : "Save Changes"}
-            </Button>
-          </div>
-
-          {accountError && (
-            <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-800">
-              <p className="text-sm">{accountError}</p>
+    <SettingsTabs
+      activeTab={activeTab}
+      onTabChange={handleTabChange}
+      hasUnsavedChanges={hasUnsavedChanges}
+    >
+      {activeTab === "profile" && (
+        <div className="space-y-6">
+          {/* Account Details */}
+          <div className="space-y-4 p-6 rounded-2xl border bg-muted/20">
+            <div className="flex items-center gap-2 text-primary font-semibold mb-4">
+              <Shield className="h-5 w-5" />
+              <h3 className="text-lg">Account Details</h3>
             </div>
-          )}
-        </div>
-      </div>
-
-      {/* Hosted checkout branding */}
-      <div className="space-y-4 p-6 rounded-2xl border bg-muted/20">
-        <div className="flex items-center gap-2 text-primary font-semibold mb-4">
-          <Palette className="h-5 w-5" />
-          <h3 className="text-lg">Hosted checkout</h3>
-        </div>
-        <p className="text-sm text-muted-foreground mb-4">
-          Logo and accent color appear on your customer-facing payment page
-          (<code className="text-xs">/pay/…</code>). If the logo fails to load,
-          customers see your business initial instead.
-        </p>
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium mb-2">Logo URL</label>
-            <Input
-              type="url"
-              value={checkoutLogoUrl}
-              onChange={(e) => handleCheckoutLogoChange(e.target.value)}
-              placeholder="https://cdn.example.com/logo.png"
-              error={checkoutLogoError}
-            />
-            <p className="text-xs text-muted-foreground mt-2">
-              Must be a public <span className="font-medium">https</span> image
-              URL (PNG, SVG, or WebP recommended).
-            </p>
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-2">
-              Primary accent color
-            </label>
-            <div className="flex flex-wrap items-center gap-3">
-              <input
-                type="color"
-                value={
-                  /^#[0-9a-fA-F]{6}$/.test(checkoutAccentColor)
-                    ? checkoutAccentColor
-                    : "#2563eb"
-                }
-                onChange={(e) => setCheckoutAccentColor(e.target.value)}
-                className="h-10 w-14 cursor-pointer rounded border border-input bg-background"
-                aria-label="Pick accent color"
-              />
-              <Input
-                type="text"
-                value={checkoutAccentColor}
-                onChange={(e) => setCheckoutAccentColor(e.target.value)}
-                placeholder="#2563eb"
-                className="max-w-[140px] font-mono text-sm"
-              />
-            </div>
-            <p className="text-xs text-muted-foreground mt-2">
-              Hex format: <code className="text-xs">#RRGGBB</code> or{" "}
-              <code className="text-xs">#RGB</code>
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-3 pt-2">
-            <Button
-              variant="dark"
-              onClick={handleCheckoutBrandingSave}
-              disabled={!!checkoutLogoError || isSavingCheckoutBranding}
-              className="gap-2"
-            >
-              {isSavingCheckoutBranding && (
-                <svg
-                  className="h-4 w-4 animate-spin"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="3"
-                >
-                  <circle cx="12" cy="12" r="10" className="opacity-30" />
-                  <path d="M22 12a10 10 0 0 1-10 10" />
-                </svg>
-              )}
-              {checkoutBrandingSaved && <CheckCircle2 className="h-4 w-4" />}
-              {isSavingCheckoutBranding
-                ? "Saving…"
-                : checkoutBrandingSaved
-                  ? "Saved!"
-                  : "Save checkout appearance"}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setCheckoutLogoUrl("");
-                setCheckoutAccentColor("#2563eb");
-                setCheckoutLogoError("");
-              }}
-            >
-              Reset to defaults
-            </Button>
-          </div>
-        </div>
-      </div>
-
-      {/* Settlement Schedule Section */}
-      <div className="space-y-4 p-6 rounded-2xl border bg-muted/20">
-        <div className="flex items-center gap-2 text-primary font-semibold mb-4">
-          <CalendarClock className="h-5 w-5" />
-          <h3 className="text-lg">Settlement Schedule</h3>
-        </div>
-
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-2">
-                Schedule Frequency
-              </label>
-              <select
-                value={settlementSchedule}
-                onChange={(e) =>
-                  setSettlementSchedule(e.target.value as "daily" | "weekly")
-                }
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <option value="daily">Daily</option>
-                <option value="weekly">Weekly</option>
-              </select>
-            </div>
-
-            {settlementSchedule === "weekly" && (
+            <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium mb-2">
-                  Settlement Day
-                </label>
-                <select
-                  value={settlementDay}
-                  onChange={(e) => setSettlementDay(parseInt(e.target.value))}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                <label className="block text-sm font-medium mb-2">Business Name</label>
+                <Input
+                  type="text"
+                  value={businessName}
+                  onChange={(e) => setBusinessName(e.target.value)}
+                  placeholder="Enter your business name"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">Contact Email</label>
+                <Input
+                  type="email"
+                  value={contactEmail}
+                  onChange={(e) => setContactEmail(e.target.value)}
+                  placeholder="contact@example.com"
+                />
+              </div>
+              <div className="flex items-center gap-3 pt-2">
+                <Button
+                  variant="dark"
+                  onClick={handleAccountSave}
+                  disabled={isSavingAccount}
+                  className="gap-2"
                 >
-                  <option value={0}>Sunday</option>
-                  <option value={1}>Monday</option>
-                  <option value={2}>Tuesday</option>
-                  <option value={3}>Wednesday</option>
-                  <option value={4}>Thursday</option>
-                  <option value={5}>Friday</option>
-                  <option value={6}>Saturday</option>
-                </select>
+                  {isSavingAccount && (
+                    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                      <circle cx="12" cy="12" r="10" className="opacity-30" />
+                      <path d="M22 12a10 10 0 0 1-10 10" />
+                    </svg>
+                  )}
+                  {accountSaved && <CheckCircle2 className="h-4 w-4" />}
+                  {isSavingAccount ? "Saving..." : accountSaved ? "Saved!" : "Save Changes"}
+                </Button>
+              </div>
+              {accountError && (
+                <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-800">
+                  <p className="text-sm">{accountError}</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Hosted Checkout Branding */}
+          <div className="space-y-4 p-6 rounded-2xl border bg-muted/20">
+            <div className="flex items-center gap-2 text-primary font-semibold mb-4">
+              <Palette className="h-5 w-5" />
+              <h3 className="text-lg">Hosted Checkout</h3>
+            </div>
+            <p className="text-sm text-muted-foreground mb-4">
+              Logo and accent color appear on your customer-facing payment page
+              (<code className="text-xs">/pay/...</code>).
+            </p>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">Logo URL</label>
+                <Input
+                  type="url"
+                  value={checkoutLogoUrl}
+                  onChange={(e) => handleCheckoutLogoChange(e.target.value)}
+                  placeholder="https://cdn.example.com/logo.png"
+                  error={checkoutLogoError}
+                />
+                <p className="text-xs text-muted-foreground mt-2">
+                  Must be a public <span className="font-medium">https</span> image URL.
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">Primary Accent Color</label>
+                <div className="flex flex-wrap items-center gap-3">
+                  <input
+                    type="color"
+                    value={/^#[0-9a-fA-F]{6}$/.test(checkoutAccentColor) ? checkoutAccentColor : "#2563eb"}
+                    onChange={(e) => setCheckoutAccentColor(e.target.value)}
+                    className="h-10 w-14 cursor-pointer rounded border border-input bg-background"
+                    aria-label="Pick accent color"
+                  />
+                  <Input
+                    type="text"
+                    value={checkoutAccentColor}
+                    onChange={(e) => setCheckoutAccentColor(e.target.value)}
+                    placeholder="#2563eb"
+                    className="max-w-[140px] font-mono text-sm"
+                  />
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-3 pt-2">
+                <Button
+                  variant="dark"
+                  onClick={handleCheckoutBrandingSave}
+                  disabled={!!checkoutLogoError || isSavingCheckoutBranding}
+                  className="gap-2"
+                >
+                  {isSavingCheckoutBranding && (
+                    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                      <circle cx="12" cy="12" r="10" className="opacity-30" />
+                      <path d="M22 12a10 10 0 0 1-10 10" />
+                    </svg>
+                  )}
+                  {checkoutBrandingSaved && <CheckCircle2 className="h-4 w-4" />}
+                  {isSavingCheckoutBranding ? "Saving..." : checkoutBrandingSaved ? "Saved!" : "Save checkout appearance"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setCheckoutLogoUrl("");
+                    setCheckoutAccentColor("#2563eb");
+                    setCheckoutLogoError("");
+                  }}
+                >
+                  Reset to defaults
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Settlement Schedule */}
+          <div className="space-y-4 p-6 rounded-2xl border bg-muted/20">
+            <div className="flex items-center gap-2 text-primary font-semibold mb-4">
+              <CalendarClock className="h-5 w-5" />
+              <h3 className="text-lg">Settlement Schedule</h3>
+            </div>
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2">Schedule Frequency</label>
+                  <select
+                    value={settlementSchedule}
+                    onChange={(e) => setSettlementSchedule(e.target.value as "daily" | "weekly")}
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  >
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                  </select>
+                </div>
+                {settlementSchedule === "weekly" && (
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Settlement Day</label>
+                    <select
+                      value={settlementDay}
+                      onChange={(e) => setSettlementDay(parseInt(e.target.value))}
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    >
+                      <option value={0}>Sunday</option>
+                      <option value={1}>Monday</option>
+                      <option value={2}>Tuesday</option>
+                      <option value={3}>Wednesday</option>
+                      <option value={4}>Thursday</option>
+                      <option value={5}>Friday</option>
+                      <option value={6}>Saturday</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+              {nextSettlementDate && (
+                <div className="p-4 rounded-xl bg-primary/5 border border-primary/10">
+                  <div className="flex items-center gap-2 text-sm text-primary font-medium">
+                    <Clock className="h-4 w-4" />
+                    <span>
+                      Next Scheduled Settlement:{" "}
+                      {new Date(nextSettlementDate).toLocaleDateString(undefined, {
+                        weekday: "long",
+                        year: "numeric",
+                        month: "long",
+                        day: "numeric",
+                      })}
+                    </span>
+                  </div>
+                </div>
+              )}
+              <div className="flex items-center gap-3 pt-2">
+                <Button
+                  variant="dark"
+                  onClick={handleAccountSave}
+                  disabled={isSavingAccount}
+                  className="gap-2"
+                >
+                  {isSavingAccount && (
+                    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                      <circle cx="12" cy="12" r="10" className="opacity-30" />
+                      <path d="M22 12a10 10 0 0 1-10 10" />
+                    </svg>
+                  )}
+                  {accountSaved && <CheckCircle2 className="h-4 w-4" />}
+                  {isSavingAccount ? "Saving..." : "Update Schedule"}
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Payout Bank Details */}
+          <div className="space-y-4 p-6 rounded-2xl border bg-muted/20">
+            <div className="flex items-center gap-2 text-primary font-semibold mb-4">
+              <Palette className="h-5 w-5" />
+              <h3 className="text-lg">Payout Bank Details</h3>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">Account Holder Name</label>
+                <Input
+                  type="text"
+                  value={accountName}
+                  onChange={(e) => setAccountName(e.target.value)}
+                  placeholder="Full name on bank account"
+                />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2">Bank Name</label>
+                  <Input type="text" value={bankName} onChange={(e) => setBankName(e.target.value)} placeholder="e.g. Zenith Bank" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2">Bank Code (Optional)</label>
+                  <Input type="text" value={bankCode} onChange={(e) => setBankCode(e.target.value)} placeholder="e.g. 057" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">Account Number</label>
+                <Input type="text" value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} placeholder="Enter account number" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2">Country</label>
+                  <Input value={country} readOnly className="bg-muted/50" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2">Currency</label>
+                  <Input value={currency} readOnly className="bg-muted/50" />
+                </div>
+              </div>
+              <div className="flex items-center gap-3 pt-2">
+                <Button variant="dark" onClick={handleBankSave} disabled={isSavingBank} className="gap-2">
+                  {isSavingBank && (
+                    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                      <circle cx="12" cy="12" r="10" className="opacity-30" />
+                      <path d="M22 12a10 10 0 0 1-10 10" />
+                    </svg>
+                  )}
+                  {bankSaved && <CheckCircle2 className="h-4 w-4" />}
+                  {isSavingBank ? "Saving..." : bankSaved ? "Saved!" : "Save Bank Details"}
+                </Button>
+              </div>
+              {bankError && (
+                <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-800">
+                  <p className="text-sm">{bankError}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === "security" && (
+        <div className="space-y-6">
+          <div className="space-y-4 p-6 rounded-2xl border bg-muted/20">
+            <div className="flex items-center gap-2 text-primary font-semibold mb-4">
+              <Shield className="h-5 w-5" />
+              <h3 className="text-lg">Security Settings</h3>
+            </div>
+            <div className="space-y-4">
+              <div className="rounded-lg border bg-background p-4">
+                <p className="font-medium">Session status</p>
+                <p className="text-sm text-muted-foreground mt-1">{sessionNote}</p>
+              </div>
+              <div className="flex items-center justify-between p-4 rounded-lg border bg-background">
+                <div>
+                  <p className="font-medium">Two-Factor Authentication</p>
+                  <p className="text-sm text-muted-foreground">Add an extra layer of security to your account</p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={twoFactorEnabled}
+                    onChange={(e) => setTwoFactorEnabled(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-[#5649DF]/20 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#5649DF]"></div>
+                </label>
+              </div>
+              <div className="rounded-lg border bg-background p-4 space-y-3">
+                <div>
+                  <p className="font-medium">Session controls</p>
+                  <p className="text-sm text-muted-foreground">Sign out this device or invalidate all active sessions.</p>
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  <Button variant="outline" onClick={handleSignOutCurrentSession} disabled={isSigningOut || isSigningOutAll}>
+                    {isSigningOut ? "Signing out..." : "Sign out this session"}
+                  </Button>
+                  <Button variant="destructive" onClick={handleSignOutAllSessions} disabled={isSigningOut || isSigningOutAll}>
+                    {isSigningOutAll ? "Signing out..." : "Sign out all sessions"}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Danger Zone */}
+          <div className="space-y-4 p-6 rounded-2xl border bg-muted/20">
+            <div className="flex items-center gap-2 text-red-700 font-semibold mb-4">
+              <AlertTriangle className="h-5 w-5" />
+              <h3 className="text-lg">Danger Zone</h3>
+            </div>
+            <div className="rounded-lg border bg-background p-4">
+              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="font-medium">Request account deletion</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Schedule your account for admin review, deletion, and PII anonymization.
+                  </p>
+                </div>
+                <Button
+                  variant="destructive"
+                  onClick={() => {
+                    setDeletionRequestError("");
+                    setShowDeletionModal(true);
+                  }}
+                  disabled={deletionRequestScheduled}
+                  className="shrink-0"
+                >
+                  {deletionRequestScheduled ? "Deletion Requested" : "Request Account Deletion"}
+                </Button>
+              </div>
+              {deletionRequestScheduled && (
+                <div className="mt-4 flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 p-3 text-green-800">
+                  <CheckCircle2 className="h-4 w-4" />
+                  <p className="text-sm font-medium">Account deletion request scheduled for admin review.</p>
+                </div>
+              )}
+              {deletionRequestError && (
+                <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-red-800">
+                  <p className="text-sm">{deletionRequestError}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === "notifications" && (
+        <div className="space-y-4 p-6 rounded-2xl border bg-muted/20">
+          <div className="flex items-center gap-2 text-primary font-semibold mb-4">
+            <h3 className="text-lg">Notification Preferences</h3>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Configure how you receive payment notifications, settlement alerts, and account updates.
+          </p>
+          <div className="rounded-lg border bg-background p-4 text-sm text-muted-foreground">
+            Notification preferences coming soon. Currently, you will receive email notifications for payment confirmations and settlement completions.
+          </div>
+        </div>
+      )}
+
+      {activeTab === "webhooks" && (
+        <div className="space-y-4 p-6 rounded-2xl border bg-muted/20">
+          <div className="flex items-center gap-2 text-primary font-semibold mb-4">
+            <Webhook className="h-5 w-5" />
+            <h3 className="text-lg">Webhook Configuration</h3>
+          </div>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium mb-2">Webhook URL</label>
+              <Input
+                type="url"
+                value={webhookUrl}
+                onChange={handleWebhookUrlChange}
+                placeholder="https://your-domain.com/webhooks"
+                error={webhookError}
+              />
+              <p className="text-xs text-muted-foreground mt-2">
+                We&apos;ll send payment notifications to this public HTTPS endpoint. Learn how to{" "}
+                <Link
+                  href={DOCS_URLS.WEBHOOK_VERIFICATION}
+                  className="text-primary font-medium underline"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  verify webhook signatures
+                </Link>
+                . Use the Webhooks page to send a test delivery.
+              </p>
+            </div>
+            <div className="flex items-center gap-3 pt-2">
+              <Button
+                variant="dark"
+                onClick={handleWebhookSave}
+                disabled={!!webhookError || isSavingWebhook}
+                className="gap-2"
+              >
+                {isSavingWebhook && (
+                  <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                    <circle cx="12" cy="12" r="10" className="opacity-30" />
+                    <path d="M22 12a10 10 0 0 1-10 10" />
+                  </svg>
+                )}
+                {webhookSaved && <CheckCircle2 className="h-4 w-4" />}
+                {isSavingWebhook ? "Saving..." : webhookSaved ? "Saved!" : "Save Webhook URL"}
+              </Button>
+            </div>
+            {webhookError && (
+              <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-800">
+                <p className="text-sm">{webhookError}</p>
               </div>
             )}
           </div>
+        </div>
+      )}
 
-          {nextSettlementDate && (
-            <div className="p-4 rounded-xl bg-primary/5 border border-primary/10">
-              <div className="flex items-center gap-2 text-sm text-primary font-medium">
-                <Clock className="h-4 w-4" />
-                <span>
-                  Next Scheduled Settlement:{" "}
-                  {new Date(nextSettlementDate).toLocaleDateString(undefined, {
-                    weekday: "long",
-                    year: "numeric",
-                    month: "long",
-                    day: "numeric",
-                  })}
-                </span>
+      {activeTab === "api-keys" && (
+        <div className="space-y-4 p-6 rounded-2xl border bg-muted/20">
+          <div className="flex items-center gap-2 text-primary font-semibold mb-4">
+            <Key className="h-5 w-5" />
+            <h3 className="text-lg">API Keys</h3>
+          </div>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium mb-2">Live API Key</label>
+              <div className="flex gap-2">
+                <Input
+                  type="text"
+                  value={apiKey}
+                  readOnly
+                  className="font-mono text-sm bg-muted/50"
+                />
+                <Button variant="outline" onClick={handleCopyApiKey} className="gap-2 shrink-0">
+                  {copied ? (
+                    <>
+                      <CheckCircle2 className="h-4 w-4 text-green-600" />
+                      Copied
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="h-4 w-4" />
+                      Copy
+                    </>
+                  )}
+                </Button>
               </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                Keep your API key secure. Do not share it publicly.
+              </p>
             </div>
-          )}
-
-          <div className="flex items-center gap-3 pt-2">
-            <Button
-              variant="dark"
-              onClick={handleAccountSave}
-              disabled={isSavingAccount}
-              className="gap-2"
-            >
-              {isSavingAccount && (
-                <svg
-                  className="h-4 w-4 animate-spin"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="3"
-                >
-                  <circle cx="12" cy="12" r="10" className="opacity-30" />
-                  <path d="M22 12a10 10 0 0 1-10 10" />
-                </svg>
-              )}
-              {accountSaved && <CheckCircle2 className="h-4 w-4" />}
-              {isSavingAccount ? "Saving..." : "Update Schedule"}
-            </Button>
-          </div>
-        </div>
-      </div>
-
-      {/* Bank Account Details Section */}
-      <div className="space-y-4 p-6 rounded-2xl border bg-muted/20">
-        <div className="flex items-center gap-2 text-primary font-semibold mb-4">
-          <Palette className="h-5 w-5" />
-          <h3 className="text-lg">Payout Bank Details</h3>
-        </div>
-
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium mb-2">
-              Account Holder Name
-            </label>
-            <Input
-              type="text"
-              value={accountName}
-              onChange={(e) => setAccountName(e.target.value)}
-              placeholder="Full name on bank account"
-            />
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-2">
-                Bank Name
-              </label>
-              <Input
-                type="text"
-                value={bankName}
-                onChange={(e) => setBankName(e.target.value)}
-                placeholder="e.g. Zenith Bank"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-2">
-                Bank Code (Optional)
-              </label>
-              <Input
-                type="text"
-                value={bankCode}
-                onChange={(e) => setBankCode(e.target.value)}
-                placeholder="e.g. 057"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium mb-2">
-              Account Number
-            </label>
-            <Input
-              type="text"
-              value={accountNumber}
-              onChange={(e) => setAccountNumber(e.target.value)}
-              placeholder="Enter account number"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-2">Country</label>
-              <Input value={country} readOnly className="bg-muted/50" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-2">Currency</label>
-              <Input value={currency} readOnly className="bg-muted/50" />
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3 pt-2">
-            <Button
-              variant="dark"
-              onClick={handleBankSave}
-              disabled={isSavingBank}
-              className="gap-2"
-            >
-              {isSavingBank && (
-                <svg
-                  className="h-4 w-4 animate-spin"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="3"
-                >
-                  <circle cx="12" cy="12" r="10" className="opacity-30" />
-                  <path d="M22 12a10 10 0 0 1-10 10" />
-                </svg>
-              )}
-              {bankSaved && <CheckCircle2 className="h-4 w-4" />}
-              {isSavingBank ? "Saving..." : bankSaved ? "Saved!" : "Save Bank Details"}
-            </Button>
-          </div>
-
-          {bankError && (
-            <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-800">
-              <p className="text-sm">{bankError}</p>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* API Keys Section */}
-      <div className="space-y-4 p-6 rounded-2xl border bg-muted/20">
-        <div className="flex items-center gap-2 text-primary font-semibold mb-4">
-          <Key className="h-5 w-5" />
-          <h3 className="text-lg">API Keys</h3>
-        </div>
-
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium mb-2">
-              Live API Key
-            </label>
-            <div className="flex gap-2">
-              <Input
-                type="text"
-                value={apiKey}
-                readOnly
-                className="font-mono text-sm bg-muted/50"
-              />
-              <Button
-                variant="outline"
-                onClick={handleCopyApiKey}
-                className="gap-2 shrink-0"
-              >
-                {copied ? (
-                  <>
-                    <CheckCircle2 className="h-4 w-4 text-green-600" />
-                    Copied
-                  </>
-                ) : (
-                  <>
-                    <Copy className="h-4 w-4" />
-                    Copy
-                  </>
-                )}
+            <div className="pt-2">
+              <Button variant="destructive" onClick={() => setShowRegenerateModal(true)}>
+                Regenerate API Key
               </Button>
             </div>
-            <p className="text-xs text-muted-foreground mt-2">
-              Keep your API key secure. Do not share it publicly.
-            </p>
-          </div>
-
-          <div className="pt-2">
-            <Button
-              variant="destructive"
-              onClick={() => setShowRegenerateModal(true)}
-            >
-              Regenerate API Key
-            </Button>
-          </div>
-
-          {/* Success Message */}
-          {keyRegenerated && (
-            <div className="flex items-center gap-2 p-3 rounded-lg bg-green-50 border border-green-200 text-green-800 animate-in fade-in slide-in-from-top-2">
-              <CheckCircle2 className="h-4 w-4" />
-              <p className="text-sm font-medium">
-                API key regenerated successfully! Make sure to update your
-                integrations.
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Webhook Configuration Section */}
-      <div className="space-y-4 p-6 rounded-2xl border bg-muted/20">
-        <div className="flex items-center gap-2 text-primary font-semibold mb-4">
-          <Webhook className="h-5 w-5" />
-          <h3 className="text-lg">Webhook Configuration</h3>
-        </div>
-
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium mb-2">
-              Webhook URL
-            </label>
-            <Input
-              type="url"
-              value={webhookUrl}
-              onChange={handleWebhookUrlChange}
-              placeholder="https://your-domain.com/webhooks"
-              error={webhookError}
-            />
-            <p className="text-xs text-muted-foreground mt-2">
-              We&apos;ll send payment notifications to this public HTTPS endpoint. Learn how to{" "}
-              <Link
-                href={DOCS_URLS.WEBHOOK_VERIFICATION}
-                className="text-primary font-medium underline"
-                target="_blank"
-                rel="noreferrer"
-              >
-                verify webhook signatures
-              </Link>
-              . Use the Webhooks page to send a test delivery.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-3 pt-2">
-            <Button
-              variant="dark"
-              onClick={handleWebhookSave}
-              disabled={!!webhookError || isSavingWebhook}
-              className="gap-2"
-            >
-              {isSavingWebhook && (
-                <svg
-                  className="h-4 w-4 animate-spin"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="3"
-                >
-                  <circle cx="12" cy="12" r="10" className="opacity-30" />
-                  <path d="M22 12a10 10 0 0 1-10 10" />
-                </svg>
-              )}
-              {webhookSaved && <CheckCircle2 className="h-4 w-4" />}
-              {isSavingWebhook
-                ? "Saving..."
-                : webhookSaved
-                  ? "Saved!"
-                  : "Save Webhook URL"}
-            </Button>
-          </div>
-
-          {webhookError && (
-            <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-800">
-              <p className="text-sm">{webhookError}</p>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Security Settings Section */}
-      <div className="space-y-4 p-6 rounded-2xl border bg-muted/20">
-        <div className="flex items-center gap-2 text-primary font-semibold mb-4">
-          <Shield className="h-5 w-5" />
-          <h3 className="text-lg">Security Settings</h3>
-        </div>
-
-        <div className="space-y-4">
-          <div className="rounded-lg border bg-background p-4">
-            <p className="font-medium">Session status</p>
-            <p className="text-sm text-muted-foreground mt-1">{sessionNote}</p>
-          </div>
-
-          <div className="flex items-center justify-between p-4 rounded-lg border bg-background">
-            <div>
-              <p className="font-medium">Two-Factor Authentication</p>
-              <p className="text-sm text-muted-foreground">
-                Add an extra layer of security to your account
-              </p>
-            </div>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                checked={twoFactorEnabled}
-                onChange={(e) => setTwoFactorEnabled(e.target.checked)}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-[#5649DF]/20 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#5649DF]"></div>
-            </label>
-          </div>
-
-          <div className="rounded-lg border bg-background p-4 space-y-3">
-            <div>
-              <p className="font-medium">Session controls</p>
-              <p className="text-sm text-muted-foreground">
-                Sign out this device or invalidate all active sessions.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-3">
-              <Button
-                variant="outline"
-                onClick={handleSignOutCurrentSession}
-                disabled={isSigningOut || isSigningOutAll}
-              >
-                {isSigningOut ? "Signing out..." : "Sign out this session"}
-              </Button>
-              <Button
-                variant="destructive"
-                onClick={handleSignOutAllSessions}
-                disabled={isSigningOut || isSigningOutAll}
-              >
-                {isSigningOutAll ? "Signing out..." : "Sign out all sessions"}
-              </Button>
-            </div>
+            {keyRegenerated && (
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-green-50 border border-green-200 text-green-800 animate-in fade-in slide-in-from-top-2">
+                <CheckCircle2 className="h-4 w-4" />
+                <p className="text-sm font-medium">
+                  API key regenerated successfully! Make sure to update your integrations.
+                </p>
+              </div>
+            )}
           </div>
         </div>
-      </div>
+      )}
 
-      {/* Danger Zone Section */}
-      <div className="space-y-4 p-6 rounded-2xl border bg-muted/20">
-        <div className="flex items-center gap-2 text-red-700 font-semibold mb-4">
-          <AlertTriangle className="h-5 w-5" />
-          <h3 className="text-lg">Danger Zone</h3>
-        </div>
-
-        <div className="rounded-lg border bg-background p-4">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <p className="font-medium">Request account deletion</p>
-              <p className="text-sm text-muted-foreground mt-1">
-                Schedule your account for admin review, deletion, and PII
-                anonymization.
-              </p>
-            </div>
-            <Button
-              variant="destructive"
-              onClick={() => {
-                setDeletionRequestError("");
-                setShowDeletionModal(true);
-              }}
-              disabled={deletionRequestScheduled}
-              className="shrink-0"
-            >
-              {deletionRequestScheduled
-                ? "Deletion Requested"
-                : "Request Account Deletion"}
-            </Button>
+      {activeTab === "kyc" && (
+        <div className="space-y-4 p-6 rounded-2xl border bg-muted/20">
+          <div className="flex items-center gap-2 text-primary font-semibold mb-4">
+            <h3 className="text-lg">KYC Documents</h3>
           </div>
-
-          {deletionRequestScheduled && (
-            <div className="mt-4 flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 p-3 text-green-800">
-              <CheckCircle2 className="h-4 w-4" />
-              <p className="text-sm font-medium">
-                Account deletion request scheduled for admin review.
-              </p>
-            </div>
-          )}
-
-          {deletionRequestError && (
-            <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-red-800">
-              <p className="text-sm">{deletionRequestError}</p>
-            </div>
-          )}
+          <p className="text-sm text-muted-foreground">
+            Upload and manage your Know Your Customer documents for account verification.
+          </p>
+          <div className="rounded-lg border bg-background p-4 text-sm text-muted-foreground">
+            KYC document management coming soon. Contact support to submit verification documents.
+          </div>
         </div>
-      </div>
+      )}
 
       {/* API Key Regeneration Modal */}
       <Modal
@@ -999,13 +902,7 @@ export default function SettingsPage() {
               disabled={isRegenerating}
             >
               {isRegenerating && (
-                <svg
-                  className="h-4 w-4 animate-spin"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="3"
-                >
+                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
                   <circle cx="12" cy="12" r="10" className="opacity-30" />
                   <path d="M22 12a10 10 0 0 1-10 10" />
                 </svg>
@@ -1055,13 +952,7 @@ export default function SettingsPage() {
               disabled={isRequestingDeletion}
             >
               {isRequestingDeletion && (
-                <svg
-                  className="h-4 w-4 animate-spin"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="3"
-                >
+                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
                   <circle cx="12" cy="12" r="10" className="opacity-30" />
                   <path d="M22 12a10 10 0 0 1-10 10" />
                 </svg>
@@ -1071,6 +962,6 @@ export default function SettingsPage() {
           </div>
         </div>
       </Modal>
-    </div>
+    </SettingsTabs>
   );
 }

@@ -4,6 +4,7 @@ import type { Request, Response, NextFunction, RequestHandler } from "express";
 import { AuthRequest } from "../types/express";
 import { PrismaClient } from "../generated/client/client";
 import { isDevEnv } from "../helpers/env.helper";
+import Redis from "ioredis";
 
 const prisma = new PrismaClient();
 
@@ -11,14 +12,15 @@ const prisma = new PrismaClient();
  * Rate Limiting Middleware
  *
  * Consolidated rate limiting strategy for all authenticated and sensitive endpoints.
- * Uses in-memory sliding window counter with per-category limits.
+ * Uses Redis-backed sliding window counters with per-category limits.
  *
  * Categories and usage:
  * 1. globalRateLimit()           - Public API by IP (100 req/60s) — UNUSED (prefer simpleRateLimit)
  * 2. merchantRateLimit()          - Per-merchant (200 req/60s) — UNUSED (legacy)
  * 3. authRateLimit()              - Auth endpoints by IP (10 req/15m) — auth.route.ts
  * 4. merchantApiKeyRateLimit()    - Per-merchant API key (200 req/60s) — payment.route.ts
- * 5. captchaCheck()               - CAPTCHA requirement check — payment.controller.ts
+ * 5. adminRateLimit()             - Admin routes by IP (60 req/60s) - app.ts
+ * 6. captchaCheck()               - CAPTCHA requirement check — payment.controller.ts
  *
  * For public endpoints, see simpleRateLimit.middleware.ts instead.
  *
@@ -28,11 +30,38 @@ const prisma = new PrismaClient();
  *  - Retry-After: Seconds to wait (only on 429)
  *  - X-RateLimit-Window: Window size in seconds (info-only)
  *
- * FUTURE: Replace in-memory Map with Redis-backed implementation for distributed deployments.
+ * Uses Redis-backed counters so limits are shared across instances and survive restarts.
  */
 
-type Counter = { count: number; resetAt: number };
-const store = new Map<string, Counter>();
+let redisClient: Redis | null = null;
+
+export function getRedisClientForRateLimit(): Redis {
+  if (!redisClient) {
+    redisClient = new Redis(process.env.REDIS_URL || "redis://localhost:6379", {
+      lazyConnect: true,
+      maxRetriesPerRequest: 2,
+      enableOfflineQueue: false,
+      connectTimeout: 2000,
+      retryStrategy: () => null,
+    });
+
+    redisClient.on("error", (err) => {
+      if (isDevEnv()) {
+        console.error("Rate limiter Redis connection error", err);
+      }
+    });
+  }
+
+  return redisClient;
+}
+
+export function setRedisClientForTests(client: Redis): void {
+  redisClient = client;
+}
+
+export function resetRedisClientForTests(): void {
+  redisClient = null;
+}
 
 // Emergency circuit breaker for IPs with >500 req/min
 const emergencyBlockedIPs = new Set<string>();
@@ -54,27 +83,35 @@ function getIp(req: Request): string {
   return req.ip || req.socket?.remoteAddress || "unknown";
 }
 
-function checkLimit(
+async function checkLimit(
   key: string,
   max: number,
   windowMs: number,
-): { allowed: boolean; retryAfterSeconds: number; remaining: number } {
-  const t = nowMs();
-  const existing = store.get(key);
+): Promise<{ allowed: boolean; retryAfterSeconds: number; remaining: number }> {
+  const redis = getRedisClientForRateLimit();
+  const windowSeconds = Math.max(1, Math.ceil(windowMs / 1000));
 
-  if (!existing || existing.resetAt <= t) {
-    store.set(key, { count: 1, resetAt: t + windowMs });
-    return { allowed: true, retryAfterSeconds: 0, remaining: max - 1 };
+  try {
+    const current = await redis.incr(key);
+    if (current === 1) {
+      await redis.expire(key, windowSeconds);
+    }
+
+    const ttl = await redis.ttl(key);
+    const retryAfterSeconds = ttl > 0 ? ttl : windowSeconds;
+
+    if (current > max) {
+      return { allowed: false, retryAfterSeconds, remaining: 0 };
+    }
+
+    const remaining = Math.max(0, max - current);
+    return { allowed: true, retryAfterSeconds: 0, remaining };
+  } catch (error) {
+    if (isDevEnv()) {
+      console.error("Rate limiter Redis unavailable, allowing request", error);
+    }
+    return { allowed: true, retryAfterSeconds: 0, remaining: max };
   }
-
-  existing.count += 1;
-
-  if (existing.count > max) {
-    const retryAfterSeconds = Math.max(1, Math.ceil((existing.resetAt - t) / 1000));
-    return { allowed: false, retryAfterSeconds, remaining: 0 };
-  }
-
-  return { allowed: true, retryAfterSeconds: 0, remaining: max - existing.count };
 }
 
 /**
@@ -181,7 +218,7 @@ export function globalRateLimit(): RequestHandler {
     10,
   );
 
-  return (req: Request, res: Response, next: NextFunction) => {
+  return async (req: Request, res: Response, next: NextFunction) => {
     const ip = getIp(req);
     
     // Check emergency block
@@ -197,7 +234,7 @@ export function globalRateLimit(): RequestHandler {
     }
     
     const key = `global:${ip}`;
-    const { allowed, retryAfterSeconds, remaining } = checkLimit(key, max, windowMs);
+    const { allowed, retryAfterSeconds, remaining } = await checkLimit(key, max, windowMs);
 
     // Add rate limit headers to all responses
     res.setHeader("X-RateLimit-Limit", String(max));
@@ -207,15 +244,21 @@ export function globalRateLimit(): RequestHandler {
     // Check for emergency threshold (>500 req/min)
     if (windowMs === 60000) {
       const emergencyKey = `emergency:${ip}`;
-      const emergencyData = store.get(emergencyKey);
+      const redis = getRedisClientForRateLimit();
       const now = nowMs();
       const emergencyWindowStart = now - EMERGENCY_WINDOW_MS;
-      
-      if (!emergencyData || emergencyData.resetAt <= emergencyWindowStart) {
-        store.set(emergencyKey, { count: 1, resetAt: now + EMERGENCY_WINDOW_MS });
-      } else {
-        emergencyData.count += 1;
-        if (emergencyData.count > EMERGENCY_THRESHOLD) {
+      const emergencyWindowSeconds = Math.max(1, Math.ceil(EMERGENCY_WINDOW_MS / 1000));
+
+      try {
+        const emergencyCount = await redis.incr(emergencyKey);
+        if (emergencyCount === 1) {
+          await redis.expire(emergencyKey, emergencyWindowSeconds);
+        }
+
+        const emergencyTtl = await redis.ttl(emergencyKey);
+        const emergencyResetAt = emergencyTtl > 0 ? now + emergencyTtl * 1000 : now + EMERGENCY_WINDOW_MS;
+
+        if (emergencyCount > EMERGENCY_THRESHOLD && emergencyResetAt > emergencyWindowStart) {
           addEmergencyBlock(ip);
           return sendApiError(
             res,
@@ -225,6 +268,10 @@ export function globalRateLimit(): RequestHandler {
               "IP temporarily blocked due to excessive requests. Contact support if this is an error.",
             ),
           );
+        }
+      } catch (error) {
+        if (isDevEnv()) {
+          console.error("Emergency limiter Redis unavailable", error);
         }
       }
     }
@@ -265,11 +312,11 @@ export function merchantRateLimit(): RequestHandler {
   const max = parseInt(process.env.MERCHANT_RATE_LIMIT_MAX || "200", 10);
   const windowMs = parseInt(process.env.MERCHANT_RATE_LIMIT_WINDOW_MS || "60000", 10);
 
-  return (req: Request, res: Response, next: NextFunction) => {
+  return async (req: Request, res: Response, next: NextFunction) => {
     const authReq = req as AuthRequest;
     const identifier = authReq.merchantId || getIp(req);
     const key = `merchant:${identifier}`;
-    const { allowed, retryAfterSeconds, remaining } = checkLimit(key, max, windowMs);
+    const { allowed, retryAfterSeconds, remaining } = await checkLimit(key, max, windowMs);
 
     res.setHeader("X-RateLimit-Limit", String(max));
     res.setHeader("X-RateLimit-Remaining", String(remaining));
@@ -312,9 +359,9 @@ export function authRateLimit(): RequestHandler {
   const max = parseInt(process.env.AUTH_RATE_LIMIT_MAX || "10", 10);
   const windowMs = parseInt(process.env.AUTH_RATE_LIMIT_WINDOW_MS || "900000", 10);
 
-  return (req: Request, res: Response, next: NextFunction) => {
+  return async (req: Request, res: Response, next: NextFunction) => {
     const key = `auth:${getIp(req)}`;
-    const { allowed, retryAfterSeconds, remaining } = checkLimit(key, max, windowMs);
+    const { allowed, retryAfterSeconds, remaining } = await checkLimit(key, max, windowMs);
 
     res.setHeader("X-RateLimit-Limit", String(max));
     res.setHeader("X-RateLimit-Remaining", String(remaining));
@@ -364,13 +411,13 @@ export function merchantApiKeyRateLimit(): RequestHandler {
   const max = parseInt(process.env.MERCHANT_API_KEY_RATE_MAX || "200", 10);
   const windowMs = parseInt(process.env.MERCHANT_API_KEY_RATE_WINDOW_MS || "60000", 10);
 
-  return (req: Request, res: Response, next: NextFunction) => {
+  return async (req: Request, res: Response, next: NextFunction) => {
     const id = getMerchantIdForApiKeyLimit(req);
     if (!id) {
       return sendApiError(res, apiError(401, ErrorCode.AUTHENTICATION_REQUIRED, "Authentication required"));
     }
     const key = `mapikey:${id}`;
-    const { allowed, retryAfterSeconds, remaining } = checkLimit(key, max, windowMs);
+    const { allowed, retryAfterSeconds, remaining } = await checkLimit(key, max, windowMs);
 
     res.setHeader("X-RateLimit-Limit", String(max));
     res.setHeader("X-RateLimit-Remaining", String(remaining));
@@ -392,6 +439,52 @@ export function merchantApiKeyRateLimit(): RequestHandler {
           429,
           ErrorCode.RATE_LIMIT_EXCEEDED,
           "API rate limit for this key exceeded. Please slow down.",
+          { retryAfterSeconds },
+        ),
+      );
+    }
+
+    next();
+  };
+}
+
+/**
+ * Rate limit for admin routes protected by X-Admin-Secret.
+ *
+ * Default: 60 requests per 60 seconds per IP.
+ * Configurable via env vars:
+ *   ADMIN_RATE_LIMIT_MAX
+ *   ADMIN_RATE_LIMIT_WINDOW_MS
+ */
+export function adminRateLimit(): RequestHandler {
+  const max = parseInt(process.env.ADMIN_RATE_LIMIT_MAX || "60", 10);
+  const windowMs = parseInt(process.env.ADMIN_RATE_LIMIT_WINDOW_MS || "60000", 10);
+
+  return async (req: Request, res: Response, next: NextFunction) => {
+    const ip = getIp(req);
+    const key = `admin:${ip}`;
+    const { allowed, retryAfterSeconds, remaining } = await checkLimit(key, max, windowMs);
+
+    res.setHeader("X-RateLimit-Limit", String(max));
+    res.setHeader("X-RateLimit-Remaining", String(remaining));
+    res.setHeader("X-RateLimit-Window", String(windowMs / 1000));
+
+    if (!allowed) {
+      res.setHeader("Retry-After", String(retryAfterSeconds));
+
+      logRateLimitEvent({
+        ipAddress: ip,
+        endpoint: req.path,
+        limitType: "admin",
+        retryAfterSeconds,
+      });
+
+      return sendApiError(
+        res,
+        apiError(
+          429,
+          ErrorCode.RATE_LIMIT_EXCEEDED,
+          "Admin rate limit exceeded. Please slow down.",
           { retryAfterSeconds },
         ),
       );

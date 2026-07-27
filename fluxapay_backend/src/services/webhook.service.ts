@@ -13,7 +13,11 @@ export class WebhookDispatcher {
     this.prisma = prismaClient;
   }
 
-  public async sendPaymentWebhook(payment: Payment, merchant: Merchant): Promise<void> {
+  public async sendPaymentWebhook(
+    payment: Payment,
+    merchant: Merchant,
+    eventType: WebhookEventType | string = "payment_confirmed",
+  ): Promise<void> {
     if (!merchant.webhook_url) {
       console.log(`[WebhookDispatcher] No webhook_url configured for merchant ${merchant.id}. Skipping.`);
       return;
@@ -24,16 +28,17 @@ export class WebhookDispatcher {
       return;
     }
 
+    const canonicalEvent = normalizeEventName(eventType as any);
     const timestamp = new Date().toISOString();
     const payload = JSON.stringify({
-      event: 'payment.confirmed',
+      event: canonicalEvent,
       event_id: crypto.randomUUID(),
       timestamp,
       data: {
         payment_id: payment.id,
         amount: payment.amount.toString(),
         currency: payment.currency,
-        status: 'CONFIRMED',
+        status: payment.status,
         transaction_hash: payment.transaction_hash,
       }
     });
@@ -497,6 +502,97 @@ export async function getDeadLetterQueueService(params: GetDeadLetterQueueParams
       },
     },
   };
+}
+
+export interface AdminGetWebhookLogsParams {
+  event_type?: WebhookEventType;
+  status?: WebhookStatus;
+  merchant_id?: string;
+  date_from?: string;
+  date_to?: string;
+  search?: string;
+  page: number;
+  limit: number;
+}
+
+export async function adminGetWebhookLogsService(params: AdminGetWebhookLogsParams) {
+  const { event_type, status, merchant_id, date_from, date_to, search, page, limit } = params;
+  const skip = (page - 1) * limit;
+
+  const where: any = {};
+  if (merchant_id) where.merchantId = merchant_id;
+  if (event_type) where.event_type = event_type;
+  if (status) where.status = status;
+  if (date_from || date_to) {
+    where.created_at = {};
+    if (date_from) where.created_at.gte = new Date(date_from);
+    if (date_to) where.created_at.lte = new Date(date_to);
+  }
+  if (search) {
+    where.OR = [
+      { id: { contains: search, mode: "insensitive" } },
+      { payment_id: { contains: search, mode: "insensitive" } },
+    ];
+  }
+
+  const [logs, total] = await Promise.all([
+    prisma.webhookLog.findMany({
+      where,
+      skip,
+      take: limit,
+      orderBy: { created_at: "desc" },
+      include: {
+        merchant: {
+          select: {
+            business_name: true,
+            email: true,
+          }
+        }
+      }
+    }),
+    prisma.webhookLog.count({ where }),
+  ]);
+
+  return {
+    message: "Admin webhook logs retrieved successfully",
+    data: {
+      logs: logs.map(log => ({
+        id: log.id,
+        merchant_id: log.merchantId,
+        merchant_name: log.merchant?.business_name,
+        merchant_email: log.merchant?.email,
+        event_type: log.event_type,
+        endpoint_url: log.endpoint_url,
+        http_status: log.http_status,
+        status: log.status,
+        event_id: log.event_id,
+        payment_id: log.payment_id,
+        retry_count: log.retry_count,
+        created_at: log.created_at,
+        updated_at: log.updated_at,
+      })),
+      pagination: {
+        page,
+        limit,
+        total,
+        total_pages: Math.ceil(total / limit),
+      },
+    },
+  };
+}
+
+export async function adminRetryWebhookService(params: { log_id: string }) {
+  const { log_id } = params;
+
+  const log = await prisma.webhookLog.findUnique({
+    where: { id: log_id },
+  });
+
+  if (!log) {
+    throw apiError(404, ErrorCode.WEBHOOK_LOG_NOT_FOUND, "Webhook log not found");
+  }
+
+  return retryWebhookService({ merchantId: log.merchantId, log_id: log.id });
 }
 
 export async function requeueWebhookService(params: RequeueWebhookParams) {

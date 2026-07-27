@@ -47,7 +47,7 @@ export interface InvoicePdfJob {
 
 const invoicePdfJobs = new Map<string, InvoicePdfJob>();
 
-export function renderInvoicePdf(doc: PDFKit.PDFDocument, data: InvoicePdfData): void {
+export function renderInvoicePdf(doc: InstanceType<typeof PDFDocument>, data: InvoicePdfData): void {
     // ── Header ──────────────────────────────────────────────────────────────
     doc
         .fontSize(24)

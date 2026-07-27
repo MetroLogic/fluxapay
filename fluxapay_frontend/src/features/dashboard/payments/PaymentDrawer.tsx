@@ -17,8 +17,10 @@ import {
   XCircle,
   AlertCircle,
   Loader2,
+  LayoutDashboard,
 } from "lucide-react";
 import { api } from "@/lib/api";
+import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 
 interface PaymentDrawerProps {
@@ -130,6 +132,7 @@ function WebhookLogRow({ log }: { log: WebhookLogEntry }) {
 }
 
 export function PaymentDrawer({ payment, isOpen, onClose }: PaymentDrawerProps) {
+  const router = useRouter();
   const [webhookLogs, setWebhookLogs] = useState<WebhookLogEntry[]>([]);
   const [webhookLoading, setWebhookLoading] = useState(false);
   const [statusHistory, setStatusHistory] = useState<StatusHistoryEntry[]>([]);
@@ -241,15 +244,29 @@ export function PaymentDrawer({ payment, isOpen, onClose }: PaymentDrawerProps) 
               {payment.id}
             </p>
           </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={onClose}
-            aria-label="Close drawer"
-            className="shrink-0"
-          >
-            <X className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center gap-2 shrink-0">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                onClose();
+                router.push(`/dashboard/payments/${payment.id}`);
+              }}
+              aria-label="View detailed payment page"
+              title="Open full payment page"
+            >
+              <LayoutDashboard className="h-4 w-4 mr-1" />
+              View Detailed Page
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={onClose}
+              aria-label="Close drawer"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
 
         <div className="p-6 space-y-6">

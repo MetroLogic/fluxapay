@@ -6,14 +6,16 @@ import { Input } from "@/components/Input";
 import { Select } from "@/components/Select";
 import { Button } from "@/components/Button";
 import { Badge } from "@/components/Badge";
-import { Search, ArrowUpRight } from "lucide-react";
+import { Search, ArrowUpRight, ChevronDown, ChevronRight, Plus, Loader2 } from "lucide-react";
 import { api } from "@/lib/api";
 import {
-  MOCK_REFUNDS,
   type RefundRecord,
   type RefundStatus,
-} from "@/features/dashboard/refunds/refunds-mock";
-import { Suspense } from "react";
+} from "@/features/dashboard/refunds/types";
+import { RefundStatusTimeline } from "@/features/dashboard/refunds/RefundStatusTimeline";
+import { RefundForm } from "@/features/dashboard/refunds/RefundForm";
+import { Suspense, Fragment } from "react";
+import toast from "react-hot-toast";
 
 interface BackendRefund {
   id: string;
@@ -32,6 +34,8 @@ interface BackendRefund {
   status: RefundStatus;
   stellar_tx_hash?: string;
   created_at: string;
+  updated_at?: string;
+  failed_reason?: string;
 }
 
 function RefundsContent() {
@@ -39,45 +43,59 @@ function RefundsContent() {
   const searchParams = useSearchParams();
   const paymentIdFromQuery = searchParams.get("paymentId") ?? "";
 
-  const [refunds, setRefunds] = useState<RefundRecord[]>(MOCK_REFUNDS);
+  const [refunds, setRefunds] = useState<RefundRecord[]>([]);
   const [search, setSearch] = useState(paymentIdFromQuery);
   const [statusFilter, setStatusFilter] = useState("all");
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  const [showInitiateModal, setShowInitiateModal] = useState(false);
+  const [initiateContext, setInitiateContext] = useState<{
+    paymentId: string;
+    merchantId: string;
+    currency: "USDC" | "XLM";
+    maxAmount: number;
+    customerAddress: string;
+  } | null>(null);
+  const [isFetchingPayment, setIsFetchingPayment] = useState(false);
 
   useEffect(() => {
     setSearch(paymentIdFromQuery);
   }, [paymentIdFromQuery]);
 
-  useEffect(() => {
-    const fetchRefunds = async () => {
-      try {
-        setIsLoading(true);
-        const response = (await api.refunds.list({
-          paymentId: paymentIdFromQuery || undefined,
-          limit: 100,
-        })) as { refunds?: BackendRefund[] };
-        if (Array.isArray(response.refunds)) {
-          const mapped = response.refunds.map((item) => ({
-            id: item.id,
-            paymentId: item.payment_id,
-            merchantId: item.merchant_id,
-            amount: item.amount,
-            currency: item.currency,
-            customerAddress: item.customer_address,
-            reason: item.reason,
-            reasonNote: item.reason_note,
-            status: item.status,
-            stellarTxHash: item.stellar_tx_hash,
-            createdAt: item.created_at,
-          }));
-          setRefunds(mapped);
-        }
-      } catch {
-        setRefunds(MOCK_REFUNDS);
-      } finally {
-        setIsLoading(false);
+  const fetchRefunds = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const response = (await api.refunds.list({
+        paymentId: paymentIdFromQuery || undefined,
+        limit: 100,
+      })) as { refunds?: BackendRefund[] };
+      if (Array.isArray(response.refunds)) {
+        const mapped = response.refunds.map((item) => ({
+          id: item.id,
+          paymentId: item.payment_id,
+          merchantId: item.merchant_id,
+          amount: item.amount,
+          currency: item.currency,
+          customerAddress: item.customer_address,
+          reason: item.reason,
+          reasonNote: item.reason_note,
+          status: item.status,
+          stellarTxHash: item.stellar_tx_hash,
+          createdAt: item.created_at,
+        }));
+        setRefunds(mapped);
       }
-    };
+    } catch {
+      setError("Failed to load refunds. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
     void fetchRefunds();
   }, [paymentIdFromQuery]);
 
@@ -98,8 +116,34 @@ function RefundsContent() {
   const getStatusBadge = (status: RefundStatus) => {
     if (status === "completed") return <Badge variant="success">Completed</Badge>;
     if (status === "processing") return <Badge variant="warning">Processing</Badge>;
-    if (status === "initiated") return <Badge variant="info">Initiated</Badge>;
+    if (status === "pending") return <Badge variant="info">Pending</Badge>;
     return <Badge variant="error">Failed</Badge>;
+  };
+
+  const handleInitiateClick = async (refund: RefundRecord) => {
+    setIsFetchingPayment(true);
+    try {
+      const payment = (await api.payments.getById(refund.paymentId)) as {
+        id: string;
+        amount: number;
+        currency: string;
+        merchant_id: string;
+        customer_address?: string;
+        status: string;
+      };
+      setInitiateContext({
+        paymentId: payment.id,
+        merchantId: payment.merchant_id,
+        currency: payment.currency as "USDC" | "XLM",
+        maxAmount: payment.amount,
+        customerAddress: payment.customer_address || "",
+      });
+      setShowInitiateModal(true);
+    } catch {
+      toast.error("Failed to load payment details. Navigate to the payment page to initiate a refund.");
+    } finally {
+      setIsFetchingPayment(false);
+    }
   };
 
   return (
@@ -111,12 +155,21 @@ function RefundsContent() {
             Track full and partial refunds with status and payment references.
           </p>
         </div>
-        <Button
-          variant="secondary"
-          onClick={() => router.push("/dashboard/payments")}
-        >
-          Back to Payments
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="brand"
+            onClick={() => router.push("/dashboard/payments")}
+          >
+            <Plus className="h-4 w-4" />
+            Initiate Refund
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => router.push("/dashboard/payments")}
+          >
+            Back to Payments
+          </Button>
+        </div>
       </div>
 
       <div className="rounded-2xl border bg-card p-4 md:p-6">
@@ -136,7 +189,7 @@ function RefundsContent() {
             onChange={(e) => setStatusFilter(e.target.value)}
           >
             <option value="all">All statuses</option>
-            <option value="initiated">Initiated</option>
+            <option value="pending">Pending</option>
             <option value="processing">Processing</option>
             <option value="completed">Completed</option>
             <option value="failed">Failed</option>
@@ -144,9 +197,27 @@ function RefundsContent() {
         </div>
 
         <div className="hidden overflow-x-auto md:block">
+          {error && (
+            <div className="mb-4 rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              {error}
+            </div>
+          )}
+          {isLoading ? (
+            <div className="space-y-3 py-8">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="flex animate-pulse gap-4">
+                  <div className="h-4 w-24 rounded bg-muted" />
+                  <div className="h-4 w-20 rounded bg-muted" />
+                  <div className="h-4 w-16 rounded bg-muted" />
+                  <div className="h-4 w-20 rounded bg-muted" />
+                </div>
+              ))}
+            </div>
+          ) : (
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="border-b bg-muted/50">
+                <th className="w-8 px-3 py-3" />
                 <th className="px-3 py-3 font-medium">Refund ID</th>
                 <th className="px-3 py-3 font-medium">Payment</th>
                 <th className="px-3 py-3 font-medium">Amount</th>
@@ -156,86 +227,183 @@ function RefundsContent() {
               </tr>
             </thead>
             <tbody className="divide-y">
-              {filteredRefunds.map((refund) => (
-                <tr key={refund.id}>
-                  <td className="px-3 py-3 font-mono text-xs">{refund.id}</td>
-                  <td className="px-3 py-3 font-mono text-xs">{refund.paymentId}</td>
-                  <td className="px-3 py-3">
-                    {refund.amount} {refund.currency}
-                  </td>
-                  <td className="px-3 py-3">{getStatusBadge(refund.status)}</td>
-                  <td className="px-3 py-3 text-muted-foreground">
-                    {new Date(refund.createdAt).toLocaleString()}
-                  </td>
-                  <td className="px-3 py-3 text-right">
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={() =>
-                        router.push(
-                          `/dashboard/payments?paymentId=${refund.paymentId}`,
-                        )
-                      }
-                    >
-                      <ArrowUpRight className="h-3.5 w-3.5" />
-                    </Button>
-                  </td>
-                </tr>
-              ))}
+              {filteredRefunds.map((refund) => {
+                const isExpanded = expandedId === refund.id;
+                return (
+                  <Fragment key={refund.id}>
+                    <tr className="group">
+                      <td className="px-3 py-3">
+                        <button
+                          onClick={() =>
+                            setExpandedId(isExpanded ? null : refund.id)
+                          }
+                          className="rounded p-1 hover:bg-muted transition-colors"
+                          aria-label={isExpanded ? "Collapse timeline" : "Expand timeline"}
+                        >
+                          {isExpanded ? (
+                            <ChevronDown className="h-4 w-4" />
+                          ) : (
+                            <ChevronRight className="h-4 w-4" />
+                          )}
+                        </button>
+                      </td>
+                      <td className="px-3 py-3 font-mono text-xs">{refund.id}</td>
+                      <td className="px-3 py-3 font-mono text-xs">{refund.paymentId}</td>
+                      <td className="px-3 py-3">
+                        {refund.amount} {refund.currency}
+                      </td>
+                      <td className="px-3 py-3">{getStatusBadge(refund.status)}</td>
+                      <td className="px-3 py-3 text-muted-foreground">
+                        {new Date(refund.createdAt).toLocaleString()}
+                      </td>
+                      <td className="px-3 py-3 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            className="h-8 px-2"
+                            onClick={() => handleInitiateClick(refund)}
+                            disabled={isFetchingPayment}
+                          >
+                            {isFetchingPayment ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <ArrowUpRight className="h-3.5 w-3.5" />
+                            )}
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                    {isExpanded && (
+                      <tr>
+                        <td colSpan={7} className="bg-muted/20 px-6 py-4">
+                          <RefundStatusTimeline
+                            status={refund.status}
+                            createdAt={refund.createdAt}
+                          />
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
               {!isLoading && filteredRefunds.length === 0 && (
                 <tr>
                   <td
                     className="px-3 py-8 text-center text-muted-foreground"
-                    colSpan={6}
+                    colSpan={7}
                   >
-                    No refunds found for the selected filters.
+                    {error ? "Could not load refunds." : "No refunds found for the selected filters."}
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
+          )}
         </div>
 
         <div className="space-y-3 md:hidden">
-          {filteredRefunds.map((refund) => (
-            <div key={refund.id} className="rounded-xl border p-3">
-              <div className="mb-2 flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="truncate font-mono text-xs">{refund.id}</p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    Payment: {refund.paymentId}
+          {error && (
+            <div className="rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              {error}
+            </div>
+          )}
+          {isLoading ? (
+            <div className="space-y-3 py-4">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="animate-pulse rounded-xl border p-3">
+                  <div className="mb-2 flex gap-3">
+                    <div className="h-4 w-24 rounded bg-muted" />
+                    <div className="h-4 w-16 rounded bg-muted" />
+                  </div>
+                  <div className="h-3 w-32 rounded bg-muted" />
+                </div>
+              ))}
+            </div>
+          ) : (
+          <>
+          {filteredRefunds.map((refund) => {
+            const isExpanded = expandedId === refund.id;
+            return (
+              <div key={refund.id} className="rounded-xl border p-3">
+                <div className="mb-2 flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate font-mono text-xs">{refund.id}</p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      Payment: {refund.paymentId}
+                    </p>
+                  </div>
+                  {getStatusBadge(refund.status)}
+                </div>
+                <div className="space-y-1 text-sm">
+                  <p>
+                    <span className="text-muted-foreground">Amount:</span>{" "}
+                    {refund.amount} {refund.currency}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {new Date(refund.createdAt).toLocaleString()}
                   </p>
                 </div>
-                {getStatusBadge(refund.status)}
+                {isExpanded && (
+                  <div className="mt-3 border-t pt-3">
+                    <RefundStatusTimeline
+                      status={refund.status}
+                      createdAt={refund.createdAt}
+                    />
+                  </div>
+                )}
+                <div className="mt-3 flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="flex-1"
+                    onClick={() =>
+                      setExpandedId(isExpanded ? null : refund.id)
+                    }
+                  >
+                    {isExpanded ? "Hide Timeline" : "View Timeline"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="flex-1"
+                    onClick={() =>
+                      router.push(`/dashboard/payments?paymentId=${refund.paymentId}`)
+                    }
+                  >
+                    Open Payment
+                  </Button>
+                </div>
               </div>
-              <div className="space-y-1 text-sm">
-                <p>
-                  <span className="text-muted-foreground">Amount:</span>{" "}
-                  {refund.amount} {refund.currency}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {new Date(refund.createdAt).toLocaleString()}
-                </p>
-              </div>
-              <Button
-                size="sm"
-                variant="secondary"
-                className="mt-3 w-full"
-                onClick={() =>
-                  router.push(`/dashboard/payments?paymentId=${refund.paymentId}`)
-                }
-              >
-                Open Payment
-              </Button>
-            </div>
-          ))}
+            );
+          })}
           {!isLoading && filteredRefunds.length === 0 && (
             <p className="rounded-xl border p-4 text-center text-sm text-muted-foreground">
-              No refunds found for the selected filters.
+              {error ? "Could not load refunds." : "No refunds found for the selected filters."}
             </p>
+          )}
+          </>
           )}
         </div>
       </div>
+
+      {initiateContext && (
+        <RefundForm
+          isOpen={showInitiateModal}
+          onClose={() => {
+            setShowInitiateModal(false);
+            setInitiateContext(null);
+          }}
+          onSuccess={() => {
+            void fetchRefunds();
+          }}
+          paymentId={initiateContext.paymentId}
+          merchantId={initiateContext.merchantId}
+          currency={initiateContext.currency}
+          maxAmount={initiateContext.maxAmount}
+          customerAddress={initiateContext.customerAddress}
+        />
+      )}
     </div>
   );
 }

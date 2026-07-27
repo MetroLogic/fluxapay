@@ -15,6 +15,7 @@ jest.mock("../../generated/client/client", () => {
     },
     payment: {
       findMany: jest.fn(),
+      count: jest.fn(),
       findUnique: jest.fn(),
       update: jest.fn(),
       updateMany: jest.fn(),
@@ -36,10 +37,34 @@ import { PrismaClient } from "../../generated/client/client";
 
 const mockPrisma = new PrismaClient() as jest.Mocked<PrismaClient> & {
   merchant: { findMany: jest.Mock; findUnique: jest.Mock };
-  payment: { findMany: jest.Mock; findUnique: jest.Mock; update: jest.Mock; updateMany: jest.Mock };
+  payment: { findMany: jest.Mock; count: jest.Mock; findUnique: jest.Mock; update: jest.Mock; updateMany: jest.Mock };
   settlement: { create: jest.Mock };
   $transaction: jest.Mock;
 };
+
+/**
+ * getUnsettledPaymentsByMerchant now queries payment.findMany/count once per
+ * due merchant (each scoped with `where.merchantId`) instead of one global
+ * query, so BATCH_PAYMENT_LIMIT is enforced per merchant rather than across
+ * the whole run. Tests set up their fixture list once via this helper so the
+ * mock filters/paginates the same way the real per-merchant queries do.
+ */
+function mockPaymentQueries(payments: Array<{ id: string; merchantId: string;[key: string]: unknown }>) {
+  mockPrisma.payment.findMany.mockImplementation(async (args: any) => {
+    const merchantId = args?.where?.merchantId;
+    const filtered = merchantId
+      ? payments.filter((p) => p.merchantId === merchantId)
+      : payments;
+    const take = args?.take;
+    return typeof take === "number" ? filtered.slice(0, take) : filtered;
+  });
+  mockPrisma.payment.count.mockImplementation(async (args: any) => {
+    const merchantId = args?.where?.merchantId;
+    return merchantId
+      ? payments.filter((p) => p.merchantId === merchantId).length
+      : payments.length;
+  });
+}
 
 jest.mock("../exchange.service");
 jest.mock("../webhook.service", () => ({
@@ -153,7 +178,7 @@ describe("settlementBatch.service", () => {
       };
 
       mockPrisma.merchant.findMany.mockResolvedValue(mockMerchants);
-      mockPrisma.payment.findMany.mockResolvedValue(mockPayments);
+      mockPaymentQueries(mockPayments);
       mockPrisma.merchant.findUnique.mockResolvedValue(mockMerchants[0]);
       mockPrisma.payment.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) => {
         const p = mockPayments.find((pay) => pay.id === where.id);
@@ -208,7 +233,7 @@ describe("settlementBatch.service", () => {
       ];
 
       mockPrisma.merchant.findMany.mockResolvedValue(mockMerchants);
-      mockPrisma.payment.findMany.mockResolvedValue(mockPayments);
+      mockPaymentQueries(mockPayments);
       mockPrisma.merchant.findUnique.mockResolvedValue(mockMerchants[0]);
 
       const result = await runSettlementBatch(new Date("2024-01-15"), "admin_1");
@@ -247,7 +272,7 @@ describe("settlementBatch.service", () => {
       ];
 
       mockPrisma.merchant.findMany.mockResolvedValue(mockMerchants);
-      mockPrisma.payment.findMany.mockResolvedValue(mockPayments);
+      mockPaymentQueries(mockPayments);
       mockPrisma.merchant.findUnique.mockResolvedValue(mockMerchants[0]);
 
       // Run on Tuesday (day 2), but merchant is scheduled for Monday (day 1)
@@ -294,7 +319,7 @@ describe("settlementBatch.service", () => {
       };
 
       mockPrisma.merchant.findMany.mockResolvedValue(mockMerchants);
-      mockPrisma.payment.findMany.mockResolvedValue(mockPayments);
+      mockPaymentQueries(mockPayments);
       mockPrisma.merchant.findUnique.mockResolvedValue(mockMerchants[0]);
       mockPrisma.payment.findUnique.mockResolvedValue({
         id: "payment_1",
@@ -318,7 +343,7 @@ describe("settlementBatch.service", () => {
 
     it("should return empty result when no unsettled payments found", async () => {
       mockPrisma.merchant.findMany.mockResolvedValue([]);
-      mockPrisma.payment.findMany.mockResolvedValue([]);
+      mockPaymentQueries([]);
 
       const result = await runSettlementBatch(new Date("2024-01-15"), "admin_1");
 
@@ -372,7 +397,7 @@ describe("settlementBatch.service", () => {
       };
 
       mockPrisma.merchant.findMany.mockResolvedValue(mockMerchants);
-      mockPrisma.payment.findMany.mockResolvedValue(mockPayments);
+      mockPaymentQueries(mockPayments);
       mockPrisma.merchant.findUnique.mockResolvedValue(mockMerchants[0]);
       mockPrisma.payment.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) => {
         const p = mockPayments.find((pay) => pay.id === where.id);
@@ -435,7 +460,7 @@ describe("settlementBatch.service", () => {
       };
 
       mockPrisma.merchant.findMany.mockResolvedValue(mockMerchantsDue);
-      mockPrisma.payment.findMany.mockResolvedValue(mockPayments);
+      mockPaymentQueries(mockPayments);
       mockPrisma.merchant.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) =>
         where.id === "merchant_1" ? merchant1 : merchant2,
       );
@@ -488,7 +513,7 @@ describe("settlementBatch.service", () => {
       };
 
       mockPrisma.merchant.findMany.mockResolvedValue(mockMerchants);
-      mockPrisma.payment.findMany.mockResolvedValue(mockPayments);
+      mockPaymentQueries(mockPayments);
       mockPrisma.merchant.findUnique.mockResolvedValue(merchant);
       mockPrisma.payment.findUnique.mockResolvedValue({
         id: "payment_1", amount: 100, metadata: { settlement_retry_count: 2 }, settled: false,
@@ -504,6 +529,78 @@ describe("settlementBatch.service", () => {
         "settlement_failed",
         expect.objectContaining({ payment_ids: ["payment_1"] }),
       );
+    });
+
+    it("enforces BATCH_PAYMENT_LIMIT per merchant: 600 unsettled payments settle 500 and defer 100 (#826)", async () => {
+      const mockMerchants = [
+        {
+          id: "merchant_1",
+          business_name: "High Volume Co",
+          settlement_schedule: "daily",
+          settlement_day: null,
+          settlement_currency: "NGN",
+          webhook_url: null,
+          bankAccount: {
+            account_name: "A", account_number: "1", bank_name: "B", currency: "NGN", country: "NG",
+          },
+        },
+      ];
+
+      const allPayments = Array.from({ length: 600 }, (_, i) => ({
+        id: `payment_${i}`,
+        merchantId: "merchant_1",
+        amount: 10,
+        swept: true,
+        settled: false,
+        createdAt: new Date(2024, 0, 1, 0, 0, i),
+      }));
+
+      const mockExchangePartner = {
+        getQuote: jest.fn().mockResolvedValue({ fiat_gross: 15500, exchange_rate: 1550, fiat_currency: "NGN" }),
+        convertAndPayout: jest.fn().mockResolvedValue({
+          transfer_ref: "t1", exchange_ref: "e1", initiated_at: new Date().toISOString(),
+        }),
+      };
+
+      mockPrisma.merchant.findMany.mockResolvedValue(mockMerchants);
+      mockPaymentQueries(allPayments);
+      mockPrisma.merchant.findUnique.mockResolvedValue(mockMerchants[0]);
+      mockPrisma.payment.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) => {
+        const p = allPayments.find((pay) => pay.id === where.id);
+        return p ? { ...p, metadata: {}, settled: false } : null;
+      });
+      mockPrisma.payment.update.mockResolvedValue({});
+      mockPrisma.$transaction.mockImplementation(async (callback: any) =>
+        callback({
+          settlement: { create: jest.fn().mockResolvedValue({ id: "settlement_ok", merchantId: "merchant_1" }) },
+          payment: { update: jest.fn() },
+        }),
+      );
+      (getExchangePartner as jest.Mock).mockReturnValue(mockExchangePartner);
+
+      const consoleWarnSpy = jest.spyOn(console, "warn").mockImplementation();
+
+      const result = await runSettlementBatch(new Date("2024-01-15"), "admin_1");
+
+      // Only BATCH_PAYMENT_LIMIT (500) payments were fetched/settled for this merchant...
+      expect(mockPrisma.payment.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ merchantId: "merchant_1" }),
+          orderBy: { createdAt: "asc" },
+          take: 500,
+        }),
+      );
+      expect(result.merchantResults).toHaveLength(1);
+      expect(result.merchantResults[0].paymentCount).toBe(500);
+      expect(result.merchantResults[0].paymentResults).toHaveLength(500);
+
+      // ...and the other 100 were deferred, with an overflow warning emitted.
+      expect(result.merchantResults[0].paymentsDeferred).toBe(100);
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        expect.stringContaining("settlement.overflow"),
+      );
+
+      consoleWarnSpy.mockRestore();
     });
   });
 });

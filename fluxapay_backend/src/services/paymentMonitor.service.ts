@@ -248,14 +248,8 @@ export async function runPaymentMonitorTick(): Promise<void> {
             )
           );
 
-          // Also emit internal event if needed by other services (like Webhook)
-          // We can import PaymentService dynamically to avoid circular dependency
-          const { PaymentService } = await import('./payment.service');
-          const updatedPayment = await prisma.payment.findUnique({ where: { id: payment.id } });
-          if (updatedPayment) {
-            const { eventBus, AppEvents } = await import('./EventService');
-            eventBus.emit(AppEvents.PAYMENT_CONFIRMED, updatedPayment);
-          }
+          // PAYMENT_CONFIRMED is emitted by PaymentService.verifyPayment()
+          // — do not duplicate it here to avoid double webhook deliveries.
         }
       } else if (latestPagingToken && latestPagingToken !== payment.last_paging_token) {
         // Just update paging token if no status change

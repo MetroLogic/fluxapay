@@ -80,6 +80,7 @@ const envSchema = z.object({
     KMS_ENCRYPTION_PASSPHRASE: z.string().optional(),
     KMS_ENCRYPTED_MASTER_SEED: z.string().optional(),
     HD_WALLET_MASTER_SEED: z.string().optional(), // Legacy, deprecated
+    HD_WALLET_SEED: z.string().optional(),
 
     // AWS KMS (conditional - required if KMS_PROVIDER=aws)
     AWS_KMS_KEY_ID: z.string().optional(),
@@ -233,8 +234,8 @@ export function validateEnv(): EnvConfig {
     }
 
     // KMS seed validation
-    if (config.KMS_PROVIDER === 'local' && !config.KMS_ENCRYPTED_MASTER_SEED && !config.HD_WALLET_MASTER_SEED) {
-        conditionalErrors.push('  • KMS_ENCRYPTED_MASTER_SEED or HD_WALLET_MASTER_SEED is required when KMS_PROVIDER=local');
+    if (config.KMS_PROVIDER === 'local' && !config.KMS_ENCRYPTED_MASTER_SEED && !config.HD_WALLET_MASTER_SEED && !config.HD_WALLET_SEED) {
+        conditionalErrors.push('  • KMS_ENCRYPTED_MASTER_SEED, HD_WALLET_MASTER_SEED, or HD_WALLET_SEED is required when KMS_PROVIDER=local');
     }
 
     if (conditionalErrors.length > 0) {

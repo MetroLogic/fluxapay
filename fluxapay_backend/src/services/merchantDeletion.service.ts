@@ -9,7 +9,7 @@ import { ErrorCode } from "../types/errors";
  *   - PII fields on Merchant are overwritten with anonymized placeholders.
  *   - Active API keys are revoked; webhook endpoints deactivated.
  *   - Pending webhook deliveries are cancelled; active charges cancelled.
- *   - KYC documents are deleted; KYC record is anonymized.
+ *   - KYC documents are purged from Cloudinary then deleted from DB; KYC record is anonymized.
  *   - OTPs, BankAccount, Customers, Subscriptions are hard-deleted.
  */
 import { PrismaClient } from "../generated/client/client";
@@ -19,6 +19,10 @@ import {
   logWebhooksDeactivated,
   logChargesCancelled,
 } from "./audit.service";
+import { deleteFromCloudinary } from "./cloudinary.service";
+import { getLogger } from "../utils/logger";
+
+const logger = getLogger();
 
 const prisma = new PrismaClient();
 
@@ -61,10 +65,13 @@ export async function requestDeletion(
  *
  * Financial records (payments, settlements, refunds, invoices) are retained.
  * PII is overwritten. Cascades revoke keys, deactivate webhooks, cancel charges.
+ *
+ * @param force - When true, skip the in-flight settlement guard (use with care).
  */
 export async function executeDeletion(
   merchantId: string,
   adminId: string,
+  force = false,
 ): Promise<void> {
   const merchant = await prisma.merchant.findUnique({ where: { id: merchantId } });
   if (!merchant) throw apiError(404, ErrorCode.MERCHANT_NOT_FOUND, "Merchant not found");
@@ -74,6 +81,33 @@ export async function executeDeletion(
     where: { merchantId },
   });
   if (!deletionReq) throw apiError(400, ErrorCode.NO_DELETION_REQUEST, "No deletion request found for this merchant");
+
+  // Guard: refuse if any settlements are still in progress unless force=true.
+  if (!force) {
+    const inflightSettlements = await prisma.settlement.findMany({
+      where: {
+        merchantId,
+        status: { in: ["pending", "processing"] },
+      },
+      select: { id: true, status: true },
+    });
+
+    if (inflightSettlements.length > 0) {
+      const ids = inflightSettlements.map((s) => s.id).join(", ");
+      logger.warn("executeDeletion blocked — in-flight settlements exist", {
+        event: "deletion_blocked_inflight_settlements",
+        merchantId,
+        settlementIds: ids,
+      });
+      throw apiError(
+        409,
+        ErrorCode.INFLIGHT_SETTLEMENTS,
+        `Cannot delete merchant while settlements are in progress. ` +
+          `Pending/processing settlement IDs: ${ids}. ` +
+          `Wait for them to complete or use force=true to override.`,
+      );
+    }
+  }
 
   await prisma.$transaction(async (tx) => {
     // 1. Revoke all active API keys
@@ -143,7 +177,30 @@ export async function executeDeletion(
       },
     });
 
-    // 6. Delete KYC documents
+    // 6. Purge KYC document files from Cloudinary, then delete DB records.
+    //    Query public_ids BEFORE the transaction deletes the rows.
+    const kycDocs = await tx.kYCDocument.findMany({
+      where: { kyc: { merchantId } },
+      select: { id: true, public_id: true },
+    });
+
+    // Purge each file from Cloudinary; log failures so operators can reconcile.
+    const cloudinaryResults = await Promise.allSettled(
+      kycDocs.map((doc) => deleteFromCloudinary(doc.public_id)),
+    );
+    cloudinaryResults.forEach((result, idx) => {
+      if (result.status === "rejected") {
+        logger.error("ALERT: Cloudinary KYC document purge failed — manual reconciliation required", {
+          event: "cloudinary_purge_failed",
+          merchantId,
+          docId: kycDocs[idx]?.id,
+          public_id: kycDocs[idx]?.public_id,
+          error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+        });
+      }
+    });
+
+    // Delete the DB rows regardless of Cloudinary outcome (PII must be removed).
     await tx.kYCDocument.deleteMany({ where: { kyc: { merchantId } } });
 
     // 7. Clear webhook log endpoint URLs (may contain PII in query params)

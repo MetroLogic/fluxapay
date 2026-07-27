@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef, Suspense } from "react";
-import { Invoice, InvoiceStatus } from "@/features/dashboard/invoices/invoices-mock";
+import { useState, useEffect, useCallback, Suspense } from "react";
+import { Invoice, InvoiceStatus } from "@/features/dashboard/invoices/types";
 import { InvoicesTable } from "@/features/dashboard/invoices/InvoicesTable";
 import { InvoiceDetails } from "@/features/dashboard/invoices/InvoiceDetails";
 import { InvoiceForm } from "@/features/dashboard/invoices/InvoiceForm";
@@ -12,6 +12,7 @@ import { api, ApiError } from "@/lib/api";
 import toast from "react-hot-toast";
 import { DataTableCard, ListPageFilterBar, TablePaginationBar } from "@/components/data-table";
 import Input from "@/components/Input";
+import { useDebounce } from "@/hooks/useDebounce";
 
 const PAGE_SIZE = 20;
 const ALL_STATUSES = ["all", "pending", "paid", "cancelled", "overdue"] as const;
@@ -48,8 +49,7 @@ function mapBackendInvoice(row: Record<string, unknown>): Invoice {
 function InvoicesContent() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
-  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const debouncedSearch = useDebounce(search, 300);
   const [statusFilter, setStatusFilter] = useState("all");
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -57,14 +57,6 @@ function InvoicesContent() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
-
-  useEffect(() => {
-    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
-    searchDebounceRef.current = setTimeout(() => setDebouncedSearch(search), 400);
-    return () => {
-      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
-    };
-  }, [search]);
 
   useEffect(() => {
     setPage(1);

@@ -1,5 +1,5 @@
 -- CreateTable
-CREATE TABLE "EmailSuppression" (
+CREATE TABLE IF NOT EXISTS "EmailSuppression" (
     "id" TEXT NOT NULL,
     "email" TEXT NOT NULL,
     "reason" TEXT NOT NULL,
@@ -11,7 +11,7 @@ CREATE TABLE "EmailSuppression" (
 );
 
 -- CreateIndex
-CREATE UNIQUE INDEX "EmailSuppression_email_key" ON "EmailSuppression"("email");
+CREATE UNIQUE INDEX IF NOT EXISTS "EmailSuppression_email_key" ON "EmailSuppression"("email");
 
 -- CreateIndex
-CREATE INDEX "EmailSuppression_email_idx" ON "EmailSuppression"("email");
+CREATE INDEX IF NOT EXISTS "EmailSuppression_email_idx" ON "EmailSuppression"("email");

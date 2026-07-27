@@ -1,9 +1,71 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Payment } from '@/types/payment';
+import { z } from 'zod';
+import { Payment, PaymentStatus } from '@/types/payment';
+
+const PAYMENT_STATUSES = [
+  'pending',
+  'partially_paid',
+  'confirmed',
+  'overpaid',
+  'expired',
+  'failed',
+  'paid',
+  'completed',
+  'cancelled',
+  'refunded',
+  'partially_refunded',
+] as const satisfies readonly PaymentStatus[];
+
+/**
+ * Validates only the fields `normalizePaymentResponse` cannot safely default
+ * or derive — everything the rest of the app treats as required on a
+ * `Payment`. Extra/branding fields are handled separately below and are
+ * intentionally not part of this schema (`.passthrough()` lets them through
+ * untouched).
+ */
+const RequiredPaymentFieldsSchema = z
+  .object({
+    id: z.string().min(1, 'id is required'),
+    amount: z.number({ invalid_type_error: 'amount must be a number' }),
+    currency: z.string().min(1, 'currency is required'),
+    address: z.string().min(1, 'address is required'),
+    status: z.enum(PAYMENT_STATUSES),
+    expiresAt: z.string().min(1, 'expiresAt is required'),
+  })
+  .passthrough();
+
+/**
+ * Thrown by `normalizePaymentResponse` when the raw API response is missing
+ * (or has the wrong type for) a field the rest of the app requires on a
+ * `Payment`. Carries field-level details so callers can surface a specific
+ * message instead of an unhandled crash.
+ */
+export class PaymentParseError extends Error {
+  public readonly fieldErrors: Record<string, string[] | undefined>;
+
+  constructor(fieldErrors: Record<string, string[] | undefined>) {
+    const fields = Object.keys(fieldErrors).join(', ');
+    super(`Payment response is missing or has invalid required field(s): ${fields}`);
+    this.name = 'PaymentParseError';
+    this.fieldErrors = fieldErrors;
+  }
+}
 
 type ConnectionType = 'sse' | 'polling' | null;
+
+const SSE_RECONNECT_BASE_DELAY_MS = 1000;
+const SSE_RECONNECT_MAX_DELAY_MS = 30000;
+const SSE_MAX_CONSECUTIVE_FAILURES = 5;
+const SSE_RECONNECT_JITTER_RATIO = 0.2;
+
+/** Applies +/-20% jitter to a backoff delay so simultaneously-disconnected
+ *  clients don't all reconnect on the exact same tick (thundering herd). */
+function applyJitter(delayMs: number): number {
+  const jitter = delayMs * SSE_RECONNECT_JITTER_RATIO;
+  return delayMs + (Math.random() * 2 - 1) * jitter;
+}
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
@@ -30,9 +92,19 @@ export function normalizePaymentResponse(data: unknown): Payment {
   const raw = asRecord(data);
   const merchantBranding = asRecord(raw.merchant_branding ?? raw.merchantBranding);
 
+  const parsed = RequiredPaymentFieldsSchema.safeParse(raw);
+  if (!parsed.success) {
+    throw new PaymentParseError(parsed.error.flatten().fieldErrors);
+  }
+
+  const expiresAtDate = new Date(parsed.data.expiresAt);
+  if (Number.isNaN(expiresAtDate.getTime())) {
+    throw new PaymentParseError({ expiresAt: ['expiresAt is not a valid date'] });
+  }
+
   return {
-    ...(raw as unknown as Payment),
-    expiresAt: new Date(raw.expiresAt as string),
+    ...(parsed.data as unknown as Payment),
+    expiresAt: expiresAtDate,
     merchantName: firstString(
       raw.merchantName,
       raw.merchant_name,
@@ -81,6 +153,8 @@ interface UsePaymentStatusReturn {
   isOffline: boolean;
   retryConnection: () => Promise<void>;
   serverTimeOffset: number;
+  /** True for one render cycle when the deposit address has just changed */
+  depositAddressUpdated: boolean;
 }
 
 /**
@@ -95,6 +169,7 @@ export function usePaymentStatus(paymentId: string): UsePaymentStatusReturn {
   const [connectionType, setConnectionType] = useState<ConnectionType>(null);
   const [isOffline, setIsOffline] = useState<boolean>(false);
   const [serverTimeOffset, setServerTimeOffset] = useState<number>(0);
+  const [depositAddressUpdated, setDepositAddressUpdated] = useState<boolean>(false);
 
   // Use refs to track mutable state without triggering re-renders or lint issues
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -102,6 +177,7 @@ export function usePaymentStatus(paymentId: string): UsePaymentStatusReturn {
   const paymentRef = useRef<Payment | null>(null);
   const pollingBackoffRef = useRef<number>(3000);
   const reconnectBackoffRef = useRef<number>(1000);
+  const sseFailureCountRef = useRef<number>(0);
 
   // Keep paymentRef in sync
   useEffect(() => {
@@ -195,8 +271,21 @@ export function usePaymentStatus(paymentId: string): UsePaymentStatusReturn {
         if (!prev) return prev;
         const statusChanged = prev.status !== data.status;
         const paidAmountChanged = data.paidAmount !== undefined && prev.paidAmount !== data.paidAmount;
-        if (statusChanged || paidAmountChanged) {
-          return { ...prev, status: data.status, ...(data.paidAmount !== undefined ? { paidAmount: data.paidAmount } : {}) };
+        const addressChanged =
+          data.address !== undefined &&
+          typeof data.address === 'string' &&
+          data.address !== '' &&
+          prev.address !== data.address;
+        if (statusChanged || paidAmountChanged || addressChanged) {
+          if (addressChanged) {
+            setDepositAddressUpdated(true);
+          }
+          return {
+            ...prev,
+            status: data.status,
+            ...(data.paidAmount !== undefined ? { paidAmount: data.paidAmount } : {}),
+            ...(addressChanged ? { address: data.address as string } : {}),
+          };
         }
         return prev;
       });
@@ -241,60 +330,93 @@ export function usePaymentStatus(paymentId: string): UsePaymentStatusReturn {
       schedulePoll();
     };
 
-    const scheduleSseReconnect = () => {
-      if (cancelled || isOffline) return;
-      const delay = reconnectBackoffRef.current;
-      reconnectBackoffRef.current = Math.min(reconnectBackoffRef.current * 2, 30000);
-      setTimeout(() => {
-        if (cancelled) return;
+    const connectSse = () => {
+      if (cancelled) return;
+
+      let es: EventSource;
+      try {
+        es = new EventSource(`/api/payments/${paymentId}/stream`);
+      } catch {
+        // EventSource construction failed — fall back to polling
         startPollingFallback();
-      }, delay);
+        return;
+      }
+      eventSourceRef.current = es;
+
+      es.onopen = () => {
+        if (cancelled) return;
+        setConnectionType('sse');
+        // A successful connection resets the backoff and failure streak.
+        reconnectBackoffRef.current = SSE_RECONNECT_BASE_DELAY_MS;
+        sseFailureCountRef.current = 0;
+      };
+
+      es.onmessage = (event) => {
+        if (cancelled) return;
+        try {
+          const data = JSON.parse(event.data);
+          setPayment((prev) => {
+            if (!prev) return prev;
+            const statusChanged = prev.status !== data.status;
+            const paidAmountChanged = data.paidAmount !== undefined && prev.paidAmount !== data.paidAmount;
+            const addressChanged =
+              data.address !== undefined &&
+              typeof data.address === 'string' &&
+              data.address !== '' &&
+              prev.address !== data.address;
+            if (statusChanged || paidAmountChanged || addressChanged) {
+              if (addressChanged) {
+                setDepositAddressUpdated(true);
+              }
+              return {
+                ...prev,
+                status: data.status,
+                ...(data.paidAmount !== undefined ? { paidAmount: data.paidAmount } : {}),
+                ...(addressChanged ? { address: data.address as string } : {}),
+              };
+            }
+            return prev;
+          });
+
+          // Close SSE on terminal states
+          if (['confirmed', 'expired', 'failed', 'partially_paid', 'overpaid'].includes(data.status)) {
+            es.close();
+            eventSourceRef.current = null;
+          }
+        } catch {
+          // Ignore parse errors
+        }
+      };
+
+      es.onerror = () => {
+        if (cancelled) return;
+        es.close();
+        eventSourceRef.current = null;
+
+        sseFailureCountRef.current += 1;
+        if (sseFailureCountRef.current >= SSE_MAX_CONSECUTIVE_FAILURES) {
+          startPollingFallback();
+          return;
+        }
+
+        // Exponential backoff (1s -> 2s -> 4s ... capped at 30s) with +/-20%
+        // jitter, so many simultaneously-dropped clients don't all retry on
+        // the same tick and flood the server (thundering herd).
+        const delay = applyJitter(reconnectBackoffRef.current);
+        reconnectBackoffRef.current = Math.min(
+          reconnectBackoffRef.current * 2,
+          SSE_RECONNECT_MAX_DELAY_MS,
+        );
+        setTimeout(() => {
+          if (cancelled) return;
+          connectSse();
+        }, delay);
+      };
     };
 
     // Try SSE first
     if (typeof window !== 'undefined' && 'EventSource' in window) {
-      try {
-        const es = new EventSource(`/api/payments/${paymentId}/stream`);
-        eventSourceRef.current = es;
-
-        es.onopen = () => {
-          if (!cancelled) setConnectionType('sse');
-        };
-
-        es.onmessage = (event) => {
-          if (cancelled) return;
-          try {
-            const data = JSON.parse(event.data);
-            setPayment((prev) => {
-              if (!prev) return prev;
-              const statusChanged = prev.status !== data.status;
-              const paidAmountChanged = data.paidAmount !== undefined && prev.paidAmount !== data.paidAmount;
-              if (statusChanged || paidAmountChanged) {
-                return { ...prev, status: data.status, ...(data.paidAmount !== undefined ? { paidAmount: data.paidAmount } : {}) };
-              }
-              return prev;
-            });
-
-            // Close SSE on terminal states
-            if (['confirmed', 'expired', 'failed', 'partially_paid', 'overpaid'].includes(data.status)) {
-              es.close();
-              eventSourceRef.current = null;
-            }
-          } catch {
-            // Ignore parse errors
-          }
-        };
-
-        es.onerror = () => {
-          // SSE failed — close and fall back to polling
-          es.close();
-          eventSourceRef.current = null;
-          scheduleSseReconnect();
-        };
-      } catch {
-        // EventSource construction failed — fall back to polling
-        startPollingFallback();
-      }
+      connectSse();
     } else {
       // No EventSource support — use polling
       startPollingFallback();
@@ -321,5 +443,13 @@ export function usePaymentStatus(paymentId: string): UsePaymentStatusReturn {
     await fetchPayment();
   }, [fetchPayment]);
 
-  return { payment, loading, error, connectionType, isOffline, retryConnection, serverTimeOffset };
+  // Auto-clear the depositAddressUpdated flag after one tick so consumers
+  // can use it as a one-shot signal without managing their own reset.
+  useEffect(() => {
+    if (!depositAddressUpdated) return;
+    const id = setTimeout(() => setDepositAddressUpdated(false), 0);
+    return () => clearTimeout(id);
+  }, [depositAddressUpdated]);
+
+  return { payment, loading, error, connectionType, isOffline, retryConnection, serverTimeOffset, depositAddressUpdated };
 }

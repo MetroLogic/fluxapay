@@ -6,20 +6,45 @@ import {
   XCircle,
   AlertCircle,
   Copy,
+  ShieldCheck,
 } from "lucide-react";
 import toast from "react-hot-toast";
+import { api } from "@/lib/api";
+import { useState } from "react";
 
 interface PaymentDetailsProps {
   payment: Payment;
+  onVerify?: (paymentId: string) => void;
+  verifyingId?: string | null;
 }
 
 const STELLAR_EXPLORER_BASE = "https://stellar.expert/explorer/public/tx";
 
-export function PaymentDetails({ payment }: PaymentDetailsProps) {
+export function PaymentDetails({ payment, onVerify, verifyingId }: PaymentDetailsProps) {
+  const [isVerifying, setIsVerifying] = useState(false);
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     toast.success("Copied to clipboard!");
   };
+
+  const handleVerify = async () => {
+    if (onVerify) {
+      onVerify(payment.id);
+    } else {
+      setIsVerifying(true);
+      try {
+        await api.admin.payments.verify(payment.id);
+        toast.success(`Verification triggered for ${payment.id}`);
+      } catch {
+        toast.error('Failed to trigger verification');
+      } finally {
+        setIsVerifying(false);
+      }
+    }
+  };
+
+  const verifying = verifyingId === payment.id || isVerifying;
+  const canVerify = payment.status === 'pending' || payment.status === 'failed';
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -88,6 +113,23 @@ export function PaymentDetails({ payment }: PaymentDetailsProps) {
           </div>
         )}
       </div>
+
+      {/* Manual Verification Trigger */}
+      {canVerify && (
+        <div className="pt-4 border-t border-border">
+          <button
+            onClick={handleVerify}
+            disabled={verifying}
+            className="inline-flex items-center justify-center gap-2 rounded-md font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-amber-300 bg-amber-50 text-amber-700 shadow-sm hover:bg-amber-100 h-9 px-4 py-2 w-full text-sm"
+          >
+            <ShieldCheck className={`h-4 w-4 ${verifying ? 'animate-spin' : ''}`} />
+            {verifying ? 'Verifying...' : 'Trigger Manual Verification'}
+          </button>
+          <p className="text-xs text-muted-foreground mt-2 text-center">
+            Manually trigger verification for oracle-missed payments
+          </p>
+        </div>
+      )}
 
       {/* Timeline */}
       <div className="pt-4 border-t border-border">

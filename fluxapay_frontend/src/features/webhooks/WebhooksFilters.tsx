@@ -3,7 +3,7 @@ import { Input } from "@/components/Input";
 import { Select } from "@/components/Select";
 import { Search } from "lucide-react";
 import { memo, useCallback, useState, useEffect } from "react";
-import { useDebounce } from "@/lib/performance";
+import { useDebounce } from "@/hooks/useDebounce";
 
 interface WebhooksFiltersProps {
     onSearchChange: (value: string) => void;

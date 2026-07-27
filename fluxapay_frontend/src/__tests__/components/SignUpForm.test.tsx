@@ -1,7 +1,6 @@
 /**
  * Component tests for SignUpForm
  */
-/* eslint-disable @next/next/no-img-element */
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { SignUpForm } from '@/features/auth';

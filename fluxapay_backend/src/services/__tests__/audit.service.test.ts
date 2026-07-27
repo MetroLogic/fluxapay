@@ -98,10 +98,9 @@ describe('Audit Service', () => {
       expect(auditLog?.entity_type).toBe(AuditEntityType.system_config);
       expect(auditLog?.entity_id).toBe('settlement_fee_percent');
       expect(auditLog?.details).toMatchObject({
-        config_key: 'settlement_fee_percent',
-        previous_value: '2.0',
-        new_value: '2.5',
-        is_sensitive: false,
+        changed_fields: ['settlement_fee_percent'],
+        old_values: { settlement_fee_percent: '2.0' },
+        new_values: { settlement_fee_percent: '2.5' },
       });
     });
 
@@ -116,9 +115,9 @@ describe('Audit Service', () => {
 
       const auditLog = await logConfigChange(params);
 
-      expect(auditLog?.details.previous_value).toBe('***REDACTED***');
-      expect(auditLog?.details.new_value).toBe('***REDACTED***');
-      expect(auditLog?.details.is_sensitive).toBe(true);
+      expect(auditLog?.details.old_values.api_secret_key).toBe('***REDACTED***');
+      expect(auditLog?.details.new_values.api_secret_key).toBe('***REDACTED***');
+      expect(auditLog?.details.changed_fields).toContain('api_secret_key');
     });
   });
 

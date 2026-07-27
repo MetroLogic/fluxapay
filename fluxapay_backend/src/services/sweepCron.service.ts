@@ -9,8 +9,15 @@
  *  1. Attempt to INSERT/UPDATE the CronLock row only when it is absent or expired.
  *  2. If another instance holds a non-expired lock, skip this tick and log a warning.
  *  3. On completion (success or error), release the lock immediately.
+ *
+ * Crash resilience:
+ *  - LOCK_TTL_MS is kept short (2 min) to minimise the window where a crashed
+ *    instance can block the job.
+ *  - A watchdog before each acquisition releases stale locks held by dead
+ *    processes on the same host (detected via /proc/<pid>).
  */
 
+import fs from "fs";
 import os from "os";
 import { PrismaClient } from "../generated/client/client";
 import { sweepService } from "./sweep.service";
@@ -18,9 +25,9 @@ import { logSweepTrigger, updateSweepCompletion } from "./audit.service";
 
 const prisma = new PrismaClient();
 
-// Lock TTL: slightly longer than the cron interval so a crashed process
-// doesn't block the next tick forever. Configurable via env.
-const LOCK_TTL_MS = parseInt(process.env.SWEEP_LOCK_TTL_MS ?? "600000", 10); // 10 min default
+// Lock TTL: kept short so a crashed process doesn't block the next tick for long.
+// Configurable via env. Default 2 min (was 10 min — see #850).
+const LOCK_TTL_MS = parseInt(process.env.SWEEP_LOCK_TTL_MS ?? "120000", 10); // 2 min default
 const LOCK_OWNER = `${os.hostname()}:${process.pid}`;
 const JOB_NAME = "sweep";
 
@@ -32,9 +39,48 @@ const metrics = {
 };
 
 /**
+ * Release any stale CronLock rows held by dead processes on this host.
+ * On Linux we check /proc/<pid>; on other platforms we fall back to
+ * relying on TTL expiry alone.
+ */
+async function releaseStaleLocks(): Promise<void> {
+  const hostname = os.hostname();
+  const staleLocks = await prisma.$queryRaw<Array<{ locked_by: string }>>`
+    SELECT locked_by FROM "CronLock"
+    WHERE job_name = ${JOB_NAME}
+      AND locked_by LIKE ${`${hostname}:%`}
+  `;
+
+  for (const row of staleLocks) {
+    const pidStr = row.locked_by.split(":")[1];
+    if (!pidStr) continue;
+    const pid = parseInt(pidStr, 10);
+    if (isNaN(pid)) continue;
+
+    let alive = true;
+    try {
+      // Sending signal 0 tests whether the process exists without delivering a signal.
+      process.kill(pid, 0);
+    } catch {
+      alive = false;
+    }
+
+    if (!alive) {
+      await prisma.$executeRaw`
+        DELETE FROM "CronLock"
+        WHERE job_name = ${JOB_NAME} AND locked_by = ${row.locked_by}
+      `;
+      console.warn(`[SweepCron] Released stale lock from dead process: ${row.locked_by}`);
+    }
+  }
+}
+
+/**
  * Try to acquire the DB lease. Returns true if acquired, false if already held.
  */
 async function acquireLock(): Promise<boolean> {
+  // Release stale locks from dead processes on this host before attempting.
+  await releaseStaleLocks();
   const now = new Date();
   const expiresAt = new Date(now.getTime() + LOCK_TTL_MS);
 

@@ -128,6 +128,10 @@ export function useAdminPayments(params: UseAdminPaymentsParams = {}) {
     key,
     async () => {
       return (await api.admin.payments.list(params)) as AdminPaymentsResponse;
+    },
+    {
+      refreshInterval: 30_000,
+      revalidateOnFocus: true,
     }
   );
 

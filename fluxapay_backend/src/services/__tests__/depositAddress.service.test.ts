@@ -3,10 +3,48 @@ import { PrismaClient } from '../../generated/client/client';
 
 const prisma = new PrismaClient();
 
+async function ensureMerchant() {
+  const existing = await prisma.merchant.findFirst({ where: { email: 'deposit-pool@example.com' } });
+  if (existing) return existing.id;
+  const created = await prisma.merchant.create({
+    data: {
+      email: 'deposit-pool@example.com',
+      business_name: 'Deposit Pool Test',
+      phone_number: `+1555${String(Date.now()).slice(-7)}`,
+      country: 'US',
+      settlement_currency: 'USD',
+      webhook_secret: 'whsec_test',
+      password: 'hashed',
+      status: 'active',
+    },
+  });
+  return created.id;
+}
+
+async function ensurePayment(paymentId: string) {
+  const merchantId = await ensureMerchant();
+  await prisma.payment.upsert({
+    where: { id: paymentId },
+    create: {
+      id: paymentId,
+      merchantId,
+      amount: 10,
+      currency: 'USDC',
+      customer_email: 'payer@example.com',
+      metadata: {},
+      expiration: new Date(Date.now() + 15 * 60 * 1000),
+      status: 'pending',
+      checkout_url: `http://localhost/pay/${paymentId}`,
+    },
+    update: {},
+  });
+}
+
 describe('DepositAddressService', () => {
   beforeAll(async () => {
     // Clean up before tests
     await prisma.depositAddress.deleteMany({});
+    await prisma.payment.deleteMany({ where: { id: { startsWith: 'payment-' } } });
   });
 
   afterAll(async () => {
@@ -63,6 +101,7 @@ describe('DepositAddressService', () => {
       await DepositAddressService.generatePoolAddresses(1);
 
       const paymentId = 'payment-123';
+      await ensurePayment(paymentId);
       const publicKey = await DepositAddressService.allocateAddress(paymentId);
 
       expect(publicKey).toBeTruthy();
@@ -77,6 +116,7 @@ describe('DepositAddressService', () => {
 
     it('should return null when no addresses available', async () => {
       const paymentId = 'payment-123';
+      await ensurePayment(paymentId);
       const publicKey = await DepositAddressService.allocateAddress(paymentId);
 
       expect(publicKey).toBeNull();
@@ -85,6 +125,8 @@ describe('DepositAddressService', () => {
     it('should allocate different addresses for different payments', async () => {
       await DepositAddressService.generatePoolAddresses(2);
 
+      await ensurePayment('payment-1');
+      await ensurePayment('payment-2');
       const payment1 = await DepositAddressService.allocateAddress('payment-1');
       const payment2 = await DepositAddressService.allocateAddress('payment-2');
 
@@ -94,6 +136,8 @@ describe('DepositAddressService', () => {
     it('should handle concurrent allocation with row-level locking', async () => {
       await DepositAddressService.generatePoolAddresses(1);
 
+      await ensurePayment('payment-1');
+      await ensurePayment('payment-2');
       const promises = [
         DepositAddressService.allocateAddress('payment-1'),
         DepositAddressService.allocateAddress('payment-2'),
@@ -114,12 +158,13 @@ describe('DepositAddressService', () => {
     it('should move address to cooldown status', async () => {
       await DepositAddressService.generatePoolAddresses(1);
       const paymentId = 'payment-123';
+      await ensurePayment(paymentId);
       await DepositAddressService.allocateAddress(paymentId);
 
       await DepositAddressService.releaseAddress(paymentId);
 
       const address = await prisma.depositAddress.findFirst({
-        where: { assigned_payment_id: paymentId },
+        where: { status: 'cooldown' },
       });
 
       expect(address?.status).toBe('cooldown');
@@ -130,14 +175,14 @@ describe('DepositAddressService', () => {
     it('should set 24-hour cooldown period', async () => {
       await DepositAddressService.generatePoolAddresses(1);
       const paymentId = 'payment-123';
+      await ensurePayment(paymentId);
       await DepositAddressService.allocateAddress(paymentId);
 
       const beforeRelease = new Date();
       await DepositAddressService.releaseAddress(paymentId);
-      const afterRelease = new Date();
 
       const address = await prisma.depositAddress.findFirst({
-        where: { assigned_payment_id: paymentId },
+        where: { status: 'cooldown' },
       });
 
       const cooldownDuration = address!.cooldown_until!.getTime() - beforeRelease.getTime();
@@ -162,6 +207,8 @@ describe('DepositAddressService', () => {
       const payment1 = 'payment-1';
       const payment2 = 'payment-2';
 
+      await ensurePayment(payment1);
+      await ensurePayment(payment2);
       await DepositAddressService.allocateAddress(payment1);
       await DepositAddressService.allocateAddress(payment2);
 
@@ -190,6 +237,7 @@ describe('DepositAddressService', () => {
       await DepositAddressService.generatePoolAddresses(1);
       const paymentId = 'payment-123';
 
+      await ensurePayment(paymentId);
       await DepositAddressService.allocateAddress(paymentId);
       await DepositAddressService.releaseAddress(paymentId);
 
@@ -221,6 +269,7 @@ describe('DepositAddressService', () => {
       await DepositAddressService.generatePoolAddresses(1);
       const paymentId = 'payment-123';
 
+      await ensurePayment(paymentId);
       await DepositAddressService.allocateAddress(paymentId);
       await DepositAddressService.releaseAddress(paymentId);
 
@@ -242,6 +291,7 @@ describe('DepositAddressService', () => {
       const paymentIds = ['payment-1', 'payment-2', 'payment-3'];
 
       for (const paymentId of paymentIds) {
+        await ensurePayment(paymentId);
         await DepositAddressService.allocateAddress(paymentId);
         await DepositAddressService.releaseAddress(paymentId);
       }
@@ -273,6 +323,7 @@ describe('DepositAddressService', () => {
 
       // Step 2: Allocate address
       const paymentId = 'payment-123';
+      await ensurePayment(paymentId);
       const publicKey = await DepositAddressService.allocateAddress(paymentId);
       expect(publicKey).toBeTruthy();
 

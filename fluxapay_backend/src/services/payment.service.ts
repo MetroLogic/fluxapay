@@ -9,8 +9,13 @@ import { PaymentStatus } from "../types/payment";
 import { trackPaymentCreated } from "../middleware/metrics.middleware";
 import { FxService } from "./fx.service";
 import { DepositAddressService } from "./depositAddress.service";
+import { apiError } from "../helpers/apiError.helper";
+import { ErrorCode } from "../types/errors";
 
 const prisma = new PrismaClient();
+
+/** Default payment expiry when no plan/env override is configured (15 minutes). */
+export const DEFAULT_PAYMENT_EXPIRY_SECONDS = 900;
 
 export class PaymentService {
     static getRateLimitWindowSeconds() {
@@ -18,6 +23,69 @@ export class PaymentService {
         return Number.isFinite(configuredWindow) && configuredWindow > 0
             ? Math.floor(configuredWindow)
             : 60;
+    }
+
+    /**
+     * Resolve payment expiry seconds with fallback order:
+     * 1. request `expires_in_seconds` (must not exceed plan max)
+     * 2. plan `max_payment_expiry_seconds`
+     * 3. env `PAYMENT_EXPIRY_SECONDS`
+     * 4. 900s default
+     */
+    static resolvePaymentExpirySeconds(
+      expiresInSeconds: number | undefined,
+      planMaxExpirySeconds: number | null | undefined,
+    ): number {
+      const envConfigured = Number(process.env.PAYMENT_EXPIRY_SECONDS);
+      const envDefault =
+        Number.isFinite(envConfigured) && envConfigured > 0
+          ? Math.floor(envConfigured)
+          : DEFAULT_PAYMENT_EXPIRY_SECONDS;
+
+      const planMax =
+        planMaxExpirySeconds != null &&
+        Number.isFinite(planMaxExpirySeconds) &&
+        planMaxExpirySeconds > 0
+          ? Math.floor(planMaxExpirySeconds)
+          : null;
+
+      if (expiresInSeconds !== undefined && expiresInSeconds !== null) {
+        const requested = Math.floor(Number(expiresInSeconds));
+        if (!Number.isFinite(requested) || requested <= 0) {
+          throw apiError(
+            400,
+            ErrorCode.VALIDATION_ERROR,
+            "expires_in_seconds must be a positive integer",
+          );
+        }
+        if (planMax != null && requested > planMax) {
+          throw apiError(
+            400,
+            ErrorCode.VALIDATION_ERROR,
+            `expires_in_seconds exceeds plan maximum of ${planMax} seconds`,
+            { details: { expires_in_seconds: requested, max_payment_expiry_seconds: planMax } },
+          );
+        }
+        return requested;
+      }
+
+      if (planMax != null) {
+        return planMax;
+      }
+
+      return envDefault;
+    }
+
+    static async getMerchantPlanMaxExpirySeconds(
+      merchantId: string,
+    ): Promise<number | null> {
+      const sub = await prisma.merchantSubscription.findFirst({
+        where: { merchantId, status: "active" },
+        include: { plan: { select: { max_payment_expiry_seconds: true } } },
+        orderBy: { created_at: "desc" },
+      });
+      const max = sub?.plan?.max_payment_expiry_seconds;
+      return max != null && max > 0 ? max : null;
     }
 
     static async checkRateLimit(merchantId: string) {
@@ -55,6 +123,7 @@ export class PaymentService {
     success_url,
     cancel_url,
     customerId,
+    expires_in_seconds,
   }: {
     amount: number;
     currency: string;
@@ -65,9 +134,15 @@ export class PaymentService {
     success_url?: string;
     cancel_url?: string;
     customerId?: string;
+    expires_in_seconds?: number;
   }) {
     const paymentId = crypto.randomUUID();
-    const expiration = new Date(Date.now() + 15 * 60 * 1000); // 15 min expiry
+    const planMax = await this.getMerchantPlanMaxExpirySeconds(merchantId);
+    const expirySeconds = this.resolvePaymentExpirySeconds(
+      expires_in_seconds,
+      planMax,
+    );
+    const expiration = new Date(Date.now() + expirySeconds * 1000);
     const sanitizedMetadata = validateAndSanitizeMetadata(metadata);
 
     // Build absolute checkout URL using PAY_CHECKOUT_BASE env var
@@ -78,30 +153,9 @@ export class PaymentService {
     const fxRate = await FxService.getUSDCExchangeRate(currency);
     const usdcAmount = amount * fxRate;
 
-    // Try to allocate an address from the pool
-    let stellarAddress = await DepositAddressService.allocateAddress(paymentId);
-    let paymentIndex = null;
-    let derivationPath = null;
-    let encryptedKeyData = null;
-
-    if (!stellarAddress) {
-      // Fallback to deterministic HD derivation if pool is empty
-      const hdWalletService = new HDWalletService();
-      const derived = await hdWalletService.derivePaymentAddress(
-        merchantId,
-        paymentId,
-      );
-      encryptedKeyData = await hdWalletService.encryptKeyData(
-        derived.merchantIndex,
-        derived.paymentIndex,
-      );
-      stellarAddress = derived.publicKey;
-      paymentIndex = derived.paymentIndex;
-      derivationPath = derived.derivationPath;
-    }
-
-    // Create payment with the derived Stellar address and derivation metadata
-    const payment = await prisma.payment.create({
+    // Persist the payment first so pool allocation can satisfy the
+    // DepositAddress.assigned_payment_id foreign key.
+    await prisma.payment.create({
       data: {
         id: paymentId,
         amount,
@@ -118,6 +172,37 @@ export class PaymentService {
         success_url: success_url ?? null,
         cancel_url: cancel_url ?? null,
         ...(customerId ? { customerId } : {}),
+        stellar_address: null,
+        payment_index: null,
+        derivation_path: null,
+        encrypted_key_data: null,
+      },
+    });
+
+    // Try to allocate an address from the pool; fall back to HD derivation
+    let stellarAddress = await DepositAddressService.allocateAddress(paymentId);
+    let paymentIndex: number | null = null;
+    let derivationPath: string | null = null;
+    let encryptedKeyData: string | null = null;
+
+    if (!stellarAddress) {
+      const hdWalletService = new HDWalletService();
+      const derived = await hdWalletService.derivePaymentAddress(
+        merchantId,
+        paymentId,
+      );
+      encryptedKeyData = await hdWalletService.encryptKeyData(
+        derived.merchantIndex,
+        derived.paymentIndex,
+      );
+      stellarAddress = derived.publicKey;
+      paymentIndex = derived.paymentIndex;
+      derivationPath = derived.derivationPath;
+    }
+
+    const payment = await prisma.payment.update({
+      where: { id: paymentId },
+      data: {
         stellar_address: stellarAddress,
         // HD wallet derivation fields (null if from pool, as pool handles its own)
         payment_index: paymentIndex,

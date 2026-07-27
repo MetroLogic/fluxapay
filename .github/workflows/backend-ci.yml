@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   quality-and-build:
-    name: Backend Quality & Build
+    name: Quality & Build
     runs-on: ubuntu-latest
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/fluxapay_ci_placeholder?schema=public
@@ -25,11 +25,9 @@ jobs:
         working-directory: ./fluxapay_backend
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: "npm"
@@ -44,20 +42,20 @@ jobs:
       - name: Generate Prisma Client
         run: npx prisma generate
 
-      - name: Format Check (Lint)
+      - name: Lint
         run: npm run lint
 
-      - name: Validate OpenAPI Specification
+      - name: Validate OpenAPI spec
         run: npm run validate:openapi
 
-      - name: Check Route Documentation Coverage
+      - name: Check route documentation coverage
         run: npm run check:route-coverage -- --ci
 
-      - name: Build Check
+      - name: Build
         run: npm run build
 
   unit-and-contract-tests:
-    name: Backend Unit & Contract Tests
+    name: Unit, Contract & Smoke Tests
     runs-on: ubuntu-latest
     env:
       NODE_ENV: test
@@ -78,6 +76,7 @@ jobs:
       FUNDER_SECRET_KEY: SBXEHJKWF7C7BIFSUGXZE7XKFJ5SP6Y7JGPD4J4TKMX2MQXWQQRF3BSG
       MASTER_VAULT_SECRET_KEY: SDGHCAPDRWTOTBAQT6HJ5KBUZOECD2JEOH6E76NDL4OXNBXIWODLZA4B
       USDC_ISSUER_PUBLIC_KEY: GBVXGET7UCLTTLDZGVWDDMZ7FVLCNZL75GU7BLVPTWUP6UIVYHAY5OAX
+      REDIS_URL: redis://localhost:6379
     services:
       postgres:
         image: postgres:15-alpine
@@ -92,16 +91,23 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
     defaults:
       run:
         working-directory: ./fluxapay_backend
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: "npm"
@@ -127,11 +133,19 @@ jobs:
       - name: Sync database schema
         run: npx prisma db push
 
-      - name: Run Unit Tests
+      - name: Run unit tests
         run: npm test
 
-      - name: Run Contract Tests
+      - name: Run contract tests
         run: npm run test:contract
         env:
-          # Contract suite runs after the full unit suite; avoid merchant create rate limit.
           PAYMENT_RATE_LIMIT_PER_MINUTE: "10000"
+
+      - name: Build backend & run smoke tests
+        run: |
+          npm run build
+          npm start &
+          npx --yes wait-on@9.0.4 http://localhost:3000/health --timeout 120000 --interval 2000
+          npm run test:smoke
+        env:
+          API_BASE_URL: http://localhost:3000

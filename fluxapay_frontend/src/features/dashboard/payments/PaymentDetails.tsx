@@ -10,13 +10,15 @@ import {
   AlertCircle,
   RefreshCcw,
   ArrowRightLeft,
+  Info,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/Button";
 import { Input } from "@/components/Input";
 import { Select } from "@/components/Select";
 import { TxHashLink } from "@/components/TxHashLink";
 import { getStellarExpertTxUrl } from "@/lib/stellar";
-import type { RefundRecord, RefundReason } from "../refunds/refunds-mock";
+import type { RefundRecord, RefundReason } from "../refunds/types";
 import { QRCodeCanvas } from "qrcode.react";
 import toast from "react-hot-toast";
 
@@ -33,6 +35,80 @@ interface PaymentDetailsProps {
     reasonNote?: string;
   }) => Promise<void>;
   onOpenRefundsSection: () => void;
+}
+
+// Stellar network base fee in XLM (0.00001 XLM per operation, typically 1 op for a refund)
+const STELLAR_BASE_FEE_XLM = 0.00001;
+// Approximate fee for USDC refunds routed through Stellar: 1 op + path payment = 2 ops
+const STELLAR_FEE_OPS = 2;
+
+function estimateNetworkFee(currency: "USDC" | "XLM" | string): {
+  feeXlm: number;
+  feeDisplay: string;
+  note: string;
+} {
+  const feeXlm = STELLAR_BASE_FEE_XLM * STELLAR_FEE_OPS;
+  if (currency === "USDC") {
+    return {
+      feeXlm,
+      feeDisplay: `~${feeXlm} XLM (≈ $0.00)`,
+      note: "Stellar network fee deducted from FluxaPay operations wallet — not from refund amount.",
+    };
+  }
+  return {
+    feeXlm,
+    feeDisplay: `~${feeXlm} XLM`,
+    note: "Stellar network fee deducted from FluxaPay operations wallet — not from refund amount.",
+  };
+}
+
+type RefundTimelineStatus = "initiated" | "processing" | "completed" | "failed";
+
+const REFUND_TIMELINE_STEPS: { key: RefundTimelineStatus; label: string }[] = [
+  { key: "initiated", label: "Initiated" },
+  { key: "processing", label: "Processing" },
+  { key: "completed", label: "Completed" },
+];
+
+function RefundStatusTimeline({ status }: { status: RefundTimelineStatus }) {
+  const isFailed = status === "failed";
+  const activeIndex = REFUND_TIMELINE_STEPS.findIndex((s) => s.key === status);
+
+  return (
+    <div className="flex items-center gap-1 flex-wrap">
+      {REFUND_TIMELINE_STEPS.map((step, i) => {
+        const isDone = !isFailed && activeIndex > i;
+        const isActive = !isFailed && activeIndex === i;
+        const dotColor = isFailed && i === 0
+          ? "bg-red-500 ring-red-500/20"
+          : isDone
+          ? "bg-green-500 ring-green-500/20"
+          : isActive
+          ? "bg-yellow-500 ring-yellow-500/20 animate-pulse"
+          : "bg-muted-foreground/30 ring-muted-foreground/10";
+
+        return (
+          <div key={step.key} className="flex items-center gap-1">
+            <div className={`h-2.5 w-2.5 rounded-full ring-4 ${dotColor}`} />
+            <span
+              className={`text-xs ${
+                isActive
+                  ? "font-semibold text-foreground"
+                  : isDone
+                  ? "text-green-600"
+                  : "text-muted-foreground"
+              }`}
+            >
+              {isFailed && i === 0 ? "Failed" : step.label}
+            </span>
+            {i < REFUND_TIMELINE_STEPS.length - 1 && !isFailed && (
+              <span className="text-muted-foreground/40 mx-1">→</span>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 const REASONS: { label: string; value: RefundReason }[] = [
@@ -55,6 +131,7 @@ export const PaymentDetails = ({
   const [reasonNote, setReasonNote] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showFeeEstimate, setShowFeeEstimate] = useState(false);
 
   const copyToClipboard = async (text: string) => {
     try {
@@ -77,16 +154,24 @@ export const PaymentDetails = ({
   );
 
   const hasActiveRefund = paymentRefunds.some((refund) =>
-    ["initiated", "processing", "completed"].includes(refund.status),
+    ["pending", "processing", "completed"].includes(refund.status),
   );
   const canRefundCurrency = payment.currency === "USDC" || payment.currency === "XLM";
   const canInitiateRefund =
     payment.status === "confirmed" && canRefundCurrency && !hasActiveRefund;
 
+  // Fee estimate is only relevant when a refund can be initiated
+  const feeEstimate = useMemo(() => {
+    if (canRefundCurrency) {
+      return estimateNetworkFee(payment.currency);
+    }
+    return null;
+  }, [payment.currency, canRefundCurrency]);
+
   const getRefundStatusBadge = (status: RefundRecord["status"]) => {
     if (status === "completed") return <Badge variant="success">Completed</Badge>;
     if (status === "processing") return <Badge variant="warning">Processing</Badge>;
-    if (status === "initiated") return <Badge variant="info">Initiated</Badge>;
+    if (status === "pending") return <Badge variant="info">Pending</Badge>;
     return <Badge variant="error">Failed</Badge>;
   };
 
@@ -418,6 +503,31 @@ export const PaymentDetails = ({
                   value={partialAmount}
                   onChange={(e) => setPartialAmount(e.target.value)}
                 />
+                {/* Absolute amount verification */}
+                {(() => {
+                  const parsed = Number.parseFloat(partialAmount);
+                  if (!Number.isFinite(parsed) || parsed <= 0) {
+                    return (
+                      <p className="mt-1 text-xs text-red-500">
+                        Amount must be greater than 0.
+                      </p>
+                    );
+                  }
+                  if (parsed > payment.amount) {
+                    return (
+                      <p className="mt-1 text-xs text-red-500">
+                        Amount cannot exceed the original payment ({payment.amount}{" "}
+                        {payment.currency}).
+                      </p>
+                    );
+                  }
+                  return (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Refunding {parsed} {payment.currency} of {payment.amount}{" "}
+                      {payment.currency} total.
+                    </p>
+                  );
+                })()}
               </div>
             )}
 
@@ -432,6 +542,29 @@ export const PaymentDetails = ({
               />
             </div>
 
+            {/* Transaction fee estimation panel */}
+            {feeEstimate && (
+              <div className="rounded-lg border bg-muted/30 p-3 space-y-1.5">
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-between text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+                  onClick={() => setShowFeeEstimate((v) => !v)}
+                  aria-expanded={showFeeEstimate}
+                >
+                  <span className="flex items-center gap-1.5">
+                    <Info className="h-3.5 w-3.5" />
+                    Network fee estimate
+                  </span>
+                  <span className="text-xs font-mono">{feeEstimate.feeDisplay}</span>
+                </button>
+                {showFeeEstimate && (
+                  <p className="text-xs text-muted-foreground pl-5">
+                    {feeEstimate.note}
+                  </p>
+                )}
+              </div>
+            )}
+
             {formError && (
               <p className="text-sm text-red-500">{formError}</p>
             )}
@@ -442,8 +575,17 @@ export const PaymentDetails = ({
                 onClick={handleInitiateRefund}
                 disabled={isSubmitting}
               >
-                <AlertCircle className="h-4 w-4" />
-                {isSubmitting ? "Submitting..." : "Initiate Refund"}
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Submitting...
+                  </>
+                ) : (
+                  <>
+                    <AlertCircle className="h-4 w-4" />
+                    Initiate Refund
+                  </>
+                )}
               </Button>
             </div>
           </div>
@@ -460,29 +602,39 @@ export const PaymentDetails = ({
         {paymentRefunds.length === 0 ? (
           <p className="text-sm text-muted-foreground">No refunds created yet.</p>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-3">
             {paymentRefunds.map((refund) => (
               <div
                 key={refund.id}
-                className="flex flex-col gap-2 rounded-xl border p-3 sm:flex-row sm:items-center sm:justify-between"
+                className="flex flex-col gap-3 rounded-xl border p-3"
               >
-                <div className="min-w-0 space-y-1">
-                  <p className="truncate text-sm font-medium">{refund.id}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {refund.amount} {refund.currency} •{" "}
-                    {new Date(refund.createdAt).toLocaleString()}
-                  </p>
+                {/* Refund header row */}
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0 space-y-0.5">
+                    <p className="truncate text-sm font-medium">{refund.id}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {refund.amount} {refund.currency} •{" "}
+                      {new Date(refund.createdAt).toLocaleString()}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {getRefundStatusBadge(refund.status)}
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className="h-8 px-2"
+                      onClick={onOpenRefundsSection}
+                      title="View in refunds section"
+                    >
+                      <ArrowRightLeft className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  {getRefundStatusBadge(refund.status)}
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    className="h-8 px-2"
-                    onClick={onOpenRefundsSection}
-                  >
-                    <ArrowRightLeft className="h-3.5 w-3.5" />
-                  </Button>
+                {/* Refund status timeline */}
+                <div className="pl-1">
+                  <RefundStatusTimeline
+                    status={refund.status as RefundTimelineStatus}
+                  />
                 </div>
               </div>
             ))}

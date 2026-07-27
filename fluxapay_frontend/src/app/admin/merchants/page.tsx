@@ -23,6 +23,7 @@ import {
     FileText,
     ShieldOff,
     ShieldCheck,
+    Loader2,
 } from 'lucide-react';
 import BulkConfirmModal from '@/features/admin/merchants/BulkConfirmModal';
 import toast from 'react-hot-toast';
@@ -50,6 +51,8 @@ const AdminMerchantsPage = () => {
     const [showResetKeyModal, setShowResetKeyModal] = useState<string | null>(null);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [bulkAction, setBulkAction] = useState<'suspend' | 'activate' | null>(null);
+    const [isBulkUpdating, setIsBulkUpdating] = useState(false);
+    const merchantsSnapshotRef = useRef<AdminMerchant[] | null>(null);
     const [showExportMenu, setShowExportMenu] = useState<boolean>(false);
     const [isExporting, setIsExporting] = useState<boolean>(false);
     const [exportProgress, setExportProgress] = useState<number>(0);
@@ -97,6 +100,15 @@ const AdminMerchantsPage = () => {
     };
 
     const getAccountStatusConfig = (status: string): StatusConfig => {
+        if (status === 'pending_verification' || status === 'pending') {
+            return {
+                color: 'text-amber-700',
+                bg: 'bg-amber-50',
+                border: 'border-amber-200',
+                icon: <Loader2 className="w-3 h-3 animate-spin" />,
+            };
+        }
+
         return status === 'active'
             ? {
                 color: 'text-emerald-700',
@@ -175,30 +187,86 @@ const AdminMerchantsPage = () => {
     const toggleSelectOne = (id: string) => {
         setSelectedIds(prev => {
             const next = new Set(prev);
-            next.has(id) ? next.delete(id) : next.add(id);
+            if (next.has(id)) {
+                next.delete(id);
+            } else {
+                next.add(id);
+            }
             return next;
         });
     };
 
     const handleBulkConfirm = async (reason: string) => {
-        if (!bulkAction) return { succeeded: 0, failed: [] };
+        if (!bulkAction || isBulkUpdating) return { succeeded: 0, failed: [] };
+
         const status = bulkAction === 'suspend' ? 'suspended' : 'active';
+        const selectedArray = Array.from(selectedIds);
+        const optimisticStatus = 'pending_verification';
+
+        setIsBulkUpdating(true);
+        merchantsSnapshotRef.current = [...merchants];
+
+        await mutate(
+            (current) => {
+                if (!current) return current;
+                return {
+                    ...current,
+                    merchants: current.merchants.map((merchant) =>
+                        selectedIds.has(merchant.id)
+                            ? { ...merchant, accountStatus: optimisticStatus }
+                            : merchant,
+                    ),
+                };
+            },
+            { revalidate: false },
+        );
+
         try {
             const data = await api.admin.merchants.bulkUpdateStatus(
-                Array.from(selectedIds),
+                selectedArray,
                 status,
                 reason,
             );
-            void mutate();
+
+            await mutate();
+
             setSelectedIds(new Set());
-            return { succeeded: data.succeeded ?? 0, failed: data.failed ?? [] };
+
+            const failed = data.failed ?? [];
+            if (failed.length > 0) {
+                toast.error(`${failed.length} merchant(s) failed to update`);
+            } else {
+                toast.success(
+                    `Successfully ${bulkAction === 'suspend' ? 'suspended' : 'activated'} ${data.succeeded ?? selectedArray.length} merchant(s)`,
+                );
+            }
+
+            return { succeeded: data.succeeded ?? 0, failed };
         } catch (err) {
+            const snapshot = merchantsSnapshotRef.current;
+            if (snapshot) {
+                await mutate(
+                    (current) => (current ? { ...current, merchants: snapshot } : current),
+                    { revalidate: false },
+                );
+            } else {
+                await mutate();
+            }
             toastApiError(err);
-            return { succeeded: 0, failed: Array.from(selectedIds).map(id => ({ id, error: 'Request failed' })) };
+            return {
+                succeeded: 0,
+                failed: selectedArray.map((id) => ({ id, error: 'Request failed' })),
+            };
+        } finally {
+            setIsBulkUpdating(false);
+            merchantsSnapshotRef.current = null;
         }
     };
 
-    const closeBulkModal = () => setBulkAction(null);
+    const closeBulkModal = () => {
+        if (isBulkUpdating) return;
+        setBulkAction(null);
+    };
 
     const resetApiKeys = (id: string) => {
         toast.success(`API keys reset for merchant ${id}`);
@@ -517,16 +585,18 @@ const AdminMerchantsPage = () => {
                         <div className="flex items-center gap-2">
                             <button
                                 onClick={() => setBulkAction('activate')}
-                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors"
+                                disabled={isBulkUpdating}
+                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                <ShieldCheck className="w-3.5 h-3.5" />
+                                {isBulkUpdating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />}
                                 Activate
                             </button>
                             <button
                                 onClick={() => setBulkAction('suspend')}
-                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-rose-600 hover:bg-rose-700 rounded-lg transition-colors"
+                                disabled={isBulkUpdating}
+                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-rose-600 hover:bg-rose-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                <ShieldOff className="w-3.5 h-3.5" />
+                                {isBulkUpdating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldOff className="w-3.5 h-3.5" />}
                                 Suspend
                             </button>
                             <button

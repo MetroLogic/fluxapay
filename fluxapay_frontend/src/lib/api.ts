@@ -38,7 +38,7 @@ export interface InitiateRefundRequest {
   reasonNote?: string;
 }
 
-export type RefundStatus = "initiated" | "processing" | "completed" | "failed";
+export type RefundStatus = "pending" | "processing" | "completed" | "failed";
 
 export interface ListRefundsParams {
   paymentId?: string;
@@ -582,7 +582,7 @@ export const api = {
       search?: string;
       date_from?: string;
       date_to?: string;
-    }) => {
+    }, init?: RequestInit) => {
       const sp = new URLSearchParams();
       if (params?.page != null) sp.set("page", String(params.page));
       if (params?.limit != null) sp.set("limit", String(params.limit));
@@ -591,7 +591,7 @@ export const api = {
       if (params?.search) sp.set("search", params.search);
       if (params?.date_from) sp.set("date_from", params.date_from);
       if (params?.date_to) sp.set("date_to", params.date_to);
-      return fetchWithAuth(`/api/v1/payments?${sp.toString()}`);
+      return fetchWithAuth(`/api/v1/payments?${sp.toString()}`, init);
     },
 
     getById: (paymentId: string) =>
@@ -817,6 +817,14 @@ export const api = {
           method: "POST",
           body: JSON.stringify({ merchantIds, status, reason }),
         }),
+      disableWebhook: (merchantId: string) =>
+        adminFetch(`/api/v1/merchants/admin/${merchantId}/webhook`, {
+          method: "PATCH",
+          body: JSON.stringify({ webhook_url: "" }),
+        }).then(async res => {
+          if (!res.ok) throw new Error("Failed to disable webhook");
+          return res.json();
+        }),
     },
     settlements: {
       list: (params?: { page?: number; limit?: number; status?: string }) => {
@@ -868,9 +876,44 @@ export const api = {
         if (params?.date_to) sp.set("date_to", params.date_to);
         return fetchWithAuth(`/api/v1/admin/payments?${sp.toString()}`);
       },
+      verify: (paymentId: string) =>
+        fetchWithAuth(`/api/v1/admin/payments/${encodeURIComponent(paymentId)}/verify`, {
+          method: "POST",
+        }),
     },
     addressPool: {
       stats: () => fetchWithAuth("/api/v1/admin/address-pool/stats"),
+    },
+    webhooks: {
+      logs: (params?: {
+        merchant_id?: string;
+        event_type?: string;
+        status?: string;
+        date_from?: string;
+        date_to?: string;
+        search?: string;
+        page?: number;
+        limit?: number;
+      }) => {
+        const sp = new URLSearchParams();
+        if (params?.merchant_id) sp.set("merchant_id", params.merchant_id);
+        if (params?.event_type && params.event_type !== "all") sp.set("event_type", params.event_type);
+        if (params?.status && params.status !== "all") sp.set("status", params.status);
+        if (params?.date_from) sp.set("date_from", params.date_from);
+        if (params?.date_to) sp.set("date_to", params.date_to);
+        if (params?.search) sp.set("search", params.search);
+        if (params?.page != null) sp.set("page", String(params.page));
+        if (params?.limit != null) sp.set("limit", String(params.limit));
+        return adminFetch(`/api/v1/webhooks/admin/logs?${sp.toString()}`).then(async res => {
+          if (!res.ok) throw new Error("Failed to fetch admin webhook logs");
+          return res.json();
+        });
+      },
+      retry: (logId: string) =>
+        adminFetch(`/api/v1/webhooks/admin/logs/${logId}/retry`, { method: "POST" }).then(async res => {
+          if (!res.ok) throw new Error("Failed to retry webhook");
+          return res.json();
+        }),
     },
   },
 };

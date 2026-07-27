@@ -23,19 +23,62 @@ const MAINTENANCE_BYPASS = [
   "/pt/support",
 ];
 
+/**
+ * Cookie/header name used by the backend JWT. We only check *presence*
+ * here — full signature verification happens in the API layer.
+ */
+const AUTH_TOKEN_COOKIE = "token";
+
+/**
+ * Protected path prefixes that require an authenticated session.
+ * Any request whose pathname starts with one of these values will be
+ * redirected to /login (with `?redirect=<original>`) when no auth
+ * token is present in cookies or the Authorization header.
+ *
+ * NOTE: The locale segment is stripped before matching so both
+ * `/dashboard/payments` and `/en/dashboard/payments` are covered.
+ */
+const PROTECTED_PREFIXES = [
+  "/dashboard",
+  "/admin",
+];
+
+/**
+ * Admin-only path prefixes — a subset of PROTECTED_PREFIXES. Role validation
+ * beyond token presence is enforced client-side by AdminGuard and on the
+ * server by the backend; middleware only blocks unauthenticated requests.
+ * Kept here for documentation and future middleware-level role checks.
+ */
+// const ADMIN_PREFIXES = ["/admin"];
+
+/** Extract the path without locale prefix, e.g. /en/dashboard → /dashboard */
+function stripLocale(pathname: string): string {
+  return pathname.replace(/^\/(en|fr|pt)(\/|$)/, "/");
+}
+
+/** Return true if the request carries *any* auth token (cookie or header). */
+function hasAuthToken(request: NextRequest): boolean {
+  if (request.cookies.get(AUTH_TOKEN_COOKIE)?.value) return true;
+  const authHeader = request.headers.get("authorization") ?? "";
+  if (authHeader.startsWith("Bearer ")) return true;
+  return false;
+}
+
 export default function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+
+  // ── 1. Maintenance mode ──────────────────────────────────────────────────
   const isMaintenanceMode =
     process.env.NEXT_PUBLIC_MAINTENANCE_MODE === "true";
 
   if (isMaintenanceMode) {
-    const { pathname } = request.nextUrl;
-
-    // Allow static files, Next.js internals, and bypass paths through
     const isBypassed =
       pathname.startsWith("/_next") ||
       pathname.startsWith("/api") ||
       pathname.startsWith("/favicon") ||
-      MAINTENANCE_BYPASS.some((p) => pathname === p || pathname.startsWith(p + "/"));
+      MAINTENANCE_BYPASS.some(
+        (p) => pathname === p || pathname.startsWith(p + "/"),
+      );
 
     if (!isBypassed) {
       const url = request.nextUrl.clone();
@@ -44,31 +87,38 @@ export default function middleware(request: NextRequest) {
     }
   }
 
+  // ── 2. Auth guard for protected routes ───────────────────────────────────
+  const bare = stripLocale(pathname);
+  const isProtected = PROTECTED_PREFIXES.some(
+    (p) => bare === p || bare.startsWith(p + "/"),
+  );
+
+  if (isProtected && !hasAuthToken(request)) {
+    const loginUrl = request.nextUrl.clone();
+    loginUrl.pathname = "/login";
+    // Preserve the original destination so the login page can redirect back.
+    loginUrl.searchParams.set("redirect", pathname);
+    return NextResponse.redirect(loginUrl);
+  }
+
+  // ── 3. Delegate to next-intl for locale handling ─────────────────────────
   return intlMiddleware(request);
 }
 
 export const config = {
-  // Locale entrypoints + unprefixed auth URLs. With `localePrefix: 'as-needed'`, `/en/signup`
-  // redirects to `/signup`; those paths must still run next-intl middleware or they 404 (no `[locale]` segment).
-  // Dashboard and other non-localized routes stay outside this list.
+  /**
+   * Matcher covers:
+   *  - Locale entry-points handled by next-intl
+   *  - Public auth / marketing routes that need next-intl
+   *  - All /dashboard/* and /admin/* paths (with and without locale prefix)
+   *    so the auth guard above fires on direct URL navigation
+   *
+   * Static files (_next, api, images, etc.) are excluded by Next.js
+   * automatically when they match /_next or /api, but we also exclude
+   * them explicitly via the negative lookahead.
+   */
   matcher: [
-    "/",
-    "/(en|fr|pt)/:path*",
-    "/signup",
-    "/login",
-    "/verify-otp",
-    "/forgot-password",
-    "/reset-password",
-    "/docs",
-    "/docs/:path*",
-    "/pricing",
-    "/faqs",
-    "/contact",
-    "/community",
-    "/support",
-    "/status",
-    "/privacy",
-    "/terms",
-    "/maintenance",
+    // Exclude static assets and Next.js internals
+    "/((?!_next|api|favicon|.*\\..*).*)",
   ],
 };

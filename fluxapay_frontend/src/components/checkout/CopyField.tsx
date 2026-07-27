@@ -9,10 +9,23 @@ interface CopyFieldProps {
   value: string;
   truncate?: boolean;
   required?: boolean;
+  /** Overrides the default `Copy ${label}` aria-label on the copy button */
+  copyAriaLabel?: string;
+  /** Accessible id for the value element; auto-generated when omitted */
+  fieldId?: string;
 }
 
-export function CopyField({ label, value, truncate = false, required = false }: CopyFieldProps) {
+export function CopyField({
+  label,
+  value,
+  truncate = false,
+  required = false,
+  copyAriaLabel,
+  fieldId,
+}: CopyFieldProps) {
   const [copied, setCopied] = useState(false);
+  const valueId = fieldId ?? `copy-field-${label.toLowerCase().replace(/\s+/g, '-')}`;
+  const buttonAriaLabel = copyAriaLabel ?? `Copy ${label}`;
 
   const handleCopy = async () => {
     try {
@@ -33,9 +46,9 @@ export function CopyField({ label, value, truncate = false, required = false }: 
   return (
     <div className="group relative mb-4">
       <div className="mb-1.5 flex items-center justify-between">
-        <label className="text-xs font-bold uppercase tracking-widest text-gray-500">
+        <span id={`${valueId}-label`} className="text-xs font-bold uppercase tracking-widest text-gray-500">
           {label}
-        </label>
+        </span>
         {required && (
           <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-tighter text-amber-700">
             Required
@@ -43,7 +56,12 @@ export function CopyField({ label, value, truncate = false, required = false }: 
         )}
       </div>
       <div className="relative flex items-center overflow-hidden rounded-xl border border-gray-200 bg-gray-50 transition-all hover:border-slate-400">
-        <div className="flex-1 overflow-hidden px-4 py-3 font-mono text-sm text-gray-900">
+        <div
+          id={valueId}
+          className="flex-1 overflow-hidden px-4 py-3 font-mono text-sm text-gray-900"
+          aria-labelledby={`${valueId}-label`}
+          aria-label={`${label}: ${value}`}
+        >
           <span className="block truncate" title={value}>
             {displayValue}
           </span>
@@ -51,16 +69,26 @@ export function CopyField({ label, value, truncate = false, required = false }: 
         <button
           type="button"
           onClick={handleCopy}
-          className="flex h-full items-center justify-center border-l border-gray-200 px-4 py-3 text-gray-500 transition-colors hover:bg-slate-900 hover:text-white"
-          aria-label={`Copy ${label}`}
+          className="flex h-full items-center justify-center border-l border-gray-200 px-4 py-3 text-gray-500 transition-colors hover:bg-slate-900 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--checkout-accent)]"
+          aria-label={buttonAriaLabel}
+          aria-describedby={copied ? `${valueId}-copied` : undefined}
         >
           {copied ? (
-            <Check className="h-4 w-4 animate-in zoom-in" />
+            <Check className="h-4 w-4 animate-in zoom-in" aria-hidden="true" />
           ) : (
-            <Copy className="h-4 w-4" />
+            <Copy className="h-4 w-4" aria-hidden="true" />
           )}
+          <span className="sr-only">{copied ? 'Copied' : buttonAriaLabel}</span>
         </button>
       </div>
+      <span
+        id={`${valueId}-copied`}
+        role="status"
+        aria-live="polite"
+        className="sr-only"
+      >
+        {copied ? 'Copied' : ''}
+      </span>
     </div>
   );
 }

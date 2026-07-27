@@ -6,6 +6,7 @@ import { createAndDeliverWebhook } from "./webhook.service";
 import { startInvoicePdfGeneration } from "./invoicePdf.service";
 import { sendInvoiceEmail } from "./email.service";
 import { Readable } from "stream";
+import { assertValidPositiveAmount, assertValidLineItems, AmountValidationError } from "../utils/amount.util";
 
 const prisma = new PrismaClient();
 
@@ -45,6 +46,22 @@ export async function createInvoiceService(params: {
     due_date,
     tax_rate,
   } = params;
+
+  // Validate amount / line items are positive numbers before using them in
+  // any calculation. Negative or zero values would otherwise flow through
+  // to `subtotal`/`total` and ultimately to settlement as inverted balances.
+  try {
+    if (line_items && line_items.length > 0) {
+      assertValidLineItems(line_items);
+    } else if (params.amount !== undefined) {
+      assertValidPositiveAmount(params.amount, "amount");
+    }
+  } catch (validationError) {
+    if (validationError instanceof AmountValidationError) {
+      throw apiError(400, ErrorCode.INVALID_AMOUNT, validationError.message);
+    }
+    throw validationError;
+  }
 
   // Calculate subtotal from line items
   let subtotal = 0;
@@ -123,9 +140,15 @@ export async function getInvoiceByIdService(merchantId: string, invoiceId: strin
     data: {
       id: invoice.id,
       invoice_number: invoice.invoice_number,
-      amount: Number(invoice.amount),
+      amount: Number(invoice.amount) / 100,
+      subtotal: invoice.subtotal ? Number(invoice.subtotal) / 100 : 0,
+      tax_amount: invoice.tax_amount ? Number(invoice.tax_amount) / 100 : 0,
+      tax_rate: invoice.tax_rate ? Number(invoice.tax_rate) / 100 : 0,
       currency: invoice.currency,
       customer_email: invoice.customer_email,
+      customer_name: invoice.customer_name,
+      line_items: invoice.line_items,
+      notes: invoice.notes,
       status: invoice.status,
       due_date: invoice.due_date,
       created_at: invoice.created_at,
