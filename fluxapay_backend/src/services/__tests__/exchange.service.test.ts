@@ -282,7 +282,13 @@ describe("exchange.service", () => {
   describe("FX Rate Caching", () => {
     afterEach(async () => {
       // Clean up Redis cache
-      const keys = await redisClient.keys("fx_rate:*");
+      const keys: string[] = [];
+      let cursor = '0';
+      do {
+        const [nextCursor, batch] = await redisClient.scan(cursor, 'MATCH', 'fx_rate:*', 'COUNT', 100);
+        cursor = nextCursor;
+        keys.push(...batch);
+      } while (cursor !== '0');
       if (keys.length > 0) {
         await redisClient.del(...keys);
       }

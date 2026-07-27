@@ -111,9 +111,42 @@ import { PrismaClient } from "../generated/client/client";
 
 const adminPrisma = new PrismaClient();
 
+/**
+ * Defense-in-depth admin gate. Mirrors the logic in adminAuth middleware so
+ * handlers are safe even if mounted without the route-level middleware.
+ *
+ * Returns an error payload if the request is NOT authorised, or null if it is.
+ * Callers should `return sendApiError(res, err)` when non-null.
+ */
+function assertAdminRequest(req: Request): ReturnType<typeof apiError> | null {
+  const adminSecret = process.env.ADMIN_SECRET;
+  const providedSecret = req.headers["x-admin-secret"];
+
+  if (!adminSecret) {
+    if (process.env.NODE_ENV === "production") {
+      return apiError(
+        503,
+        ErrorCode.SERVICE_UNAVAILABLE,
+        "Admin endpoints are disabled in production because ADMIN_SECRET is not configured.",
+      );
+    }
+    // Dev fallthrough — allowed without a secret
+    return null;
+  }
+
+  if (providedSecret !== adminSecret) {
+    return apiError(401, ErrorCode.UNAUTHORIZED, "Unauthorized. Invalid or missing admin secret.");
+  }
+
+  return null;
+}
+
 /** GET /api/merchants/admin/list – paginated merchant list */
 export async function adminListMerchants(req: Request, res: Response) {
   try {
+    const denied = assertAdminRequest(req);
+    if (denied) return sendApiError(res, denied);
+
     const page = Math.max(1, parseInt((req.query.page as string) || "1"));
     const limit = Math.min(100, Math.max(1, parseInt((req.query.limit as string) || "20")));
     const status = req.query.status as string | undefined;
@@ -149,6 +182,9 @@ export async function adminListMerchants(req: Request, res: Response) {
 /** GET /api/merchants/admin/:merchantId – single merchant detail */
 export async function adminGetMerchant(req: Request, res: Response) {
   try {
+    const denied = assertAdminRequest(req);
+    if (denied) return sendApiError(res, denied);
+
     const merchantId = String(req.params.merchantId);
     const merchant = await adminPrisma.merchant.findUnique({
       where: { id: merchantId },
@@ -168,6 +204,9 @@ export async function adminGetMerchant(req: Request, res: Response) {
 /** PATCH /api/merchants/admin/:merchantId/status – suspend / activate */
 export async function adminUpdateMerchantStatus(req: Request, res: Response) {
   try {
+    const denied = assertAdminRequest(req);
+    if (denied) return sendApiError(res, denied);
+
     const merchantId = String(req.params.merchantId);
     const { status } = req.body as { status: MerchantStatus };
 
@@ -190,6 +229,9 @@ export async function adminUpdateMerchantStatus(req: Request, res: Response) {
 /** POST /api/merchants/admin/bulk-status – bulk suspend / activate */
 export async function adminBulkUpdateMerchantStatus(req: Request, res: Response) {
   try {
+    const denied = assertAdminRequest(req);
+    if (denied) return sendApiError(res, denied);
+
     const { merchantIds, status, reason } = req.body as {
       merchantIds: string[];
       status: MerchantStatus;
@@ -238,6 +280,9 @@ export async function adminBulkUpdateMerchantStatus(req: Request, res: Response)
 /** PATCH /api/merchants/admin/:merchantId/webhook – update webhook URL */
 export async function adminUpdateMerchantWebhook(req: Request, res: Response) {
   try {
+    const denied = assertAdminRequest(req);
+    if (denied) return sendApiError(res, denied);
+
     const merchantId = String(req.params.merchantId);
     const { webhook_url } = req.body as { webhook_url: string };
 

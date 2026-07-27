@@ -40,6 +40,33 @@ export interface InvoicePdfJob {
 
 const invoicePdfJobs = new Map<string, InvoicePdfJob>();
 
+/** How long a completed/failed job stays in the map before eviction (1 hour). */
+const JOB_TTL_MS = 60 * 60 * 1000;
+
+/** Hard cap on map size — evict oldest entries when exceeded. */
+const MAX_JOBS = 1000;
+
+function evictJob(jobId: string): void {
+    const job = invoicePdfJobs.get(jobId);
+    if (!job) return;
+    // Remove temp PDF from disk
+    if (job.filePath) {
+        fs.unlink(job.filePath, () => {});
+    }
+    invoicePdfJobs.delete(jobId);
+}
+
+function scheduleEviction(jobId: string): void {
+    setTimeout(() => evictJob(jobId), JOB_TTL_MS).unref();
+}
+
+function enforceMaxJobs(): void {
+    while (invoicePdfJobs.size > MAX_JOBS) {
+        const oldest = invoicePdfJobs.keys().next().value;
+        if (oldest) evictJob(oldest);
+    }
+}
+
 export function renderInvoicePdf(doc: PDFDocument, data: InvoicePdfData): void {
     // ── Header ──────────────────────────────────────────────────────────────
     doc
@@ -203,6 +230,7 @@ export function startInvoicePdfGeneration(data: InvoicePdfData, filename: string
     };
 
     invoicePdfJobs.set(jobId, job);
+    enforceMaxJobs();
 
     const possibleWorkerPaths = [
         path.resolve(__dirname, "invoicePdf.worker.js"),
@@ -224,10 +252,12 @@ export function startInvoicePdfGeneration(data: InvoicePdfData, filename: string
             currentJob.status = "completed";
             currentJob.filePath = message.filePath;
             currentJob.completedAt = new Date();
+            scheduleEviction(message.jobId);
         } else {
             currentJob.status = "failed";
             currentJob.error = message.error ?? "Failed to generate PDF";
             currentJob.completedAt = new Date();
+            scheduleEviction(message.jobId);
         }
     });
 
@@ -237,6 +267,7 @@ export function startInvoicePdfGeneration(data: InvoicePdfData, filename: string
             currentJob.status = "failed";
             currentJob.error = error.message;
             currentJob.completedAt = new Date();
+            scheduleEviction(jobId);
         }
     });
 
@@ -247,6 +278,7 @@ export function startInvoicePdfGeneration(data: InvoicePdfData, filename: string
                 currentJob.status = "failed";
                 currentJob.error = `Worker exited with code ${code}`;
                 currentJob.completedAt = new Date();
+                scheduleEviction(jobId);
             }
         }
     });

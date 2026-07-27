@@ -175,7 +175,14 @@ async function getQuoteWithFallback(
 
 export async function getAllCachedFxRates(): Promise<Record<string, CachedFxRate>> {
   try {
-    const keys = await redisClient.keys('fx_rate:USDC:*');
+    const keys: string[] = [];
+    let cursor = '0';
+    do {
+      const [nextCursor, batch] = await redisClient.scan(cursor, 'MATCH', 'fx_rate:USDC:*', 'COUNT', 100);
+      cursor = nextCursor;
+      keys.push(...batch);
+    } while (cursor !== '0');
+
     const rates: Record<string, CachedFxRate> = {};
 
     for (const key of keys) {

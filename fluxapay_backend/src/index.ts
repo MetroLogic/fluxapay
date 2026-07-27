@@ -65,6 +65,11 @@ try {
     // Initialize per-payment settlement service (subscribes to PAYMENT_CONFIRMED events)
     // Service auto-starts via constructor subscription
     logger.info("Payment settlement service initialized");
+
+    // Pick up any settlement retries that were pending before restart
+    paymentSettlementService.processPendingSettlementRetries().catch((err) => {
+      logger.error("Failed to process pending settlement retries on startup", { error: err });
+    });
   });
 
   /**

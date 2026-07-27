@@ -25,8 +25,10 @@ import { getExchangePartner, ExchangeQuoteResult, PayoutResult } from "./exchang
 import { createAndDeliverWebhook } from "./webhook.service";
 import { eventBus, AppEvents } from "./EventService";
 import { sendSettlementFailureAlert } from "./settlementAlert.service";
+import { getLogger } from "../utils/logger";
 
 const prisma = new PrismaClient();
+const logger = getLogger();
 
 /** Maximum retry attempts for failed settlements */
 const MAX_RETRY_ATTEMPTS = 3;
@@ -92,16 +94,31 @@ export class PaymentSettlementService {
 
       if (result.success) {
         console.log(`[PaymentSettlement] ✅ Settlement succeeded for payment ${paymentId}`);
+        // Clear any pending retry record
+        await prisma.settlementRetry.deleteMany({ where: { paymentId, status: { in: ['pending', 'processing'] } } }).catch(() => {});
       } else {
         console.error(`[PaymentSettlement] ❌ Settlement failed for payment ${paymentId}: ${result.error}`);
         
         // Schedule retry if not exhausted
         if ((result.retryCount || 0) < MAX_RETRY_ATTEMPTS) {
+          const nextRetryCount = (result.retryCount || 0) + 1;
           const retryDelay = RETRY_INTERVAL_MS * Math.pow(2, result.retryCount || 0);
-          console.log(`[PaymentSettlement] Scheduling retry ${result.retryCount || 0} + 1 in ${retryDelay}ms`);
-          setTimeout(() => this.settlePayment(paymentId, (result.retryCount || 0) + 1), retryDelay);
+          const nextRetryAt = new Date(Date.now() + retryDelay);
+          logger.info('Scheduling persistent settlement retry', { paymentId, retryCount: nextRetryCount, nextRetryAt });
+          await prisma.settlementRetry.upsert({
+            where: { paymentId },
+            update: { retryCount: nextRetryCount, nextRetryAt, lastError: result.error, status: 'pending' },
+            create: { paymentId, retryCount: nextRetryCount, nextRetryAt, lastError: result.error },
+          }).catch((err) => {
+            logger.error('Failed to persist settlement retry', { paymentId, error: err });
+          });
         } else {
           console.error(`[PaymentSettlement] Max retries exceeded for payment ${paymentId}, alerting required`);
+          // Mark retry record as exhausted
+          await prisma.settlementRetry.updateMany({
+            where: { paymentId, status: 'pending' },
+            data: { status: 'exhausted' },
+          }).catch(() => {});
           sendSettlementFailureAlert({
             merchantId: result.merchantId || payment.merchantId,
             settlementId: result.settlementId,
@@ -329,6 +346,76 @@ export class PaymentSettlementService {
         retryCount,
       };
     }
+  }
+
+  /**
+   * Pick up pending settlement retries whose nextRetryAt has passed.
+   * Called by cron job and on startup.
+   */
+  public async processPendingSettlementRetries(): Promise<{ processed: number; succeeded: number; failed: number }> {
+    const now = new Date();
+    const pendingRetries = await prisma.settlementRetry.findMany({
+      where: { status: 'pending', nextRetryAt: { lte: now } },
+      orderBy: { nextRetryAt: 'asc' },
+    });
+
+    if (pendingRetries.length === 0) {
+      return { processed: 0, succeeded: 0, failed: 0 };
+    }
+
+    logger.info('Processing pending settlement retries', { count: pendingRetries.length });
+
+    let succeeded = 0;
+    let failed = 0;
+
+    for (const retry of pendingRetries) {
+      // Mark as processing to prevent concurrent pickup
+      await prisma.settlementRetry.update({
+        where: { id: retry.id },
+        data: { status: 'processing' },
+      }).catch(() => {});
+
+      try {
+        const result = await this.settlePayment(retry.paymentId, retry.retryCount);
+
+        if (result.success) {
+          succeeded++;
+          await prisma.settlementRetry.delete({ where: { id: retry.id } }).catch(() => {});
+          logger.info('Settlement retry succeeded', { paymentId: retry.paymentId, retryCount: retry.retryCount });
+        } else {
+          // Retry failed again — reschedule if under limit
+          if (retry.retryCount < MAX_RETRY_ATTEMPTS) {
+            const retryDelay = RETRY_INTERVAL_MS * Math.pow(2, retry.retryCount);
+            await prisma.settlementRetry.update({
+              where: { id: retry.id },
+              data: {
+                status: 'pending',
+                retryCount: retry.retryCount + 1,
+                nextRetryAt: new Date(Date.now() + retryDelay),
+                lastError: result.error,
+              },
+            });
+            logger.info('Settlement retry rescheduled', { paymentId: retry.paymentId, nextRetryCount: retry.retryCount + 1 });
+          } else {
+            failed++;
+            await prisma.settlementRetry.update({
+              where: { id: retry.id },
+              data: { status: 'exhausted', lastError: result.error },
+            });
+            logger.warn('Settlement retry exhausted', { paymentId: retry.paymentId });
+          }
+        }
+      } catch (err) {
+        failed++;
+        await prisma.settlementRetry.update({
+          where: { id: retry.id },
+          data: { status: 'pending', lastError: err instanceof Error ? err.message : String(err) },
+        }).catch(() => {});
+        logger.error('Settlement retry error', { paymentId: retry.paymentId, error: err });
+      }
+    }
+
+    return { processed: pendingRetries.length, succeeded, failed };
   }
 
   /**
