@@ -176,6 +176,8 @@ model Plan {
   overage_mode            String                 @default("hard_block")
   /** Feature flags, e.g. ["data_export_pii"] */
   features                Json                   @default("[]")
+  /** Max payment expiry window in seconds (also used as plan default expiry) */
+  max_payment_expiry_seconds Int?
   created_at              DateTime               @default(now())
   updated_at              DateTime               @updatedAt
   subscriptions           MerchantSubscription[]
@@ -210,6 +212,12 @@ model MerchantSubscription {
   current_period_start DateTime
   current_period_end   DateTime
   next_billing_date    DateTime
+  /** Plan amount actually charged/applied for the current period, captured
+   *  fresh from Plan.amount at subscription creation and on every renewal. */
+  current_period_amount        Decimal?
+  /** Set once a price-increase notice email has been sent for the
+   *  upcoming renewal, so the 7-day-prior notice job doesn't resend it. */
+  price_change_notice_sent_at  DateTime?
   created_at           DateTime @default(now())
   updated_at           DateTime @updatedAt
 }
@@ -374,6 +382,10 @@ model Payment {
   settled            Boolean  @default(false)
   swept_at           DateTime?
   sweep_tx_hash      String?
+  sweep_retry_count         Int      @default(0)
+  sweep_last_error          String?
+  sweep_failed_at           DateTime?
+  sweep_needs_manual_review Boolean  @default(false)
   confirmed_at       DateTime?
   settled_at         DateTime?
   settlement_ref     String?
@@ -403,7 +415,7 @@ model Payment {
   escrow_contract_address  String?
   escrow_status            String?
 
-  @@index([swept, status])
+  @@index([swept, status, sweep_needs_manual_review])
   @@index([customerId])
   @@index([merchantId, createdAt(sort: Desc)])
   @@index([merchantId, status, createdAt(sort: Desc)])

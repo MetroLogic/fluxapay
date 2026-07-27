@@ -67,7 +67,7 @@ function enforceMaxJobs(): void {
     }
 }
 
-export function renderInvoicePdf(doc: PDFDocument, data: InvoicePdfData): void {
+export function renderInvoicePdf(doc: InstanceType<typeof PDFDocument>, data: InvoicePdfData): void {
     // ── Header ──────────────────────────────────────────────────────────────
     doc
         .fontSize(24)

@@ -64,15 +64,17 @@ export class HDWalletService {
   /**
    * Converts the master seed string to 64-byte seed buffer.
    * Supports both raw hex (64 chars = 32 bytes expanded to 64) and plain strings.
+   *
+   * A 32-byte hex seed is expanded with HMAC-SHA512("ed25519 seed", seed32) per
+   * SLIP-0010 style expansion — never by concatenating the seed with itself.
    */
   private async getSeedBuffer(): Promise<Buffer> {
     const masterSeed = await this.getMasterSeed();
 
-    // If it looks like a 64-char hex string, use it directly as 32-byte seed
-    // padded to 64 bytes (ed25519-hd-key expects 64 bytes)
+    // 64-char hex → 32 bytes; expand to 64 bytes via HMAC-SHA512 (not concat)
     if (/^[0-9a-fA-F]{64}$/.test(masterSeed)) {
       const seed32 = Buffer.from(masterSeed, "hex");
-      return Buffer.concat([seed32, seed32]); // 64 bytes
+      return crypto.createHmac("sha512", "ed25519 seed").update(seed32).digest();
     }
 
     // Otherwise hash to get deterministic 64-byte seed

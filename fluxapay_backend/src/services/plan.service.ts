@@ -10,8 +10,13 @@
 import { Decimal } from "@prisma/client/runtime/library";
 import { PrismaClient } from "../generated/client/client";
 import { createAndDeliverWebhook } from "./webhook.service";
+import { sendSubscriptionPriceChangeNoticeEmail } from "./email.service";
 
 const prisma = new PrismaClient();
+
+const PRICE_CHANGE_NOTICE_LOCK = "subscription_price_change_notice";
+const PRICE_CHANGE_NOTICE_LOCK_TTL_MS = 5 * 60 * 1000;
+const PRICE_CHANGE_NOTICE_WINDOW_DAYS = 7;
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -128,6 +133,7 @@ export async function createSubscription(params: {
       current_period_start: now,
       current_period_end: periodEnd,
       next_billing_date: nextBilling,
+      current_period_amount: plan.amount,
     },
     include: { merchant: true, plan: true },
   });
@@ -202,12 +208,19 @@ export async function processBillingCycle(): Promise<ProcessBillingCycleResult> 
       );
       const nextBilling = new Date(periodEnd);
 
+      // Always charge the plan's *current* amount, not whatever was stored
+      // from a previous period -- an admin price change must take effect
+      // on the very next renewal rather than being silently ignored.
       await prisma.merchantSubscription.update({
         where: { id: sub.id },
         data: {
           current_period_start: periodStart,
           current_period_end: periodEnd,
           next_billing_date: nextBilling,
+          current_period_amount: subscription.plan.amount,
+          // Reset so a further price change ahead of the *next* renewal
+          // gets its own notice.
+          price_change_notice_sent_at: null,
         },
       });
 
@@ -238,4 +251,117 @@ export async function processBillingCycle(): Promise<ProcessBillingCycleResult> 
     renewed,
     errors,
   };
+}
+
+// ─── Upcoming price-change notices ─────────────────────────────────────────────
+
+export interface PriceChangeNoticeResult {
+  processed: number;
+  notified: number;
+  errors: { subscriptionId: string; error: string }[];
+}
+
+async function acquirePriceChangeNoticeLock(lockedBy: string): Promise<boolean> {
+  const now = new Date();
+  try {
+    await prisma.cronLock.upsert({
+      where: { job_name: PRICE_CHANGE_NOTICE_LOCK },
+      create: {
+        job_name: PRICE_CHANGE_NOTICE_LOCK,
+        locked_at: now,
+        expires_at: new Date(now.getTime() + PRICE_CHANGE_NOTICE_LOCK_TTL_MS),
+        locked_by: lockedBy,
+      },
+      update: {
+        locked_at: now,
+        expires_at: new Date(now.getTime() + PRICE_CHANGE_NOTICE_LOCK_TTL_MS),
+        locked_by: lockedBy,
+      },
+    });
+    const lock = await prisma.cronLock.findUnique({ where: { job_name: PRICE_CHANGE_NOTICE_LOCK } });
+    return lock?.locked_by === lockedBy && lock.expires_at > now;
+  } catch {
+    return false;
+  }
+}
+
+async function releasePriceChangeNoticeLock(): Promise<void> {
+  await prisma.cronLock
+    .delete({ where: { job_name: PRICE_CHANGE_NOTICE_LOCK } })
+    .catch(() => {/* already gone */});
+}
+
+/**
+ * Find active subscriptions renewing within the next 7 days whose plan's
+ * current amount differs from what was actually charged last period, and
+ * email the merchant a heads-up before that new price takes effect.
+ * Idempotent via `price_change_notice_sent_at`; call this from a daily cron.
+ */
+export async function sendUpcomingSubscriptionPriceChangeNotices(): Promise<PriceChangeNoticeResult> {
+  const result: PriceChangeNoticeResult = { processed: 0, notified: 0, errors: [] };
+
+  const lockedBy = `${process.env.HOSTNAME ?? "app"}:${process.pid}`;
+  const acquired = await acquirePriceChangeNoticeLock(lockedBy);
+  if (!acquired) {
+    console.log("[PlanService] Price-change notice lock held by another instance — skipping.");
+    return result;
+  }
+
+  try {
+    const now = new Date();
+    const windowEnd = new Date(
+      now.getTime() + PRICE_CHANGE_NOTICE_WINDOW_DAYS * 24 * 60 * 60 * 1000,
+    );
+
+    const candidates = await prisma.merchantSubscription.findMany({
+      where: {
+        status: "active",
+        next_billing_date: { gt: now, lte: windowEnd },
+        price_change_notice_sent_at: null,
+      },
+      include: { merchant: true, plan: true },
+    });
+
+    result.processed = candidates.length;
+
+    for (const sub of candidates) {
+      try {
+        const oldAmount = sub.current_period_amount;
+        const newAmount = sub.plan.amount;
+
+        // Only notify when the plan price actually increased -- a decrease
+        // or an unchanged price needs no advance warning.
+        if (oldAmount === null || newAmount.lte(oldAmount)) continue;
+
+        if (sub.merchant.email_notifications_enabled) {
+          await sendSubscriptionPriceChangeNoticeEmail(
+            sub.merchant.email,
+            sub.merchant.business_name,
+            {
+              subscription_id: sub.id,
+              plan_name: sub.plan.name,
+              old_amount: oldAmount.toString(),
+              new_amount: newAmount.toString(),
+              currency: sub.plan.currency,
+              renewal_date: sub.next_billing_date.toISOString(),
+            },
+          );
+        }
+
+        await prisma.merchantSubscription.update({
+          where: { id: sub.id },
+          data: { price_change_notice_sent_at: now },
+        });
+
+        result.notified++;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        result.errors.push({ subscriptionId: sub.id, error: msg });
+      }
+    }
+  } finally {
+    await releasePriceChangeNoticeLock();
+  }
+
+  return result;
 }

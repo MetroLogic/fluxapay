@@ -49,6 +49,16 @@ async function sendIfNotSuppressed(
   await sendFn();
 }
 
+async function sendTransactionalWithSuppressionCheck(
+  to: string,
+  sendFn: () => Promise<void>,
+): Promise<void> {
+  if (await isEmailSuppressed(to)) {
+    logger.warn("Sending transactional/security email to suppressed address", { to });
+  }
+  await sendFn();
+}
+
 export async function sendWelcomeEmail(
   to: string,
   businessName: string,
@@ -100,7 +110,7 @@ export async function sendWelcomeEmail(
 
 export async function sendOtpEmail(to: string, otp: string) {
   try {
-    await sendIfNotSuppressed(to, async () => {
+    await sendTransactionalWithSuppressionCheck(to, async () => {
     const response = await getResend().emails.send({
       from: process.env.MAIL_FROM || "noreply@fluxapay.com",
       to,
@@ -175,6 +185,56 @@ export async function sendCheckoutExpiryReminderEmail(
     });
   } catch (err) {
     if (isDevEnv()) console.error("Error sending expiry reminder email:", err);
+    throw err;
+  }
+}
+
+export interface PriceChangeNoticeDetails {
+  subscription_id: string;
+  plan_name: string;
+  old_amount: string;
+  new_amount: string;
+  currency: string;
+  renewal_date: string;
+}
+
+export async function sendSubscriptionPriceChangeNoticeEmail(
+  to: string,
+  businessName: string,
+  details: PriceChangeNoticeDetails,
+) {
+  try {
+    await sendIfNotSuppressed(to, async () => {
+    const response = await getResend().emails.send({
+      from: process.env.MAIL_FROM || "noreply@fluxapay.com",
+      to,
+      subject: `Your ${escapeHtml(details.plan_name)} plan price is changing`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2>Upcoming Price Change</h2>
+          <p>Hello ${escapeHtml(businessName)},</p>
+          <p>Your <strong>${escapeHtml(details.plan_name)}</strong> subscription will renew at a new price starting <strong>${escapeHtml(new Date(details.renewal_date).toLocaleDateString())}</strong>.</p>
+          <div style="background: #fff8e1; border-left: 4px solid #f59e0b; padding: 16px; border-radius: 4px; margin: 16px 0;">
+            <table style="width: 100%; border-collapse: collapse;">
+              <tr><td style="padding: 6px 0;"><strong>Current price:</strong></td><td>${escapeHtml(details.old_amount)} ${escapeHtml(details.currency)}</td></tr>
+              <tr><td style="padding: 6px 0;"><strong>New price:</strong></td><td>${escapeHtml(details.new_amount)} ${escapeHtml(details.currency)}</td></tr>
+              <tr><td style="padding: 6px 0;"><strong>Effective:</strong></td><td>${escapeHtml(new Date(details.renewal_date).toLocaleDateString())}</td></tr>
+              <tr><td style="padding: 6px 0;"><strong>Subscription ID:</strong></td><td style="font-family: monospace; font-size: 12px;">${escapeHtml(details.subscription_id)}</td></tr>
+            </table>
+          </div>
+          <p style="color: #666; font-size: 13px;">No action is needed if you'd like to continue at the new price. Contact support if you have questions.</p>
+          <p>— The FluxaPay Team</p>
+          ${buildUnsubscribeFooter(to)}
+        </div>
+      `,
+    });
+    if (response.error) {
+      if (isDevEnv()) console.error("Error sending price change notice email:", response.error);
+      throw new Error("Failed to send price change notice email");
+    }
+    });
+  } catch (err) {
+    if (isDevEnv()) console.error("Error sending price change notice email:", err);
     throw err;
   }
 }
@@ -328,6 +388,7 @@ export async function sendSecurityAlertEmail(data: {
   message: string;
 }) {
   try {
+    await sendTransactionalWithSuppressionCheck(data.to, async () => {
     const response = await getResend().emails.send({
       from: process.env.MAIL_FROM || "noreply@fluxapay.com",
       to: data.to,
@@ -359,6 +420,7 @@ export async function sendSecurityAlertEmail(data: {
       }
       throw new Error("Failed to send security alert email");
     }
+    });
   } catch (err) {
     if (isDevEnv()) {
       console.error("Error sending security alert email:", err);
@@ -377,6 +439,7 @@ export async function sendBackupFailureAlertEmail(
   details: BackupFailureAlertDetails,
 ): Promise<void> {
   try {
+    await sendTransactionalWithSuppressionCheck(details.to, async () => {
     const response = await getResend().emails.send({
       from: process.env.MAIL_FROM || "noreply@fluxapay.com",
       to: details.to,
@@ -423,6 +486,7 @@ export async function sendBackupFailureAlertEmail(
       }
       throw new Error("Failed to send backup failure alert email");
     }
+    });
   } catch (err) {
     if (isDevEnv()) {
       console.error("Error sending backup failure alert:", err);

@@ -4,6 +4,35 @@
  * Tests for exchange partner integrations (Mock, YellowCard, Anchor)
  */
 
+jest.mock("../../middleware/redisIdempotency.middleware", () => {
+  const store = new Map<string, string>();
+  const redisClient = {
+    get: jest.fn(async (key: string) => store.get(key) ?? null),
+    set: jest.fn(async (key: string, value: string) => {
+      store.set(key, value);
+      return "OK";
+    }),
+    setex: jest.fn(async (key: string, _ttl: number, value: string) => {
+      store.set(key, value);
+      return "OK";
+    }),
+    del: jest.fn(async (...keys: string[]) => {
+      let n = 0;
+      for (const key of keys) {
+        if (store.delete(key)) n++;
+      }
+      return n;
+    }),
+    keys: jest.fn(async (pattern: string) => {
+      const prefix = pattern.replace("*", "");
+      return Array.from(store.keys()).filter((k) => k.startsWith(prefix));
+    }),
+    on: jest.fn(),
+    __store: store,
+  };
+  return { redisClient };
+});
+
 import {
   MockExchangePartner,
   YellowCardPartner,
@@ -33,6 +62,7 @@ describe("exchange.service", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     (global.fetch as jest.Mock).mockClear();
+    (redisClient as any).__store.clear();
   });
 
   describe("MockExchangePartner", () => {
@@ -201,15 +231,25 @@ describe("exchange.service", () => {
     });
 
     it("should execute payout via Anchor API", async () => {
-      const mockResponse = {
+      const mockQuoteResponse = {
+        rate: 1550,
+        fiat_amount: 155000,
+      };
+      const mockPayoutResponse = {
         reference: "anchor_ref_123",
         exchange_id: "anchor_exchange_123",
       };
 
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockResponse,
-      });
+      // convertAndPayout fetches a quote first, then posts the payout
+      (global.fetch as jest.Mock)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockQuoteResponse,
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockPayoutResponse,
+        });
 
       const result = await partner.convertAndPayout(
         100,
@@ -219,7 +259,8 @@ describe("exchange.service", () => {
       );
 
       expect(result.transfer_ref).toBe("anchor_ref_123");
-      expect(result.exchange_ref).toBe("anchor_exchange_123");
+      expect(result.exchange_ref).toBeUndefined();
+      expect(global.fetch).toHaveBeenCalledTimes(2);
       expect(global.fetch).toHaveBeenCalledWith(
         expect.stringContaining("/v1/offramp/payout"),
         expect.objectContaining({
@@ -349,7 +390,7 @@ describe("exchange.service", () => {
       process.env.YELLOWCARD_API_KEY = "test_key";
       process.env.YELLOWCARD_API_URL = "https://api.yellowcard.io";
 
-      // First, cache a rate
+      // First, cache a rate (also writes the stale copy)
       (global.fetch as jest.Mock).mockResolvedValueOnce({
         ok: true,
         json: async () => ({
@@ -362,19 +403,30 @@ describe("exchange.service", () => {
       const partner = new YellowCardPartner();
       await partner.getQuote(100, "NGN");
 
-      // Clear cache but keep stale data
+      // Clear fresh cache but keep stale data
       await redisClient.del("fx_rate:USDC:NGN");
+      const stale = await getStaleFxRate("USDC", "NGN");
+      expect(stale?.exchange_rate).toBe(1550);
 
-      // Now API fails
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-        text: async () => "Server error",
-      });
+      // Quote fetch fails → getQuoteWithFallback uses stale, then payout succeeds
+      (global.fetch as jest.Mock)
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 500,
+          text: async () => "Server error",
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ transferId: "yc_transfer_stale" }),
+        });
 
-      // Should fall back to stale rate
-      const quote = await partner.getQuote(100, "NGN");
-      expect(quote.exchange_rate).toBe(1550);
+      const result = await partner.convertAndPayout(
+        100,
+        "NGN",
+        mockBankAccount,
+        "ref_stale"
+      );
+      expect(result.transfer_ref).toBe("yc_transfer_stale");
     });
 
     it("should retrieve all cached FX rates", async () => {

@@ -7,6 +7,7 @@
  *  • Settlement batch        – runs daily at 00:00 UTC (swept → fiat payout)
  *  • Payment monitor         – runs every 2 min (on-chain USDC detection)
  *  • Billing cycle           – runs daily at 01:00 UTC (subscription renewals)
+ *  • Price-change notice     – runs daily at 04:00 UTC (warn merchants of upcoming plan price increases)
  *  • Database backup         – runs daily at 02:00 UTC (encrypted SQL dump)
  *  • Invoice overdue check   – runs every hour
  *  • Idempotency cleanup     – runs daily at 03:00 UTC
@@ -14,6 +15,7 @@
  * Environment variables:
  *  SETTLEMENT_CRON           – Cron for settlement (default: "0 0 * * *")
  *  BILLING_CRON              – Cron for subscription billing (default: "0 1 * * *")
+ *  PRICE_CHANGE_NOTICE_CRON  – Cron for subscription price-change notices (default: "0 4 * * *")
  *  DB_BACKUP_CRON            – Cron for database backup (default: "0 2 * * *")
  *  IDEMPOTENCY_CLEANUP_CRON  – Cron for idempotency cleanup (default: "0 3 * * *")
  *  INVOICE_OVERDUE_CRON      – Cron for invoice overdue check (default: "0 * * * *")
@@ -22,7 +24,7 @@
 
 import { schedule, validate, type ScheduledTask } from "node-cron";
 import { runSettlementBatch } from "./settlementBatch.service";
-import { processBillingCycle } from "./plan.service";
+import { processBillingCycle, sendUpcomingSubscriptionPriceChangeNotices } from "./plan.service";
 import { runSweepWithLock } from "./sweepCron.service";
 import { funderMonitorService } from "./funderMonitor.service";
 import { runPaymentExpiryReminderJob } from "./paymentExpiryReminder.service";
@@ -37,6 +39,7 @@ import { paymentSettlementService } from "./paymentSettlement.service";
 
 const SETTLEMENT_CRON_EXPR = process.env.SETTLEMENT_CRON ?? "0 0 * * *";
 const BILLING_CRON_EXPR = process.env.BILLING_CRON ?? "0 1 * * *";
+const PRICE_CHANGE_NOTICE_CRON_EXPR = process.env.PRICE_CHANGE_NOTICE_CRON ?? "0 4 * * *";
 const SWEEP_CRON_EXPR = getSweepCronInterval();
 const FUNDER_MONITOR_CRON_EXPR = process.env.FUNDER_MONITOR_CRON ?? "*/10 * * * *";
 const CHECKOUT_REMINDER_CRON_EXPR = process.env.CHECKOUT_REMINDER_CRON ?? "*/2 * * * *";
@@ -49,6 +52,7 @@ const SETTLEMENT_RETRY_CRON_EXPR = process.env.SETTLEMENT_RETRY_CRON ?? "*/1 * *
 
 let settlementTask: ScheduledTask | null = null;
 let billingTask: ScheduledTask | null = null;
+let priceChangeNoticeTask: ScheduledTask | null = null;
 let sweepTask: ScheduledTask | null = null;
 let funderMonitorTask: ScheduledTask | null = null;
 let checkoutReminderTask: ScheduledTask | null = null;
@@ -101,6 +105,26 @@ export function startCronJobs(): void {
       console.error(`[Cron] ❌ Billing cycle failed: ${err.message}`);
     } finally {
       await releaseCronLock("billing");
+    }
+  }, { timezone: "UTC" });
+
+  // ── Subscription price-change notice ──────────────────────────────────────
+  priceChangeNoticeTask = schedule(PRICE_CHANGE_NOTICE_CRON_EXPR, async () => {
+    console.log(`[Cron] ⏰ Price-change notice triggered at ${new Date().toISOString()}`);
+    const acquired = await acquireCronLock("price_change_notice");
+    if (!acquired) {
+      console.warn(`[Cron] ⚠️ Price-change notice lock held by another instance – skipping tick.`);
+      return;
+    }
+    try {
+      const result = await sendUpcomingSubscriptionPriceChangeNotices();
+      if (result.processed > 0) {
+        console.log(`[Cron] ✅ Price-change notice — ${result.notified}/${result.processed} notified.`);
+      }
+    } catch (err: any) {
+      console.error(`[Cron] ❌ Price-change notice job failed: ${err.message}`);
+    } finally {
+      await releaseCronLock("price_change_notice");
     }
   }, { timezone: "UTC" });
 
@@ -285,6 +309,7 @@ export function stopCronJobs(): void {
   const tasks: [ScheduledTask | null, string][] = [
     [settlementTask, "Settlement batch"],
     [billingTask, "Billing cycle"],
+    [priceChangeNoticeTask, "Price-change notice"],
     [sweepTask, "Sweep"],
     [funderMonitorTask, "Funder monitor"],
     [checkoutReminderTask, "Checkout reminder"],
@@ -303,6 +328,7 @@ export function stopCronJobs(): void {
   }
   settlementTask = null;
   billingTask = null;
+  priceChangeNoticeTask = null;
   sweepTask = null;
   funderMonitorTask = null;
   checkoutReminderTask = null;

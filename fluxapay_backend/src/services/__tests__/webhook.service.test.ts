@@ -274,6 +274,46 @@ describe("WebhookDispatcher.sendPaymentWebhook", () => {
     expect(global.fetch).not.toHaveBeenCalled();
     expect(mockMerchant.payment.update).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ["payment.created", "pending", "payment.created"],
+    ["payment.pending", "pending", "payment.pending"],
+    ["payment.confirmed", "confirmed", "payment.confirmed"],
+    ["payment.failed", "failed", "payment.failed"],
+    ["payment.settled", "completed", "payment.settled"],
+    ["payment_confirmed", "confirmed", "payment.confirmed"],
+    ["payment_failed", "failed", "payment.failed"],
+  ] as const)(
+    "should emit event=%s with payment status=%s in payload",
+    async (eventType, status, expectedEvent) => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: () => Promise.resolve("OK"),
+      });
+
+      const dispatcher = new WebhookDispatcher(new PrismaClient());
+      const payment = {
+        id: "pay_evt",
+        amount: 42,
+        currency: "USDC",
+        status,
+        transaction_hash: "tx_abc",
+      } as any;
+      const merchant = {
+        id: "m_evt",
+        webhook_url: "https://example.com/hook",
+        webhook_secret: "secret",
+      } as any;
+
+      await dispatcher.sendPaymentWebhook(payment, merchant, eventType as any);
+
+      const sentBody = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+      expect(sentBody.event).toBe(expectedEvent);
+      expect(sentBody.data.status).toBe(status);
+      expect(sentBody.data.payment_id).toBe("pay_evt");
+    },
+  );
 });
 
 describe("DLQ services", () => {

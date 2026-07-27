@@ -53,6 +53,7 @@ jest.mock("../../middleware/rateLimit.middleware", () => ({
   globalRateLimit: () => (req: any, res: any, next: any) => next(),
   merchantRateLimit: () => (req: any, res: any, next: any) => next(),
   authRateLimit: () => (req: any, res: any, next: any) => next(),
+  adminRateLimit: () => (req: any, res: any, next: any) => next(),
 }));
 
 jest.mock("../../services/payment.service", () => ({

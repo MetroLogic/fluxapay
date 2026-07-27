@@ -155,4 +155,51 @@ describe("HDWalletService", () => {
       expect(await service.verifyAddress(0, 0, wrongKey)).toBe(false);
     });
   });
+
+  describe("hex seed expansion (HMAC-SHA512)", () => {
+    const hex32 =
+      "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+    it("should derive stable addresses that regenerate from the same seed", async () => {
+      const s1 = new HDWalletService(hex32);
+      const derived: string[] = [];
+      for (let i = 0; i < 5; i++) {
+        const { publicKey } = await s1.regenerateKeypair(0, i);
+        derived.push(publicKey);
+      }
+
+      const s2 = new HDWalletService(hex32);
+      for (let i = 0; i < 5; i++) {
+        const { publicKey } = await s2.regenerateKeypair(0, i);
+        expect(publicKey).toBe(derived[i]);
+      }
+    });
+
+    it("should not match naive seed32||seed32 concatenation expansion", async () => {
+      const crypto = require("crypto");
+      const { derivePath } = require("ed25519-hd-key");
+      const { Keypair } = require("@stellar/stellar-sdk");
+
+      const seed32 = Buffer.from(hex32, "hex");
+      const hmacSeed = crypto
+        .createHmac("sha512", "ed25519 seed")
+        .update(seed32)
+        .digest();
+      const concatSeed = Buffer.concat([seed32, seed32]);
+
+      const path = "m/44'/148'/0'/0'";
+      const hmacKey = Keypair.fromRawEd25519Seed(
+        Buffer.from(derivePath(path, hmacSeed.toString("hex")).key),
+      );
+      const concatKey = Keypair.fromRawEd25519Seed(
+        Buffer.from(derivePath(path, concatSeed.toString("hex")).key),
+      );
+
+      expect(hmacKey.publicKey()).not.toBe(concatKey.publicKey());
+
+      const serviceHex = new HDWalletService(hex32);
+      const { publicKey } = await serviceHex.regenerateKeypair(0, 0);
+      expect(publicKey).toBe(hmacKey.publicKey());
+    });
+  });
 });

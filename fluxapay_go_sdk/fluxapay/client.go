@@ -37,6 +37,9 @@ const (
 type Error struct {
 	StatusCode int
 	Message    string
+	Code       string
+	RequestID  string
+	Retryable  bool
 	Raw        json.RawMessage
 }
 
@@ -204,13 +207,26 @@ func (c *Client) do(ctx context.Context, method, path string, body interface{}, 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		var errBody struct {
 			Message string `json:"message"`
+			Code    string `json:"code"`
 		}
 		_ = json.Unmarshal(raw, &errBody)
 		msg := errBody.Message
 		if msg == "" {
 			msg = fmt.Sprintf("HTTP %d", resp.StatusCode)
 		}
-		return &Error{StatusCode: resp.StatusCode, Message: msg, Raw: raw}
+		reqID := resp.Header.Get("X-Request-ID")
+		if reqID == "" {
+			reqID = resp.Header.Get("x-request-id")
+		}
+		retryable := resp.StatusCode == 429 || resp.StatusCode == 502 || resp.StatusCode == 503 || resp.StatusCode == 504
+		return &Error{
+			StatusCode: resp.StatusCode,
+			Message:    msg,
+			Code:       errBody.Code,
+			RequestID:  reqID,
+			Retryable:  retryable,
+			Raw:        raw,
+		}
 	}
 
 	if out != nil {

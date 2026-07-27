@@ -34,6 +34,7 @@ jest.mock("../../generated/client/client", () => ({
 jest.mock("../audit.service", () => ({
   logSweepTrigger: jest.fn().mockResolvedValue({ id: "audit_test" }),
   updateSweepCompletion: jest.fn().mockResolvedValue(undefined),
+  logSweepFailure: jest.fn().mockResolvedValue({ id: "audit_fail_test" }),
 }));
 
 jest.mock("../sweepQueue.service", () => ({
@@ -55,11 +56,13 @@ jest.mock("../HDWalletService", () => ({
 
 jest.mock("../../config/sweep.config", () => ({
   getSweepMinBalanceUsdc: jest.fn(() => 10),
+  getMaxSweepRetryAttempts: jest.fn(() => 5),
 }));
 
 // Import after mocks
 import { Horizon, Keypair, Account } from "@stellar/stellar-sdk";
 import { SweepService } from "../sweep.service";
+import { logSweepFailure } from "../audit.service";
 
 describe("SweepService", () => {
   let sweepService: SweepService;
@@ -355,6 +358,179 @@ describe("SweepService", () => {
       expect(mockServer.submitTransaction).toHaveBeenCalledTimes(3); // Max retries
       expect(result.addressesSwept).toBe(0);
       expect(result.skipped).toHaveLength(1);
+    });
+  });
+
+  describe("per-payment error isolation (#824)", () => {
+    it("isolates a single failing sweep: batch of 5 payments with 1 failing completes the other 4", async () => {
+      const fixtures = Array.from({ length: 5 }, (_, i) =>
+        createSweepFixture({
+          id: `payment_${i}`,
+          derivation_path: `m/44'/148'/0'/0/${i}`,
+        }),
+      );
+      const failingFixture = fixtures[2];
+
+      mockPrisma.payment.findMany.mockResolvedValue(
+        fixtures.map((f) => f.payment),
+      );
+
+      mockHDWalletService.regenerateKeypairFromPath.mockImplementation(
+        async (path: string) => {
+          const fixture = fixtures.find(
+            (f) => f.payment.derivation_path === path,
+          );
+          return fixture!.keypair;
+        },
+      );
+
+      mockServer.loadAccount.mockImplementation(async (publicKey: string) => {
+        const fixture = fixtures.find((f) => f.keypair.publicKey === publicKey);
+        return fixture!.account;
+      });
+
+      mockServer.submitTransaction.mockImplementation(async (tx: any) => {
+        if (tx.source === failingFixture.keypair.publicKey) {
+          throw new Error("insufficient XLM for fee");
+        }
+        return { hash: `tx_hash_${tx.source}` };
+      });
+
+      const result = await sweepService.sweepPaidPayments({
+        adminId: "admin_1",
+      });
+
+      expect(result.addressesSwept).toBe(4);
+      expect(result.txHashes).toHaveLength(4);
+      expect(result.skipped).toHaveLength(1);
+      expect(result.skipped[0].paymentId).toBe(failingFixture.payment.id);
+
+      // The failing payment's retry bookkeeping was persisted...
+      expect(mockPrisma.payment.update).toHaveBeenCalledWith({
+        where: { id: failingFixture.payment.id },
+        data: {
+          sweep_retry_count: 1,
+          sweep_last_error: expect.stringContaining("insufficient XLM"),
+          sweep_failed_at: expect.any(Date),
+          sweep_needs_manual_review: false,
+        },
+      });
+
+      // ...and the other 4 were still marked swept despite the one failure.
+      const successfulIds = fixtures
+        .filter((f) => f.payment.id !== failingFixture.payment.id)
+        .map((f) => f.payment.id);
+      for (const id of successfulIds) {
+        expect(mockPrisma.payment.update).toHaveBeenCalledWith({
+          where: { id },
+          data: {
+            swept: true,
+            swept_at: expect.any(Date),
+            sweep_tx_hash: expect.any(String),
+          },
+        });
+      }
+    });
+
+    it("increments sweep_retry_count and logs an audit entry on a failed sweep", async () => {
+      const { payment, keypair, account } = createSweepFixture({
+        sweep_retry_count: 2,
+      });
+
+      mockPrisma.payment.findMany.mockResolvedValue([payment]);
+      mockHDWalletService.regenerateKeypairFromPath.mockResolvedValue(keypair);
+      mockServer.loadAccount.mockResolvedValue(account);
+      mockServer.submitTransaction.mockRejectedValue(
+        new Error("invalid trustline"),
+      );
+
+      const result = await sweepService.sweepPaidPayments({
+        adminId: "admin_1",
+      });
+
+      expect(result.addressesSwept).toBe(0);
+      expect(mockPrisma.payment.update).toHaveBeenCalledWith({
+        where: { id: payment.id },
+        data: {
+          sweep_retry_count: 3,
+          sweep_last_error: expect.stringContaining("invalid trustline"),
+          sweep_failed_at: expect.any(Date),
+          sweep_needs_manual_review: false,
+        },
+      });
+      expect(logSweepFailure).toHaveBeenCalledWith({
+        paymentId: payment.id,
+        error: expect.stringContaining("invalid trustline"),
+        retryCount: 3,
+        flaggedForManualReview: false,
+      });
+    });
+
+    it("flags a payment for manual review once max retry attempts are reached", async () => {
+      const { payment, keypair, account } = createSweepFixture({
+        sweep_retry_count: 4,
+      });
+
+      mockPrisma.payment.findMany.mockResolvedValue([payment]);
+      mockHDWalletService.regenerateKeypairFromPath.mockResolvedValue(keypair);
+      mockServer.loadAccount.mockResolvedValue(account);
+      mockServer.submitTransaction.mockRejectedValue(new Error("tx_failed"));
+
+      await sweepService.sweepPaidPayments({ adminId: "admin_1" });
+
+      // getMaxSweepRetryAttempts() is mocked to 5, so the 5th failure flips the flag.
+      expect(mockPrisma.payment.update).toHaveBeenCalledWith({
+        where: { id: payment.id },
+        data: {
+          sweep_retry_count: 5,
+          sweep_last_error: expect.any(String),
+          sweep_failed_at: expect.any(Date),
+          sweep_needs_manual_review: true,
+        },
+      });
+      expect(logSweepFailure).toHaveBeenCalledWith(
+        expect.objectContaining({
+          retryCount: 5,
+          flaggedForManualReview: true,
+        }),
+      );
+    });
+
+    it("excludes payments already flagged for manual review from the sweep query", async () => {
+      mockPrisma.payment.findMany.mockResolvedValue([]);
+
+      await sweepService.sweepPaidPayments({ adminId: "admin_1" });
+
+      expect(mockPrisma.payment.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            sweep_needs_manual_review: false,
+          }),
+        }),
+      );
+    });
+
+    it("does not abort the batch when persisting sweep-failure bookkeeping itself fails", async () => {
+      const { payment, keypair, account } = createSweepFixture();
+
+      mockPrisma.payment.findMany.mockResolvedValue([payment]);
+      mockHDWalletService.regenerateKeypairFromPath.mockResolvedValue(keypair);
+      mockServer.loadAccount.mockResolvedValue(account);
+      mockServer.submitTransaction.mockRejectedValue(new Error("tx_failed"));
+      mockPrisma.payment.update.mockRejectedValueOnce(
+        new Error("db unavailable"),
+      );
+      (logSweepFailure as jest.Mock).mockRejectedValueOnce(
+        new Error("audit unavailable"),
+      );
+
+      const result = await sweepService.sweepPaidPayments({
+        adminId: "admin_1",
+      });
+
+      expect(result.addressesSwept).toBe(0);
+      expect(result.skipped).toHaveLength(1);
+      expect(result.skipped[0].paymentId).toBe(payment.id);
     });
   });
 

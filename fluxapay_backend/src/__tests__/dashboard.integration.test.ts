@@ -2,6 +2,7 @@ process.env.USDC_ISSUER_PUBLIC_KEY = process.env.USDC_ISSUER_PUBLIC_KEY || "GBBD
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
 import { app } from '../app';
+import { bucketDateInTimezone } from '../services/dashboard.service';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'test_secret';
 
@@ -53,6 +54,15 @@ describe('Dashboard API Integration Tests', () => {
       expect(response.body.data).toHaveProperty('volume_over_time');
       expect(response.body.data).toHaveProperty('status_breakdown');
       expect(response.body.data).toHaveProperty('revenue_trend');
+    });
+
+    it('should correctly convert 23:30 UTC payment timestamp to local date in UTC+3 timezone', () => {
+      const utcLatePayment = new Date('2026-01-18T23:30:00Z');
+      const utcDay = bucketDateInTimezone(utcLatePayment, 'UTC');
+      const localDay = bucketDateInTimezone(utcLatePayment, 'UTC+3');
+
+      expect(utcDay).toBe('2026-01-18');
+      expect(localDay).toBe('2026-01-19');
     });
   });
 
