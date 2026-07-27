@@ -269,6 +269,7 @@ export async function sendInvoiceEmail(
   merchantName?: string,
 ) {
   try {
+    await sendIfNotSuppressed(to, async () => {
     const response = await getResend().emails.send({
       from: process.env.MAIL_FROM || "noreply@fluxapay.com",
       to,
@@ -312,6 +313,7 @@ export async function sendInvoiceEmail(
       }
       throw new Error("Failed to send invoice email");
     }
+    });
   } catch (err) {
     if (isDevEnv()) {
       console.error("Error sending invoice email:", err);
