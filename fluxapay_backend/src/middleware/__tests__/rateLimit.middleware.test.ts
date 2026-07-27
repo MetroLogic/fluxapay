@@ -2,6 +2,7 @@ import {
   globalRateLimit,
   merchantRateLimit,
   authRateLimit,
+  adminRateLimit,
   merchantApiKeyRateLimit,
   checkCaptchaRequired,
   recordFailedPaymentAttempt,
@@ -100,6 +101,40 @@ describe("Rate Limit Middleware", () => {
       middleware(mockReq as Request, mockRes as Response, mockNext);
 
       expect(mockRes.setHeader).toHaveBeenCalledWith("X-RateLimit-Limit", "10");
+    });
+  });
+
+  describe("adminRateLimit", () => {
+    it("should allow admin requests within limit", () => {
+      const middleware = adminRateLimit();
+      mockReq.ip = "127.0.0.10";
+
+      middleware(mockReq as Request, mockRes as Response, mockNext);
+
+      expect(mockNext).toHaveBeenCalled();
+    });
+
+    it("should set admin rate limit headers", () => {
+      const middleware = adminRateLimit();
+      mockReq.ip = "127.0.0.11";
+
+      middleware(mockReq as Request, mockRes as Response, mockNext);
+
+      expect(mockRes.setHeader).toHaveBeenCalledWith("X-RateLimit-Limit", "60");
+      expect(mockRes.setHeader).toHaveBeenCalledWith("X-RateLimit-Remaining", expect.any(String));
+      expect(mockRes.setHeader).toHaveBeenCalledWith("X-RateLimit-Window", "60");
+    });
+
+    it("should return 429 when admin limit is exceeded", () => {
+      const middleware = adminRateLimit();
+      mockReq.ip = "127.0.0.12";
+
+      for (let i = 0; i < 61; i++) {
+        middleware(mockReq as Request, mockRes as Response, mockNext);
+      }
+
+      expect(mockRes.status).toHaveBeenCalledWith(429);
+      expect(mockRes.setHeader).toHaveBeenCalledWith("Retry-After", expect.any(String));
     });
   });
 
