@@ -237,6 +237,64 @@ router.get("/:invoice_id/export", authenticateApiKey, merchantApiKeyRateLimit(),
 
 /**
  * @swagger
+ * /api/v1/invoices/{invoice_id}/export:
+ *   post:
+ *     summary: Start an async invoice export job
+ *     tags: [Invoices]
+ *     security:
+ *       - apiKeyAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: invoice_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: format
+ *         schema:
+ *           type: string
+ *           enum: [pdf, csv, json]
+ *           default: pdf
+ *     responses:
+ *       202:
+ *         description: Export job accepted
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *       404:
+ *         description: Invoice not found
+ */
+router.post("/:invoice_id/export", authenticateApiKey, merchantApiKeyRateLimit(), validate(exportInvoiceSchema), exportInvoice);
+
+/**
+ * @swagger
+ * /api/v1/invoices/exports/{jobId}:
+ *   get:
+ *     summary: Get invoice export job status by job id
+ *     tags: [Invoices]
+ *     security:
+ *       - apiKeyAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: jobId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Export job status
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *       404:
+ *         description: Export job not found
+ */
+router.get("/exports/:jobId", authenticateApiKey, merchantApiKeyRateLimit(), getInvoiceExportStatus);
+
+/**
+ * @swagger
  * /api/v1/invoices/{invoice_id}/export/{jobId}/status:
  *   get:
  *     summary: Get async invoice export job status
@@ -264,8 +322,6 @@ router.get("/:invoice_id/export", authenticateApiKey, merchantApiKeyRateLimit(),
  *       404:
  *         description: Invoice or export job not found
  */
-router.post("/:invoice_id/export", authenticateApiKey, merchantApiKeyRateLimit(), validate(exportInvoiceSchema), exportInvoice);
-router.get("/exports/:jobId", authenticateApiKey, merchantApiKeyRateLimit(), getInvoiceExportStatus);
 router.get("/:invoice_id/export/:jobId/status", authenticateApiKey, merchantApiKeyRateLimit(), validate(getInvoiceByIdSchema), getInvoiceExportStatus);
 
 /**
