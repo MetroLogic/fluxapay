@@ -447,6 +447,8 @@ export async function exportInvoiceService(
         created_at: invoice.created_at,
         payment_link: invoice.payment_link,
         merchant_name: invoice.merchant?.business_name,
+        line_items: (invoice.line_items as any) || undefined,
+        notes: invoice.notes || undefined,
         payment: payment
           ? {
             id: payment.id,
