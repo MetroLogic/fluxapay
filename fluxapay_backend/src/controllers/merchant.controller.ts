@@ -187,6 +187,8 @@ export async function adminUpdateMerchantStatus(req: Request, res: Response) {
   }
 }
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /** POST /api/merchants/admin/bulk-status – bulk suspend / activate */
 export async function adminBulkUpdateMerchantStatus(req: Request, res: Response) {
   try {
@@ -199,6 +201,16 @@ export async function adminBulkUpdateMerchantStatus(req: Request, res: Response)
     if (!Array.isArray(merchantIds) || merchantIds.length === 0) {
       return sendApiError(res, apiError(400, ErrorCode.INVALID_MERCHANT_IDS, "merchantIds must be a non-empty array"));
     }
+
+    // Validate UUID format before hitting the database
+    const invalidIds = merchantIds.filter((id) => typeof id !== "string" || !UUID_REGEX.test(id));
+    if (invalidIds.length > 0) {
+      return sendApiError(
+        res,
+        apiError(400, ErrorCode.INVALID_MERCHANT_IDS, `Invalid merchant IDs: ${invalidIds.join(", ")}`),
+      );
+    }
+
     if (!["active", "suspended"].includes(status)) {
       return sendApiError(res, apiError(400, ErrorCode.INVALID_STATUS_VALUE, "status must be active or suspended"));
     }
