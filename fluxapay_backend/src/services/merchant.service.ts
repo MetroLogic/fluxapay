@@ -341,17 +341,6 @@ export async function updateSettlementScheduleService(data: {
   }
 
   return { message: "Settlement schedule updated", settlement_schedule, settlement_day: finalSettlementDay };
-  const updateData: { settlement_schedule: string; settlement_day: number | null } = {
-    settlement_schedule,
-    // Clear settlement_day when switching to daily so batch logic stays consistent
-    settlement_day: settlement_schedule === "daily" ? null : (settlement_day ?? null),
-  };
-
-  await prisma.merchant.update({
-    where: { id: merchantId },
-    data: updateData,
-  });
-  return { message: "Settlement schedule updated", settlement_schedule, settlement_day: updateData.settlement_day };
 }
 
 export async function updateBankAccountService(data: {
