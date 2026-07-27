@@ -182,14 +182,18 @@ export function verifyWebhookSignature(
 // ── Errors ───────────────────────────────────────────────────────────────────
 
 export class FluxaPayError extends Error {
+  public readonly retryable: boolean;
+
   constructor(
     public readonly statusCode: number,
     message: string,
     public readonly code?: string,
     public readonly raw?: unknown,
+    public readonly requestId?: string,
   ) {
     super(message);
     this.name = 'FluxaPayError';
+    this.retryable = [429, 502, 503, 504].includes(statusCode);
   }
 
   /** Branch on machine-readable error code from the API. */
@@ -225,11 +229,16 @@ async function request<T>(
 
   if (!res.ok) {
     const body = json as { message?: string; code?: string } | null;
+    const requestId =
+      res.headers.get('x-request-id') ??
+      res.headers.get('X-Request-ID') ??
+      undefined;
     throw new FluxaPayError(
       res.status,
       body?.message ?? `HTTP ${res.status}`,
       body?.code,
       json,
+      requestId,
     );
   }
 

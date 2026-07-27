@@ -234,7 +234,10 @@ router.post("/:invoice_id/void", authenticateApiKey, merchantApiKeyRateLimit(), 
  *         description: Invoice not found
  */
 router.get("/:invoice_id/export", authenticateApiKey, merchantApiKeyRateLimit(), validate(exportInvoiceSchema), exportInvoice);
+router.post("/:invoice_id/export", authenticateApiKey, merchantApiKeyRateLimit(), validate(exportInvoiceSchema), exportInvoice);
+router.get("/exports/:jobId", authenticateApiKey, merchantApiKeyRateLimit(), getInvoiceExportStatus);
 router.get("/:invoice_id/export/:jobId/status", authenticateApiKey, merchantApiKeyRateLimit(), validate(getInvoiceByIdSchema), getInvoiceExportStatus);
 router.get("/:invoice_id/export/:jobId/download", authenticateApiKey, merchantApiKeyRateLimit(), validate(getInvoiceByIdSchema), downloadInvoiceExport);
 
 export default router;
+

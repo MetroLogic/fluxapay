@@ -15,7 +15,7 @@ jest.mock("../../utils/logger", () => ({
 }));
 
 import { isEmailSuppressed } from "../emailSuppression.service";
-import { sendPaymentConfirmationEmail } from "../email.service";
+import { sendPaymentConfirmationEmail, sendOtpEmail, sendSecurityAlertEmail, sendWelcomeEmail } from "../email.service";
 
 const mockIsSuppressed = isEmailSuppressed as jest.Mock;
 
@@ -26,7 +26,7 @@ describe("email.service suppression", () => {
     process.env.RESEND_API_KEY = "re_test";
   });
 
-  it("skips send for suppressed addresses", async () => {
+  it("skips send for suppressed marketing / notification addresses", async () => {
     mockIsSuppressed.mockResolvedValue(true);
 
     await sendPaymentConfirmationEmail("blocked@example.com", "Acme", {
@@ -38,6 +38,35 @@ describe("email.service suppression", () => {
     });
 
     expect(mockSend).not.toHaveBeenCalled();
+
+    await sendWelcomeEmail("blocked@example.com", "Acme", "key_123", "http://localhost:3000");
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it("sends transactional/OTP and security emails even if suppressed, logging a warning", async () => {
+    mockIsSuppressed.mockResolvedValue(true);
+
+    await sendOtpEmail("suppressed-user@example.com", "123456");
+    expect(mockSend).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: "suppressed-user@example.com",
+        subject: "Your Fluxapay OTP",
+      })
+    );
+
+    mockSend.mockClear();
+
+    await sendSecurityAlertEmail({
+      to: "suppressed-user@example.com",
+      subject: "Security Alert Test",
+      message: "Unusual login activity detected",
+    });
+    expect(mockSend).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: "suppressed-user@example.com",
+        subject: "Security Alert Test",
+      })
+    );
   });
 
   it("includes unsubscribe link in merchant notification emails", async () => {

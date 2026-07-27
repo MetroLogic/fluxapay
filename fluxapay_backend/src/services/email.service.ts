@@ -49,6 +49,16 @@ async function sendIfNotSuppressed(
   await sendFn();
 }
 
+async function sendTransactionalWithSuppressionCheck(
+  to: string,
+  sendFn: () => Promise<void>,
+): Promise<void> {
+  if (await isEmailSuppressed(to)) {
+    logger.warn("Sending transactional/security email to suppressed address", { to });
+  }
+  await sendFn();
+}
+
 export async function sendWelcomeEmail(
   to: string,
   businessName: string,
@@ -100,7 +110,7 @@ export async function sendWelcomeEmail(
 
 export async function sendOtpEmail(to: string, otp: string) {
   try {
-    await sendIfNotSuppressed(to, async () => {
+    await sendTransactionalWithSuppressionCheck(to, async () => {
     const response = await getResend().emails.send({
       from: process.env.MAIL_FROM || "noreply@fluxapay.com",
       to,
@@ -269,6 +279,7 @@ export async function sendInvoiceEmail(
   merchantName?: string,
 ) {
   try {
+    await sendIfNotSuppressed(to, async () => {
     const response = await getResend().emails.send({
       from: process.env.MAIL_FROM || "noreply@fluxapay.com",
       to,
@@ -312,6 +323,7 @@ export async function sendInvoiceEmail(
       }
       throw new Error("Failed to send invoice email");
     }
+    });
   } catch (err) {
     if (isDevEnv()) {
       console.error("Error sending invoice email:", err);
@@ -326,6 +338,7 @@ export async function sendSecurityAlertEmail(data: {
   message: string;
 }) {
   try {
+    await sendTransactionalWithSuppressionCheck(data.to, async () => {
     const response = await getResend().emails.send({
       from: process.env.MAIL_FROM || "noreply@fluxapay.com",
       to: data.to,
@@ -357,6 +370,7 @@ export async function sendSecurityAlertEmail(data: {
       }
       throw new Error("Failed to send security alert email");
     }
+    });
   } catch (err) {
     if (isDevEnv()) {
       console.error("Error sending security alert email:", err);
@@ -375,6 +389,7 @@ export async function sendBackupFailureAlertEmail(
   details: BackupFailureAlertDetails,
 ): Promise<void> {
   try {
+    await sendTransactionalWithSuppressionCheck(details.to, async () => {
     const response = await getResend().emails.send({
       from: process.env.MAIL_FROM || "noreply@fluxapay.com",
       to: details.to,
@@ -421,6 +436,7 @@ export async function sendBackupFailureAlertEmail(
       }
       throw new Error("Failed to send backup failure alert email");
     }
+    });
   } catch (err) {
     if (isDevEnv()) {
       console.error("Error sending backup failure alert:", err);

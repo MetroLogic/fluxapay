@@ -84,12 +84,15 @@ def test_settlements_list():
 @respx.mock
 def test_raises_fluxapay_error_on_4xx():
     respx.post(f"{BASE}/api/payments").mock(
-        return_value=httpx.Response(401, json={"message": "Unauthorized"})
+        return_value=httpx.Response(401, json={"message": "Unauthorized", "code": "UNAUTHORIZED"}, headers={"X-Request-ID": "req_test_123"})
     )
     client = FluxaPay(api_key=API_KEY)
     with pytest.raises(FluxaPayError) as exc_info:
         client.payments.create(amount=1, currency="USD", customer_email="x@x.com")
     assert exc_info.value.status_code == 401
+    assert exc_info.value.code == "UNAUTHORIZED"
+    assert exc_info.value.request_id == "req_test_123"
+    assert exc_info.value.retryable is False
 
 
 def test_missing_api_key_raises():
