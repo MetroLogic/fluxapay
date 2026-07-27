@@ -60,6 +60,11 @@ export class FxService {
   static async getUSDCExchangeRate(fiatCurrency: string): Promise<number> {
     const currency = fiatCurrency.toUpperCase();
 
+    // USDC (and USD) are pegged 1:1 — no conversion needed
+    if (currency === "USDC" || currency === "USD") {
+      return 1.0;
+    }
+
     // 1. Try live fetch (skip if cache is still fresh)
     const now = Date.now();
     if (cachedRates && now - cachedRates.fetchedAt < CACHE_TTL_MS) {

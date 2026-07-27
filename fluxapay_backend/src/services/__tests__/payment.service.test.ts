@@ -9,6 +9,7 @@ jest.mock("../../generated/client/client", () => {
     payment: {
       count: jest.fn(),
       create: jest.fn(),
+      update: jest.fn(),
     },
     merchantSubscription: {
       findFirst: jest.fn().mockResolvedValue(null),
@@ -48,6 +49,10 @@ describe("PaymentService", () => {
       HD_WALLET_MASTER_SEED: "test-master-seed-123",
     };
     mockPrisma = new PrismaClient();
+    // createPayment persists then updates with the derived address
+    mockPrisma.payment.update.mockImplementation(({ data }: any) =>
+      Promise.resolve({ id: "payment_123", ...data }),
+    );
   });
 
   afterEach(() => {
@@ -152,7 +157,11 @@ describe("PaymentService", () => {
           }) as any,
       );
 
-      mockPrisma.payment.create.mockResolvedValue(mockPaymentData);
+      mockPrisma.payment.create.mockResolvedValue({
+        id: "payment_123",
+        stellar_address: null,
+      });
+      mockPrisma.payment.update.mockResolvedValue(mockPaymentData);
 
       const result = await PaymentService.createPayment({
         amount: 100,
@@ -165,14 +174,20 @@ describe("PaymentService", () => {
       expect(result.stellar_address).toBe(mockStellarAddress);
       expect(mockPrisma.payment.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
-          stellar_address: mockStellarAddress,
-          payment_index: 0,
-          derivation_path: "m/44'/148'/0'/0'",
-          encrypted_key_data: "encrypted-blob",
+          stellar_address: null,
           amount: 100,
           currency: "USDC",
           customer_email: "test@example.com",
           merchantId: "merchant_1",
+        }),
+      });
+      expect(mockPrisma.payment.update).toHaveBeenCalledWith({
+        where: { id: expect.any(String) },
+        data: expect.objectContaining({
+          stellar_address: mockStellarAddress,
+          payment_index: 0,
+          derivation_path: "m/44'/148'/0'/0'",
+          encrypted_key_data: "encrypted-blob",
         }),
       });
     });

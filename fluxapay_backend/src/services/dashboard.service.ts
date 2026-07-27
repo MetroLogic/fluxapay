@@ -56,14 +56,14 @@ export async function getDashboardAnalytics(options: { timezone?: string; mercha
 
   if (options.merchantId) {
     const payments = await prisma.payment.findMany({
-      where: { merchant_id: options.merchantId },
-      select: { amount: true, created_at: true, status: true },
+      where: { merchantId: options.merchantId },
+      select: { amount: true, createdAt: true, status: true },
     });
 
     if (payments.length > 0) {
       const buckets = new Map<string, { count: number; amount: number }>();
       for (const p of payments) {
-        const period = bucketDateInTimezone(p.created_at, tz);
+        const period = bucketDateInTimezone(p.createdAt, tz);
         const existing = buckets.get(period) || { count: 0, amount: 0 };
         buckets.set(period, {
           count: existing.count + 1,

@@ -153,30 +153,9 @@ export class PaymentService {
     const fxRate = await FxService.getUSDCExchangeRate(currency);
     const usdcAmount = amount * fxRate;
 
-    // Try to allocate an address from the pool
-    let stellarAddress = await DepositAddressService.allocateAddress(paymentId);
-    let paymentIndex = null;
-    let derivationPath = null;
-    let encryptedKeyData = null;
-
-    if (!stellarAddress) {
-      // Fallback to deterministic HD derivation if pool is empty
-      const hdWalletService = new HDWalletService();
-      const derived = await hdWalletService.derivePaymentAddress(
-        merchantId,
-        paymentId,
-      );
-      encryptedKeyData = await hdWalletService.encryptKeyData(
-        derived.merchantIndex,
-        derived.paymentIndex,
-      );
-      stellarAddress = derived.publicKey;
-      paymentIndex = derived.paymentIndex;
-      derivationPath = derived.derivationPath;
-    }
-
-    // Create payment with the derived Stellar address and derivation metadata
-    const payment = await prisma.payment.create({
+    // Persist the payment first so pool allocation can satisfy the
+    // DepositAddress.assigned_payment_id foreign key.
+    await prisma.payment.create({
       data: {
         id: paymentId,
         amount,
@@ -193,6 +172,37 @@ export class PaymentService {
         success_url: success_url ?? null,
         cancel_url: cancel_url ?? null,
         ...(customerId ? { customerId } : {}),
+        stellar_address: null,
+        payment_index: null,
+        derivation_path: null,
+        encrypted_key_data: null,
+      },
+    });
+
+    // Try to allocate an address from the pool; fall back to HD derivation
+    let stellarAddress = await DepositAddressService.allocateAddress(paymentId);
+    let paymentIndex: number | null = null;
+    let derivationPath: string | null = null;
+    let encryptedKeyData: string | null = null;
+
+    if (!stellarAddress) {
+      const hdWalletService = new HDWalletService();
+      const derived = await hdWalletService.derivePaymentAddress(
+        merchantId,
+        paymentId,
+      );
+      encryptedKeyData = await hdWalletService.encryptKeyData(
+        derived.merchantIndex,
+        derived.paymentIndex,
+      );
+      stellarAddress = derived.publicKey;
+      paymentIndex = derived.paymentIndex;
+      derivationPath = derived.derivationPath;
+    }
+
+    const payment = await prisma.payment.update({
+      where: { id: paymentId },
+      data: {
         stellar_address: stellarAddress,
         // HD wallet derivation fields (null if from pool, as pool handles its own)
         payment_index: paymentIndex,
