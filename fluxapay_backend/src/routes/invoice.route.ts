@@ -264,6 +264,8 @@ router.get("/:invoice_id/export", authenticateApiKey, merchantApiKeyRateLimit(),
  *       404:
  *         description: Invoice or export job not found
  */
+router.post("/:invoice_id/export", authenticateApiKey, merchantApiKeyRateLimit(), validate(exportInvoiceSchema), exportInvoice);
+router.get("/exports/:jobId", authenticateApiKey, merchantApiKeyRateLimit(), getInvoiceExportStatus);
 router.get("/:invoice_id/export/:jobId/status", authenticateApiKey, merchantApiKeyRateLimit(), validate(getInvoiceByIdSchema), getInvoiceExportStatus);
 
 /**
@@ -299,3 +301,4 @@ router.get("/:invoice_id/export/:jobId/status", authenticateApiKey, merchantApiK
 router.get("/:invoice_id/export/:jobId/download", authenticateApiKey, merchantApiKeyRateLimit(), validate(getInvoiceByIdSchema), downloadInvoiceExport);
 
 export default router;
+

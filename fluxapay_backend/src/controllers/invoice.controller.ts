@@ -158,9 +158,11 @@ export async function getInvoiceExportStatus(req: AuthRequest, res: Response) {
     }
 
     const job = getInvoicePdfJob(jobId);
-    if (!job || job.merchantId !== merchantId || job.invoiceId !== invoiceId) {
+    if (!job || job.merchantId !== merchantId || (invoiceId && job.invoiceId !== invoiceId)) {
       return res.status(404).json({ code: ErrorCode.INVOICE_NOT_FOUND, message: "Export job not found" });
     }
+
+    const downloadUrl = `/api/v1/invoices/${job.invoiceId}/export/${job.id}/download`;
 
     return res.status(200).json({
       jobId: job.id,
@@ -169,6 +171,7 @@ export async function getInvoiceExportStatus(req: AuthRequest, res: Response) {
       contentType: job.contentType,
       createdAt: job.createdAt,
       completedAt: job.completedAt,
+      downloadUrl: job.status === "completed" ? downloadUrl : undefined,
       error: job.error,
     });
   } catch (err: any) {
