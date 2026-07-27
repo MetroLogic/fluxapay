@@ -34,13 +34,24 @@ const client = new FluxaPay({ apiKey: 'sk_test_123', baseUrl: 'http://localhost:
 assert(client instanceof FluxaPay, 'creates client instance');
 
 // FluxaPayError
-const err = new FluxaPayError(400, 'bad request', 'VALIDATION_ERROR');
+const err = new FluxaPayError(400, 'bad request', 'VALIDATION_ERROR', null, 'req_abc123');
 assert(err.statusCode === 400, 'FluxaPayError.statusCode is 400');
 assert(err.message === 'bad request', 'FluxaPayError.message is set');
 assert(err.code === 'VALIDATION_ERROR', 'FluxaPayError.code is set');
+assert(err.requestId === 'req_abc123', 'FluxaPayError.requestId is set');
+assert(err.retryable === false, '400 error is not retryable');
 assert(err.is('VALIDATION_ERROR'), 'FluxaPayError.is matches code');
 assert(!err.is('NOT_FOUND'), 'FluxaPayError.is rejects other codes');
 assert(err.name === 'FluxaPayError', 'FluxaPayError.name is correct');
+
+const err429 = new FluxaPayError(429, 'rate limited', 'RATE_LIMITED', null, 'req_429');
+assert(err429.retryable === true, '429 error is retryable');
+
+const err500 = new FluxaPayError(500, 'server error', 'INTERNAL_ERROR', null, 'req_500');
+assert(err500.retryable === false, '500 error is not retryable');
+
+const err503 = new FluxaPayError(503, 'service unavailable', 'UNAVAILABLE', null, 'req_503');
+assert(err503.retryable === true, '503 error is retryable');
 
 // Webhook verify – tampered payload should fail
 const secret = 'webhook_secret_test';

@@ -30,10 +30,21 @@ _API_VERSION = "v1"
 
 
 class FluxaPayError(Exception):
-    def __init__(self, status_code: int, message: str, raw: Any = None) -> None:
+    def __init__(
+        self,
+        status_code: int,
+        message: str,
+        raw: Any = None,
+        code: Optional[str] = None,
+        request_id: Optional[str] = None,
+    ) -> None:
         super().__init__(message)
         self.status_code = status_code
+        self.message = message
         self.raw = raw
+        self.code = code
+        self.request_id = request_id
+        self.retryable = status_code in (429, 502, 503, 504)
 
 
 # ── Models ────────────────────────────────────────────────────────────────────
@@ -145,10 +156,19 @@ def _raise_for(response: httpx.Response) -> None:
         try:
             body = response.json()
             message = body.get("message", f"HTTP {response.status_code}")
+            code = body.get("code")
         except Exception:
             body = None
             message = f"HTTP {response.status_code}"
-        raise FluxaPayError(response.status_code, message, body)
+            code = None
+        request_id = response.headers.get("x-request-id") or response.headers.get("X-Request-ID")
+        raise FluxaPayError(
+            status_code=response.status_code,
+            message=message,
+            raw=body,
+            code=code,
+            request_id=request_id,
+        )
 
 
 # ── Resource mixins (shared logic) ────────────────────────────────────────────
