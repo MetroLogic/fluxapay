@@ -1,7 +1,6 @@
 import type { Server } from "http";
 import type { PrismaClient } from "../generated/client/client";
 import { stopCronJobs } from "./cron.service";
-import { stopPaymentMonitor } from "./paymentMonitor.service";
 import { stopPaymentOracle } from "./paymentOracle.service";
 import { getLogger } from "../utils/logger";
 
@@ -46,9 +45,8 @@ export async function gracefulShutdown(
     forceExitTimer.unref();
 
     try {
-        // 1 & 2. Stop background workers — no new cron ticks or monitor polls.
+        // 1 & 2. Stop background workers — no new cron ticks or Oracle polls.
         stopCronJobs();
-        stopPaymentMonitor();
         stopPaymentOracle();
         logger.info("Background workers stopped");
 

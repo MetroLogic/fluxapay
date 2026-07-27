@@ -1,310 +1,45 @@
-// Payment Monitor Oracle
-import { Horizon, Asset } from "@stellar/stellar-sdk";
-import { PrismaClient } from "../generated/client/client";
-import { Decimal } from "@prisma/client/runtime/library";
-import { paymentContractService } from "./paymentContract.service";
-import { PaymentStatus } from "../types/payment";
-import { getLogger } from "../utils/logger";
-import { requestContextStorage } from "../utils/requestContext";
-import { randomUUID } from "crypto";
-import { trackPaymentConfirmed, trackPaymentExpired } from "../middleware/metrics.middleware";
-import { createAndDeliverWebhook } from "./webhook.service";
-import { eventBus, AppEvents } from "./EventService";
-
 /**
  * paymentMonitor.service.ts
  *
- * Automated on-chain payment detection: polls Stellar Horizon for incoming
- * USDC payments to payment addresses and updates Payment status (confirmed / overpaid / partially_paid).
- * Intended to be run on a schedule via cron.service (e.g. every 1–2 minutes).
+ * @deprecated This service has been superseded by `paymentOracle.service.ts`, which is the
+ * sole authority for on-chain Stellar payment detection.  All Horizon polling, Prisma updates,
+ * event emissions, and Soroban verification previously performed here now happen exclusively
+ * inside `runOracleTick()` (paymentOracle.service.ts).
+ *
+ * Payment expiry (pending → expired transitions) is handled by:
+ *   - `paymentExpiry.service.ts`  — runs every 5 min via cron with a distributed CronLock
+ *   - `runOracleTick()` step 1   — marks expired rows on every Oracle tick
+ *
+ * The `startPaymentMonitor` / `stopPaymentMonitor` stubs are retained only to avoid breaking
+ * existing imports in `index.ts`, `shutdown.service.ts`, and `paymentMonitor.worker.ts`.
+ * They are intentionally no-ops and will be removed in a subsequent cleanup PR.
  */
 
-const HORIZON_URL = () => process.env.STELLAR_HORIZON_URL || 'https://horizon-testnet.stellar.org';
-const USDC_ISSUER = () => process.env.USDC_ISSUER_PUBLIC_KEY || 'GBBD47IF6LWK7P7MDEVSCWT73IQIGCEZHR7OMXMBZQ3ZONN2T4U6W23Y';
-const getUsdcAsset = () => new Asset('USDC', USDC_ISSUER());
+import { getLogger } from "../utils/logger";
 
-// Policy configuration
-const UNDERPAYMENT_THRESHOLD = parseFloat(process.env.UNDERPAYMENT_ACCEPT_THRESHOLD || '0.1');
-const PARTIAL_PAYMENT_TIMEOUT = parseInt(process.env.PARTIAL_PAYMENT_TIMEOUT_MS || '3600000', 10);
-const STALE_PAYMENT_TIMEOUT = parseInt(process.env.STALE_PAYMENT_TIMEOUT_MS || '1800000', 10);
-const ACCEPT_OVERPAYMENTS = process.env.ACCEPT_OVERPAYMENTS !== 'false';
-
-const prisma = new PrismaClient();
-const getServer = () => new Horizon.Server(HORIZON_URL());
 const logger = getLogger();
 
 /**
- * Run one pass of the payment monitor: check for expired payments,
- * fetch all pending or partially paid, check for incoming USDC,
- * and update status. Safe to call repeatedly from a cron job.
+ * @deprecated No-op stub. All on-chain detection has moved to paymentOracle.service.ts.
+ * This function does nothing and will be removed in a future cleanup PR.
  */
 export async function runPaymentMonitorTick(): Promise<void> {
-  const now = new Date();
-  const partialPaymentExpiry = new Date(now.getTime() - PARTIAL_PAYMENT_TIMEOUT);
-  const stalePaymentExpiry = new Date(now.getTime() - STALE_PAYMENT_TIMEOUT);
-
-  // 1. Check for payments expired by their expiration date and fire webhooks
-  const expiredPayments = await prisma.payment.findMany({
-    where: {
-      status: { in: [PaymentStatus.PENDING, PaymentStatus.PARTIALLY_PAID] },
-      expiration: { lte: now },
-    },
-    select: {
-      id: true,
-      merchantId: true,
-      amount: true,
-      currency: true,
-      customer_email: true,
-      expiration: true,
-    },
-  });
-
-  for (const payment of expiredPayments) {
-    // Idempotent update: only transitions rows still in pending/partially_paid
-    const updated = await prisma.payment.updateMany({
-      where: { id: payment.id, status: { in: [PaymentStatus.PENDING, PaymentStatus.PARTIALLY_PAID] } },
-      data: { status: PaymentStatus.EXPIRED },
-    });
-
-    if (updated.count === 0) continue;
-
-    trackPaymentExpired(1);
-    eventBus.emit(AppEvents.PAYMENT_EXPIRED, { ...payment, status: PaymentStatus.EXPIRED });
-
-    const eventId = `${payment.id}:expired`;
-    try {
-      await createAndDeliverWebhook(
-        payment.merchantId,
-        "payment.expired" as any,
-        {
-          event: "payment.expired",
-          data: {
-            payment_id: payment.id,
-            amount: payment.amount.toString(),
-            currency: payment.currency,
-            status: PaymentStatus.EXPIRED,
-            customer_email: payment.customer_email,
-            expired_at: now.toISOString(),
-            reason: "Payment window expired without on-chain confirmation.",
-          },
-        },
-        payment.id,
-        undefined,
-        eventId,
-      );
-    } catch (err: unknown) {
-      console.error(`[PaymentMonitor] Webhook failed for expired payment ${payment.id}:`, err);
-    }
-  }
-
-  // 2. Expire partially-paid payments past the partial-payment timeout
-  const expired2 = await prisma.payment.updateMany({
-    where: {
-      status: PaymentStatus.PARTIALLY_PAID,
-      last_seen_at: { lte: partialPaymentExpiry },
-    },
-    data: { status: PaymentStatus.EXPIRED },
-  });
-  if (expired2.count > 0) trackPaymentExpired(expired2.count);
-
-  // 3. Expire stale pending payments that haven't seen activity
-  const expired3 = await prisma.payment.updateMany({
-    where: {
-      status: { in: [PaymentStatus.PENDING, PaymentStatus.PARTIALLY_PAID] },
-      last_seen_at: { lte: stalePaymentExpiry },
-      expiration: { gt: now },
-    },
-    data: { status: PaymentStatus.EXPIRED },
-  });
-  if (expired3.count > 0) trackPaymentExpired(expired3.count);
-
-  // 4. Monitor active payments for new on-chain transactions
-  const payments = await prisma.payment.findMany({
-    where: {
-      status: { in: [PaymentStatus.PENDING, PaymentStatus.PARTIALLY_PAID] },
-      expiration: { gt: now },
-      stellar_address: { not: null },
-    },
-  });
-
-  for (const payment of payments) {
-    const address = payment.stellar_address;
-    if (!address) continue;
-
-    try {
-      // Fetch current USDC balance for cumulative payment handling
-      const account = await getServer().loadAccount(address);
-      const usdcBalanceRecord = account.balances.find((b: any) =>
-        'asset_code' in b && b.asset_code === 'USDC' && b.asset_issuer === getUsdcAsset().issuer
-      );
-      const totalReceived = usdcBalanceRecord ? parseFloat(usdcBalanceRecord.balance) : 0;
-
-      // Use cursor (last_paging_token) to only fetch transactions newer than last seen
-      let paymentsQuery = getServer().payments()
-        .forAccount(address)
-        .order('asc')
-        .limit(10);
-
-      if (payment.last_paging_token) {
-        paymentsQuery = paymentsQuery.cursor(payment.last_paging_token);
-      }
-
-      const transactions = await paymentsQuery.call();
-
-      let latestPagingToken = payment.last_paging_token;
-      let latestTxHash: string | undefined;
-      let latestPayer: string | undefined;
-
-      for (const record of transactions.records) {
-        if (record.paging_token && (!latestPagingToken || record.paging_token > latestPagingToken)) {
-          latestPagingToken = record.paging_token;
-        }
-
-        if (record.type === 'payment' &&
-          record.asset_type === 'credit_alphanum4' &&
-          record.asset_code === 'USDC' &&
-          record.asset_issuer === getUsdcAsset().issuer) {
-
-          // Dedupe: skip transactions already recorded on this payment
-          if (record.transaction_hash && record.transaction_hash === payment.transaction_hash) {
-            continue;
-          }
-
-          if (!latestTxHash) {
-            latestTxHash = record.transaction_hash;
-            latestPayer = record.from;
-          }
-        }
-      }
-
-      // Determine new status based on total balance and policies
-      let newStatus: PaymentStatus | undefined;
-      const expectedAmount = Number(payment.amount as any as Decimal);
-      const underpaymentThreshold = expectedAmount * UNDERPAYMENT_THRESHOLD;
-
-      if (totalReceived >= expectedAmount) {
-        // Full payment or overpayment
-        if (totalReceived > expectedAmount && ACCEPT_OVERPAYMENTS) {
-          newStatus = PaymentStatus.OVERPAID;
-        } else if (totalReceived > expectedAmount && !ACCEPT_OVERPAYMENTS) {
-          // Treat overpayment as confirmed if overpayments not accepted
-          newStatus = PaymentStatus.CONFIRMED;
-        } else {
-          newStatus = PaymentStatus.CONFIRMED;
-        }
-      } else if (totalReceived > 0) {
-        // Partial payment - check if it meets threshold
-        if (totalReceived >= underpaymentThreshold && UNDERPAYMENT_THRESHOLD > 0) {
-          newStatus = PaymentStatus.PARTIALLY_PAID;
-        } else if (UNDERPAYMENT_THRESHOLD === 0) {
-          // No partial payments accepted - keep as pending
-          newStatus = undefined;
-        } else {
-          // Below threshold - keep as pending for now
-          newStatus = undefined;
-        }
-      }
-
-      // Update database if status changed or new activity detected
-      if (newStatus && (newStatus !== payment.status || latestTxHash)) {
-        const updatedPayment = await prisma.payment.update({
-          where: { id: payment.id },
-          data: {
-            status: newStatus as any,
-            paid_amount: totalReceived,
-            last_seen_at: new Date(),
-            last_paging_token: latestPagingToken,
-            ...(latestTxHash && { transaction_hash: latestTxHash }),
-            ...(newStatus === PaymentStatus.CONFIRMED && { confirmed_at: new Date() }),
-          },
-        });
-
-        if (newStatus === PaymentStatus.CONFIRMED) {
-          trackPaymentConfirmed();
-        }
-
-        // Emit generic status change event
-        const { eventBus, AppEvents } = await import('./EventService');
-        eventBus.emit(AppEvents.PAYMENT_UPDATED, updatedPayment);
-
-        // Emit specific webhook events for partial and overpayment scenarios
-        if (newStatus === PaymentStatus.PARTIALLY_PAID) {
-          eventBus.emit(AppEvents.PAYMENT_PARTIALLY_PAID, updatedPayment);
-        } else if (newStatus === PaymentStatus.OVERPAID) {
-          eventBus.emit(AppEvents.PAYMENT_OVERPAID, updatedPayment);
-        }
-
-        // Trigger on-chain verification via Soroban contract
-        if ((newStatus === PaymentStatus.CONFIRMED || newStatus === PaymentStatus.OVERPAID) && latestTxHash) {
-          // Use the newer paymentContractService with retry logic
-          paymentContractService.verify_payment(
-            payment.id,
-            latestTxHash,
-            totalReceived.toString()
-          ).catch((err) =>
-            console.error(
-              `[PaymentMonitor] Failed to initiate on-chain verification for payment ${payment.id}:`,
-              err
-            )
-          );
-
-          // PAYMENT_CONFIRMED is emitted by PaymentService.verifyPayment()
-          // — do not duplicate it here to avoid double webhook deliveries.
-        }
-      } else if (latestPagingToken && latestPagingToken !== payment.last_paging_token) {
-        // Just update paging token if no status change
-        await prisma.payment.update({
-          where: { id: payment.id },
-          data: { 
-            last_paging_token: latestPagingToken,
-            last_seen_at: new Date(),
-          },
-        });
-      }
-    } catch (e) {
-      // Handle 404 meaning account doesn't exist yet (no payments received)
-      if ((e as any).response?.status !== 404) {
-        logger.error(`Error checking address ${address}`, { error: (e as Error).message });
-      }
-    }
-  }
-}
-
-let monitorTimer: NodeJS.Timeout | null = null;
-
-/**
- * Starts the payment monitor loop.
- */
-export function startPaymentMonitor() {
-  const intervalMs = parseInt(process.env.PAYMENT_MONITOR_INTERVAL_MS || '120000', 10);
-  logger.info(`Starting payment monitor loop`, { intervalMs });
-
-  const runTickWithContext = async () => {
-    const requestId = `monitor-${randomUUID()}`;
-    await requestContextStorage.run({ requestId }, async () => {
-      try {
-        await runPaymentMonitorTick();
-      } catch (err: any) {
-        logger.error('Tick failed', { error: err.message });
-      }
-    });
-  };
-
-  // Run immediately
-  runTickWithContext();
-
-  // Run on interval
-  monitorTimer = setInterval(runTickWithContext, intervalMs);
+  // Intentional no-op. See file-level deprecation notice.
 }
 
 /**
- * Stops the payment monitor loop.
+ * @deprecated No-op stub. Call startPaymentOracle() from paymentOracle.service.ts instead.
  */
-export function stopPaymentMonitor() {
-  if (monitorTimer) {
-    clearInterval(monitorTimer);
-    monitorTimer = null;
-    logger.info('Payment monitor loop stopped.');
-  }
+export function startPaymentMonitor(): void {
+  logger.warn(
+    "[PaymentMonitor] startPaymentMonitor() is deprecated and is now a no-op. " +
+    "All Horizon polling is handled by paymentOracle.service.ts (startPaymentOracle)."
+  );
 }
 
+/**
+ * @deprecated No-op stub. Call stopPaymentOracle() from paymentOracle.service.ts instead.
+ */
+export function stopPaymentMonitor(): void {
+  // Intentional no-op. See file-level deprecation notice.
+}
