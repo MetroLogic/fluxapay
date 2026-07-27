@@ -946,6 +946,28 @@ model DepositAddress {
   @@index([status, cooldown_until])
 }
 
+/// Persistent settlement retry queue – replaces in-memory setTimeout retries.
+/// Survives process restarts; picked up by cron job (settlement_retry).
+model SettlementRetry {
+  id           String   @id @default(cuid())
+  paymentId    String   @unique
+  retryCount   Int      @default(0)
+  nextRetryAt  DateTime
+  lastError    String?
+  status       SettlementRetryStatus @default(pending)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([status, nextRetryAt])
+}
+
+enum SettlementRetryStatus {
+  pending
+  processing
+  completed
+  exhausted
+}
+
 /// Suppressed email addresses (bounces, complaints, unsubscribes).
 model EmailSuppression {
   id         String   @id @default(cuid())
