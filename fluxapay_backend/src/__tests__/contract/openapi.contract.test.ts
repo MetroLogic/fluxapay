@@ -101,6 +101,27 @@ beforeAll(async () => {
     });
     testMerchantId = created.id;
   }
+
+  await prisma.merchantKYC.upsert({
+    where: { merchantId: testMerchantId },
+    create: {
+      merchantId: testMerchantId,
+      business_type: 'registered_business',
+      legal_business_name: 'Test Business LLC',
+      country_of_registration: 'US',
+      business_address: '123 Test St',
+      director_full_name: 'Test Director',
+      director_email: 'director@example.com',
+      director_phone: '+15551234567',
+      government_id_type: 'passport',
+      government_id_number: 'P1234567',
+      kyc_status: 'approved',
+    },
+    update: {
+      kyc_status: 'approved',
+    },
+  });
+
   testApiKey = RAW_TEST_API_KEY;
 });
 
