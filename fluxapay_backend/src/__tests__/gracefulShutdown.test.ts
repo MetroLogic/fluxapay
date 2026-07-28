@@ -4,11 +4,10 @@
  * Tests gracefulShutdown() and registerShutdownHandlers() from shutdown.service.ts.
  *
  * Shutdown sequence verified:
- *   1. Stop cron jobs
- *   2. Stop the payment monitor
- *   3. Close the HTTP server (drain in-flight requests)
- *   4. Disconnect Prisma
- *   5. Exit 0
+ *   1. Stop cron jobs and payment oracle (no new background work)
+ *   2. Close the HTTP server (drain in-flight requests)
+ *   3. Disconnect Prisma
+ *   4. Exit 0
  *
  * Edge cases:
  *   - Duplicate signals are ignored (isShuttingDown guard)
@@ -38,7 +37,6 @@ jest.mock("../services/paymentOracle.service", () => ({
 
 import { gracefulShutdown, registerShutdownHandlers } from "../services/shutdown.service";
 import { stopCronJobs } from "../services/cron.service";
-import { stopPaymentMonitor } from "../services/paymentMonitor.service";
 import { stopPaymentOracle } from "../services/paymentOracle.service";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -77,14 +75,13 @@ describe("gracefulShutdown()", () => {
         exitSpy.mockRestore();
     });
 
-    it("stops cron, stops monitor, closes server, disconnects prisma, exits 0", async () => {
+    it("stops cron, stops oracle, closes server, disconnects prisma, exits 0", async () => {
         const server = makeMockServer();
         const prisma = makeMockPrisma();
 
         await gracefulShutdown("SIGTERM", { server: server as any, prisma });
 
         expect(stopCronJobs).toHaveBeenCalledTimes(1);
-        expect(stopPaymentMonitor).toHaveBeenCalledTimes(1);
         expect(stopPaymentOracle).toHaveBeenCalledTimes(1);
         expect(server.close).toHaveBeenCalledTimes(1);
         expect(prisma.$disconnect).toHaveBeenCalledTimes(1);
@@ -95,7 +92,6 @@ describe("gracefulShutdown()", () => {
         const callOrder: string[] = [];
 
         (stopCronJobs as jest.Mock).mockImplementation(() => callOrder.push("stopCronJobs"));
-        (stopPaymentMonitor as jest.Mock).mockImplementation(() => callOrder.push("stopPaymentMonitor"));
         (stopPaymentOracle as jest.Mock).mockImplementation(() => callOrder.push("stopPaymentOracle"));
 
         const server = {
@@ -107,7 +103,7 @@ describe("gracefulShutdown()", () => {
 
         await gracefulShutdown("SIGTERM", { server: server as any, prisma: makeMockPrisma() });
 
-        expect(callOrder).toEqual(["stopCronJobs", "stopPaymentMonitor", "stopPaymentOracle", "server.close"]);
+        expect(callOrder).toEqual(["stopCronJobs", "stopPaymentOracle", "server.close"]);
     });
 
     it("exits with code 1 when server.close returns an error", async () => {

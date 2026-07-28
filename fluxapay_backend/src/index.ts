@@ -5,7 +5,6 @@ import "./tracing";
 import dotenv from "dotenv";
 import { validateEnv, EnvValidationError } from "./config/env.config";
 import { startCronJobs } from "./services/cron.service";
-import { startPaymentMonitor } from "./services/paymentMonitor.service";
 import { startPaymentOracle, stopPaymentOracle } from "./services/paymentOracle.service";
 import { initializeEmailNotifications } from "./services/emailNotification.service";
 import { registerShutdownHandlers } from "./services/shutdown.service";
@@ -50,10 +49,7 @@ try {
     // Start scheduled jobs (daily settlement batch, etc.)
     startCronJobs();
 
-    // Start payment monitor loop (legacy polling)
-    startPaymentMonitor();
-
-    // Start payment oracle service (enhanced monitoring with smart contract verification)
+    // Start payment oracle service — the sole Horizon poller for on-chain USDC detection
     startPaymentOracle();
 
     // Initialize email notification listeners
