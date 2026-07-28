@@ -108,7 +108,7 @@ export async function signupMerchantService(data: {
 
   // Generate OTP (non-blocking — merchant record is already committed)
   try {
-    const otp = await createOtp(merchant.id, "email");
+    const otp = await createOtp(merchant.id, "email", email);
     await sendOtpEmail(email, otp);
   } catch (err) {
     console.error("OTP email delivery failed during signup:", err);
@@ -171,7 +171,7 @@ export async function resendOtpMerchantService(data: {
   if (!merchant) throw apiError(404, ErrorCode.MERCHANT_NOT_FOUND, "Merchant not found");
 
 
-  const otp = await createOtp(merchantId, channel);
+  const otp = await createOtp(merchantId, channel, channel === "email" ? merchant.email : undefined);
   if (channel === "email") {
     await sendOtpEmail(merchant.email, otp);
   } else {
