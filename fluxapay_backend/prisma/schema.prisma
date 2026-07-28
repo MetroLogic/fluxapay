@@ -357,6 +357,7 @@ model Payment {
   currency           String
   usdc_amount        Decimal?
   fx_rate            Decimal?
+  fx_rate_stale      Boolean  @default(false)
   customer_email     String
   description        String?
   metadata           Json

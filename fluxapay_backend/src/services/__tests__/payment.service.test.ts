@@ -2,6 +2,7 @@ import { PaymentService } from "../payment.service";
 import { PrismaClient } from "../../generated/client/client";
 import { HDWalletService } from "../HDWalletService";
 import { StellarService } from "../StellarService";
+import { FxService } from "../fx.service";
 
 // Mock Prisma
 jest.mock("../../generated/client/client", () => {
@@ -35,6 +36,9 @@ jest.mock("../depositAddress.service", () => ({
 jest.mock("../fx.service", () => ({
   FxService: {
     getUSDCExchangeRate: jest.fn().mockResolvedValue(1),
+    getUSDCExchangeRateWithMeta: jest
+      .fn()
+      .mockResolvedValue({ rate: 1, stale: false, circuitState: "closed" }),
   },
 }));
 
@@ -192,6 +196,61 @@ describe("PaymentService", () => {
       });
     });
 
+    it("should persist fx_rate_stale when the FX circuit breaker served a stale rate (#823)", async () => {
+      const mockStellarAddress =
+        "GTEST123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ123456789ABC";
+      const mockDerivedAddress = {
+        publicKey: mockStellarAddress,
+        merchantIndex: 0,
+        paymentIndex: 0,
+        derivationPath: "m/44'/148'/0'/0'",
+      };
+
+      (
+        HDWalletService as jest.MockedClass<typeof HDWalletService>
+      ).mockImplementation(
+        () =>
+          ({
+            derivePaymentAddress: jest.fn().mockResolvedValue(mockDerivedAddress),
+            encryptKeyData: jest.fn().mockResolvedValue("encrypted-blob"),
+            regenerateKeypair: jest.fn(),
+            regenerateKeypairFromPath: jest.fn(),
+            verifyAddress: jest.fn(),
+            decryptKeyData: jest.fn(),
+          }) as any,
+      );
+      (
+        StellarService as jest.MockedClass<typeof StellarService>
+      ).mockImplementation(
+        () => ({ prepareAccount: jest.fn().mockResolvedValue(undefined) }) as any,
+      );
+
+      (FxService.getUSDCExchangeRateWithMeta as jest.Mock).mockResolvedValueOnce({
+        rate: 1550,
+        stale: true,
+        circuitState: "open",
+      });
+
+      mockPrisma.payment.create.mockResolvedValue({
+        id: "payment_123",
+        stellar_address: null,
+      });
+
+      await PaymentService.createPayment({
+        amount: 100,
+        currency: "NGN",
+        customer_email: "test@example.com",
+        merchantId: "merchant_1",
+        metadata: {},
+      });
+
+      expect(mockPrisma.payment.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          fx_rate: 1550,
+          fx_rate_stale: true,
+        }),
+      });
+    });
 
     it('should sanitize metadata string fields before persistence', async () => {
       const mockStellarAddress =

@@ -26,6 +26,21 @@ export function createHealthRouter(prisma: PrismaClient): Router {
    *                 uptime:
    *                   type: number
    *                   description: Process uptime in seconds
+   *                 fx_circuit_breaker:
+   *                   type: object
+   *                   description: Current state of the FX rate circuit breaker
+   *                   properties:
+   *                     state:
+   *                       type: string
+   *                       enum: [closed, open, half_open]
+   *                     consecutiveFailures:
+   *                       type: number
+   *                     openedAt:
+   *                       type: string
+   *                       nullable: true
+   *                     lastError:
+   *                       type: string
+   *                       nullable: true
    */
   router.get("/", controller.getHealth);
 

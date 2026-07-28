@@ -86,3 +86,14 @@ export async function sendSettlementFailureAlert(alert: SettlementFailureAlert):
 
   await Promise.all([sendSlackAlert(message), sendTelegramAlert(message)]);
 }
+
+/**
+ * Generic ops alert for non-settlement events (e.g. the FX circuit breaker
+ * opening) that should reach the same Slack/Telegram channels. Shares the
+ * same env-configured channels as sendSettlementFailureAlert. Never throws.
+ */
+export async function sendOpsAlert(prefix: string, message: string): Promise<void> {
+  console.error(`[${prefix}] ${message.replace(/\n/g, " | ")}`);
+
+  await Promise.all([sendSlackAlert(message), sendTelegramAlert(message)]);
+}
