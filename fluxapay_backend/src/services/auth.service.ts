@@ -11,10 +11,52 @@ const REFRESH_TOKEN_EXPIRY_DAYS = 30;
 const FAILED_LOGIN_THRESHOLD = 10;
 const ACCOUNT_LOCKOUT_MINUTES = 15;
 const BCRYPT_COST = 12;
+const DEFAULT_IP_LOCKOUT_THRESHOLD = 20;
+const DEFAULT_IP_LOCKOUT_WINDOW_MINUTES = 15;
+
+/** Max failed login attempts per IP (across all emails) before a 429 lockout. Env-configurable. */
+function getIpLockoutThreshold(): number {
+  const raw = parseInt(process.env.AUTH_IP_LOCKOUT_THRESHOLD ?? "", 10);
+  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_IP_LOCKOUT_THRESHOLD;
+}
+
+/** Rolling window (minutes) over which failed attempts count toward the IP lockout. Env-configurable. */
+function getIpLockoutWindowMinutes(): number {
+  const raw = parseInt(process.env.AUTH_IP_LOCKOUT_WINDOW_MINUTES ?? "", 10);
+  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_IP_LOCKOUT_WINDOW_MINUTES;
+}
+
+/**
+ * Persist an IP-level lockout event to RateLimitLog (distinct limit_type from
+ * the generic `authRateLimit` middleware and from per-email lockouts) so
+ * IP-level brute-force blocks can be monitored/audited separately.
+ */
+async function logIpLockoutEvent(params: {
+  ipAddress: string;
+  retryAfterSeconds: number;
+}): Promise<void> {
+  try {
+    await prisma.rateLimitLog.create({
+      data: {
+        ip_address: params.ipAddress,
+        endpoint: "auth.loginWithEmailPassword",
+        limit_type: "login_ip_lockout",
+        retry_after_seconds: params.retryAfterSeconds,
+        timestamp: new Date(),
+      },
+    });
+  } catch (error) {
+    console.error("Failed to log IP lockout event:", error);
+  }
+}
 
 /**
  * Login with email and password, returns access token and refresh token
- * Implements account lockout after 10 failed attempts within 15 minutes
+ * Implements two layers of brute-force protection:
+ *  - Per-email lockout after 10 failed attempts within 15 minutes.
+ *  - Per-IP lockout (across all emails) after AUTH_IP_LOCKOUT_THRESHOLD failed
+ *    attempts within AUTH_IP_LOCKOUT_WINDOW_MINUTES, to catch a distributed
+ *    attack that spreads failed attempts across many emails from one IP.
  */
 export async function loginWithEmailPassword(data: {
   email: string;
@@ -23,6 +65,45 @@ export async function loginWithEmailPassword(data: {
   userAgent?: string;
 }) {
   const { email, password, ipAddress, userAgent } = data;
+  const ip = ipAddress || "unknown";
+
+  // Check for IP-level lockout first — this catches a distributed brute-force
+  // attack (many emails, one IP) that the per-email check alone would miss.
+  const ipLockoutThreshold = getIpLockoutThreshold();
+  const ipLockoutWindowMinutes = getIpLockoutWindowMinutes();
+
+  const recentFailedAttemptsForIp = await prisma.loginAttempt.count({
+    where: {
+      ip_address: ip,
+      success: false,
+      created_at: {
+        gte: new Date(Date.now() - ipLockoutWindowMinutes * 60 * 1000),
+      },
+    },
+  });
+
+  if (recentFailedAttemptsForIp >= ipLockoutThreshold) {
+    const retryAfterSeconds = ipLockoutWindowMinutes * 60;
+
+    // Log this attempt as failed
+    await prisma.loginAttempt.create({
+      data: {
+        merchantId: "unknown",
+        email,
+        ip_address: ip,
+        success: false,
+      },
+    });
+
+    await logIpLockoutEvent({ ipAddress: ip, retryAfterSeconds });
+
+    throw apiError(
+      429,
+      ErrorCode.RATE_LIMIT_EXCEEDED,
+      "Too many failed login attempts from this IP address. Please try again later.",
+      { retryAfterSeconds },
+    );
+  }
 
   // Check for account lockout
   const recentFailedAttempts = await prisma.loginAttempt.findMany({
@@ -41,7 +122,7 @@ export async function loginWithEmailPassword(data: {
       data: {
         merchantId: "unknown",
         email,
-        ip_address: ipAddress || "unknown",
+        ip_address: ip,
         success: false,
       },
     });

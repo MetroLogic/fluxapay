@@ -9,6 +9,7 @@ import {
   cleanupOldLoginAttempts,
 } from "../auth.service";
 import { PrismaClient } from "../../generated/client/client";
+import { ErrorCode } from "../../types/errors";
 import bcrypt from "bcrypt";
 
 process.env.DATABASE_URL =
@@ -62,8 +63,16 @@ describe("Auth Service", () => {
           { email: { contains: "test-lockout" } },
           { email: { contains: "test-notlocked" } },
           { email: { contains: "test-cleanup" } },
+          // Dedicated IP range used by the #825 IP-lockout tests below —
+          // distinct from 127.0.0.1 (shared by the other tests in this file)
+          // so a distributed-attack fixture never counts toward the other
+          // tests' per-IP failed-attempt totals, or vice versa.
+          { ip_address: { startsWith: "203.0.113." } },
         ],
       },
+    });
+    await prisma.rateLimitLog.deleteMany({
+      where: { ip_address: { startsWith: "203.0.113." } },
     });
     await prisma.merchant.deleteMany({ where: merchantFilter });
   });
@@ -189,6 +198,136 @@ describe("Auth Service", () => {
         status: 403,
         message: "Account not active",
       });
+    });
+
+    it("should lock out an IP after exceeding the IP-level failed-attempt threshold across different emails (#825)", async () => {
+      const attackerIp = "203.0.113.11";
+
+      // Seed 20 failed attempts across 20 different emails, all from the same
+      // IP — a distributed brute-force attack that per-email lockout alone
+      // (scoped to a single email) would never catch.
+      for (let i = 0; i < 20; i++) {
+        await prisma.loginAttempt.create({
+          data: {
+            merchantId: "unknown",
+            email: `distributed-target-${i}@example.com`,
+            ip_address: attackerIp,
+            success: false,
+          },
+        });
+      }
+
+      await expect(
+        loginWithEmailPassword({
+          email: "yet-another-target@example.com",
+          password: "whatever",
+          ipAddress: attackerIp,
+        })
+      ).rejects.toMatchObject({
+        status: 429,
+        code: ErrorCode.RATE_LIMIT_EXCEEDED,
+        message: expect.stringContaining("Too many failed login attempts from this IP"),
+        retryAfterSeconds: expect.any(Number),
+      });
+
+      const rateLimitLogs = await prisma.rateLimitLog.findMany({
+        where: { ip_address: attackerIp, limit_type: "login_ip_lockout" },
+      });
+      expect(rateLimitLogs.length).toBeGreaterThan(0);
+    });
+
+    it("should return 429 when both per-email and per-IP thresholds are exceeded simultaneously", async () => {
+      const sharedIp = "203.0.113.12";
+      const targetEmail = "test-auth-both-locked@example.com";
+
+      const hashedPassword = await bcrypt.hash("TestPassword123!", 12);
+      await prisma.merchant.create({
+        data: {
+          business_name: "Test Auth Merchant",
+          email: targetEmail,
+          phone_number: uniquePhone(),
+          country: "US",
+          settlement_currency: "USD",
+          password: hashedPassword,
+          webhook_secret: "test-secret",
+          status: "active",
+        },
+      });
+
+      // Exceed the per-email threshold (10) targeting this one email...
+      for (let i = 0; i < 10; i++) {
+        await prisma.loginAttempt.create({
+          data: {
+            merchantId: "unknown",
+            email: targetEmail,
+            ip_address: sharedIp,
+            success: false,
+          },
+        });
+      }
+      // ...and separately exceed the per-IP threshold (20) via other emails
+      // attempted from the same IP.
+      for (let i = 0; i < 15; i++) {
+        await prisma.loginAttempt.create({
+          data: {
+            merchantId: "unknown",
+            email: `other-target-${i}@example.com`,
+            ip_address: sharedIp,
+            success: false,
+          },
+        });
+      }
+
+      await expect(
+        loginWithEmailPassword({
+          email: targetEmail,
+          password: "TestPassword123!",
+          ipAddress: sharedIp,
+        })
+      ).rejects.toMatchObject({
+        status: 429,
+        code: ErrorCode.RATE_LIMIT_EXCEEDED,
+        // The IP check runs first, so it takes precedence when both are tripped.
+        message: expect.stringContaining("Too many failed login attempts from this IP"),
+      });
+    });
+
+    it("should respect AUTH_IP_LOCKOUT_THRESHOLD and AUTH_IP_LOCKOUT_WINDOW_MINUTES env overrides", async () => {
+      const originalThreshold = process.env.AUTH_IP_LOCKOUT_THRESHOLD;
+      const originalWindow = process.env.AUTH_IP_LOCKOUT_WINDOW_MINUTES;
+      process.env.AUTH_IP_LOCKOUT_THRESHOLD = "3";
+      process.env.AUTH_IP_LOCKOUT_WINDOW_MINUTES = "15";
+
+      try {
+        const configuredIp = "203.0.113.13";
+        for (let i = 0; i < 3; i++) {
+          await prisma.loginAttempt.create({
+            data: {
+              merchantId: "unknown",
+              email: `configured-target-${i}@example.com`,
+              ip_address: configuredIp,
+              success: false,
+            },
+          });
+        }
+
+        await expect(
+          loginWithEmailPassword({
+            email: "configured-target-new@example.com",
+            password: "whatever",
+            ipAddress: configuredIp,
+          })
+        ).rejects.toMatchObject({
+          status: 429,
+          code: ErrorCode.RATE_LIMIT_EXCEEDED,
+          retryAfterSeconds: 15 * 60,
+        });
+      } finally {
+        if (originalThreshold === undefined) delete process.env.AUTH_IP_LOCKOUT_THRESHOLD;
+        else process.env.AUTH_IP_LOCKOUT_THRESHOLD = originalThreshold;
+        if (originalWindow === undefined) delete process.env.AUTH_IP_LOCKOUT_WINDOW_MINUTES;
+        else process.env.AUTH_IP_LOCKOUT_WINDOW_MINUTES = originalWindow;
+      }
     });
   });
 
