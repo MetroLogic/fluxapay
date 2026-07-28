@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { PrismaClient } from "../generated/client/client";
 import { getReadiness, getUptimeSeconds } from "../services/health.service";
+import { getFxCircuitBreakerStatus } from "../services/fx.service";
 
 export function createHealthController(prisma: PrismaClient) {
   return {
@@ -8,6 +9,7 @@ export function createHealthController(prisma: PrismaClient) {
       res.status(200).json({
         status: "ok",
         uptime: getUptimeSeconds(),
+        fx_circuit_breaker: getFxCircuitBreakerStatus(),
       });
     },
 

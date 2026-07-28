@@ -150,7 +150,8 @@ export class PaymentService {
     const checkout_url = `${checkoutBase}/pay/${paymentId}`;
 
     // FX conversion
-    const fxRate = await FxService.getUSDCExchangeRate(currency);
+    const fxResult = await FxService.getUSDCExchangeRateWithMeta(currency);
+    const fxRate = fxResult.rate;
     const usdcAmount = amount * fxRate;
 
     // Persist the payment first so pool allocation can satisfy the
@@ -162,6 +163,7 @@ export class PaymentService {
         currency,
         usdc_amount: usdcAmount,
         fx_rate: fxRate,
+        fx_rate_stale: fxResult.stale,
         customer_email,
         description: description ?? null,
         merchantId,
