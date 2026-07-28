@@ -19,7 +19,7 @@ export async function createOtp(merchantId: string, channel: 'email' | 'phone') 
 
 export async function verifyOtp(merchantId: string, channel: 'email' | 'phone', otp: string) {
   const bypass = process.env.E2E_ACCEPT_OTP;
-  if (bypass && otp === bypass) {
+  if (process.env.NODE_ENV === 'test' && bypass && otp === bypass) {
     await prisma.oTP.deleteMany({ where: { merchantId, channel } });
     return { success: true };
   }
