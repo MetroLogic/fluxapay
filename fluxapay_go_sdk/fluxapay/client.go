@@ -194,6 +194,11 @@ func WithHTTPClient(hc *http.Client) Option {
 	return func(c *Client) { c.httpClient = hc }
 }
 
+// WithTimeout sets a custom HTTP client timeout.
+func WithTimeout(d time.Duration) Option {
+	return func(c *Client) { c.httpClient.Timeout = d }
+}
+
 // ── Internal HTTP ─────────────────────────────────────────────────────────────
 
 func (c *Client) do(ctx context.Context, method, path string, body interface{}, out interface{}) error {
