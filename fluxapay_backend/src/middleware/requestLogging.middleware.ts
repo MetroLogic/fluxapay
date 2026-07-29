@@ -170,16 +170,30 @@ function calculateDuration(startTime: [number, number]): number {
  * Normalize path to remove dynamic parameters for metrics
  * This prevents metric cardinality explosion
  */
+/**
+ * Normalize path to remove dynamic parameters for metrics.
+ * Prevents metric cardinality explosion from high-entropy path segments:
+ *   - UUIDs
+ *   - Numeric IDs
+ *   - Stellar public keys (56-char G... base58 strings)
+ *   - API key prefixes (sk_live_..., pk_test_..., etc.)
+ *   - Email addresses in paths
+ *   - Base64 / long opaque tokens (≥32 chars)
+ */
 function normalizePath(path: string): string {
-  // Remove query parameters
   const basePath = path.split('?')[0];
-  
-  // Replace UUIDs with placeholder
-  const normalized = basePath.replace(
-    /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi,
-    ':id'
-  );
-  
-  // Replace numeric IDs with placeholder
-  return normalized.replace(/\/\d+/g, '/:id');
+
+  return basePath
+    // UUIDs
+    .replace(/\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, '/:id')
+    // Numeric IDs
+    .replace(/\/\d+/g, '/:id')
+    // Stellar public keys: G followed by 55 base58 chars
+    .replace(/\/G[A-HJ-NP-Z2-7A-Z0-9]{55}/g, '/:stellarKey')
+    // API key prefixes (e.g. sk_live_..., pk_test_...)
+    .replace(/\/(?:sk|pk)_(?:live|test)_[A-Za-z0-9_-]+/g, '/:apiKey')
+    // Email addresses in path segments
+    .replace(/\/[^\s/]+@[^\s/]+\.[^\s/]+/g, '/:email')
+    // Long opaque tokens / base64 values (≥32 alphanumeric+_- chars)
+    .replace(/\/[A-Za-z0-9_-]{32,}/g, '/:token');
 }
