@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { adminAuth } from "../middleware/adminAuth.middleware";
-import { authenticateAdmin, requireAdminRole } from "../middleware/adminRbac.middleware";
+import { authenticateAdmin, requireAdminRole, AdminPermission } from "../middleware/adminRbac.middleware";
 import { adminQueryUsageHandler } from "../controllers/usage.controller";
 
 const router = Router();
@@ -34,7 +34,7 @@ router.get(
   "/",
   authenticateAdmin,
   adminAuth,
-  requireAdminRole("merchants:read"),
+  requireAdminRole(AdminPermission.MERCHANTS_READ),
   adminQueryUsageHandler,
 );
 
