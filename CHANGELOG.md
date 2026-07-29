@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Exported typed webhook event payload interfaces (`PaymentCreatedEvent`, `PaymentConfirmedEvent`, etc.) across TypeScript, Python, and Go SDKs.
+- `verifyWebhookSignature` in TypeScript SDK now returns the typed `WebhookEvent` union.
+
 ## [1.0.0] - 2024-03-25
 
 ### Added

@@ -122,14 +122,35 @@ type ListSettlementsParams struct {
 	DateTo   string
 }
 
-// WebhookEvent is a parsed FluxaPay webhook payload.
-type WebhookEvent struct {
+// WebhookEventBase contains the common fields for all webhook events.
+type WebhookEventBase struct {
 	Event      string                 `json:"event"`
 	PaymentID  string                 `json:"payment_id"`
 	MerchantID string                 `json:"merchant_id"`
 	Timestamp  string                 `json:"timestamp"`
 	Data       map[string]interface{} `json:"data"`
 }
+
+// PaymentCreatedEvent represents a payment.created webhook payload.
+type PaymentCreatedEvent struct { WebhookEventBase }
+
+// PaymentPendingEvent represents a payment.pending webhook payload.
+type PaymentPendingEvent struct { WebhookEventBase }
+
+// PaymentConfirmedEvent represents a payment.confirmed webhook payload.
+type PaymentConfirmedEvent struct { WebhookEventBase }
+
+// PaymentFailedEvent represents a payment.failed webhook payload.
+type PaymentFailedEvent struct { WebhookEventBase }
+
+// PaymentSettledEvent represents a payment.settled webhook payload.
+type PaymentSettledEvent struct { WebhookEventBase }
+
+// RefundCompletedEvent represents a refund.completed webhook payload.
+type RefundCompletedEvent struct { WebhookEventBase }
+
+// WebhookEvent is a parsed FluxaPay webhook payload.
+type WebhookEvent = WebhookEventBase
 
 // ── Client ────────────────────────────────────────────────────────────────────
 

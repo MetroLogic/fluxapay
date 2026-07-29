@@ -57,13 +57,44 @@ export interface PaymentStatus {
   confirmed_at?: string;
 }
 
-export interface WebhookEvent {
-  event: string;
+export interface WebhookEventBase {
   payment_id: string;
   merchant_id: string;
   timestamp: string;
   data: Record<string, unknown>;
 }
+
+export interface PaymentCreatedEvent extends WebhookEventBase {
+  event: 'payment_created';
+}
+
+export interface PaymentPendingEvent extends WebhookEventBase {
+  event: 'payment_pending';
+}
+
+export interface PaymentConfirmedEvent extends WebhookEventBase {
+  event: 'payment_confirmed';
+}
+
+export interface PaymentFailedEvent extends WebhookEventBase {
+  event: 'payment_failed';
+}
+
+export interface PaymentSettledEvent extends WebhookEventBase {
+  event: 'payment_settled';
+}
+
+export interface RefundCompletedEvent extends WebhookEventBase {
+  event: 'refund_completed';
+}
+
+export type WebhookEvent =
+  | PaymentCreatedEvent
+  | PaymentPendingEvent
+  | PaymentConfirmedEvent
+  | PaymentFailedEvent
+  | PaymentSettledEvent
+  | RefundCompletedEvent;
 
 export interface CreateInvoiceParams {
   /** Customer name for the invoice. */
@@ -109,10 +140,9 @@ export interface VerifyWebhookSignatureOptions {
   toleranceSeconds?: number;
 }
 
-export interface WebhookVerificationResult {
-  valid: boolean;
-  error?: string;
-}
+export type WebhookVerificationResult = 
+  | { valid: true; event: WebhookEvent }
+  | { valid: false; error: string };
 
 /**
  * Verify a FluxaPay webhook signature without instantiating the SDK client.
@@ -132,6 +162,7 @@ export interface WebhookVerificationResult {
  *
  * const result = verifyWebhookSignature(rawBody, sig, ts, process.env.WEBHOOK_SECRET!);
  * if (!result.valid) throw new Error(result.error);
+ * console.log(result.event.event); // typed as 'payment_created' | 'payment_pending' | ...
  * ```
  */
 export function verifyWebhookSignature(
@@ -181,7 +212,12 @@ export function verifyWebhookSignature(
     return { valid: false, error: 'Signature verification failed' };
   }
 
-  return { valid: true };
+  try {
+    const event = JSON.parse(rawBody) as WebhookEvent;
+    return { valid: true, event };
+  } catch {
+    return { valid: false, error: 'Invalid JSON payload' };
+  }
 }
 
 // ── Errors ───────────────────────────────────────────────────────────────────
