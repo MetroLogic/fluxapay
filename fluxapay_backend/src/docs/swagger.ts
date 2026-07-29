@@ -82,18 +82,35 @@ const options: swaggerJsdoc.Options = {
                     type: 'object',
                     required: ['amount', 'currency', 'customer_email', 'metadata'],
                     properties: {
-                        amount: { type: 'number', example: 120.5 },
+                        amount: { type: 'number', example: 150.0 },
                         currency: { type: 'string', example: 'USDC' },
-                        customer_email: { type: 'string', example: 'buyer@example.com' },
+                        customer_email: { type: 'string', example: 'alice@example.com' },
                         customer_id: {
                             type: 'string',
                             description: 'Optional Customer id (must belong to the authenticated merchant)',
-                            example: 'clxyz123customer',
+                            example: 'seed-customer-alice',
                         },
                         metadata: {
                             type: 'object',
                             additionalProperties: true,
-                            example: { order_id: 'ord_001', webhook_url: 'https://merchant.tld/webhooks' },
+                            example: { order_id: 'ord_001', webhook_url: 'https://webhook.site/fluxapay-demo' },
+                        },
+                    },
+                    examples: {
+                        ProSubscription: {
+                            summary: 'Pro plan subscription',
+                            value: {
+                                amount: 150.0, currency: 'USDC', customer_email: 'alice@example.com',
+                                customer_id: 'seed-customer-alice',
+                                metadata: { order_id: 'ord_001', plan: 'pro', stellar_address: 'GBUQWP3BOUZX34ULNQG23RQ6F5DOBAB4NSTOF5AUFF6GPBK476QC6G5' },
+                            },
+                        },
+                        StarterPlan: {
+                            summary: 'Starter plan payment',
+                            value: {
+                                amount: 75.5, currency: 'USDC', customer_email: 'bob@example.com',
+                                metadata: { order_id: 'ord_002', plan: 'starter' },
+                            },
                         },
                     },
                 },
@@ -101,11 +118,21 @@ const options: swaggerJsdoc.Options = {
                     type: 'object',
                     required: ['email'],
                     properties: {
-                        email: { type: 'string', format: 'email', example: 'buyer@example.com' },
+                        email: { type: 'string', format: 'email', example: 'alice@example.com' },
                         metadata: {
                             type: 'object',
                             additionalProperties: true,
-                            example: { plan: 'pro' },
+                            example: { plan: 'pro', region: 'us-east' },
+                        },
+                    },
+                    examples: {
+                        ProCustomer: {
+                            summary: 'Pro plan customer',
+                            value: { email: 'alice@example.com', metadata: { plan: 'pro', region: 'us-east' } },
+                        },
+                        StarterCustomer: {
+                            summary: 'Starter plan customer',
+                            value: { email: 'bob@example.com', metadata: { plan: 'starter' } },
                         },
                     },
                 },
@@ -113,12 +140,19 @@ const options: swaggerJsdoc.Options = {
                     type: 'object',
                     properties: {
                         email: { type: 'string', format: 'email' },
-                        metadata: {
-                            type: 'object',
-                            additionalProperties: true,
-                        },
+                        metadata: { type: 'object', additionalProperties: true },
                     },
                     description: 'At least one of email or metadata should be provided',
+                    examples: {
+                        UpdateEmail: {
+                            summary: 'Update email address',
+                            value: { email: 'alice-new@example.com' },
+                        },
+                        UpgradePlan: {
+                            summary: 'Upgrade plan in metadata',
+                            value: { metadata: { plan: 'enterprise', region: 'eu-west' } },
+                        },
+                    },
                 },
                 CreateInvoiceRequest: {
                     type: 'object',
@@ -126,7 +160,7 @@ const options: swaggerJsdoc.Options = {
                     properties: {
                         amount: { type: 'number', example: 250.0 },
                         currency: { type: 'string', example: 'USDC' },
-                        customer_email: { type: 'string', example: 'customer@example.com' },
+                        customer_email: { type: 'string', example: 'alice@example.com' },
                         due_date: { type: 'string', format: 'date-time' },
                         metadata: {
                             type: 'object',
@@ -134,14 +168,42 @@ const options: swaggerJsdoc.Options = {
                             example: { invoice_ref: 'inv-2026-0099' },
                         },
                     },
+                    examples: {
+                        NetThirty: {
+                            summary: 'Net-30 invoice',
+                            value: {
+                                amount: 250.0, currency: 'USDC', customer_email: 'alice@example.com',
+                                due_date: '2026-08-28T00:00:00.000Z',
+                                metadata: { invoice_ref: 'inv-2026-0099' },
+                            },
+                        },
+                        OverdueInvoice: {
+                            summary: 'Past-due invoice',
+                            value: {
+                                amount: 99.0, currency: 'USDC', customer_email: 'carol@example.com',
+                                due_date: '2026-07-26T00:00:00.000Z',
+                                metadata: { invoice_ref: 'inv-2026-0003' },
+                            },
+                        },
+                    },
                 },
                 CreateRefundRequest: {
                     type: 'object',
                     required: ['payment_id', 'amount'],
                     properties: {
-                        payment_id: { type: 'string', example: 'pay_123' },
+                        payment_id: { type: 'string', example: 'seed-pay-001' },
                         amount: { type: 'number', example: 50.0 },
                         reason: { type: 'string', example: 'Partial cancellation' },
+                    },
+                    examples: {
+                        PartialRefund: {
+                            summary: 'Partial refund on confirmed payment',
+                            value: { payment_id: 'seed-pay-001', amount: 50.0, reason: 'Partial cancellation' },
+                        },
+                        FullRefund: {
+                            summary: 'Full refund',
+                            value: { payment_id: 'seed-pay-005', amount: 300.0, reason: 'Order cancelled by customer' },
+                        },
                     },
                 },
                 UpdateRefundStatusRequest: {
@@ -155,6 +217,16 @@ const options: swaggerJsdoc.Options = {
                         },
                         failed_reason: { type: 'string', example: 'Settlement window expired' },
                     },
+                    examples: {
+                        MarkCompleted: {
+                            summary: 'Mark refund as completed',
+                            value: { status: 'completed' },
+                        },
+                        MarkFailed: {
+                            summary: 'Mark refund as failed',
+                            value: { status: 'failed', failed_reason: 'Settlement window expired' },
+                        },
+                    },
                 },
                 UpsertDiscrepancyThresholdRequest: {
                     type: 'object',
@@ -164,6 +236,16 @@ const options: swaggerJsdoc.Options = {
                         amount_threshold: { type: 'number', example: 100 },
                         percent_threshold: { type: 'number', example: 2.5 },
                         is_active: { type: 'boolean', example: true },
+                    },
+                    examples: {
+                        GlobalThreshold: {
+                            summary: 'Global threshold (all merchants)',
+                            value: { merchant_id: null, amount_threshold: 100, percent_threshold: 2.5, is_active: true },
+                        },
+                        MerchantThreshold: {
+                            summary: 'Merchant-specific threshold',
+                            value: { merchant_id: 'cm123abc', amount_threshold: 50, percent_threshold: 1.5, is_active: true },
+                        },
                     },
                 },
                 WebhookEventType: {

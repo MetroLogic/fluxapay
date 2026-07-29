@@ -176,6 +176,24 @@ class OpenAPIValidator {
           });
         }
 
+        // Check POST and PATCH request bodies for named examples
+        if ((method === 'post' || method === 'patch') && operation.requestBody) {
+          const content = operation.requestBody?.content || {};
+          const jsonContent = content['application/json'];
+          if (jsonContent) {
+            const hasExamples = jsonContent.examples && Object.keys(jsonContent.examples).length > 0;
+            const hasSchemaExamples =
+              jsonContent.schema?.examples && Object.keys(jsonContent.schema.examples).length > 0;
+            if (!hasExamples && !hasSchemaExamples) {
+              this.errors.push({
+                severity: 'error',
+                message: `Missing request body examples for ${method.toUpperCase()} ${path}. Add a named examples object to the requestBody.`,
+                path: `${path} (${method})`,
+              });
+            }
+          }
+        }
+
         // Check responses
         if (!operation.responses) {
           this.errors.push({
