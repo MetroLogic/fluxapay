@@ -18,6 +18,7 @@ import {
   Play,
 } from "lucide-react";
 import { api } from "@/lib/api";
+import { useRouter } from "next/navigation";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -141,6 +142,7 @@ function StatusPill({ status }: { status: string }) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function SweepPage() {
+  const router = useRouter();
   const [sweepStatus, setSweepStatus] = useState<SweepStatus | null>(null);
   const [statusLoading, setStatusLoading] = useState(true);
   const [statusError, setStatusError] = useState<string | null>(null);
@@ -185,6 +187,10 @@ export default function SweepPage() {
     try {
       const res = await api.sweep.getStatus();
       if (!res.ok) {
+        if (res.status === 403) {
+          router.replace('/login');
+          return;
+        }
         const err = await res
           .json()
           .catch(() => ({ message: "Unknown error" }));
@@ -198,7 +204,7 @@ export default function SweepPage() {
     } finally {
       setStatusLoading(false);
     }
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     addLog("info", "Sweep Control Center loaded.");
@@ -212,6 +218,10 @@ export default function SweepPage() {
 
     try {
       const res = await api.sweep.previewSweep();
+      if (res.status === 403) {
+        router.replace('/login');
+        return;
+      }
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.message ?? data.error ?? `HTTP ${res.status}`);
@@ -248,6 +258,10 @@ export default function SweepPage() {
 
     try {
       const res = await api.sweep.runSweep(dryRun);
+      if (res.status === 403) {
+        router.replace('/login');
+        return;
+      }
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.message ?? data.error ?? `HTTP ${res.status}`);
