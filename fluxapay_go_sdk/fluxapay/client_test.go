@@ -175,6 +175,21 @@ func TestContextCancellation(t *testing.T) {
 	}
 }
 
+func TestWithTimeoutOption(t *testing.T) {
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(50 * time.Millisecond)
+		writeJSON(w, 200, paymentFixture)
+	})
+
+	// Override default timeout
+	fluxapay.WithTimeout(10 * time.Millisecond)(client)
+
+	_, err := client.Payments.Get(context.Background(), "pay_123")
+	if err == nil {
+		t.Fatal("expected timeout error")
+	}
+}
+
 // ── Webhooks ──────────────────────────────────────────────────────────────────
 
 func makeSig(body, ts, secret string) string {
