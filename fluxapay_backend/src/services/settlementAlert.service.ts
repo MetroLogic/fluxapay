@@ -95,5 +95,6 @@ export async function sendSettlementFailureAlert(alert: SettlementFailureAlert):
 export async function sendOpsAlert(prefix: string, message: string): Promise<void> {
   console.error(`[${prefix}] ${message.replace(/\n/g, " | ")}`);
 
-  await Promise.all([sendSlackAlert(message), sendTelegramAlert(message)]);
+  const prefixedMessage = `[${prefix}] ${message}`;
+  await Promise.all([sendSlackAlert(prefixedMessage), sendTelegramAlert(prefixedMessage)]);
 }
