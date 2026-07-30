@@ -686,6 +686,40 @@ export const api = {
         method: "PATCH",
         body: JSON.stringify({ status }),
       }),
+
+    export: async (invoiceId: string): Promise<Blob> => {
+      const response = await fetch(
+        `${API_BASE_URL}/api/v1/invoices/${invoiceId}/export?format=pdf`,
+        { headers: { Authorization: `Bearer ${getToken()}` } },
+      );
+      if (!response.ok) throw new ApiError(response.status, "Export failed");
+      const body = await response.json();
+      if (body.status === "accepted" && body.jobId) {
+        const { jobId } = body;
+        const pollUrl = `${API_BASE_URL}/api/v1/invoices/${invoiceId}/export/${jobId}/status`;
+        for (let i = 0; i < 30; i++) {
+          await new Promise((r) => setTimeout(r, 1000));
+          const pollRes = await fetch(pollUrl, {
+            headers: { Authorization: `Bearer ${getToken()}` },
+          });
+          if (!pollRes.ok) throw new ApiError(pollRes.status, "Export polling failed");
+          const pollBody = await pollRes.json();
+          if (pollBody.status === "completed" && pollBody.downloadUrl) {
+            const dlRes = await fetch(
+              `${API_BASE_URL}${pollBody.downloadUrl}`,
+              { headers: { Authorization: `Bearer ${getToken()}` } },
+            );
+            if (!dlRes.ok) throw new ApiError(dlRes.status, "Download failed");
+            return dlRes.blob();
+          }
+          if (pollBody.status === "failed") {
+            throw new ApiError(500, pollBody.error || "PDF generation failed");
+          }
+        }
+        throw new ApiError(408, "PDF generation timed out");
+      }
+      throw new ApiError(500, "Unexpected export response");
+    },
   },
 
   // Webhooks (merchant-scoped webhook delivery logs)

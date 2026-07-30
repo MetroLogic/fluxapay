@@ -42,6 +42,8 @@ model Merchant {
   /** On-chain registry state — prevents duplicate Soroban registrations on retry */
   onchain_registered        Boolean   @default(false)
   onchain_registry_tx_hash  String?
+  /** Whether the merchant's phone number has been verified */
+  verified_phone       Boolean                @default(false)
   /** Compliance: set when merchant requests account deletion */
   deletion_requested_at DateTime?
   /** Compliance: set after PII anonymization is complete */
@@ -750,6 +752,8 @@ model MerchantNotificationPreferences {
   merchantId                   String   @id
   /// Whether to send payment-expiry reminder emails/webhooks (default: true)
   payment_expiry_reminder      Boolean  @default(true)
+  /// Whether SMS notifications are enabled (requires verified phone)
+  sms_notifications_enabled    Boolean  @default(false)
   /// Minutes before expiry to send the reminder (default: 5, min: 1)
   reminder_minutes_before      Int      @default(5)
   created_at                   DateTime @default(now())

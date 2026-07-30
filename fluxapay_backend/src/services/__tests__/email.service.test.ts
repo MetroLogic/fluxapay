@@ -2,11 +2,11 @@ jest.mock("../emailSuppression.service", () => ({
   isEmailSuppressed: jest.fn(),
 }));
 
-const mockSend = jest.fn().mockResolvedValue({ error: null });
+const mockSendEmail = jest.fn().mockResolvedValue(undefined);
 
-jest.mock("resend", () => ({
-  Resend: jest.fn().mockImplementation(() => ({
-    emails: { send: mockSend },
+jest.mock("../../email/emailProvider.factory", () => ({
+  getEmailProvider: jest.fn(() => ({
+    sendEmail: mockSendEmail,
   })),
 }));
 
@@ -37,31 +37,31 @@ describe("email.service suppression", () => {
       timestamp: new Date().toISOString(),
     });
 
-    expect(mockSend).not.toHaveBeenCalled();
+    expect(mockSendEmail).not.toHaveBeenCalled();
 
     await sendWelcomeEmail("blocked@example.com", "Acme", "key_123", "http://localhost:3000");
-    expect(mockSend).not.toHaveBeenCalled();
+    expect(mockSendEmail).not.toHaveBeenCalled();
   });
 
   it("sends transactional/OTP and security emails even if suppressed, logging a warning", async () => {
     mockIsSuppressed.mockResolvedValue(true);
 
     await sendOtpEmail("suppressed-user@example.com", "123456");
-    expect(mockSend).toHaveBeenCalledWith(
+    expect(mockSendEmail).toHaveBeenCalledWith(
       expect.objectContaining({
         to: "suppressed-user@example.com",
         subject: "Your Fluxapay OTP",
       })
     );
 
-    mockSend.mockClear();
+    mockSendEmail.mockClear();
 
     await sendSecurityAlertEmail({
       to: "suppressed-user@example.com",
       subject: "Security Alert Test",
       message: "Unusual login activity detected",
     });
-    expect(mockSend).toHaveBeenCalledWith(
+    expect(mockSendEmail).toHaveBeenCalledWith(
       expect.objectContaining({
         to: "suppressed-user@example.com",
         subject: "Security Alert Test",
@@ -80,7 +80,7 @@ describe("email.service suppression", () => {
       timestamp: new Date().toISOString(),
     });
 
-    expect(mockSend).toHaveBeenCalledWith(
+    expect(mockSendEmail).toHaveBeenCalledWith(
       expect.objectContaining({
         html: expect.stringContaining("/api/v1/email/unsubscribe?email="),
       }),

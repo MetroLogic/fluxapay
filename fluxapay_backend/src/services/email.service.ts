@@ -1,11 +1,10 @@
 import dotenv from "dotenv";
-import { Resend } from "resend";
 import { isDevEnv } from "../helpers/env.helper";
 import { isEmailSuppressed } from "./emailSuppression.service";
 import { getLogger } from "../utils/logger";
+import { getEmailProvider } from "../email/emailProvider.factory";
 dotenv.config();
 
-let _resend: Resend | undefined;
 const logger = (getLogger("EmailService") ?? { warn: () => {} }) as { warn: (msg: string, meta?: unknown) => void };
 
 /**
@@ -19,13 +18,6 @@ function escapeHtml(str: string): string {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#x27;");
-}
-
-function getResend(): Resend {
-  if (!_resend) {
-    _resend = new Resend(process.env.RESEND_API_KEY);
-  }
-  return _resend;
 }
 
 function buildUnsubscribeFooter(email: string): string {
@@ -67,7 +59,7 @@ export async function sendWelcomeEmail(
 ) {
   try {
     await sendIfNotSuppressed(to, async () => {
-    const response = await getResend().emails.send({
+    await getEmailProvider().sendEmail({
       from: process.env.MAIL_FROM || "noreply@fluxapay.com",
       to,
       subject: "Welcome to FluxaPay!",
@@ -93,12 +85,6 @@ export async function sendWelcomeEmail(
         </div>
       `,
     });
-    if (response.error) {
-      if (isDevEnv()) {
-        console.error("Error sending welcome email:", response.error);
-      }
-      throw new Error("Failed to send welcome email");
-    }
     });
   } catch (err) {
     if (isDevEnv()) {
@@ -111,18 +97,12 @@ export async function sendWelcomeEmail(
 export async function sendOtpEmail(to: string, otp: string) {
   try {
     await sendTransactionalWithSuppressionCheck(to, async () => {
-    const response = await getResend().emails.send({
+    await getEmailProvider().sendEmail({
       from: process.env.MAIL_FROM || "noreply@fluxapay.com",
       to,
       subject: "Your Fluxapay OTP",
       html: `<p>Your OTP is <b>${escapeHtml(otp)}</b>. It expires in 10 minutes.</p>`,
     });
-    if (response.error) {
-      if (isDevEnv()) {
-        console.error("Error sending OTP:", response.error);
-      }
-      throw new Error("Failed to send OTP email");
-    }
     });
   } catch (err) {
     if (isDevEnv()) {
@@ -149,7 +129,7 @@ export async function sendCheckoutExpiryReminderEmail(
 ) {
   try {
     await sendIfNotSuppressed(to, async () => {
-    const response = await getResend().emails.send({
+    await getEmailProvider().sendEmail({
       from: process.env.MAIL_FROM || "noreply@fluxapay.com",
       to,
       subject: `Checkout Expiring Soon — ${escapeHtml(details.amount)} ${escapeHtml(details.currency)} (${details.minutes_remaining} min left)`,
@@ -178,10 +158,7 @@ export async function sendCheckoutExpiryReminderEmail(
         </div>
       `,
     });
-    if (response.error) {
-      if (isDevEnv()) console.error("Error sending expiry reminder email:", response.error);
-      throw new Error("Failed to send expiry reminder email");
-    }
+
     });
   } catch (err) {
     if (isDevEnv()) console.error("Error sending expiry reminder email:", err);
@@ -205,7 +182,7 @@ export async function sendSubscriptionPriceChangeNoticeEmail(
 ) {
   try {
     await sendIfNotSuppressed(to, async () => {
-    const response = await getResend().emails.send({
+    await getEmailProvider().sendEmail({
       from: process.env.MAIL_FROM || "noreply@fluxapay.com",
       to,
       subject: `Your ${escapeHtml(details.plan_name)} plan price is changing`,
@@ -228,10 +205,6 @@ export async function sendSubscriptionPriceChangeNoticeEmail(
         </div>
       `,
     });
-    if (response.error) {
-      if (isDevEnv()) console.error("Error sending price change notice email:", response.error);
-      throw new Error("Failed to send price change notice email");
-    }
     });
   } catch (err) {
     if (isDevEnv()) console.error("Error sending price change notice email:", err);
@@ -255,7 +228,7 @@ export async function sendPaymentConfirmationEmail(
 ) {
   try {
     await sendIfNotSuppressed(to, async () => {
-    const response = await getResend().emails.send({
+    await getEmailProvider().sendEmail({
       from: process.env.MAIL_FROM || "noreply@fluxapay.com",
       to,
       subject: `Payment Confirmed - ${escapeHtml(details.amount)} ${escapeHtml(details.currency)}`,
@@ -304,12 +277,6 @@ export async function sendPaymentConfirmationEmail(
         </div>
       `,
     });
-    if (response.error) {
-      if (isDevEnv()) {
-        console.error("Error sending payment confirmation email:", response.error);
-      }
-      throw new Error("Failed to send payment confirmation email");
-    }
     });
   } catch (err) {
     if (isDevEnv()) {
@@ -330,7 +297,7 @@ export async function sendInvoiceEmail(
 ) {
   try {
     await sendIfNotSuppressed(to, async () => {
-    const response = await getResend().emails.send({
+    await getEmailProvider().sendEmail({
       from: process.env.MAIL_FROM || "noreply@fluxapay.com",
       to,
       subject: `Invoice #${escapeHtml(invoiceNumber)} from ${escapeHtml(merchantName || "FluxaPay")}`,
@@ -367,12 +334,6 @@ export async function sendInvoiceEmail(
         </div>
       `,
     });
-    if (response.error) {
-      if (isDevEnv()) {
-        console.error("Error sending invoice email:", response.error);
-      }
-      throw new Error("Failed to send invoice email");
-    }
     });
   } catch (err) {
     if (isDevEnv()) {
@@ -389,7 +350,7 @@ export async function sendSecurityAlertEmail(data: {
 }) {
   try {
     await sendTransactionalWithSuppressionCheck(data.to, async () => {
-    const response = await getResend().emails.send({
+    await getEmailProvider().sendEmail({
       from: process.env.MAIL_FROM || "noreply@fluxapay.com",
       to: data.to,
       subject: escapeHtml(data.subject),
@@ -414,12 +375,6 @@ export async function sendSecurityAlertEmail(data: {
         </div>
       `,
     });
-    if (response.error) {
-      if (isDevEnv()) {
-        console.error("Error sending security alert email:", response.error);
-      }
-      throw new Error("Failed to send security alert email");
-    }
     });
   } catch (err) {
     if (isDevEnv()) {
@@ -440,7 +395,7 @@ export async function sendBackupFailureAlertEmail(
 ): Promise<void> {
   try {
     await sendTransactionalWithSuppressionCheck(details.to, async () => {
-    const response = await getResend().emails.send({
+    await getEmailProvider().sendEmail({
       from: process.env.MAIL_FROM || "noreply@fluxapay.com",
       to: details.to,
       subject: `🚨 [FluxaPay] Database Backup FAILED — ${escapeHtml(details.backupId)}`,
@@ -480,12 +435,6 @@ export async function sendBackupFailureAlertEmail(
         </div>
       `,
     });
-    if (response.error) {
-      if (isDevEnv()) {
-        console.error("Error sending backup failure alert:", response.error);
-      }
-      throw new Error("Failed to send backup failure alert email");
-    }
     });
   } catch (err) {
     if (isDevEnv()) {

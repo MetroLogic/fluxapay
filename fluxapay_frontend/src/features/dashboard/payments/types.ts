@@ -21,6 +21,8 @@ export interface WebhookLogEntry {
   attempt: number;
   created_at: string;
   response_body?: string;
+  retry_count?: number;
+  next_retry_at?: string;
 }
 
 export interface StatusHistoryEntry {
