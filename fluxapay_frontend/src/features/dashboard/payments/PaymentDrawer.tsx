@@ -18,6 +18,8 @@ import {
   AlertCircle,
   Loader2,
   LayoutDashboard,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useRouter } from "next/navigation";
@@ -98,7 +100,16 @@ function TimelineItem({
   );
 }
 
+function httpStatusBadge(status: number | undefined) {
+  if (!status) return <Badge variant="secondary">—</Badge>;
+  if (status < 300) return <Badge variant="success">{status}</Badge>;
+  if (status < 400) return <Badge className="border-transparent bg-blue-500/10 text-blue-500">{status}</Badge>;
+  return <Badge variant="error">{status}</Badge>;
+}
+
 function WebhookLogRow({ log }: { log: WebhookLogEntry }) {
+  const [expanded, setExpanded] = useState(false);
+
   const statusIcon =
     log.status === "success" ? (
       <CheckCircle2 className="h-4 w-4 text-green-500" />
@@ -108,25 +119,56 @@ function WebhookLogRow({ log }: { log: WebhookLogEntry }) {
       <Loader2 className="h-4 w-4 text-yellow-500 animate-spin" />
     );
 
+  let formattedPayload: string | null = null;
+  if (log.response_body) {
+    try {
+      formattedPayload = JSON.stringify(JSON.parse(log.response_body), null, 2);
+    } catch {
+      formattedPayload = log.response_body;
+    }
+  }
+
   return (
-    <div className="flex items-center justify-between gap-3 rounded-lg border p-3 text-xs">
-      <div className="flex items-center gap-2 min-w-0">
-        {statusIcon}
-        <div className="min-w-0">
-          <p className="font-medium truncate">{log.event_type}</p>
-          <p className="text-muted-foreground truncate">
-            {log.endpoint_url}
-          </p>
+    <div className="rounded-lg border text-xs">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="flex w-full items-center justify-between gap-3 p-3 hover:bg-muted/30 transition-colors text-left"
+        aria-expanded={expanded}
+      >
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          {statusIcon}
+          <div className="min-w-0 flex-1">
+            <p className="font-medium truncate">{log.event_type}</p>
+            <p className="text-muted-foreground truncate">
+              {log.endpoint_url}
+            </p>
+          </div>
         </div>
-      </div>
-      <div className="text-right shrink-0">
-        <p className="font-mono">
-          {log.http_status ? `HTTP ${log.http_status}` : "—"}
-        </p>
-        <p className="text-muted-foreground">
-          Attempt {log.attempt} • {new Date(log.created_at).toLocaleTimeString()}
-        </p>
-      </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {httpStatusBadge(log.http_status)}
+          {expanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+        </div>
+      </button>
+
+      {expanded && (
+        <div className="border-t px-3 py-2 space-y-2">
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-muted-foreground">
+            <span>Attempt <strong>{log.attempt}</strong></span>
+            <span>{new Date(log.created_at).toLocaleString()}</span>
+            {log.retry_count != null && (
+              <span>Retries: <strong>{log.retry_count}</strong></span>
+            )}
+            {log.next_retry_at && (
+              <span>Next retry: {new Date(log.next_retry_at).toLocaleString()}</span>
+            )}
+          </div>
+          {formattedPayload && (
+            <pre className="bg-muted rounded p-2 text-xs overflow-x-auto max-h-48 whitespace-pre-wrap font-mono">
+              {formattedPayload}
+            </pre>
+          )}
+        </div>
+      )}
     </div>
   );
 }

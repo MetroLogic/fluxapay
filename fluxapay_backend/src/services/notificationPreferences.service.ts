@@ -19,12 +19,14 @@ const prisma = new PrismaClient();
 export interface NotificationPreferences {
   merchantId: string;
   payment_expiry_reminder: boolean;
+  sms_notifications_enabled: boolean;
   reminder_minutes_before: number;
 }
 
 /** Defaults applied when no row exists for a merchant. */
 const DEFAULTS: Omit<NotificationPreferences, "merchantId"> = {
   payment_expiry_reminder: true,
+  sms_notifications_enabled: false,
   reminder_minutes_before: 5,
 };
 
@@ -46,6 +48,7 @@ export async function getNotificationPreferences(
   return {
     merchantId: row.merchantId,
     payment_expiry_reminder: row.payment_expiry_reminder,
+    sms_notifications_enabled: row.sms_notifications_enabled,
     reminder_minutes_before: row.reminder_minutes_before,
   };
 }
@@ -53,6 +56,7 @@ export async function getNotificationPreferences(
 export interface UpdateNotificationPreferencesInput {
   merchantId: string;
   payment_expiry_reminder?: boolean;
+  sms_notifications_enabled?: boolean;
   reminder_minutes_before?: number;
 }
 
@@ -64,6 +68,16 @@ export async function updateNotificationPreferences(
   input: UpdateNotificationPreferencesInput,
 ): Promise<NotificationPreferences> {
   const { merchantId, ...updates } = input;
+
+  if (updates.sms_notifications_enabled === true) {
+    const merchant = await prisma.merchant.findUnique({
+      where: { id: merchantId },
+      select: { verified_phone: true },
+    });
+    if (!merchant?.verified_phone) {
+      throw apiError(422, ErrorCode.PHONE_NOT_VERIFIED, "Enable SMS notifications requires a verified phone number. Please verify your phone first.");
+    }
+  }
 
   // Clamp reminder_minutes_before to at least 1 minute
   if (
@@ -82,6 +96,10 @@ export async function updateNotificationPreferences(
       updates.payment_expiry_reminder ??
       existing?.payment_expiry_reminder ??
       DEFAULTS.payment_expiry_reminder,
+    sms_notifications_enabled:
+      updates.sms_notifications_enabled ??
+      existing?.sms_notifications_enabled ??
+      DEFAULTS.sms_notifications_enabled,
     reminder_minutes_before:
       updates.reminder_minutes_before ??
       existing?.reminder_minutes_before ??
@@ -97,6 +115,7 @@ export async function updateNotificationPreferences(
   return {
     merchantId: row.merchantId,
     payment_expiry_reminder: row.payment_expiry_reminder,
+    sms_notifications_enabled: row.sms_notifications_enabled,
     reminder_minutes_before: row.reminder_minutes_before,
   };
 }
