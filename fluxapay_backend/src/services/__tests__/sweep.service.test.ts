@@ -67,6 +67,17 @@ describe("SweepService", () => {
   let mockHDWalletService: any;
   let issuerPublicKey: string;
 
+  it("re-throws initialization errors instead of exporting an undefined service", () => {
+    jest.resetModules();
+    delete process.env.MASTER_VAULT_SECRET_KEY;
+
+    expect(() => {
+      jest.isolateModules(() => {
+        require("../sweep.service");
+      });
+    }).toThrow("MASTER_VAULT_SECRET_KEY is required");
+  });
+
   function createSweepFixture(
     paymentOverrides: Record<string, unknown> = {},
     balance = "100.0000000",
