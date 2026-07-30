@@ -488,13 +488,11 @@ export class SweepService {
   }
 }
 
-let _sweepService: SweepService | undefined;
+let _sweepService: SweepService;
 try {
   _sweepService = new SweepService();
 } catch (err) {
-  console.warn(
-    "SweepService failed to initialize (missing Stellar env vars?):",
-    err instanceof Error ? err.message : err,
-  );
+  console.error("SweepService failed to initialize", err);
+  throw err;
 }
-export const sweepService = _sweepService as SweepService;
+export const sweepService = _sweepService;
