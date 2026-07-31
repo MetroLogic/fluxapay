@@ -100,6 +100,23 @@ def test_missing_api_key_raises():
         FluxaPay(api_key="")
 
 
+def test_sync_client_context_manager_closes_on_exit(monkeypatch):
+    client = FluxaPay(api_key=API_KEY)
+    closed = False
+
+    def close() -> None:
+        nonlocal closed
+        closed = True
+
+    monkeypatch.setattr(client, "close", close)
+
+    with client as active_client:
+        assert active_client is client
+        assert closed is False
+
+    assert closed is True
+
+
 # ── Async client ──────────────────────────────────────────────────────────────
 
 
