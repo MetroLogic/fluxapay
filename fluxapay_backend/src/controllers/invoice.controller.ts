@@ -217,3 +217,51 @@ export async function downloadInvoiceExport(req: AuthRequest, res: Response) {
     }
   }
 }
+
+
+/**
+ * Send payment confirmation webhook for an invoice
+ * @param invoiceId - The invoice ID
+ * @param paymentData - Payment confirmation data
+ */
+async function sendPaymentConfirmationWebhook(invoiceId: string, paymentData: {
+  txHash: string;
+  amount: string;
+  currency: string;
+  timestamp: string;
+}) {
+  const webhookUrl = process.env.PAYMENT_CONFIRMATION_WEBHOOK_URL;
+  if (!webhookUrl) {
+    console.warn('[Webhook] No PAYMENT_CONFIRMATION_WEBHOOK_URL configured');
+    return;
+  }
+  
+  try {
+    const response = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        event: 'payment.confirmed',
+        invoiceId,
+        txHash: paymentData.txHash,
+        amount: paymentData.amount,
+        currency: paymentData.currency,
+        timestamp: paymentData.timestamp,
+      }),
+    });
+    
+    if (!response.ok) {
+      console.error(`[Webhook] Failed to send confirmation: ${response.status}`);
+      // Queue for retry
+      await queueForRetry(invoiceId, paymentData);
+    }
+  } catch (error) {
+    console.error('[Webhook] Error sending payment confirmation:', error);
+    await queueForRetry(invoiceId, paymentData);
+  }
+}
+
+async function queueForRetry(invoiceId: string, data: any) {
+  // Store for retry - in production use a message queue
+  console.log(`[Webhook] Queued retry for invoice ${invoiceId}`);
+}
