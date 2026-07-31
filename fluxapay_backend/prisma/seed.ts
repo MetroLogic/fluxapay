@@ -32,7 +32,15 @@ import { PrismaClient } from "../src/generated/client/client";
 
 dotenv.config();
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({
+  datasources: {
+    db: {
+      url: process.env.DATABASE_URL,
+    },
+  },
+  // Connection pooling for production
+  // @see https://www.prisma.io/docs/guides/performance-and-optimization/connection-management
+});
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
