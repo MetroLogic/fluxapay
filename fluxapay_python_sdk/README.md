@@ -15,15 +15,14 @@ pip install fluxapay
 ```python
 from fluxapay import FluxaPay
 
-client = FluxaPay(api_key="sk_live_...")
-
-payment = client.payments.create(
-    amount=49.99,
-    currency="USD",
-    customer_email="buyer@example.com",
-    order_id="order_123",
-)
-print(payment.checkout_url)
+with FluxaPay(api_key="sk_live_...") as client:
+    payment = client.payments.create(
+        amount=49.99,
+        currency="USD",
+        customer_email="buyer@example.com",
+        order_id="order_123",
+    )
+    print(payment.checkout_url)
 ```
 
 ### Asynchronous
