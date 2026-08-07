@@ -206,3 +206,24 @@ for old, new_s in lines_to_replace:
 
 with open('fluxapay_sdk/src/index.ts', 'w') as f:
     f.write(content)
+
+
+# Async context manager mixin for SDK clients
+class AsyncContextManagerMixin:
+    async def __aenter__(self):
+        if not getattr(self, '_connected', True):
+            await self.connect()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.close()
+        return False
+
+    def __enter__(self):
+        if not getattr(self, '_connected', True):
+            self.connect()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+        return False
