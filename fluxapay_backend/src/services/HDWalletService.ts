@@ -20,8 +20,23 @@ export interface DerivedAddress {
 }
 
 export class HDWalletService {
+  private static versionedSeeds: Map<number, string> = new Map();
   private masterSeed: string | null = null;
   private kmsProvider: IKMSProvider;
+
+  /**
+   * Statically registers a seed string for a specific seed version (useful for tests and rotation).
+   */
+  public static registerSeed(version: number, seed: string): void {
+    HDWalletService.versionedSeeds.set(version, seed);
+  }
+
+  /**
+   * Clears registered versioned seeds.
+   */
+  public static clearRegisteredSeeds(): void {
+    HDWalletService.versionedSeeds.clear();
+  }
 
   constructor(masterSeedOrKmsProvider?: string | IKMSProvider) {
     if (typeof masterSeedOrKmsProvider === "string") {
@@ -49,9 +64,30 @@ export class HDWalletService {
   // ─── KMS Retrieval ────────────────────────────────────────────────────────
 
   /**
-   * Retrieves the master seed from KMS (cached after first fetch)
+   * Retrieves the master seed for a given seedVersion from registry, env, or KMS.
    */
-  private async getMasterSeed(): Promise<string> {
+  public async getMasterSeed(seedVersion: number = 1): Promise<string> {
+    // 1. Check versioned registry
+    if (HDWalletService.versionedSeeds.has(seedVersion)) {
+      return HDWalletService.versionedSeeds.get(seedVersion)!;
+    }
+
+    // 2. Check environment variable for versioned seed
+    const envVersionKey = `HD_WALLET_SEED_V${seedVersion}`;
+    const envMasterKey = `HD_WALLET_MASTER_SEED_V${seedVersion}`;
+    const envKmsKey = `KMS_ENCRYPTED_MASTER_SEED_V${seedVersion}`;
+
+    if (process.env[envVersionKey]) {
+      return process.env[envVersionKey]!;
+    }
+    if (process.env[envMasterKey]) {
+      return process.env[envMasterKey]!;
+    }
+    if (process.env[envKmsKey] && this.kmsProvider.decrypt) {
+      return await this.kmsProvider.decrypt(process.env[envKmsKey]!);
+    }
+
+    // 3. Default current master seed
     if (this.masterSeed) {
       return this.masterSeed;
     }
@@ -62,14 +98,14 @@ export class HDWalletService {
   // ─── BIP44 Core Derivation ────────────────────────────────────────────────
 
   /**
-   * Converts the master seed string to 64-byte seed buffer.
+   * Converts the master seed string for seedVersion to 64-byte seed buffer.
    * Supports both raw hex (64 chars = 32 bytes expanded to 64) and plain strings.
    *
    * A 32-byte hex seed is expanded with HMAC-SHA512("ed25519 seed", seed32) per
    * SLIP-0010 style expansion — never by concatenating the seed with itself.
    */
-  private async getSeedBuffer(): Promise<Buffer> {
-    const masterSeed = await this.getMasterSeed();
+  public async getSeedBuffer(seedVersion: number = 1): Promise<Buffer> {
+    const masterSeed = await this.getMasterSeed(seedVersion);
 
     // 64-char hex → 32 bytes; expand to 64 bytes via HMAC-SHA512 (not concat)
     if (/^[0-9a-fA-F]{64}$/.test(masterSeed)) {
@@ -88,13 +124,14 @@ export class HDWalletService {
   private async deriveKeypairFromPath(
     merchantIndex: number,
     paymentIndex: number,
+    seedVersion: number = 1,
   ): Promise<{
     publicKey: string;
     secretKey: string;
     derivationPath: string;
   }> {
     const path = `m/44'/${STELLAR_COIN_TYPE}'/${merchantIndex}'/${paymentIndex}'`;
-    const seedBuffer = await this.getSeedBuffer();
+    const seedBuffer = await this.getSeedBuffer(seedVersion);
 
     // Derive the Ed25519 key
     const { key } = derivePath(path, seedBuffer.toString("hex"));
@@ -256,6 +293,7 @@ export class HDWalletService {
   public async derivePaymentAddress(
     merchantId: string,
     paymentId: string,
+    seedVersion: number = 1,
   ): Promise<DerivedAddress> {
     const merchantIndex = await this.getMerchantIndex(merchantId);
     const paymentIndex = await this.getNextPaymentIndex(merchantId);
@@ -263,6 +301,7 @@ export class HDWalletService {
     const { publicKey, derivationPath } = await this.deriveKeypairFromPath(
       merchantIndex,
       paymentIndex,
+      seedVersion,
     );
 
     // Log the derived address with indices for audit trail
@@ -276,6 +315,7 @@ export class HDWalletService {
         merchantIndex,
         paymentIndex,
         derivationPath,
+        seedVersion,
         timestamp: new Date().toISOString(),
       }),
     );
@@ -296,6 +336,7 @@ export class HDWalletService {
   public async regenerateKeypair(
     merchantIdOrMerchantIndex: string | number,
     paymentIdOrPaymentIndex: string | number,
+    seedVersion: number = 1,
   ): Promise<{ publicKey: string; secretKey: string }> {
     let merchantIndex: number;
     let paymentIndex: number;
@@ -334,6 +375,7 @@ export class HDWalletService {
     const { publicKey, secretKey } = await this.deriveKeypairFromPath(
       merchantIndex,
       paymentIndex,
+      seedVersion,
     );
     return { publicKey, secretKey };
   }
@@ -344,8 +386,9 @@ export class HDWalletService {
    */
   public async regenerateKeypairFromPath(
     derivationPath: string,
+    seedVersion: number = 1,
   ): Promise<{ publicKey: string; secretKey: string }> {
-    const seedBuffer = await this.getSeedBuffer();
+    const seedBuffer = await this.getSeedBuffer(seedVersion);
     const { key } = derivePath(derivationPath, seedBuffer.toString("hex"));
     const keypair = Keypair.fromRawEd25519Seed(Buffer.from(key));
     return {
@@ -361,10 +404,12 @@ export class HDWalletService {
     merchantIndex: number,
     paymentIndex: number,
     publicKey: string,
+    seedVersion: number = 1,
   ): Promise<boolean> {
     const { publicKey: derived } = await this.deriveKeypairFromPath(
       merchantIndex,
       paymentIndex,
+      seedVersion,
     );
     return derived === publicKey;
   }

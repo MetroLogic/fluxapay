@@ -1,4 +1,5 @@
 import { Horizon, Keypair } from "@stellar/stellar-sdk";
+import { DepositAddressService } from "./depositAddress.service";
 
 export interface FunderBalanceStatus {
   publicKey: string;
@@ -7,11 +8,25 @@ export interface FunderBalanceStatus {
   ok: boolean;
 }
 
+export interface PoolDepthStatus {
+  availableCount: number;
+  allocatedCount: number;
+  totalCount: number;
+  utilizationPct: number;
+  ok: boolean;
+}
+
+export interface FunderMonitorStatus {
+  funder: FunderBalanceStatus;
+  pool: PoolDepthStatus;
+  ok: boolean;
+}
+
 /**
  * funderMonitor.service.ts
  *
  * Technical-debt utility for monitoring the funder wallet balance used to create
- * derived payment accounts.
+ * derived payment accounts and monitoring deposit address pool depth.
  */
 export class FunderMonitorService {
   private server: Horizon.Server;
@@ -40,6 +55,30 @@ export class FunderMonitorService {
       xlmBalance,
       thresholdXlm,
       ok: xlmBalance >= thresholdXlm,
+    };
+  }
+
+  public async getPoolStatus(): Promise<PoolDepthStatus> {
+    const stats = await DepositAddressService.getPoolStats();
+    return {
+      availableCount: stats.availableCount,
+      allocatedCount: stats.allocatedCount,
+      totalCount: stats.totalCount,
+      utilizationPct: stats.utilizationPct,
+      ok: stats.utilizationPct < 0.8,
+    };
+  }
+
+  public async getCompleteStatus(): Promise<FunderMonitorStatus> {
+    const [funder, pool] = await Promise.all([
+      this.getBalanceStatus(),
+      this.getPoolStatus(),
+    ]);
+
+    return {
+      funder,
+      pool,
+      ok: funder.ok && pool.ok,
     };
   }
 }

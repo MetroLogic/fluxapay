@@ -13,6 +13,9 @@ jest.mock("@stellar/stellar-sdk", () => {
       Server: jest.fn().mockImplementation(() => ({
         loadAccount: jest.fn(),
         submitTransaction: jest.fn(),
+        feeStats: jest.fn().mockResolvedValue({
+          fee_charged: { p90: "150" },
+        }),
       })),
     },
   };
@@ -23,6 +26,9 @@ const mockPrisma = {
   payment: {
     findMany: jest.fn(),
     update: jest.fn(),
+  },
+  depositAddress: {
+    findFirst: jest.fn(),
   },
   $executeRaw: jest.fn(),
 };
@@ -59,8 +65,12 @@ jest.mock("../../config/sweep.config", () => ({
   getMaxSweepRetryAttempts: jest.fn(() => 5),
 }));
 
-// Import after mocks
 import { Horizon, Keypair, Account } from "@stellar/stellar-sdk";
+
+// Set required env vars for module load
+process.env.MASTER_VAULT_SECRET_KEY = Keypair.random().secret();
+
+// Import after mocks
 import { SweepService } from "../sweep.service";
 import { logSweepFailure } from "../audit.service";
 
@@ -126,6 +136,7 @@ describe("SweepService", () => {
     process.env.STELLAR_NETWORK_PASSPHRASE = "Test SDF Network ; September 2015";
     process.env.STELLAR_BASE_FEE = "100";
     process.env.STELLAR_MAX_FEE = "2000";
+    delete process.env.SWEEP_MAX_FEE_STROOPS;
     process.env.STELLAR_FEE_BUMP_MULTIPLIER = "2";
     process.env.STELLAR_TX_MAX_RETRIES = "3";
     process.env.USDC_ISSUER_PUBLIC_KEY = issuerPublicKey;
@@ -137,6 +148,9 @@ describe("SweepService", () => {
     mockServer = {
       loadAccount: jest.fn(),
       submitTransaction: jest.fn(),
+      feeStats: jest.fn().mockResolvedValue({
+        fee_charged: { p90: "150" },
+      }),
     };
     (Horizon.Server as jest.Mock).mockImplementation(() => mockServer);
 
@@ -296,7 +310,7 @@ describe("SweepService", () => {
       const result = await sweepService.sweepPaidPayments({ adminId: "admin_1" });
 
       expect(mockHDWalletService.decryptKeyData).toHaveBeenCalledWith("encrypted_data");
-      expect(mockHDWalletService.regenerateKeypair).toHaveBeenCalledWith(0, 0);
+      expect(mockHDWalletService.regenerateKeypair).toHaveBeenCalledWith(0, 0, 1);
       expect(result.addressesSwept).toBe(1);
     });
 
@@ -314,14 +328,15 @@ describe("SweepService", () => {
 
       expect(mockHDWalletService.regenerateKeypair).toHaveBeenCalledWith(
         "merchant_1",
-        "payment_1"
+        "payment_1",
+        1,
       );
       expect(result.addressesSwept).toBe(1);
     });
   });
 
-  describe("fee calculation", () => {
-    it("should calculate fees with exponential backoff", () => {
+  describe("fee calculation and dynamic Horizon fee stats (#753)", () => {
+    it("should calculate fees with exponential backoff using base fee", () => {
       const calculateFee = (sweepService as any).calculateFeeForAttempt.bind(sweepService);
 
       expect(calculateFee(1)).toBe("100"); // Base fee
@@ -329,10 +344,58 @@ describe("SweepService", () => {
       expect(calculateFee(3)).toBe("400"); // 4x
     });
 
-    it("should cap fees at max fee", () => {
+    it("should use max(BASE_FEE, feeStats.fee_charged.p90) when Horizon fee stats are higher", () => {
       const calculateFee = (sweepService as any).calculateFeeForAttempt.bind(sweepService);
 
-      expect(calculateFee(10)).toBe("2000"); // Capped at max
+      // p90 is 350 > baseFee 100
+      expect(calculateFee(1, 350)).toBe("350");
+      expect(calculateFee(2, 350)).toBe("700");
+      expect(calculateFee(3, 350)).toBe("1400");
+    });
+
+    it("should use BASE_FEE when Horizon fee stats p90 is lower than base fee", () => {
+      const calculateFee = (sweepService as any).calculateFeeForAttempt.bind(sweepService);
+
+      // p90 is 50 < baseFee 100
+      expect(calculateFee(1, 50)).toBe("100");
+      expect(calculateFee(2, 50)).toBe("200");
+    });
+
+    it("should cap fees at SWEEP_MAX_FEE_STROOPS and emit metric when capped fee is reached", () => {
+      process.env.SWEEP_MAX_FEE_STROOPS = "1500";
+      const metricsMock = (sweepService as any).metrics;
+      const metricsSpy = jest.spyOn(metricsMock, "increment");
+
+      const calculateFee = (sweepService as any).calculateFeeForAttempt.bind(sweepService);
+
+      // 350 * 2^2 = 1400 (< 1500)
+      expect(calculateFee(3, 350)).toBe("1400");
+      // 350 * 2^3 = 2800 (>= 1500 capped)
+      expect(calculateFee(4, 350)).toBe("1500");
+      expect(metricsSpy).toHaveBeenCalledWith(
+        "stellar.sweep.capped_fee_reached",
+        expect.objectContaining({
+          attempt: "4",
+          maxFee: "1500",
+        }),
+      );
+    });
+
+    it("fetches /fee_stats from Horizon before each sweep attempt", async () => {
+      const { payment, keypair, account } = createSweepFixture();
+
+      mockPrisma.payment.findMany.mockResolvedValue([payment]);
+      mockHDWalletService.regenerateKeypairFromPath.mockResolvedValue(keypair);
+      mockServer.loadAccount.mockResolvedValue(account);
+      mockServer.submitTransaction.mockResolvedValue({ hash: "tx_hash_fee_test" });
+      mockServer.feeStats.mockResolvedValue({
+        fee_charged: { p90: "250" },
+      });
+
+      const result = await sweepService.sweepPaidPayments({ adminId: "admin_1" });
+
+      expect(mockServer.feeStats).toHaveBeenCalled();
+      expect(result.addressesSwept).toBe(1);
     });
   });
 

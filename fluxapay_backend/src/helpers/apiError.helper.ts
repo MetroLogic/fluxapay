@@ -50,7 +50,7 @@ export function sendApiError(res: Response, err: unknown): Response {
   const { status, code, message, retryAfterSeconds, details, errors } =
     resolveApiError(err);
 
-  if (status === 429 && retryAfterSeconds != null) {
+  if ((status === 429 || status === 503) && retryAfterSeconds != null) {
     res.setHeader("Retry-After", String(retryAfterSeconds));
   }
 
@@ -59,7 +59,7 @@ export function sendApiError(res: Response, err: unknown): Response {
     message,
     ...(details ? { details } : {}),
     ...(errors ? { errors } : {}),
-    ...(status === 429 && retryAfterSeconds != null
+    ...((status === 429 || status === 503) && retryAfterSeconds != null
       ? { retry_after_seconds: retryAfterSeconds }
       : {}),
   });

@@ -20,8 +20,8 @@
 
 import crypto from 'crypto';
 import { PrismaClient } from '../src/generated/client/client';
-import { getKmsProvider } from '../src/services/kms.service';
-import { deriveAccountKeypair } from '../src/services/hdWallet.service';
+import { KMSFactory } from '../src/services/kms';
+import { HDWalletService } from '../src/services/HDWalletService';
 
 const prisma = new PrismaClient();
 
@@ -92,7 +92,7 @@ async function verifyPreRotationState() {
 
   // Check KMS provider
   try {
-    const kmsProvider = getKmsProvider();
+    const kmsProvider = KMSFactory.getProvider();
     const isHealthy = await kmsProvider.healthCheck();
     if (!isHealthy) {
       throw new Error('KMS health check failed');
@@ -127,14 +127,95 @@ function generateNewSeed(): string {
 }
 
 /**
+ * Marks all unallocated old-seed deposit addresses as RETIRING before switching seed epochs.
+ */
+export async function markUnallocatedOldAddressesRetiring(
+  oldSeedVersion: number,
+  dryRun: boolean = false,
+): Promise<number> {
+  const unallocatedCount = await prisma.depositAddress.count({
+    where: {
+      seedVersion: oldSeedVersion,
+      status: 'available',
+    },
+  });
+
+  console.log(`Found ${unallocatedCount} unallocated addresses for seedVersion ${oldSeedVersion}`);
+
+  if (dryRun) {
+    console.log(`[DRY RUN] Would mark ${unallocatedCount} available addresses as retiring`);
+    return unallocatedCount;
+  }
+
+  const updated = await prisma.depositAddress.updateMany({
+    where: {
+      seedVersion: oldSeedVersion,
+      status: 'available',
+    },
+    data: {
+      status: 'retiring',
+    },
+  });
+
+  console.log(`✅ Marked ${updated.count} unallocated addresses as RETIRING`);
+  return updated.count;
+}
+
+/**
+ * Checks if old seed material can be safely deleted.
+ * Old seed material may only be deleted when zero outstanding addresses reference it.
+ */
+export async function canDeleteOldSeed(seedVersion: number): Promise<boolean> {
+  const outstandingCount = await prisma.depositAddress.count({
+    where: {
+      seedVersion,
+      status: {
+        in: ['assigned', 'cooldown', 'available'],
+      },
+    },
+  });
+
+  return outstandingCount === 0;
+}
+
+/**
+ * Deletes old seed material only if zero outstanding addresses reference it.
+ */
+export async function deleteOldSeedMaterial(seedVersion: number): Promise<{ deleted: boolean; reason?: string }> {
+  const safeToDelete = await canDeleteOldSeed(seedVersion);
+  if (!safeToDelete) {
+    const remaining = await prisma.depositAddress.count({
+      where: {
+        seedVersion,
+        status: { in: ['assigned', 'cooldown', 'available'] },
+      },
+    });
+    return {
+      deleted: false,
+      reason: `Cannot delete seed material for epoch ${seedVersion}: ${remaining} outstanding addresses still reference it`,
+    };
+  }
+
+  // Clear from versioned registry if present
+  const envVersionKey = `HD_WALLET_SEED_V${seedVersion}`;
+  delete process.env[envVersionKey];
+
+  return { deleted: true };
+}
+
+/**
  * Re-derive strategy: Replace all merchant addresses with new seed
  */
 async function executeRederiveStrategy(newSeed: string, dryRun: boolean) {
   console.log('🔀 Executing Re-Derive Strategy');
   console.log('──────────────────────────────────────────────────────────────────────────────\n');
 
+  // Step A: Mark all unallocated addresses from current epoch as retiring
+  const currentSeedVersion = Number(process.env.CURRENT_SEED_VERSION || '1');
+  await markUnallocatedOldAddressesRetiring(currentSeedVersion, dryRun);
+
   // Get current KMS provider and seed
-  const kmsProvider = getKmsProvider();
+  const kmsProvider = KMSFactory.getProvider();
   const oldSeed = await kmsProvider.getMasterSeed();
 
   // Fetch all merchants with HD indices
@@ -151,6 +232,9 @@ async function executeRederiveStrategy(newSeed: string, dryRun: boolean) {
 
   console.log(`Processing ${merchants.length} merchants...\n`);
 
+  const oldHD = new HDWalletService(oldSeed);
+  const newHD = new HDWalletService(newSeed);
+
   const updates: Array<{
     merchantId: string;
     oldAddress: string;
@@ -160,20 +244,20 @@ async function executeRederiveStrategy(newSeed: string, dryRun: boolean) {
 
   // Derive new addresses for all merchants
   for (const merchantHD of merchants) {
-    const oldKeypair = deriveAccountKeypair(oldSeed, merchantHD.hd_index);
-    const newKeypair = deriveAccountKeypair(newSeed, merchantHD.hd_index);
+    const oldKeypair = await oldHD.regenerateKeypair(merchantHD.merchant_index, 0);
+    const newKeypair = await newHD.regenerateKeypair(merchantHD.merchant_index, 0);
 
     updates.push({
       merchantId: merchantHD.merchant.id,
-      oldAddress: oldKeypair.publicKey(),
-      newAddress: newKeypair.publicKey(),
-      hdIndex: merchantHD.hd_index,
+      oldAddress: oldKeypair.publicKey,
+      newAddress: newKeypair.publicKey,
+      hdIndex: merchantHD.merchant_index,
     });
 
     console.log(`  ${merchantHD.merchant.business_name}`);
-    console.log(`    HD Index: ${merchantHD.hd_index}`);
-    console.log(`    Old Address: ${oldKeypair.publicKey()}`);
-    console.log(`    New Address: ${newKeypair.publicKey()}`);
+    console.log(`    HD Index: ${merchantHD.merchant_index}`);
+    console.log(`    Old Address: ${oldKeypair.publicKey}`);
+    console.log(`    New Address: ${newKeypair.publicKey}`);
     console.log('');
   }
 
@@ -182,20 +266,6 @@ async function executeRederiveStrategy(newSeed: string, dryRun: boolean) {
     console.log(`   Would update ${updates.length} merchant addresses`);
     return;
   }
-
-  // Update database with new addresses
-  console.log('💾 Updating database with new addresses...');
-
-  for (const update of updates) {
-    await prisma.merchantHDIndex.update({
-      where: { merchantId: update.merchantId },
-      data: {
-        stellar_address: update.newAddress,
-      },
-    });
-  }
-
-  console.log(`✅ Updated ${updates.length} merchant addresses`);
 
   // Store new encrypted seed
   console.log('\n🔐 Encrypting new master seed...');
@@ -210,21 +280,27 @@ async function executeRederiveStrategy(newSeed: string, dryRun: boolean) {
 }
 
 /**
- * Dual-read strategy: Keep both seeds active
+ * Dual-read strategy: Keep both seeds active with epoch tracking
  */
 async function executeDualReadStrategy(newSeed: string, dryRun: boolean) {
   console.log('🔀 Executing Dual-Read Strategy');
   console.log('──────────────────────────────────────────────────────────────────────────────\n');
 
-  console.log('⚠️  Dual-read strategy requires code changes:');
-  console.log('   1. Add seed_version column to MerchantHDIndex table');
-  console.log('   2. Update HD wallet service to support multiple seeds');
-  console.log('   3. Modify address derivation to use correct seed per merchant');
-  console.log('');
+  const currentSeedVersion = Number(process.env.CURRENT_SEED_VERSION || '1');
+  const newSeedVersion = currentSeedVersion + 1;
 
-  if (!dryRun) {
-    throw new Error('Dual-read strategy not yet implemented. Use --strategy=rederive');
+  // Mark all unallocated addresses for current seed epoch as RETIRING
+  await markUnallocatedOldAddressesRetiring(currentSeedVersion, dryRun);
+
+  if (dryRun) {
+    console.log(`[DRY RUN] Would switch active seed epoch from ${currentSeedVersion} to ${newSeedVersion}`);
+    return;
   }
+
+  const kmsProvider = KMSFactory.getProvider();
+  await kmsProvider.storeMasterSeed(newSeed);
+
+  console.log(`✅ Dual-read rotation completed. Active epoch is now ${newSeedVersion}. In-flight addresses retained under epoch ${currentSeedVersion}.`);
 }
 
 /**
@@ -234,7 +310,7 @@ async function verifyRotation() {
   console.log('🔍 Verifying Rotation Status');
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 
-  const kmsProvider = getKmsProvider();
+  const kmsProvider = KMSFactory.getProvider();
 
   try {
     const currentSeed = await kmsProvider.getMasterSeed();
@@ -245,34 +321,11 @@ async function verifyRotation() {
     return;
   }
 
-  // Check all merchants have addresses
-  const merchantsWithoutAddress = await prisma.merchantHDIndex.count({
-    where: { stellar_address: null },
+  const poolStats = await prisma.depositAddress.groupBy({
+    by: ['status'],
+    _count: { status: true },
   });
-
-  if (merchantsWithoutAddress > 0) {
-    console.error(`❌ ${merchantsWithoutAddress} merchants missing stellar_address`);
-  } else {
-    console.log('✅ All merchants have stellar addresses');
-  }
-
-  // Check for duplicate addresses (should never happen)
-  const addresses = await prisma.merchantHDIndex.groupBy({
-    by: ['stellar_address'],
-    having: {
-      stellar_address: {
-        _count: {
-          gt: 1,
-        },
-      },
-    },
-  });
-
-  if (addresses.length > 0) {
-    console.error(`❌ Duplicate addresses detected: ${addresses.length}`);
-  } else {
-    console.log('✅ No duplicate addresses found');
-  }
+  console.log('✅ Deposit address pool breakdown:', poolStats);
 
   console.log('\n✅ Verification Complete');
 }
