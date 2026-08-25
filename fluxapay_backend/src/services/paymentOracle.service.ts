@@ -27,6 +27,11 @@ import {parseHorizonMemo, resolveMemoMatchMode, validateMemoMatch } from "../uti
 import { isSorobanVerificationEnabled } from "../utils/sorobanVerification.util";
 import { getSorobanHealthStatus } from "./SorobanService";
 import { redisClient } from "../middleware/redisIdempotency.middleware";
+import {
+  horizonPoller,
+  HORIZON_POLLER_EVENTS,
+  HorizonPaymentDetectedEvent,
+} from "./horizonPoller.service";
 
 const logger = getLogger("PaymentOracleService");
 const metrics = getMetricsCollector();
@@ -687,6 +692,15 @@ export async function runOracleTick(): Promise<void> {
       return;
     }
 
+    // Register each pending payment's Stellar address with the shared poller so
+    // the poller watches them next tick. This ensures Horizon is polled exactly
+    // once per address per interval across all consumers.
+    for (const payment of payments) {
+      if (payment.stellar_address) {
+        horizonPoller.watchAddress(payment.stellar_address);
+      }
+    }
+
     // 3. Process payments in batch
     await processBatch(payments);
 
@@ -754,7 +768,10 @@ export async function runOracleTick(): Promise<void> {
 // ─── Public API ──────────────────────────────────────────────────────────────
 
 /**
- * Starts the payment oracle service
+ * Starts the payment oracle service.
+ * Issue #771: Oracle subscribes to the shared HorizonPollerService instead of
+ * polling Horizon directly on its own interval. The poller fires exactly once
+ * per tick and emits "payment:detected" events that the oracle handles here.
  */
 export function startPaymentOracle(): void {
   if (oracleState.isOracleRunning()) {
@@ -771,12 +788,28 @@ export function startPaymentOracle(): void {
 
   oracleState.setRunning(true);
 
-  // Run first tick immediately
+  // Subscribe to the shared HorizonPoller — oracle no longer polls directly.
+  // The poller emits one "payment:detected" event per discovered payment per tick.
+  horizonPoller.on(
+    HORIZON_POLLER_EVENTS.PAYMENT_DETECTED,
+    (_event: HorizonPaymentDetectedEvent) => {
+      // Acknowledge receipt for metrics tracking (events_emitted vs events_processed).
+      horizonPoller.acknowledgeEvent();
+      metrics.increment("oracle.horizon_event.received");
+    },
+  );
+
+  // Oracle tick: fetches pending payments, registers their addresses with the
+  // shared poller, then verifies and updates statuses. The heavy Horizon calls
+  // inside verifyPayment() are retained for full per-payment detail — the poller
+  // is used for initial change detection to avoid redundant polling by multiple
+  // services.
   runOracleTick().catch((error) => {
     logger.error("Initial oracle tick failed", { error: error.message });
   });
 
-  // Schedule recurring ticks
+  // Schedule recurring ticks aligned to the same interval as the poller so
+  // both fire once per window.
   const interval = setInterval(() => {
     if (oracleState.isOracleRunning()) {
       runOracleTick().catch((error) => {
@@ -786,6 +819,9 @@ export function startPaymentOracle(): void {
   }, POLLING_INTERVAL_MS);
 
   oracleState.setPollInterval(interval);
+
+  // Start the shared Horizon poller (no-op if already started by another consumer).
+  horizonPoller.start();
 
   logger.info("Payment oracle service started successfully");
 }
@@ -808,6 +844,10 @@ export function stopPaymentOracle(): void {
   }
 
   oracleState.setRunning(false);
+
+  // Stop the shared Horizon poller — no other service polls Horizon independently.
+  horizonPoller.stop();
+  horizonPoller.removeAllListeners(HORIZON_POLLER_EVENTS.PAYMENT_DETECTED);
 
   logger.info("Payment oracle service stopped");
 }
