@@ -21,31 +21,59 @@ import {
 } from 'lucide-react';
 
 function EmptyChart({ label }: { label: string }) {
+    // Matches the rendered chart height so swapping between them shifts nothing.
     return (
-        <div className="h-[300px] w-full flex flex-col items-center justify-center gap-2 text-muted-foreground">
+        <div
+            data-testid="empty-chart"
+            role="status"
+            className="h-[300px] w-full flex flex-col items-center justify-center gap-2 text-muted-foreground"
+        >
             <BarChart2 className="h-10 w-10 opacity-30" />
             <p className="text-sm">No {label} data for this period</p>
         </div>
     );
 }
 
+/**
+ * Loading placeholder for the analytics dashboard.
+ *
+ * Every wrapper here mirrors the loaded layout's grid and column spans exactly
+ * — same `space-y-6`, same `md:grid-cols-2 lg:grid-cols-7`, same
+ * `col-span-full lg:col-span-4` / `lg:col-span-3`. That is the whole point: a
+ * skeleton whose boxes land anywhere other than where the real charts land
+ * causes the layout shift it was added to prevent. The previous version used
+ * bare `col-span-4` / `col-span-3`, which collapsed differently from the real
+ * layout at the `md` breakpoint.
+ */
 function AnalyticsSkeleton() {
     return (
-        <div className="space-y-6 animate-pulse">
-            <div className="h-10 w-1/3 bg-slate-200 rounded-md" />
+        <div className="space-y-6 animate-pulse" data-testid="analytics-skeleton" aria-hidden="true">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="space-y-2">
+                    <div className="h-9 w-72 bg-slate-200 rounded-md" />
+                    <div className="h-5 w-96 max-w-full bg-slate-100 rounded-md" />
+                </div>
+                <div className="flex items-center gap-3">
+                    <div className="h-10 w-32 bg-slate-100 rounded-lg border" />
+                    <div className="h-10 w-56 bg-slate-100 rounded-lg border" />
+                </div>
+            </div>
+
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 {[1, 2, 3, 4].map((i) => (
                     <div key={i} className="h-32 bg-slate-100 rounded-xl border" />
                 ))}
             </div>
+
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7">
-                <div className="col-span-4 h-[380px] bg-slate-100 rounded-xl border flex items-center justify-center">
+                <div className="col-span-full lg:col-span-4 h-[380px] bg-slate-100 rounded-xl border flex items-center justify-center">
                     <Loader2 className="h-8 w-8 animate-spin text-slate-300" />
                 </div>
-                <div className="col-span-3 h-[380px] bg-slate-100 rounded-xl border flex items-center justify-center">
+                <div className="col-span-full lg:col-span-3 h-[380px] bg-slate-100 rounded-xl border flex items-center justify-center">
                     <Loader2 className="h-8 w-8 animate-spin text-slate-300" />
                 </div>
             </div>
+
             <div className="h-[380px] bg-slate-100 rounded-xl border" />
         </div>
     );
