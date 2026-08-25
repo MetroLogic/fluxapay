@@ -128,7 +128,7 @@ export const createPayment = async (req: Request, res: Response) => {
       error &&
       typeof error === "object" &&
       "status" in error &&
-      (error as { status?: unknown }).status === 400
+      typeof (error as { status?: unknown }).status === "number"
     ) {
       return sendApiError(res, error);
     }

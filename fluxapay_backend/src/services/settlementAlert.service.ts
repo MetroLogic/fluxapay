@@ -98,3 +98,19 @@ export async function sendOpsAlert(prefix: string, message: string): Promise<voi
   const prefixedMessage = `[${prefix}] ${message}`;
   await Promise.all([sendSlackAlert(prefixedMessage), sendTelegramAlert(prefixedMessage)]);
 }
+
+/**
+ * Sends an alert when the deposit address pool reaches high utilization (e.g. >= 80%).
+ * Never throws.
+ */
+export async function sendDepositPoolAlert(stats: {
+  utilizationPct: number;
+  availableCount: number;
+  totalCount: number;
+  allocatedCount?: number;
+}): Promise<void> {
+  const pctStr = (stats.utilizationPct * 100).toFixed(1);
+  const message = `🚨 Deposit Address Pool Alert: High utilization at ${pctStr}% (${stats.availableCount}/${stats.totalCount} available)`;
+  await sendOpsAlert("DepositAddressPool", message);
+}
+

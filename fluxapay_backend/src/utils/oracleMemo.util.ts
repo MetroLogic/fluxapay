@@ -48,6 +48,10 @@ export function parseHorizonMemo(tx: HorizonTransactionMemo): StellarMemo {
     return { type, value: Number.isNaN(parsed) ? tx.memo : parsed };
   }
 
+  if (type === "text") {
+    return { type, value: tx.memo.toLowerCase() };
+  }
+
   return { type, value: tx.memo };
 }
 
@@ -100,18 +104,22 @@ export function validateMemoMatch(
     return { ...base, matched: true, rejected: false };
   }
 
+  const isMatch =
+    received !== null &&
+    (memo.type === "text"
+      ? received.toLowerCase() === expectedPaymentId.toLowerCase()
+      : received === expectedPaymentId);
+
   if (mode === "required") {
     if (!received) {
       return { ...base, matched: false, rejected: true };
     }
-    const matched = received === expectedPaymentId;
-    return { ...base, matched, rejected: !matched };
+    return { ...base, matched: isMatch, rejected: !isMatch };
   }
 
   // secondary verification — warn on mismatch but do not reject attribution
   if (!received) {
     return { ...base, matched: true, rejected: false };
   }
-  const matched = received === expectedPaymentId;
-  return { ...base, matched, rejected: false };
+  return { ...base, matched: isMatch, rejected: false };
 }

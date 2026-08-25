@@ -92,7 +92,11 @@ export class SweepService {
     this.networkPassphrase =
       process.env.STELLAR_NETWORK_PASSPHRASE || Networks.TESTNET;
     this.baseFee = Number(process.env.STELLAR_BASE_FEE || "100");
-    this.maxFee = Number(process.env.STELLAR_MAX_FEE || "2000");
+    this.maxFee = Number(
+      process.env.SWEEP_MAX_FEE_STROOPS ||
+      process.env.STELLAR_MAX_FEE ||
+      "2000"
+    );
     this.feeBumpMultiplier = Number(
       process.env.STELLAR_FEE_BUMP_MULTIPLIER || "2",
     );
@@ -100,13 +104,22 @@ export class SweepService {
 
     const issuer =
       process.env.USDC_ISSUER_PUBLIC_KEY ||
-      "GBBD47IF6LWK7P7MDEVSCWT73IQIGCEZHR7OMXMBZQ3ZONN2T4U6W23Y";
+      "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5";
     this.usdcAsset = new Asset("USDC", issuer);
 
     const vaultSecret = requiredEnv("MASTER_VAULT_SECRET_KEY");
     this.vaultKeypair = Keypair.fromSecret(vaultSecret);
 
     this.hdWalletService = new HDWalletService();
+  }
+
+  private getMaxFee(): number {
+    return Number(
+      process.env.SWEEP_MAX_FEE_STROOPS ||
+      process.env.STELLAR_MAX_FEE ||
+      this.maxFee ||
+      "2000"
+    );
   }
 
   /**
@@ -135,6 +148,26 @@ export class SweepService {
     let lastError: unknown;
 
     for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
+      let p90Fee = this.baseFee;
+      try {
+        if (typeof this.server.feeStats === "function") {
+          const feeStats = await this.server.feeStats();
+          const p90 = feeStats?.fee_charged?.p90;
+          if (p90 !== undefined && p90 !== null) {
+            const parsedP90 = parseInt(String(p90), 10);
+            if (!isNaN(parsedP90) && parsedP90 > 0) {
+              p90Fee = Math.max(this.baseFee, parsedP90);
+            }
+          }
+        }
+      } catch (feeErr) {
+        this.logger.warn("Failed to fetch fee stats from Horizon, falling back to base fee", {
+          error: feeErr instanceof Error ? feeErr.message : String(feeErr),
+        });
+      }
+
+      const attemptFee = this.calculateFeeForAttempt(attempt, p90Fee);
+
       try {
         const sourceKeypair = Keypair.fromSecret(params.sourceSecret);
         const sourceAccount = await this.server.loadAccount(
@@ -142,7 +175,7 @@ export class SweepService {
         );
 
         const builder = new TransactionBuilder(sourceAccount, {
-          fee: this.calculateFeeForAttempt(attempt),
+          fee: attemptFee,
           networkPassphrase: this.networkPassphrase,
         }).addOperation(
           Operation.payment({
@@ -180,13 +213,13 @@ export class SweepService {
         this.logger.warn("Sweep transaction submission failed", {
           attempt,
           maxRetries: this.maxRetries,
-          fee: this.calculateFeeForAttempt(attempt),
+          fee: attemptFee,
           errorMessage,
         });
 
         this.metrics.increment("stellar.sweep.submit.failure", {
           attempt: attempt.toString(),
-          fee: this.calculateFeeForAttempt(attempt),
+          fee: attemptFee,
         });
 
         if (attempt >= this.maxRetries) {
@@ -196,7 +229,7 @@ export class SweepService {
               attempts: attempt,
               feeBudget: {
                 baseFee: this.baseFee,
-                maxFee: this.maxFee,
+                maxFee: this.getMaxFee(),
                 multiplier: this.feeBumpMultiplier,
               },
             },
@@ -211,10 +244,22 @@ export class SweepService {
       : new Error("Failed to submit sweep transaction");
   }
 
-  private calculateFeeForAttempt(attempt: number): string {
+  public calculateFeeForAttempt(attempt: number, p90BaseFee?: number): string {
+    const base = Math.max(this.baseFee, p90BaseFee ?? this.baseFee);
     const bump = Math.pow(this.feeBumpMultiplier, Math.max(0, attempt - 1));
-    const candidateFee = Math.floor(this.baseFee * bump);
-    return Math.min(candidateFee, this.maxFee).toString();
+    const candidateFee = Math.floor(base * bump);
+    const maxFee = this.getMaxFee();
+
+    if (candidateFee >= maxFee) {
+      this.metrics.increment("stellar.sweep.capped_fee_reached", {
+        attempt: attempt.toString(),
+        candidateFee: candidateFee.toString(),
+        maxFee: maxFee.toString(),
+      });
+      return maxFee.toString();
+    }
+
+    return candidateFee.toString();
   }
 
   /**
@@ -294,11 +339,23 @@ export class SweepService {
             return;
           }
 
+          let seedVersion = 1;
+          if (p.stellar_address) {
+            const depositAddr = await prisma.depositAddress.findFirst({
+              where: { public_key: p.stellar_address },
+              select: { seedVersion: true },
+            });
+            if (depositAddr?.seedVersion) {
+              seedVersion = depositAddr.seedVersion;
+            }
+          }
+
           let kp: { publicKey: string; secretKey: string };
 
           if (p.derivation_path) {
             kp = await this.hdWalletService.regenerateKeypairFromPath(
               p.derivation_path,
+              seedVersion,
             );
           } else if (p.encrypted_key_data) {
             const { merchantIndex, paymentIndex } =
@@ -306,11 +363,13 @@ export class SweepService {
             kp = await this.hdWalletService.regenerateKeypair(
               merchantIndex,
               paymentIndex,
+              seedVersion,
             );
           } else {
             kp = await this.hdWalletService.regenerateKeypair(
               p.merchantId,
               p.id,
+              seedVersion,
             );
           }
 
