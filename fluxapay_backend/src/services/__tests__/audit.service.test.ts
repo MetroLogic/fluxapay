@@ -8,18 +8,28 @@ import {
   updateSettlementBatchCompletion,
   queryAuditLogs,
   getAuditLogById,
+  createAuditLog,
 } from '../audit.service';
+import { hashMerchantId } from '../../utils/piiRedactor';
 
-const prisma = new PrismaClient();
+const describeWithDatabase = process.env.DATABASE_URL && !process.env.DATABASE_URL.includes('mock') ? describe : describe.skip;
 
-describe('Audit Service', () => {
+describeWithDatabase('Audit Service', () => {
+  let prisma: PrismaClient;
+
+  beforeAll(() => {
+    prisma = new PrismaClient();
+  });
+
   beforeEach(async () => {
     // Clean up audit logs before each test
     await prisma.auditLog.deleteMany({});
   });
 
   afterAll(async () => {
-    await prisma.$disconnect();
+    if (prisma) {
+      await prisma.$disconnect();
+    }
   });
 
   describe('logKycDecision', () => {
@@ -42,7 +52,7 @@ describe('Audit Service', () => {
       expect(auditLog?.action_type).toBe(AuditActionType.kyc_approve);
       expect(auditLog?.entity_type).toBe(AuditEntityType.merchant_kyc);
       expect(auditLog?.details).toMatchObject({
-        merchant_id: 'merchant-456',
+        merchant_id: hashMerchantId('merchant-456'),
         previous_status: KYCStatus.pending_review,
         new_status: KYCStatus.approved,
         reason: 'All documents verified',
@@ -63,8 +73,27 @@ describe('Audit Service', () => {
 
       expect(auditLog?.action_type).toBe(AuditActionType.kyc_reject);
       expect(auditLog?.details).toMatchObject({
+        merchant_id: hashMerchantId('merchant-456'),
         reason: 'Incomplete documents',
       });
+    });
+
+    it('should redact raw email in audit input details', async () => {
+      const auditLog = await createAuditLog({
+        admin_id: 'admin-123',
+        action_type: AuditActionType.kyc_approve,
+        entity_type: AuditEntityType.merchant_kyc,
+        entity_id: 'merchant-456',
+        details: {
+          merchant_id: 'merchant-456',
+          email: 'sensitive-user@example.com',
+          director_email: 'director@test.com',
+        },
+      });
+
+      expect(auditLog?.details.merchant_id).toBe(hashMerchantId('merchant-456'));
+      expect(auditLog?.details.email).toBe('[REDACTED]');
+      expect(auditLog?.details.director_email).toBe('[REDACTED]');
     });
 
     it('should handle missing reason gracefully', async () => {

@@ -27,6 +27,11 @@ jest.mock("../../middleware/redisIdempotency.middleware", () => {
       const prefix = pattern.replace("*", "");
       return Array.from(store.keys()).filter((k) => k.startsWith(prefix));
     }),
+    scan: jest.fn(async (cursor: string, matchKeyword?: string, pattern?: string) => {
+      const prefix = pattern ? pattern.replace("*", "") : "";
+      const matchedKeys = Array.from(store.keys()).filter((k) => k.startsWith(prefix));
+      return ["0", matchedKeys];
+    }),
     on: jest.fn(),
     __store: store,
   };
@@ -43,6 +48,7 @@ import {
   getCachedFxRate,
   getStaleFxRate,
   getAllCachedFxRates,
+  generatePayoutIdempotencyKey,
 } from "../exchange.service";
 import { redisClient } from "../../middleware/redisIdempotency.middleware";
 
@@ -149,7 +155,7 @@ describe("exchange.service", () => {
       );
     });
 
-    it("should execute payout via YellowCard API", async () => {
+    it("should execute payout via YellowCard API with deterministic idempotency key", async () => {
       const mockQuoteResponse = {
         rate: 1550,
         destinationAmount: 155000,
@@ -170,6 +176,8 @@ describe("exchange.service", () => {
           json: async () => mockPayoutResponse,
         });
 
+      const expectedKey = generatePayoutIdempotencyKey("ref_123", 1);
+
       const result = await partner.convertAndPayout(
         100,
         "NGN",
@@ -180,6 +188,56 @@ describe("exchange.service", () => {
       expect(result.transfer_ref).toBe("yc_transfer_123");
       expect(result.exchange_ref).toBe("yc_quote_123");
       expect(global.fetch).toHaveBeenCalledTimes(2);
+      expect(global.fetch).toHaveBeenLastCalledWith(
+        expect.stringContaining("/v2/payments"),
+        expect.objectContaining({
+          method: "POST",
+          headers: expect.objectContaining({
+            "X-Idempotency-Key": expectedKey,
+          }),
+        })
+      );
+    });
+
+    it("should send deterministic idempotency key on retry attempt for YellowCard", async () => {
+      const mockQuoteResponse = {
+        rate: 1550,
+        destinationAmount: 155000,
+        quoteId: "yc_quote_123",
+      };
+      const mockPayoutResponse = {
+        transferId: "yc_transfer_123",
+      };
+
+      (global.fetch as jest.Mock)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockQuoteResponse,
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockPayoutResponse,
+        });
+
+      const retryKey = generatePayoutIdempotencyKey("ref_123", 2);
+
+      await partner.convertAndPayout(
+        100,
+        "NGN",
+        mockBankAccount,
+        "ref_123",
+        2
+      );
+
+      expect(global.fetch).toHaveBeenLastCalledWith(
+        expect.stringContaining("/v2/payments"),
+        expect.objectContaining({
+          method: "POST",
+          headers: expect.objectContaining({
+            "X-Idempotency-Key": retryKey,
+          }),
+        })
+      );
     });
 
     it("should throw error on API failure", async () => {
@@ -230,7 +288,7 @@ describe("exchange.service", () => {
       );
     });
 
-    it("should execute payout via Anchor API", async () => {
+    it("should execute payout via Anchor API with deterministic idempotency key", async () => {
       const mockQuoteResponse = {
         rate: 1550,
         fiat_amount: 155000,
@@ -240,7 +298,6 @@ describe("exchange.service", () => {
         exchange_id: "anchor_exchange_123",
       };
 
-      // convertAndPayout fetches a quote first, then posts the payout
       (global.fetch as jest.Mock)
         .mockResolvedValueOnce({
           ok: true,
@@ -250,6 +307,8 @@ describe("exchange.service", () => {
           ok: true,
           json: async () => mockPayoutResponse,
         });
+
+      const expectedKey = generatePayoutIdempotencyKey("ref_123", 1);
 
       const result = await partner.convertAndPayout(
         100,
@@ -265,7 +324,51 @@ describe("exchange.service", () => {
         expect.stringContaining("/v1/offramp/payout"),
         expect.objectContaining({
           method: "POST",
+          headers: expect.objectContaining({
+            "X-Idempotency-Key": expectedKey,
+          }),
           body: expect.stringContaining("ref_123"),
+        })
+      );
+    });
+
+    it("should send deterministic idempotency key on retry attempt for Anchor", async () => {
+      const mockQuoteResponse = {
+        rate: 1550,
+        fiat_amount: 155000,
+      };
+      const mockPayoutResponse = {
+        reference: "anchor_ref_123",
+        exchange_id: "anchor_exchange_123",
+      };
+
+      (global.fetch as jest.Mock)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockQuoteResponse,
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => mockPayoutResponse,
+        });
+
+      const retryKey = generatePayoutIdempotencyKey("ref_123", 2);
+
+      await partner.convertAndPayout(
+        100,
+        "NGN",
+        mockBankAccount,
+        "ref_123",
+        2
+      );
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining("/v1/offramp/payout"),
+        expect.objectContaining({
+          method: "POST",
+          headers: expect.objectContaining({
+            "X-Idempotency-Key": retryKey,
+          }),
         })
       );
     });

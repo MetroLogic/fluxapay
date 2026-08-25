@@ -1,5 +1,6 @@
 import { PrismaClient, KYCStatus, BusinessType, GovernmentIdType } from '../../generated/client/client';
 import { updateKycStatusService } from '../kyc.service';
+import { hashMerchantId } from '../../utils/piiRedactor';
 
 const prisma = new PrismaClient();
 const describeWithDatabase = process.env.DATABASE_URL ? describe : describe.skip;
@@ -110,7 +111,7 @@ describeWithDatabase('Audit Logging - KYC Integration', () => {
     expect(auditLogs[0].action_type).toBe('kyc_approve');
     expect(auditLogs[0].entity_type).toBe('merchant_kyc');
     expect(auditLogs[0].details).toMatchObject({
-      merchant_id: testMerchantId,
+      merchant_id: hashMerchantId(testMerchantId),
       previous_status: KYCStatus.pending_review,
       new_status: KYCStatus.approved,
     });
@@ -143,7 +144,7 @@ describeWithDatabase('Audit Logging - KYC Integration', () => {
     expect(auditLogs).toHaveLength(1);
     expect(auditLogs[0].action_type).toBe('kyc_reject');
     expect(auditLogs[0].details).toMatchObject({
-      merchant_id: testMerchantId,
+      merchant_id: hashMerchantId(testMerchantId),
       previous_status: KYCStatus.pending_review,
       new_status: KYCStatus.rejected,
       reason: 'Incomplete documents',

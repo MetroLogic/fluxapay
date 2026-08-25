@@ -9,6 +9,7 @@ import { PaymentTimer } from '@/components/checkout/PaymentTimer';
 import { StellarPayButton } from '@/components/checkout/StellarPayButton';
 import { BrowserWalletButtons } from '@/components/checkout/BrowserWalletButtons';
 import { FiatEquivalent } from '@/components/checkout/FiatEquivalent';
+import { api } from '@/lib/api';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
@@ -48,15 +49,17 @@ interface InvoicePaymentData {
 }
 
 async function fetchInvoicePublic(invoiceId: string): Promise<InvoicePaymentData> {
-  // The invoice route requires API key auth. The invoice_id from the payment_link
-  // (e.g. /pay/invoice/INV-...) maps to invoice_number. We call the backend
-  // public-facing invoice lookup which is accessible via the payment link context.
-  const res = await fetch(`${API_BASE}/api/v1/invoices/${invoiceId}`, {
-    headers: { 'Content-Type': 'application/json' },
-  });
-  if (!res.ok) throw new Error(res.status === 404 ? 'Invoice not found' : 'Failed to load invoice');
-  const json = await res.json();
-  const inv = json.data ?? json;
+  let inv: any;
+  try {
+    inv = await api.invoices.getById(invoiceId);
+  } catch {
+    const res = await fetch(`${API_BASE}/api/v1/invoices/${invoiceId}`, {
+      headers: { 'Content-Type': 'application/json' },
+    });
+    if (!res.ok) throw new Error(res.status === 404 ? 'Invoice not found' : 'Failed to load invoice');
+    const json = await res.json();
+    inv = json.data ?? json;
+  }
   return {
     id: String(inv.id),
     invoice_number: String(inv.invoice_number ?? inv.id),
