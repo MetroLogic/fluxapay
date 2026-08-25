@@ -4,11 +4,11 @@
 
 import { Decimal } from "@prisma/client/runtime/library";
 import { PrismaClient } from "../generated/client/client";
+import { prisma } from "../config/prisma";
 import { apiError } from "../helpers/apiError.helper";
 import { ErrorCode } from "../types/errors";
 import { createAndDeliverWebhook } from "./webhook.service";
 
-const prisma = new PrismaClient();
 
 export type UsageMetric = "api_calls" | "charges_created" | "settlement_volume";
 

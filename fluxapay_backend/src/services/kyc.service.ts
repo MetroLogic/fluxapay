@@ -8,13 +8,13 @@ import {
   GovernmentIdType,
   Prisma,
 } from "../generated/client/client";
+import { prisma } from "../config/prisma";
 import { uploadToCloudinary, deleteFromCloudinary } from "./cloudinary.service";
 import { SubmitKycInput, UpdateKycStatusInput } from "../schemas/kyc.schema";
 import { logKycDecision } from "./audit.service";
 import { KYCStatus as AuditKYCStatus } from "../types/audit.types";
 import { validateKycUploadFile } from "../utils/kycUploadValidation.util";
 
-const prisma = new PrismaClient();
 
 /**
  * Submit KYC information for a merchant

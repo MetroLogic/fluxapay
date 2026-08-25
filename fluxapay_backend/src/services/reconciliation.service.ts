@@ -5,8 +5,8 @@ import {
   PrismaClient,
   ReconciliationStatus,
 } from "../generated/client/client";
+import { prisma } from "../config/prisma";
 
-const prisma = new PrismaClient();
 
 function toNumber(value: unknown): number {
   if (typeof value === "number") {

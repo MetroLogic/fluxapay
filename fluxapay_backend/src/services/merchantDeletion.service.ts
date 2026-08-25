@@ -13,6 +13,7 @@ import { ErrorCode } from "../types/errors";
  *   - OTPs, BankAccount, Customers, Subscriptions are hard-deleted.
  */
 import { PrismaClient } from "../generated/client/client";
+import { prisma } from "../config/prisma";
 import {
   logMerchantDeleted,
   logApiKeysRevoked,
@@ -24,7 +25,6 @@ import { getLogger } from "../utils/logger";
 
 const logger = getLogger();
 
-const prisma = new PrismaClient();
 
 const ANON_EMAIL = (id: string) => `deleted-${id}@anonymized.invalid`;
 const ANON_PHONE = (id: string) => `+000000${id.slice(-6)}`;

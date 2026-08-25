@@ -1,7 +1,7 @@
 import { PrismaClient } from "../generated/client/client";
 import { logConfigUpdated } from "./audit.service";
 
-const prisma = new PrismaClient();
+import { prisma } from "../config/prisma";
 
 const CONFIG_PREFIX = "admin_config:";
 

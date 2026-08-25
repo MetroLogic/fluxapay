@@ -1,15 +1,6 @@
 import cors, { CorsOptions } from 'cors';
 import { getEnvConfig } from '../config/env.config';
-import { PrismaClient } from '../generated/client/client';
-
-let prisma: PrismaClient | null = null;
-
-function getPrismaInstance(): PrismaClient {
-  if (!prisma) {
-    prisma = new PrismaClient();
-  }
-  return prisma;
-}
+import { prisma } from '../config/prisma';
 
 /**
  * CORS Middleware Configuration
@@ -108,7 +99,7 @@ function getUrlOrigin(urlStr: string): string | null {
  */
 async function isMerchantWebhookOrigin(origin: string): Promise<boolean> {
   try {
-    const db = getPrismaInstance();
+    const db = prisma;
     const merchants = await db.merchant.findMany({
       where: {
         webhook_url: {

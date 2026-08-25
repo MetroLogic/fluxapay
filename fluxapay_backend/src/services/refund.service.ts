@@ -6,10 +6,10 @@ import {
   WebhookEventType,
   Prisma,
 } from "../generated/client/client";
+import { prisma } from "../config/prisma";
 import { createAndDeliverWebhook } from "./webhook.service";
 import { PaymentStatus, getRefundableStatuses } from "../types/payment";
 
-const prisma = new PrismaClient();
 
 /**
  * Validates that a payment can be refunded

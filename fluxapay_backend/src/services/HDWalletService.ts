@@ -4,7 +4,7 @@ import { derivePath } from "ed25519-hd-key";
 import { PrismaClient } from "../generated/client/client";
 import { IKMSProvider, KMSFactory } from "./kms";
 
-const prisma = new PrismaClient();
+import { prisma } from "../config/prisma";
 
 /**
  * Coin type 148 = Stellar (SLIP-0044)

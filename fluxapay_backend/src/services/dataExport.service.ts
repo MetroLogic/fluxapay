@@ -10,7 +10,7 @@ import {
 } from "./audit.service";
 import { getMerchantPlanFeatures, merchantHasFeature } from "./usage.service";
 
-const prisma = new PrismaClient();
+import { prisma } from "../config/prisma";
 
 /** How long a completed export download link is valid (24 h). */
 const EXPORT_TTL_MS = 24 * 60 * 60 * 1000;

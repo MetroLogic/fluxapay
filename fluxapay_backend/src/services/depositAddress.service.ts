@@ -4,7 +4,7 @@ import { KMSFactory } from "./kms";
 import * as crypto from "crypto";
 import { eventBus, AppEvents } from "./EventService";
 
-const prisma = new PrismaClient();
+import { prisma } from "../config/prisma";
 
 export class DepositAddressService {
   /**

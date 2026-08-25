@@ -1,6 +1,7 @@
 import { apiError } from "../helpers/apiError.helper";
 import { ErrorCode } from "../types/errors";
 import { PrismaClient, WebhookEventType, WebhookStatus, Payment, Merchant } from "../generated/client/client";
+import { prisma } from "../config/prisma";
 import crypto from "crypto";
 import { webhookEventTypes } from "../schemas/webhook.schema";
 import { normalizeEventName, toLegacyEventName } from "../utils/webhook-event-mapping.util";
@@ -79,7 +80,6 @@ export class WebhookDispatcher {
   }
 }
 
-const prisma = new PrismaClient();
 
 interface GetWebhookLogsParams {
   merchantId: string;

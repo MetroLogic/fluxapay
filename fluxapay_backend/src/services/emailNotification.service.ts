@@ -9,7 +9,7 @@ import { eventBus, AppEvents } from './EventService';
 import { sendPaymentConfirmationEmail, PaymentConfirmationDetails } from './email.service';
 import { PrismaClient } from '../generated/client/client';
 
-const prisma = new PrismaClient();
+import { prisma } from "../config/prisma";
 
 /**
  * Initialize email notification listeners

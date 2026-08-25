@@ -4,7 +4,7 @@ import swaggerUi from "swagger-ui-express";
 import { specs } from "./docs/swagger";
 import { apiError, sendApiError } from "./helpers/apiError.helper";
 import { ErrorCode } from "./types/errors";
-import { PrismaClient } from "./generated/client/client";
+import { prisma } from "./config/prisma";
 import { requestIdMiddleware } from "./middleware/requestId.middleware";
 import {
   requestLoggingMiddleware,
@@ -47,8 +47,6 @@ import escrowRoutes from "./routes/escrow.route";
 import emailRoutes from "./routes/email.route";
 
 const app = express();
-const prisma = new PrismaClient();
-
 // Observability Middleware (must be first)
 app.use(requestIdMiddleware);
 app.use(requestLoggingMiddleware);
