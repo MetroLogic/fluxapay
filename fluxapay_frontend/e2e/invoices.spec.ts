@@ -119,4 +119,67 @@ test.describe("Invoice creation flow", () => {
     const clipboardContent = await page.evaluate(() => navigator.clipboard.readText());
     expect(clipboardContent).toContain("/pay/invoice/");
   });
+
+  test("@smoke - customer can view and pay invoice on /pay/invoice/[invoice_id]", async ({ page }) => {
+    const invoiceId = "inv_test_123";
+    const mockInvoice = {
+      id: invoiceId,
+      invoice_number: "INV-2026-001",
+      customer_name: "Acme Corp",
+      customer_email: "billing@acme.com",
+      amount: 250,
+      currency: "USDC",
+      due_date: "2026-12-31T00:00:00.000Z",
+      status: "pending",
+      payment_link: `http://localhost:3075/pay/invoice/${invoiceId}`,
+      notes: "Net 30 payment terms apply.",
+      metadata: {
+        customer_name: "Acme Corp",
+        line_items: [
+          { description: "API Integration Consulting", quantity: 2, unit_price: 100 },
+          { description: "Technical Support Retainer", quantity: 1, unit_price: 50 },
+        ],
+        notes: "Net 30 payment terms apply.",
+      },
+      merchantName: "FluxaPay Merchant",
+      checkoutAccentColor: "#0052FF",
+      payment: {
+        id: "pay_test_456",
+        address: "GBBD47IF6LWK7P7MDEVSCWT73IQIGCEZHR7OMXMBZQ3ZONN2T4U6W23Y",
+        memo: "INV2026001",
+        memoType: "text",
+        memoRequired: true,
+        expiresAt: new Date(Date.now() + 3600000).toISOString(),
+        status: "pending",
+        amount: 250,
+      },
+    };
+
+    await setupMocks(page, async (p) => {
+      await p.route(`**/api/v1/invoices/${invoiceId}`, async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ data: mockInvoice }),
+        });
+      });
+    });
+
+    await page.goto(`/pay/invoice/${invoiceId}`);
+
+    // Verify invoice number and amount
+    await expect(page.getByText("INV-2026-001")).toBeVisible();
+    await expect(page.getByText(/250(\.00)? USDC/)).toBeVisible();
+
+    // Verify customer info
+    await expect(page.getByText("Acme Corp")).toBeVisible();
+
+    // Verify line items
+    await expect(page.getByText("API Integration Consulting")).toBeVisible();
+    await expect(page.getByText("Technical Support Retainer")).toBeVisible();
+
+    // Verify payment address & memo
+    await expect(page.getByText("GBBD47IF6LWK7P7MDEVSCWT73IQIGCEZHR7OMXMBZQ3ZONN2T4U6W23Y")).toBeVisible();
+    await expect(page.getByText("INV2026001")).toBeVisible();
+  });
 });
