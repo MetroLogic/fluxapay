@@ -1,9 +1,20 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
 import { isAdmin } from "@/lib/auth";
+import { useDebounce } from "@/hooks/useDebounce";
+
+/**
+ * Default debounce applied to the palette's search input (#779).
+ *
+ * Every keystroke used to drive the search directly, so typing a nine-letter
+ * route name meant nine passes — and nine requests once a search handler is
+ * wired up. 250ms is short enough to feel instant while collapsing a burst of
+ * typing into a single search.
+ */
+export const COMMAND_PALETTE_DEBOUNCE_MS = 250;
 
 const BASE_ROUTES = [
   { label: "Overview", path: "/dashboard" },
@@ -25,7 +36,22 @@ const ADMIN_ROUTES = [
   { label: "View KYC Queue", path: "/admin/overview?action=kyc-queue" },
 ];
 
-export function CommandPalette() {
+export interface CommandPaletteProps {
+  /** Debounce applied to the search input, in milliseconds. */
+  debounceMs?: number;
+  /**
+   * Called with the debounced query whenever it settles.
+   *
+   * This is the seam a network-backed search hangs off; it fires once per
+   * settled query rather than once per keystroke.
+   */
+  onSearch?: (query: string) => void;
+}
+
+export function CommandPalette({
+  debounceMs = COMMAND_PALETTE_DEBOUNCE_MS,
+  onSearch,
+}: CommandPaletteProps = {}) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
@@ -35,16 +61,40 @@ export function CommandPalette() {
   const dialogRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
-  const routes = isAdminUser ? [...BASE_ROUTES, ...ADMIN_ROUTES] : BASE_ROUTES;
+  const routes = useMemo(
+    () => (isAdminUser ? [...BASE_ROUTES, ...ADMIN_ROUTES] : BASE_ROUTES),
+    [isAdminUser],
+  );
 
   // Initialize admin status
   useEffect(() => {
     setIsAdminUser(isAdmin());
   }, []);
 
-  const filtered = routes.filter((r) =>
-    r.label.toLowerCase().includes(query.toLowerCase())
+  // `query` drives the input so typing stays responsive; everything downstream
+  // reads the debounced value, so a burst of keystrokes settles into one pass.
+  const debouncedQuery = useDebounce(query, debounceMs);
+
+  const filtered = useMemo(
+    () =>
+      routes.filter((r) =>
+        r.label.toLowerCase().includes(debouncedQuery.toLowerCase()),
+      ),
+    [routes, debouncedQuery],
   );
+
+  // Skips the value present at mount, so an untouched palette issues no search.
+  const lastSearchedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!onSearch) return;
+    if (lastSearchedRef.current === null) {
+      lastSearchedRef.current = debouncedQuery;
+      return;
+    }
+    if (lastSearchedRef.current === debouncedQuery) return;
+    lastSearchedRef.current = debouncedQuery;
+    onSearch(debouncedQuery);
+  }, [debouncedQuery, onSearch]);
 
   const close = useCallback(() => {
     setOpen(false);
@@ -203,7 +253,7 @@ export function CommandPalette() {
       aria-modal="true"
       aria-label="Command palette"
       aria-live="polite"
-      aria-busy={filtered.length === 0 && query.length > 0}
+      aria-busy={query !== debouncedQuery}
       className="fixed inset-0 z-50 flex items-start justify-center pt-[20vh] bg-black/50 backdrop-blur-sm"
       onMouseDown={(e) => e.target === e.currentTarget && close()}
     >
@@ -257,7 +307,7 @@ export function CommandPalette() {
           </ul>
         ) : (
           <p className="px-4 py-3 text-sm text-muted-foreground" role="status">
-            {query ? "No results." : "Type to search…"}
+            {debouncedQuery ? "No results." : "Type to search…"}
           </p>
         )}
       </div>

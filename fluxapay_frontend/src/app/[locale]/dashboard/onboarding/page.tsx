@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "@/i18n/routing";
 import { Button } from "@/components/Button";
 import {
@@ -27,9 +27,32 @@ interface KycDraft {
 
 const DRAFT_KEY = "fluxapay_kyc_draft";
 
+/**
+ * Bank fields that must never reach localStorage (#777).
+ *
+ * localStorage is readable by any script on the origin and persists
+ * indefinitely, so an account number left there outlives the session and is
+ * exposed to any XSS. They are dropped on save, which means the bank step is
+ * deliberately *not* restored — a merchant re-enters those four fields, and
+ * that is the intended trade-off.
+ */
+const SENSITIVE_BANK_FIELDS = ["accountNumber", "iban", "swift"] as const;
+
+/** Strip sensitive values from a bank slice before it is persisted. */
+export function redactBankForDraft(
+  bank: Record<string, unknown>,
+): Record<string, unknown> {
+  const safe: Record<string, unknown> = { ...bank };
+  for (const field of SENSITIVE_BANK_FIELDS) {
+    delete safe[field];
+  }
+  return safe;
+}
+
 function loadDraft(): KycDraft | null {
   try {
-    const raw = localStorage.getItem(DRAFT_KEY);
+    if (typeof window === "undefined") return null;
+    const raw = window.localStorage.getItem(DRAFT_KEY);
     if (!raw) return null;
     return JSON.parse(raw) as KycDraft;
   } catch {
@@ -38,38 +61,83 @@ function loadDraft(): KycDraft | null {
 }
 
 function saveDraft(draft: KycDraft) {
-  localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+  try {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(
+      DRAFT_KEY,
+      JSON.stringify({ ...draft, bank: redactBankForDraft(draft.bank) }),
+    );
+  } catch {
+    // A full or unavailable store costs the draft, not the form.
+  }
 }
 
 function clearDraft() {
-  localStorage.removeItem(DRAFT_KEY);
+  try {
+    if (typeof window === "undefined") return;
+    window.localStorage.removeItem(DRAFT_KEY);
+  } catch {
+    /* nothing to clean up */
+  }
+}
+
+/** Slices that carry restorable draft data, in the order the steps present them. */
+const RESTORABLE_SECTIONS = ["business", "owner", "bank"] as const;
+
+/**
+ * Marks a group of fields as carrying restored draft values (#777).
+ *
+ * A merchant needs to be able to tell at a glance which values they typed just
+ * now and which came back from a previous session, so restored groups stay
+ * visually distinct until the restore banner is dismissed.
+ */
+function RestoredFields({
+  restored,
+  children,
+}: {
+  restored: boolean;
+  children: React.ReactNode;
+}) {
+  if (!restored) return <>{children}</>;
+
+  return (
+    <div
+      data-testid="restored-fields"
+      data-restored="true"
+      className="rounded-xl border-l-4 border-amber-400 bg-amber-50/40 pl-4"
+    >
+      <p className="pt-3 text-xs font-medium text-amber-800">
+        Restored from your saved draft — please review before continuing.
+      </p>
+      {children}
+    </div>
+  );
 }
 
 export default function MerchantOnboardingPage() {
   const router = useRouter();
-  const draft = useMemo(() => loadDraft(), []);
 
-  const [step, setStep] = useState<Step>((draft?.step as Step) ?? 1);
-  const [business, setBusiness] = useState<Record<string, unknown>>(draft?.business ?? {
+  const [step, setStep] = useState<Step>(1);
+  const [business, setBusiness] = useState<Record<string, unknown>>({
     legalName: "",
     registrationNumber: "",
     country: "",
     address: "",
     website: "",
   });
-  const [owner, setOwner] = useState<Record<string, unknown>>(draft?.owner ?? {
+  const [owner, setOwner] = useState<Record<string, unknown>>({
     fullName: "",
     dateOfBirth: "",
     nationality: "",
     address: "",
   });
-  const [documents, setDocuments] = useState<Record<string, unknown>>(draft?.documents ?? {
+  const [documents, setDocuments] = useState<Record<string, unknown>>({
     businessCertificate: null as File | null,
     governmentIdFront: null as File | null,
     governmentIdBack: null as File | null,
     proofOfAddress: null as File | null,
   });
-  const [bank, setBank] = useState<Record<string, unknown>>(draft?.bank ?? {
+  const [bank, setBank] = useState<Record<string, unknown>>({
     bankName: "",
     accountNumber: "",
     iban: "",
@@ -78,6 +146,55 @@ export default function MerchantOnboardingPage() {
   });
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+
+  /** Which sections came back from a draft and have not yet been confirmed. */
+  const [restoredSections, setRestoredSections] = useState<string[]>([]);
+
+  /**
+   * Restore the saved draft on mount (#777).
+   *
+   * This runs in an effect rather than during render because `localStorage` is
+   * unavailable on the server: seeding state from it directly makes the first
+   * client render disagree with the server HTML, and React discards the
+   * mismatched tree — which is exactly how a saved draft ends up looking lost
+   * after a refresh.
+   *
+   * Restoring is skipped once the form has been submitted, so a stale draft
+   * cannot repopulate a finished application.
+   */
+  const hasRestored = useRef(false);
+  useEffect(() => {
+    if (hasRestored.current) return;
+    hasRestored.current = true;
+
+    const draft = loadDraft();
+    if (!draft) return;
+
+    const restored: string[] = [];
+    if (draft.business && Object.keys(draft.business).length > 0) {
+      setBusiness((current) => ({ ...current, ...draft.business }));
+      restored.push("business");
+    }
+    if (draft.owner && Object.keys(draft.owner).length > 0) {
+      setOwner((current) => ({ ...current, ...draft.owner }));
+      restored.push("owner");
+    }
+    // Sensitive bank fields were never written, so only the safe ones return.
+    if (draft.bank && Object.keys(draft.bank).length > 0) {
+      setBank((current) => ({ ...current, ...draft.bank }));
+      restored.push("bank");
+    }
+    if (draft.step) {
+      setStep(Math.min(Math.max(Number(draft.step), 1), 5) as Step);
+    }
+
+    // File inputs cannot be rehydrated from storage, so `documents` is skipped.
+    if (restored.length > 0) {
+      setRestoredSections(restored.filter((s) =>
+        (RESTORABLE_SECTIONS as readonly string[]).includes(s),
+      ));
+    }
+  }, []);
 
   const draftRef = useRef({ business, owner, documents, bank, step });
   draftRef.current = { business, owner, documents, bank, step };
@@ -98,6 +215,9 @@ export default function MerchantOnboardingPage() {
       if (draftTimer.current) clearTimeout(draftTimer.current);
     };
   }, [business, owner, documents, bank, step]);
+
+  const isRestored = (section: string) => restoredSections.includes(section);
+  const confirmRestored = () => setRestoredSections([]);
 
   const handleSubmit = async () => {
     if (!business.legalName || !business.country || !business.address) {
@@ -168,6 +288,28 @@ export default function MerchantOnboardingPage() {
         <p className="text-muted-foreground">Complete the steps below to verify your account and start processing live payments.</p>
       </div>
 
+      {restoredSections.length > 0 && (
+        <div
+          className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900"
+          role="status"
+          aria-live="polite"
+          data-testid="draft-restored-banner"
+        >
+          <p>
+            We restored your progress from last time.
+            {isRestored("bank") && (
+              <span className="block text-xs opacity-80">
+                For your security, bank account, IBAN and SWIFT details are never
+                saved and need to be entered again.
+              </span>
+            )}
+          </p>
+          <Button type="button" variant="secondary" size="sm" onClick={confirmRestored}>
+            Got it
+          </Button>
+        </div>
+      )}
+
       <ol className="mb-8 flex items-center gap-2" aria-label="Onboarding progress">
         {([1, 2, 3, 4, 5] as Step[]).map((s) => (
           <li key={s} className="flex items-center gap-2">
@@ -196,12 +338,16 @@ export default function MerchantOnboardingPage() {
       <div className="rounded-2xl border bg-card p-6 shadow-sm">
         {step === 1 && (
           <StepSection title="Business Details" description="Tell us about your business.">
-            <BusinessForm business={business} onChange={setBusiness} />
+            <RestoredFields restored={isRestored("business")}>
+              <BusinessForm business={business} onChange={setBusiness} />
+            </RestoredFields>
           </StepSection>
         )}
         {step === 2 && (
           <StepSection title="Owner Details" description="Information about the primary owner or director.">
-            <OwnerForm owner={owner} onChange={setOwner} />
+            <RestoredFields restored={isRestored("owner")}>
+              <OwnerForm owner={owner} onChange={setOwner} />
+            </RestoredFields>
           </StepSection>
         )}
         {step === 3 && (
@@ -211,7 +357,9 @@ export default function MerchantOnboardingPage() {
         )}
         {step === 4 && (
           <StepSection title="Bank / Payout Details" description="Where should we send your settlements?">
-            <BankForm bank={bank} onChange={setBank} />
+            <RestoredFields restored={isRestored("bank")}>
+              <BankForm bank={bank} onChange={setBank} />
+            </RestoredFields>
           </StepSection>
         )}
         {step === 5 && (

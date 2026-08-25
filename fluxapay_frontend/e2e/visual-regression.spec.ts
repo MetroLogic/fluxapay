@@ -120,4 +120,42 @@ test.describe('Visual Regression Tests', () => {
 
     await expect(page).toHaveScreenshot('checkout-address-updated.png', { fullPage: true });
   });
+  /**
+   * Analytics loading and empty states (#778).
+   *
+   * The loading shot is the one that matters: it is the frame where a blank
+   * area used to sit, and comparing it against the loaded layout is how a
+   * reintroduced layout shift gets caught.
+   */
+  test('Analytics skeleton visual regression - loading state', async ({ page }) => {
+    // Hold the analytics response open so the skeleton is what renders.
+    await page.route('**/api/**/analytics**', () => {
+      /* never fulfilled — the request stays in flight */
+    });
+
+    await page.goto('/dashboard/analytics');
+    await expect(page.getByTestId('analytics-skeleton')).toBeVisible();
+
+    await expect(page).toHaveScreenshot('analytics-loading.png', { fullPage: true });
+  });
+
+  test('Analytics empty state visual regression', async ({ page }) => {
+    await page.route('**/api/**/analytics**', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          summary: { total_revenue: 0, total_payments: 0, active_merchants: 0, growth_rate: 0 },
+          revenue_trends: [],
+          payment_distribution: [],
+          revenue_by_country: [],
+        }),
+      })
+    );
+
+    await page.goto('/dashboard/analytics');
+    await expect(page.getByText(/no revenue trend data for this period/i)).toBeVisible();
+
+    await expect(page).toHaveScreenshot('analytics-empty.png', { fullPage: true });
+  });
 });

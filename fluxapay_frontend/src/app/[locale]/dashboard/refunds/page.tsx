@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Input } from "@/components/Input";
 import { Select } from "@/components/Select";
@@ -14,8 +14,18 @@ import {
 } from "@/features/dashboard/refunds/types";
 import { RefundStatusTimeline } from "@/features/dashboard/refunds/RefundStatusTimeline";
 import { RefundForm } from "@/features/dashboard/refunds/RefundForm";
+import { TablePaginationBar } from "@/components/data-table";
 import { Suspense, Fragment } from "react";
 import toast from "react-hot-toast";
+
+/** Refunds requested per page. Matches the payments list for consistency. */
+const PAGE_SIZE = 20;
+
+/** Parse a `page` query param into a usable 1-based page number. */
+export function parsePageParam(raw: string | null): number {
+  const parsed = Number(raw);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 1;
+}
 
 interface BackendRefund {
   id: string;
@@ -43,7 +53,10 @@ function RefundsContent() {
   const searchParams = useSearchParams();
   const paymentIdFromQuery = searchParams.get("paymentId") ?? "";
 
+  const pageFromQuery = parsePageParam(searchParams.get("page"));
+
   const [refunds, setRefunds] = useState<RefundRecord[]>([]);
+  const [total, setTotal] = useState(0);
   const [search, setSearch] = useState(paymentIdFromQuery);
   const [statusFilter, setStatusFilter] = useState("all");
   const [isLoading, setIsLoading] = useState(false);
@@ -64,14 +77,24 @@ function RefundsContent() {
     setSearch(paymentIdFromQuery);
   }, [paymentIdFromQuery]);
 
-  const fetchRefunds = async () => {
+  const fetchRefunds = useCallback(async () => {
     try {
       setIsLoading(true);
       setError(null);
+      // Server-side paging: the previous `limit: 100` pulled the whole list in
+      // one query, which does not survive a merchant with thousands of refunds.
       const response = (await api.refunds.list({
         paymentId: paymentIdFromQuery || undefined,
-        limit: 100,
-      })) as { refunds?: BackendRefund[] };
+        // Filtered server-side so the "of N" count describes the same set the
+        // table is paging through.
+        status: statusFilter === "all" ? undefined : (statusFilter as RefundStatus),
+        page: pageFromQuery,
+        limit: PAGE_SIZE,
+      })) as {
+        refunds?: BackendRefund[];
+        total?: number;
+        meta?: { total?: number };
+      };
       if (Array.isArray(response.refunds)) {
         const mapped = response.refunds.map((item) => ({
           id: item.id,
@@ -87,17 +110,57 @@ function RefundsContent() {
           createdAt: item.created_at,
         }));
         setRefunds(mapped);
+        // Backends differ on where the count sits; fall back to the page length
+        // so the bar still reads sensibly rather than claiming zero results.
+        setTotal(
+          response.total ??
+            response.meta?.total ??
+            (pageFromQuery - 1) * PAGE_SIZE + mapped.length,
+        );
       }
     } catch {
       setError("Failed to load refunds. Please try again.");
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [paymentIdFromQuery, pageFromQuery, statusFilter]);
 
   useEffect(() => {
     void fetchRefunds();
-  }, [paymentIdFromQuery]);
+  }, [fetchRefunds]);
+
+  /**
+   * Page lives in the URL so a page of refunds can be linked to and survives a
+   * refresh or a back-navigation.
+   */
+  const goToPage = useCallback(
+    (nextPage: number) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (nextPage <= 1) params.delete("page");
+      else params.set("page", String(nextPage));
+      const query = params.toString();
+      router.push(`/dashboard/refunds${query ? `?${query}` : ""}`);
+    },
+    [router, searchParams],
+  );
+
+  const handleStatusFilterChange = useCallback(
+    (nextStatus: string) => {
+      setStatusFilter(nextStatus);
+      // A narrower filter usually has fewer pages; staying on page 4 would show
+      // an empty table.
+      if (pageFromQuery !== 1) goToPage(1);
+    },
+    [goToPage, pageFromQuery],
+  );
+
+  const handlePageChange = useCallback(
+    (nextPage: number) => {
+      goToPage(nextPage);
+      setExpandedId(null);
+    },
+    [goToPage],
+  );
 
   const filteredRefunds = useMemo(() => {
     return refunds.filter((refund) => {
@@ -107,11 +170,10 @@ function RefundsContent() {
         refund.id.toLowerCase().includes(query) ||
         refund.paymentId.toLowerCase().includes(query) ||
         refund.merchantId.toLowerCase().includes(query);
-      const matchesStatus =
-        statusFilter === "all" || refund.status === statusFilter;
-      return matchesSearch && matchesStatus;
+      // Status is applied by the API; only the free-text search is local.
+      return matchesSearch;
     });
-  }, [refunds, search, statusFilter]);
+  }, [refunds, search]);
 
   const getStatusBadge = (status: RefundStatus) => {
     if (status === "completed") return <Badge variant="success">Completed</Badge>;
@@ -186,7 +248,7 @@ function RefundsContent() {
           <Select
             className="w-full md:w-[200px]"
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(e) => handleStatusFilterChange(e.target.value)}
           >
             <option value="all">All statuses</option>
             <option value="pending">Pending</option>
@@ -385,6 +447,14 @@ function RefundsContent() {
           </>
           )}
         </div>
+
+        <TablePaginationBar
+          page={pageFromQuery}
+          pageSize={PAGE_SIZE}
+          total={total}
+          loading={isLoading}
+          onPageChange={handlePageChange}
+        />
       </div>
 
       {initiateContext && (
