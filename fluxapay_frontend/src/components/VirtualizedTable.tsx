@@ -4,15 +4,25 @@
  */
 
 import { useRef, useState, useEffect, memo } from 'react';
+import EmptyState from './EmptyState';
 
 interface VirtualizedTableProps<T> {
-  data: T[];
+  /**
+   * Rows to render. Tolerates `undefined` and `null` so a table bound directly
+   * to an in-flight or failed request renders its empty state instead of
+   * throwing on `.length`.
+   */
+  data?: T[] | null;
   rowHeight: number;
   containerHeight: number;
   renderRow: (item: T, index: number) => React.ReactNode;
   renderHeader?: () => React.ReactNode;
   overscan?: number; // Number of extra rows to render above/below viewport
   className?: string;
+  /** Message shown when there are no rows. */
+  emptyMessage?: string;
+  /** Optional icon shown above the empty message. */
+  emptyIcon?: React.ReactNode;
 }
 
 function VirtualizedTableInner<T>({
@@ -23,19 +33,26 @@ function VirtualizedTableInner<T>({
   renderHeader,
   overscan = 5,
   className = '',
+  emptyMessage = 'No data available.',
+  emptyIcon,
 }: VirtualizedTableProps<T>) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
 
+  // Normalised once so every calculation below is safe even when the caller
+  // passes nothing at all.
+  const rows: T[] = Array.isArray(data) ? data : [];
+  const isEmpty = rows.length === 0;
+
   // Calculate visible range
-  const totalHeight = data.length * rowHeight;
+  const totalHeight = rows.length * rowHeight;
   const startIndex = Math.max(0, Math.floor(scrollTop / rowHeight) - overscan);
   const endIndex = Math.min(
-    data.length - 1,
+    rows.length - 1,
     Math.ceil((scrollTop + containerHeight) / rowHeight) + overscan
   );
 
-  const visibleData = data.slice(startIndex, endIndex + 1);
+  const visibleData = rows.slice(startIndex, endIndex + 1);
   const offsetY = startIndex * rowHeight;
 
   // Scroll handler with manual throttling
@@ -80,15 +97,19 @@ function VirtualizedTableInner<T>({
           {renderHeader()}
         </div>
       )}
-      <div style={{ height: totalHeight, position: 'relative' }}>
-        <div style={{ transform: `translateY(${offsetY}px)` }}>
-          {visibleData.map((item, idx) => (
-            <div key={startIndex + idx} style={{ height: rowHeight }}>
-              {renderRow(item, startIndex + idx)}
-            </div>
-          ))}
+      {isEmpty ? (
+        <EmptyState variant="block" className="py-12" message={emptyMessage} icon={emptyIcon} />
+      ) : (
+        <div style={{ height: totalHeight, position: 'relative' }}>
+          <div style={{ transform: `translateY(${offsetY}px)` }}>
+            {visibleData.map((item, idx) => (
+              <div key={startIndex + idx} style={{ height: rowHeight }}>
+                {renderRow(item, startIndex + idx)}
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
