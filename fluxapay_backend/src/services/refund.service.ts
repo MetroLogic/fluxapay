@@ -230,6 +230,9 @@ export async function createRefundService(params: {
 
       return createdRefund;
     },
+    {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+    },
   );
 
   return {
