@@ -30,7 +30,7 @@ export default function CheckoutPage() {
   const searchParams = useSearchParams();
   const chargeId = params.charge_id as string;
 
-  const { payment, loading, error, isOffline, retryConnection, depositAddressUpdated } =
+  const { payment, loading, error, isOffline, retryConnection, depositAddressUpdated, connectionType } =
     usePaymentStatus(chargeId);
 
   // Notify the customer when the deposit address has changed (e.g. after timeout reset).
@@ -102,6 +102,19 @@ export default function CheckoutPage() {
               {t('checkout.retryNow')}
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Polling fallback banner — shown when SSE max retries are exhausted */}
+      {!isOffline && connectionType === 'polling' && (
+        <div
+          className="mx-auto mt-4 w-full max-w-2xl rounded-lg border border-yellow-300 bg-yellow-50 px-4 py-3 text-yellow-900"
+          role="status"
+          aria-live="polite"
+        >
+          <p className="text-sm font-medium">
+            Real-time updates unavailable. Checking for status every 10 seconds.
+          </p>
         </div>
       )}
 

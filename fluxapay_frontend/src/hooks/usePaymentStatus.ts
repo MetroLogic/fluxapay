@@ -175,7 +175,7 @@ export function usePaymentStatus(paymentId: string): UsePaymentStatusReturn {
   const eventSourceRef = useRef<EventSource | null>(null);
   const pollingRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const paymentRef = useRef<Payment | null>(null);
-  const pollingBackoffRef = useRef<number>(3000);
+  const pollingBackoffRef = useRef<number>(10000);
   const reconnectBackoffRef = useRef<number>(1000);
   const sseFailureCountRef = useRef<number>(0);
 
@@ -236,7 +236,7 @@ export function usePaymentStatus(paymentId: string): UsePaymentStatusReturn {
       const data = await response.json();
       const paymentData = normalizePaymentResponse(data);
 
-      pollingBackoffRef.current = 3000;
+      pollingBackoffRef.current = 10000;
       reconnectBackoffRef.current = 1000;
       setPayment(paymentData);
       setError(null);
@@ -289,7 +289,7 @@ export function usePaymentStatus(paymentId: string): UsePaymentStatusReturn {
         }
         return prev;
       });
-      pollingBackoffRef.current = 3000;
+      pollingBackoffRef.current = 10000;
     } catch (err) {
       console.error('Polling error:', err);
       pollingBackoffRef.current = Math.min(pollingBackoffRef.current * 2, 30000);
