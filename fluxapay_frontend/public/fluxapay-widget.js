@@ -5,6 +5,14 @@
  * Usage:
  * <script src="https://cdn.fluxapay.com/widget.js"></script>
  * <div id="fluxapay-checkout"></div>
+ *
+ * Content Security Policy:
+ * If your page enforces a strict CSP, pass your per-request nonce on the
+ * script tag and the widget will apply it to everything it injects:
+ *
+ * <script src="https://cdn.fluxapay.com/widget.js" data-nonce="YOUR_NONCE"></script>
+ *
+ * See docs/checkout-widget-csp.md for the full integration guide.
  * <script>
  *   FluxaPay.checkout({
  *     paymentId: 'pay_abc123',
@@ -25,9 +33,156 @@
  */
 
 (function (window) {
+  const STYLE_ELEMENT_ID = "fluxapay-widget-styles";
+
+  /**
+   * Resolve the CSP nonce for this widget.
+   *
+   * `document.currentScript` is the widget's own <script> during initial
+   * evaluation, which is where the merchant puts `data-nonce`. It is null by
+   * the time a callback runs, so the value is read once at load and cached.
+   * The query-selector fallback covers loaders that inject the script
+   * asynchronously, where `currentScript` is null even at evaluation time.
+   */
+  function resolveNonce() {
+    const own = document.currentScript;
+    if (own && own.getAttribute("data-nonce")) {
+      return own.getAttribute("data-nonce");
+    }
+
+    const tagged = document.querySelector("script[data-fluxapay-widget][data-nonce]");
+    if (tagged) return tagged.getAttribute("data-nonce");
+
+    const bySrc = document.querySelector('script[src*="fluxapay-widget"][data-nonce], script[src*="widget.js"][data-nonce]');
+    if (bySrc) return bySrc.getAttribute("data-nonce");
+
+    return window.FLUXAPAY_CSP_NONCE || null;
+  }
+
+  const CSP_NONCE = resolveNonce();
+
+  /**
+   * Apply the nonce to a dynamically created <script> or <style>.
+   *
+   * Both the property and the attribute are set: browsers hide `nonce` as a
+   * content attribute after parsing to stop it leaking through CSS selectors,
+   * so the IDL property is what the CSP check actually reads, while the
+   * attribute keeps the element inspectable for anything cloning it.
+   */
+  function applyNonce(element) {
+    if (!CSP_NONCE) return element;
+    element.setAttribute("nonce", CSP_NONCE);
+    element.nonce = CSP_NONCE;
+    return element;
+  }
+
+  /**
+   * The widget's styles, injected once as a single nonced <style> element.
+   *
+   * These used to be `element.style.cssText = ...` inline style attributes.
+   * A nonce cannot whitelist a style *attribute* — CSP only nonces <style>
+   * elements — so under a strict `style-src` the widget rendered unstyled
+   * regardless of configuration. Moving to classes in one stylesheet is what
+   * actually makes it CSP-compatible.
+   */
+  const WIDGET_CSS = `
+.fluxapay-embedded-iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  border-radius: 8px;
+}
+.fluxapay-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background-color: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.fluxapay-modal {
+  position: relative;
+  background-color: white;
+  border-radius: 16px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+  width: 100%;
+  max-width: 512px;
+  max-height: 90vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.fluxapay-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  border-bottom: 1px solid #e2e8f0;
+}
+.fluxapay-modal-title {
+  font-size: 18px;
+  font-weight: bold;
+  color: #111827;
+  margin: 0;
+}
+.fluxapay-modal-subtitle {
+  font-size: 12px;
+  color: #6b7280;
+  margin: 0;
+}
+.fluxapay-modal-close {
+  padding: 8px;
+  background-color: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 20px;
+  color: #6b7280;
+  transition: background-color 0.2s;
+}
+.fluxapay-modal-close:hover,
+.fluxapay-modal-close:focus-visible {
+  background-color: #f3f4f6;
+}
+.fluxapay-modal-body {
+  flex: 1;
+  overflow: hidden;
+  height: calc(90vh - 80px);
+}
+.fluxapay-modal-iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+`;
+
+  /** Inject the stylesheet once per page, carrying the nonce if there is one. */
+  function ensureStyles() {
+    if (document.getElementById(STYLE_ELEMENT_ID)) return;
+    const style = document.createElement("style");
+    style.id = STYLE_ELEMENT_ID;
+    style.textContent = WIDGET_CSS;
+    applyNonce(style);
+    document.head.appendChild(style);
+  }
+
   const FluxaPay = {
     version: "1.0.0",
     apiUrl: window.FLUXAPAY_API_URL || "http://localhost:3001",
+
+    /** The CSP nonce in force, or null when the host page did not supply one. */
+    nonce: CSP_NONCE,
+
+    /**
+     * Create an element with the widget's nonce already applied.
+     * Exposed so host integrations injecting their own <script>/<style>
+     * alongside the widget can reuse the same nonce.
+     */
+    createNoncedElement: function (tagName) {
+      return applyNonce(document.createElement(tagName));
+    },
 
     /**
      * Initialize checkout widget
@@ -123,12 +278,11 @@
         return;
       }
 
+      ensureStyles();
+
       const iframe = document.createElement("iframe");
       iframe.src = checkoutUrl;
-      iframe.style.width = "100%";
-      iframe.style.height = "100%";
-      iframe.style.border = "none";
-      iframe.style.borderRadius = "8px";
+      iframe.className = "fluxapay-embedded-iframe";
       iframe.setAttribute("title", "FluxaPay Checkout");
       iframe.setAttribute("allow", "payment");
 
@@ -139,86 +293,46 @@
      * Render modal checkout
      */
     renderModal: function (checkoutUrl, merchantName, amount, currency) {
+      ensureStyles();
+
       // Create modal overlay
       const overlay = document.createElement("div");
       overlay.id = "fluxapay-modal-overlay";
-      overlay.style.cssText = `
-        position: fixed;
-        inset: 0;
-        z-index: 9999;
-        background-color: rgba(0, 0, 0, 0.5);
-        backdrop-filter: blur(4px);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 16px;
-      `;
+      overlay.className = "fluxapay-modal-overlay";
 
       // Create modal container
       const modal = document.createElement("div");
       modal.id = "fluxapay-modal";
-      modal.style.cssText = `
-        position: relative;
-        background-color: white;
-        border-radius: 16px;
-        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
-        width: 100%;
-        max-width: 512px;
-        max-height: 90vh;
-        overflow: hidden;
-        display: flex;
-        flex-direction: column;
-      `;
+      modal.className = "fluxapay-modal";
+      modal.setAttribute("role", "dialog");
+      modal.setAttribute("aria-modal", "true");
+      modal.setAttribute("aria-label", merchantName ? `Pay ${merchantName}` : "Complete Payment");
 
       // Create header
       const header = document.createElement("div");
-      header.style.cssText = `
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 16px;
-        border-bottom: 1px solid #e2e8f0;
-      `;
+      header.className = "fluxapay-modal-header";
 
       const headerContent = document.createElement("div");
       const title = document.createElement("h2");
       title.textContent = merchantName || "Complete Payment";
-      title.style.cssText = `
-        font-size: 18px;
-        font-weight: bold;
-        color: #111827;
-        margin: 0;
-      `;
+      title.className = "fluxapay-modal-title";
       headerContent.appendChild(title);
 
       if (merchantName) {
         const subtitle = document.createElement("p");
         subtitle.textContent = "Payment to";
-        subtitle.style.cssText = `
-          font-size: 12px;
-          color: #6b7280;
-          margin: 0;
-        `;
+        subtitle.className = "fluxapay-modal-subtitle";
         headerContent.insertBefore(subtitle, title);
       }
 
       const closeBtn = document.createElement("button");
-      closeBtn.innerHTML = "✕";
-      closeBtn.style.cssText = `
-        padding: 8px;
-        background-color: transparent;
-        border: none;
-        cursor: pointer;
-        font-size: 20px;
-        color: #6b7280;
-        transition: background-color 0.2s;
-      `;
-      closeBtn.onmouseover = () => {
-        closeBtn.style.backgroundColor = "#f3f4f6";
-      };
-      closeBtn.onmouseout = () => {
-        closeBtn.style.backgroundColor = "transparent";
-      };
+      // textContent rather than innerHTML: nothing here needs parsing as HTML.
+      closeBtn.textContent = "\u2715";
+      closeBtn.className = "fluxapay-modal-close";
+      closeBtn.setAttribute("type", "button");
+      closeBtn.setAttribute("aria-label", "Close payment dialog");
+      // Hover is handled by the stylesheet now — assigning to element.style
+      // would be an inline style attribute, which a nonce cannot whitelist.
       closeBtn.onclick = () => this.closeModal();
 
       header.appendChild(headerContent);
@@ -226,19 +340,11 @@
 
       // Create iframe container
       const iframeContainer = document.createElement("div");
-      iframeContainer.style.cssText = `
-        flex: 1;
-        overflow: hidden;
-        height: calc(90vh - 80px);
-      `;
+      iframeContainer.className = "fluxapay-modal-body";
 
       const iframe = document.createElement("iframe");
       iframe.src = checkoutUrl;
-      iframe.style.cssText = `
-        width: 100%;
-        height: 100%;
-        border: none;
-      `;
+      iframe.className = "fluxapay-modal-iframe";
       iframe.setAttribute("title", "FluxaPay Checkout");
       iframe.setAttribute("allow", "payment");
 

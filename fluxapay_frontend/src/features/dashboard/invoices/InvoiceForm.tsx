@@ -21,7 +21,7 @@ const getDecimalPlaces = (c: string) => (c === "XLM" ? 7 : c === "USDC" ? 7 : 2)
 
 const emptyLineItem = (): LineItem => ({ description: "", quantity: 1, unit_price: 0 });
 
-interface DraftState {
+export interface DraftState {
   customerName: string;
   customerEmail: string;
   currency: string;
@@ -30,19 +30,59 @@ interface DraftState {
   lineItems: LineItem[];
 }
 
+/**
+ * Fields never written to localStorage.
+ *
+ * localStorage is unencrypted, survives the tab, and is readable by any script
+ * running on the origin. Customer contact details are the merchant's customers'
+ * personal data, not the merchant's own — so a shared or borrowed device, or a
+ * single XSS foothold, would expose people who never used this app. Losing an
+ * autosaved name or email costs a retype; leaking one is a data breach.
+ *
+ * Everything else in the draft describes the invoice, not a person, and is
+ * safe to keep so the autosave still does its job.
+ */
+const PII_DRAFT_FIELDS = ["customerName", "customerEmail"] as const;
+
+type PiiDraftField = (typeof PII_DRAFT_FIELDS)[number];
+
+/** The draft shape actually persisted: everything except {@link PII_DRAFT_FIELDS}. */
+export type PersistedDraftState = Omit<DraftState, PiiDraftField>;
+
+/** Strip PII from a draft before it goes anywhere near storage. */
+export function stripPiiFromDraft(state: DraftState): PersistedDraftState {
+  const persisted: Record<string, unknown> = { ...state };
+  for (const field of PII_DRAFT_FIELDS) {
+    delete persisted[field];
+  }
+  return persisted as PersistedDraftState;
+}
+
 function loadDraft(): DraftState | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = localStorage.getItem(DRAFT_KEY);
-    return raw ? (JSON.parse(raw) as DraftState) : null;
+    if (!raw) return null;
+    const stored = JSON.parse(raw) as Partial<DraftState>;
+    // PII was never stored, so it restores empty. Drafts written by an older
+    // build may still contain it; ignoring those fields here means the next
+    // save also purges them from storage.
+    return {
+      customerName: "",
+      customerEmail: "",
+      currency: stored.currency ?? "USD",
+      dueDate: stored.dueDate ?? "",
+      notes: stored.notes ?? "",
+      lineItems: stored.lineItems ?? [emptyLineItem()],
+    };
   } catch {
     return null;
   }
 }
 
-function saveDraft(state: DraftState) {
+export function saveDraft(state: DraftState) {
   try {
-    localStorage.setItem(DRAFT_KEY, JSON.stringify(state));
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(stripPiiFromDraft(state)));
   } catch {
     // storage quota exceeded
   }

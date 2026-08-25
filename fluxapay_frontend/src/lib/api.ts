@@ -1,3 +1,5 @@
+import { handleSessionExpired } from "./session";
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
 // Re-export auth functions for backward compatibility
@@ -112,6 +114,92 @@ export function clearToken(): void {
   sessionStorage.removeItem("token");
 }
 
+const REFRESH_TOKEN_KEY = "refresh_token";
+
+/** Persist the refresh token beside the access token, in the same storage. */
+export function storeRefreshToken(refreshToken: string, keepLoggedIn = false): void {
+  if (keepLoggedIn) {
+    localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+    sessionStorage.removeItem(REFRESH_TOKEN_KEY);
+  } else {
+    sessionStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+    localStorage.removeItem(REFRESH_TOKEN_KEY);
+  }
+}
+
+/** The stored refresh token, or null when the session has none. */
+export function getRefreshToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return (
+    localStorage.getItem(REFRESH_TOKEN_KEY) ??
+    sessionStorage.getItem(REFRESH_TOKEN_KEY)
+  );
+}
+
+export function clearRefreshToken(): void {
+  localStorage.removeItem(REFRESH_TOKEN_KEY);
+  sessionStorage.removeItem(REFRESH_TOKEN_KEY);
+}
+
+export interface RefreshedSession {
+  accessToken: string;
+  /** Seconds until the new access token expires, when the server reports it. */
+  expiresIn?: number;
+}
+
+/**
+ * Exchange the stored refresh token for a fresh access token.
+ *
+ * Returns null when there is nothing to exchange — the merchant login endpoint
+ * does not currently hand out a refresh token, so most sessions land here. In
+ * that case the caller should treat imminent expiry as expiry and end the
+ * session cleanly, which is still a large improvement on leaving the user on a
+ * dashboard whose every request 401s.
+ *
+ * Throws {@link ApiError} when the server rejects the refresh token, since that
+ * is a real failure the caller must react to.
+ */
+export async function refreshAccessToken(): Promise<RefreshedSession | null> {
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) return null;
+
+  const keepLoggedIn = localStorage.getItem(REFRESH_TOKEN_KEY) !== null;
+
+  const response = await fetch(`${API_BASE_URL}/api/v1/auth/refresh`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ refresh_token: refreshToken }),
+  });
+
+  if (!response.ok) {
+    const body = await response
+      .json()
+      .catch(() => ({ message: "Token refresh failed" }));
+    throw new ApiError(
+      response.status,
+      (body as { message?: string }).message || "Token refresh failed",
+    );
+  }
+
+  const data = (await response.json()) as {
+    access_token?: string;
+    refresh_token?: string;
+    expires_in?: number;
+  };
+
+  if (!data.access_token) {
+    throw new ApiError(500, "Refresh response did not include an access token");
+  }
+
+  storeToken(data.access_token, keepLoggedIn);
+  if (data.refresh_token) {
+    // The backend rotates refresh tokens, so the old one is now dead.
+    storeRefreshToken(data.refresh_token, keepLoggedIn);
+  }
+
+  return { accessToken: data.access_token, expiresIn: data.expires_in };
+}
+
 async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
   // We use getToken() to automatically handle missing token redirects
   let token;
@@ -140,12 +228,11 @@ async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
   });
 
   if (!response.ok) {
-    if (response.status === 401 && typeof window !== "undefined") {
-      clearToken();
-      if (!window.location.pathname.includes("/login")) {
-        const currentUrl = window.location.pathname + window.location.search;
-        window.location.href = `/login?redirect=${encodeURIComponent(currentUrl)}`;
-      }
+    // A 401 from any authenticated call means the token is dead — expired,
+    // revoked, or invalidated server-side. Ending the session here is what
+    // stops a user sitting on a dashboard where every request silently fails.
+    if (response.status === 401) {
+      handleSessionExpired();
     }
     const error = await response
       .json()

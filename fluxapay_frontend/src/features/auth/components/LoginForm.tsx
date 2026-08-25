@@ -9,7 +9,7 @@ import { useSearchParams } from "next/navigation";
 import * as yup from "yup";
 import Input from "@/components/Input";
 import { Button } from "@/components/Button";
-import { api, ApiError, storeToken } from "@/lib/api";
+import { api, ApiError, storeToken, storeRefreshToken } from "@/lib/api";
 import { useTranslations } from "next-intl";
 
 type AuthTranslator = (key: string) => string;
@@ -50,13 +50,18 @@ const LoginForm = () => {
       const data = (await api.auth.login({
         email: validData.email,
         password: validData.password,
-      })) as { token?: string; message?: string };
+      })) as { token?: string; refresh_token?: string; message?: string };
 
       if (!data.token) {
         throw new Error("Login response missing token");
       }
 
       storeToken(data.token, Boolean(validData.keepLoggedIn));
+      // Stored only when the backend issues one. Without it the session still
+      // works; it just ends at expiry instead of refreshing (see AuthGuard).
+      if (data.refresh_token) {
+        storeRefreshToken(data.refresh_token, Boolean(validData.keepLoggedIn));
+      }
       toast.success(data.message || "Login successful!");
       
       const redirectUrl = searchParams.get("redirect");
