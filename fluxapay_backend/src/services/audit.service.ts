@@ -1,4 +1,5 @@
 import { PrismaClient, Prisma } from '../generated/client/client';
+import { prisma } from "../config/prisma";
 import {
   AuditActionType,
   AuditEntityType,
@@ -12,7 +13,6 @@ import {
   SettlementBatchDetails,
 } from "../types/audit.types";
 
-const prisma = new PrismaClient();
 
 // Utility function for delay
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));

@@ -18,7 +18,7 @@ import { PrismaClient, Prisma } from "../generated/client/client";
 import crypto from "crypto";
 import { AuditActionType, AuditEntityType } from "../types/audit.types";
 
-const prisma = new PrismaClient();
+import { prisma } from "../config/prisma";
 
 /** Maximum active keys per merchant */
 const MAX_ACTIVE_KEYS = 5;

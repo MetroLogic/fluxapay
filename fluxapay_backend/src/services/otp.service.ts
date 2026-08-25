@@ -1,7 +1,7 @@
 import bcrypt from 'bcrypt';
 import { PrismaClient } from '../generated/client/client';
+import { prisma } from "../config/prisma";
 import { assertOtpEmailRateLimit } from './otpEmailRateLimiter';
-const prisma = new PrismaClient();
 
 export async function createOtp(merchantId: string, channel: 'email' | 'phone', email?: string) {
   if (channel === 'email') {

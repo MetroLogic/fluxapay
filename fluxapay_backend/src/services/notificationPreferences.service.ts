@@ -13,8 +13,8 @@ import { ErrorCode } from "../types/errors";
  */
 
 import { PrismaClient } from "../generated/client/client";
+import { prisma } from "../config/prisma";
 
-const prisma = new PrismaClient();
 
 export interface NotificationPreferences {
   merchantId: string;

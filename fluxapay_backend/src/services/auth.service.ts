@@ -5,7 +5,7 @@ import bcrypt from "bcrypt";
 import { generateAccessToken, generateRefreshTokenPair } from "../helpers/jwt.helper";
 import { sendSecurityAlertEmail } from "./email.service";
 
-const prisma = new PrismaClient();
+import { prisma } from "../config/prisma";
 
 const REFRESH_TOKEN_EXPIRY_DAYS = 30;
 const FAILED_LOGIN_THRESHOLD = 10;

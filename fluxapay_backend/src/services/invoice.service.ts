@@ -8,7 +8,7 @@ import { sendInvoiceEmail } from "./email.service";
 import { Readable } from "stream";
 import { assertValidPositiveAmount, assertValidLineItems, AmountValidationError } from "../utils/amount.util";
 
-const prisma = new PrismaClient();
+import { prisma } from "../config/prisma";
 
 function buildInvoiceNumber() {
   const d = new Date();
@@ -229,6 +229,7 @@ export async function updateInvoiceStatusService(
 
   const invoice = await prisma.invoice.findFirst({
     where: { id: invoiceId, merchantId },
+    include: { payment: true },
   });
 
   if (!invoice) {
@@ -259,14 +260,22 @@ export async function updateInvoiceStatusService(
       const payload = {
         event: `invoice.${newStatus}`,
         invoice_id: updatedInvoice.id,
+        merchant_id: merchantId,
         invoice_number: updatedInvoice.invoice_number,
         amount: updatedInvoice.amount.toString(),
         currency: updatedInvoice.currency,
         status: newStatus,
         customer_email: updatedInvoice.customer_email,
+        paid_at: updatedInvoice.updated_at.toISOString(),
+        payment_tx_hash: invoice.payment?.transaction_hash ?? null,
         updated_at: updatedInvoice.updated_at.toISOString(),
       };
-      await createAndDeliverWebhook(merchantId, `invoice_${newStatus}` as any, payload);
+      await createAndDeliverWebhook(
+        merchantId,
+        `invoice_${newStatus}` as any,
+        payload,
+        newStatus === "paid" ? updatedInvoice.payment_id ?? undefined : undefined,
+      );
     } catch (err: any) {
       if (!err.message?.includes("has no webhook")) {
         console.error(`[InvoiceService] Webhook delivery failed for invoice ${invoiceId}:`, err);
@@ -283,6 +292,52 @@ export async function updateInvoiceStatusService(
       updated_at: updatedInvoice.updated_at,
     },
   };
+}
+
+/** Mark an invoice paid when its linked payment is confirmed. */
+export async function markInvoicePaidForPaymentService(
+  merchantId: string,
+  paymentId: string,
+) {
+  const claimed = await prisma.invoice.updateMany({
+    where: {
+      merchantId,
+      payment_id: paymentId,
+      status: { in: ["sent", "overdue"] },
+    },
+    data: { status: "paid" },
+  });
+
+  if (claimed.count === 0) {
+    return null;
+  }
+
+  const invoice = await prisma.invoice.findFirst({
+    where: { merchantId, payment_id: paymentId, status: "paid" },
+    include: { payment: true },
+  });
+
+  if (!invoice) {
+    return null;
+  }
+
+  try {
+    await createAndDeliverWebhook(merchantId, "invoice_paid" as any, {
+      event: "invoice.paid",
+      invoice_id: invoice.id,
+      merchant_id: merchantId,
+      amount: invoice.amount.toString(),
+      currency: invoice.currency,
+      paid_at: invoice.updated_at.toISOString(),
+      payment_tx_hash: invoice.payment?.transaction_hash ?? null,
+    }, paymentId);
+  } catch (err: any) {
+    if (!err.message?.includes("has no webhook")) {
+      console.error(`[InvoiceService] Webhook delivery failed for invoice ${invoice.id}:`, err);
+    }
+  }
+
+  return invoice;
 }
 
 export async function sendInvoiceService(merchantId: string, invoiceId: string) {
