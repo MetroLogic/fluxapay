@@ -9,11 +9,12 @@ import {
   Footer,
 } from "@/features/landing";
 import {
+  faqSchema,
   organizationSchema,
   softwareApplicationSchema,
-  jsonLdScript,
 } from "@/lib/seo-schemas";
-import { generatePageMetadata } from "@/lib/seo";
+import { createJsonLdScript, generatePageMetadata } from "@/lib/seo";
+import { FAQ_ITEMS } from "@/features/landing/sections/faq-data";
 
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
@@ -36,22 +37,23 @@ export default function Home() {
       "Global payment infrastructure that lets merchants accept crypto and fiat payments seamlessly.",
     operatingSystem: ["Web"],
   });
+  const faqPageSchema = faqSchema(FAQ_ITEMS);
 
   return (
     <>
-      {/* Organization structured data */}
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={jsonLdScript(
-          orgSchema as Record<string, unknown>
-        )}
+        dangerouslySetInnerHTML={{ __html: createJsonLdScript(orgSchema) }}
       />
-      {/* SoftwareApplication structured data */}
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={jsonLdScript(
-          appSchema as Record<string, unknown>
-        )}
+        dangerouslySetInnerHTML={{ __html: createJsonLdScript(appSchema) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: createJsonLdScript(faqPageSchema),
+        }}
       />
       <div className="">
         <Hero />
