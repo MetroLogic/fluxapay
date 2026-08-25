@@ -14,6 +14,7 @@ import { SubmitKycInput, UpdateKycStatusInput } from "../schemas/kyc.schema";
 import { logKycDecision } from "./audit.service";
 import { KYCStatus as AuditKYCStatus } from "../types/audit.types";
 import { validateKycUploadFile } from "../utils/kycUploadValidation.util";
+import { scanFile, handleScanFailure } from "../utils/fileScan.util";
 
 
 /**
@@ -91,6 +92,17 @@ export async function submitKycService(
 
 /**
  * Upload a KYC document
+ *
+ * Security flow:
+ *  1. Validate MIME type at middleware layer (allowlist only)
+ *  2. Enforce file size limit (max 10MB) before scanning
+ *  3. Run virus scan via configurable AV provider
+ *  4. Reject if scan indicates malware
+ *  5. Upload to Cloudinary only if scan passes
+ *
+ * File size limits:
+ *  - Middleware enforces hard limit (prevents DoS of scan service)
+ *  - Service layer enforces business limit (supports migration to larger sizes)
  */
 export async function uploadKycDocumentService(
   merchantId: string,
@@ -102,7 +114,7 @@ export async function uploadKycDocumentService(
     size: number;
   }
 ) {
-  // Validate file type
+  // ── 1. MIME type validation (whitelist only) ──────────────────────────────
   const allowedMimeTypes = [
     "image/jpeg",
     "image/png",
@@ -117,18 +129,45 @@ export async function uploadKycDocumentService(
     );
   }
 
-  // Validate file size (max 10MB)
-  const maxSize = 10 * 1024 * 1024;
+  // ── 2. File size limit (enforced at middleware layer for DoS protection,
+  //       re-checked here for defense-in-depth)
+  const maxSize = 10 * 1024 * 1024; // 10MB
   if (file.size > maxSize) {
     throw apiError(413, ErrorCode.FILE_TOO_LARGE, "File size exceeds 10MB limit");
   }
 
+  // ── 3. Additional MIME/magic-byte validation
   const validationError = await validateKycUploadFile(file);
   if (validationError) {
     throw validationError;
   }
 
-  // Get merchant KYC
+  // ── 4. VIRUS SCAN (before any storage operation) ───────────────────────
+  console.log(
+    `[KYC] Scanning file ${file.originalname} (${file.size} bytes) for merchant ${merchantId}`
+  );
+
+  const scanResult = await scanFile(file.buffer, file.originalname);
+
+  if (!scanResult.clean) {
+    console.warn(
+      `[KYC] ⚠️  Malicious file rejected for merchant ${merchantId}: ` +
+      `${scanResult.reason} (${scanResult.virusName || scanResult.error || "unknown"})`
+    );
+
+    // Log this security event for audit
+    // TODO: Create AuditLog entry for rejected upload
+    // await logKycFileRejection({ merchantId, filename: file.originalname, reason: scanResult.reason });
+
+    // Throw error – will be caught by middleware and returned as 422
+    handleScanFailure(scanResult, file.originalname);
+  }
+
+  console.log(
+    `[KYC] ✅ File scan passed for ${file.originalname}`
+  );
+
+  // ── 5. KYC record validation ──────────────────────────────────────────
   const kyc = await prisma.merchantKYC.findUnique({
     where: { merchantId },
     include: { documents: true },
@@ -151,7 +190,8 @@ export async function uploadKycDocumentService(
     (doc: { document_type: DocumentType; id: string; public_id: string }) => doc.document_type === documentType
   );
 
-  // Upload to Cloudinary
+  // ── 6. Upload to Cloudinary (only after scan passes) ──────────────────
+  console.log(`[KYC] Uploading ${file.originalname} to Cloudinary...`);
   const uploadResult = await uploadToCloudinary(
     file.buffer,
     file.originalname,

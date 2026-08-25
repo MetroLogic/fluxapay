@@ -77,12 +77,26 @@ async function releaseStaleLocks(): Promise<void> {
 
 /**
  * Try to acquire the DB lease. Returns true if acquired, false if already held.
+ *
+ * @param ttlSeconds Lock TTL in seconds. Required to prevent indefinite lock holds on crash.
+ * @returns true if lock acquired, false if held by another instance
+ *
+ * This implements a distributed lease pattern with mandatory TTL:
+ *  - If the lock holder crashes, the lock auto-expires after ttlSeconds
+ *  - Next instance can then acquire it and continue the cron job
+ *  - The conditional upsert (ON CONFLICT ... WHERE expires_at < now) ensures
+ *    only expired locks can be taken, preventing premature lock theft
  */
-async function acquireLock(): Promise<boolean> {
+async function acquireLock(ttlSeconds: number): Promise<boolean> {
+  if (!Number.isInteger(ttlSeconds) || ttlSeconds <= 0) {
+    throw new Error(`Invalid TTL: ${ttlSeconds}. Must be positive integer (seconds).`);
+  }
+
   // Release stale locks from dead processes on this host before attempting.
   await releaseStaleLocks();
   const now = new Date();
-  const expiresAt = new Date(now.getTime() + LOCK_TTL_MS);
+  const ttlMs = ttlSeconds * 1000;
+  const expiresAt = new Date(now.getTime() + ttlMs);
 
   // Use a raw upsert that only succeeds when the row is absent OR expired.
   // Prisma doesn't support conditional upserts natively, so we use $executeRaw.
@@ -112,7 +126,10 @@ async function releaseLock(): Promise<void> {
  * Safe to call from any cron scheduler.
  */
 export async function runSweepWithLock(): Promise<void> {
-  const acquired = await acquireLock();
+  // Pass TTL (2 minutes by default, configurable via SWEEP_LOCK_TTL_MS)
+  // If process crashes, lock auto-expires and another instance can acquire it
+  const ttlSeconds = Math.floor(LOCK_TTL_MS / 1000);
+  const acquired = await acquireLock(ttlSeconds);
 
   if (!acquired) {
     console.warn(`[SweepCron] Lock held by another instance – skipping tick.`);
