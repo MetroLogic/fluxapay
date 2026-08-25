@@ -12,6 +12,7 @@ import {
   SweepOperationDetails,
   SettlementBatchDetails,
 } from "../types/audit.types";
+import { sanitizeObject } from "../utils/piiRedactor";
 
 
 // Utility function for delay
@@ -74,6 +75,7 @@ async function safeAuditLog<T>(
  * Emit structured log for audit entry
  */
 function emitStructuredLog(auditLog: any, success: boolean) {
+  const sanitizedDetails = auditLog.details ? sanitizeObject(auditLog.details) : auditLog.details;
   const logData = {
     level: success ? "info" : "warn",
     message: `Audit: ${auditLog.action_type}`,
@@ -83,7 +85,7 @@ function emitStructuredLog(auditLog: any, success: boolean) {
     action_type: auditLog.action_type,
     entity_type: auditLog.entity_type,
     entity_id: auditLog.entity_id,
-    details: auditLog.details,
+    details: sanitizedDetails,
   };
 
   if (success) {
@@ -104,20 +106,22 @@ function redactSensitiveValue(value: string, isSensitive: boolean): string {
 /**
  * Create audit log entry
  */
-async function createAuditLog(
+export async function createAuditLog(
   params: CreateAuditLogParams,
   tx?: Prisma.TransactionClient,
 ): Promise<any> {
   const client = tx || prisma;
 
   return await safeAuditLog(async () => {
+    const sanitizedDetails = params.details ? sanitizeObject(params.details) : params.details;
+
     const auditLog = await client.auditLog.create({
       data: {
         admin_id: params.admin_id,
         action_type: params.action_type,
         entity_type: params.entity_type,
         entity_id: params.entity_id,
-        details: params.details,
+        details: sanitizedDetails,
       },
     });
 
@@ -366,12 +370,12 @@ export async function updateSweepCompletion(params: {
       throw new Error(`Audit log ${params.auditLogId} not found`);
     }
 
-    const updatedDetails = {
+    const updatedDetails = sanitizeObject({
       ...(existingLog.details as any),
       status: params.status,
       statistics: params.statistics,
       failure_reason: params.failureReason,
-    };
+    });
 
     const sweepActionType =
       params.status === "completed"
@@ -464,7 +468,7 @@ export async function updateSettlementBatchCompletion(params: {
       throw new Error(`Audit log ${params.auditLogId} not found`);
     }
 
-    const updatedDetails = {
+    const updatedDetails = sanitizeObject({
       ...(existingLog.details as any),
       status: params.status,
       transaction_count: params.transactionCount,
@@ -473,7 +477,7 @@ export async function updateSettlementBatchCompletion(params: {
       completed_at: new Date().toISOString(),
       failure_reason: params.failureReason,
       merchant_results: params.merchantResults,
-    };
+    });
 
     const completionActionType =
       params.status === "failed"
