@@ -19,7 +19,6 @@
  *  9. Retry failed settlements (3x, 5-min intervals)
  */
 
-import { PrismaClient } from "../generated/client/client";
 import { Decimal } from "@prisma/client/runtime/library";
 import { getExchangePartner, ExchangeQuoteResult, PayoutResult } from "./exchange.service";
 import { createAndDeliverWebhook } from "./webhook.service";
@@ -27,7 +26,7 @@ import { eventBus, AppEvents } from "./EventService";
 import { sendSettlementFailureAlert } from "./settlementAlert.service";
 import { getLogger } from "../utils/logger";
 
-const prisma = new PrismaClient();
+import { prisma } from "../prisma";
 const logger = getLogger();
 
 /** Maximum retry attempts for failed settlements */

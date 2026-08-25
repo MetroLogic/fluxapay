@@ -8,11 +8,10 @@
  */
 
 import { Decimal } from "@prisma/client/runtime/library";
-import { PrismaClient } from "../generated/client/client";
 import { createAndDeliverWebhook } from "./webhook.service";
 import { sendSubscriptionPriceChangeNoticeEmail } from "./email.service";
 
-const prisma = new PrismaClient();
+import { prisma } from "../prisma";
 
 const PRICE_CHANGE_NOTICE_LOCK = "subscription_price_change_notice";
 const PRICE_CHANGE_NOTICE_LOCK_TTL_MS = 5 * 60 * 1000;

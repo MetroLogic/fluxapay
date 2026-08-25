@@ -12,13 +12,12 @@
  *    createAndDeliverWebhook skips re-delivery if already sent.
  */
 
-import { PrismaClient } from "../generated/client/client";
 import { createAndDeliverWebhook } from "./webhook.service";
 import { eventBus, AppEvents } from "./EventService";
 import { PaymentStatus } from "../types/payment";
 import { trackPaymentExpired } from "../middleware/metrics.middleware";
 
-const prisma = new PrismaClient();
+import { prisma } from "../prisma";
 
 const LOCK_NAME = "payment_expiry";
 const LOCK_TTL_MS = 5 * 60 * 1000; // 5 minutes — matches default cron interval

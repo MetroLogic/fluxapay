@@ -19,11 +19,10 @@
 
 import fs from "fs";
 import os from "os";
-import { PrismaClient } from "../generated/client/client";
 import { sweepService } from "./sweep.service";
 import { logSweepTrigger, updateSweepCompletion } from "./audit.service";
 
-const prisma = new PrismaClient();
+import { prisma } from "../prisma";
 
 // Lock TTL: kept short so a crashed process doesn't block the next tick for long.
 // Configurable via env. Default 2 min (was 10 min — see #850).

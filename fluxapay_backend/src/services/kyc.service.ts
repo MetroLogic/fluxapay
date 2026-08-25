@@ -1,7 +1,6 @@
 import { apiError } from "../helpers/apiError.helper";
 import { ErrorCode } from "../types/errors";
 import {
-  PrismaClient,
   KYCStatus as PrismaKYCStatus,
   DocumentType,
   BusinessType,
@@ -14,7 +13,7 @@ import { logKycDecision } from "./audit.service";
 import { KYCStatus as AuditKYCStatus } from "../types/audit.types";
 import { validateKycUploadFile } from "../utils/kycUploadValidation.util";
 
-const prisma = new PrismaClient();
+import { prisma } from "../prisma";
 
 /**
  * Submit KYC information for a merchant

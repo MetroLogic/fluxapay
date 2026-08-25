@@ -1,9 +1,8 @@
 import { Keypair, nativeToScVal, rpc, TransactionBuilder, Networks, Contract } from '@stellar/stellar-sdk';
 import { isDevEnv } from '../helpers/env.helper';
-import { PrismaClient } from '../generated/client/client';
 import { recordSorobanFailure, recordSorobanSuccess } from './SorobanService';
 
-const prisma = new PrismaClient();
+import { prisma } from "../prisma";
 
 export class PaymentContractService {
     private rpcUrl: string;

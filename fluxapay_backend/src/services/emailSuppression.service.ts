@@ -1,7 +1,6 @@
-import { PrismaClient } from "../generated/client/client";
 import { getLogger } from "../utils/logger";
 
-const prisma = new PrismaClient();
+import { prisma } from "../prisma";
 const logger = getLogger("EmailSuppressionService");
 
 export type SuppressionReason = "bounce" | "complaint" | "unsubscribe";

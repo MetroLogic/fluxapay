@@ -26,12 +26,11 @@
  *   - CronLock prevents concurrent runs across multiple instances.
  */
 
-import { PrismaClient } from "../generated/client/client";
 import { createAndDeliverWebhook } from "./webhook.service";
 import { sendCheckoutExpiryReminderEmail } from "./email.service";
 import { getNotificationPreferences } from "./notificationPreferences.service";
 
-const prisma = new PrismaClient();
+import { prisma } from "../prisma";
 
 const LOCK_NAME = "payment_expiry_reminder";
 const LOCK_TTL_MS = 5 * 60 * 1000;

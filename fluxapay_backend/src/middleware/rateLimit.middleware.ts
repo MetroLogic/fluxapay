@@ -2,11 +2,10 @@ import { ErrorCode } from "../types/errors";
 import { apiError, sendApiError } from "../helpers/apiError.helper";
 import type { Request, Response, NextFunction, RequestHandler } from "express";
 import { AuthRequest } from "../types/express";
-import { PrismaClient } from "../generated/client/client";
 import { isDevEnv } from "../helpers/env.helper";
 import Redis from "ioredis";
 
-const prisma = new PrismaClient();
+import { prisma } from "../prisma";
 
 /**
  * Rate Limiting Middleware

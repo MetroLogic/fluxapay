@@ -1,9 +1,9 @@
 import { apiError } from "../helpers/apiError.helper";
 import { ErrorCode } from "../types/errors";
-import { PrismaClient, Prisma } from "../generated/client/client";
+import { Prisma } from "../generated/client/client";
 import crypto from "crypto";
 
-const prisma = new PrismaClient();
+import { prisma } from "../prisma";
 
 function generateSlug(): string {
   const chars = "abcdefghijklmnopqrstuvwxyz0123456789";

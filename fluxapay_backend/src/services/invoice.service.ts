@@ -1,6 +1,6 @@
 import { apiError } from "../helpers/apiError.helper";
 import { ErrorCode } from "../types/errors";
-import { PrismaClient, Prisma, InvoiceStatus } from "../generated/client/client";
+import { Prisma, InvoiceStatus } from "../generated/client/client";
 import crypto from "crypto";
 import { createAndDeliverWebhook } from "./webhook.service";
 import { startInvoicePdfGeneration } from "./invoicePdf.service";
@@ -8,7 +8,7 @@ import { sendInvoiceEmail } from "./email.service";
 import { Readable } from "stream";
 import { assertValidPositiveAmount, assertValidLineItems, AmountValidationError } from "../utils/amount.util";
 
-const prisma = new PrismaClient();
+import { prisma } from "../prisma";
 
 function buildInvoiceNumber() {
   const d = new Date();

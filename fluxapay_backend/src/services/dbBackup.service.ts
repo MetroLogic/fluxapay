@@ -22,13 +22,12 @@ import { promisify } from "util";
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
-import { PrismaClient } from "../generated/client/client";
 import { getLogger } from "../utils/logger";
 import { sendBackupFailureAlertEmail } from "./email.service";
 
 const execAsync = promisify(exec);
 const logger = getLogger();
-const prisma = new PrismaClient();
+import { prisma } from "../prisma";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 

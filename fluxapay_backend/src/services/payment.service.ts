@@ -1,4 +1,3 @@
-import { PrismaClient } from "../generated/client/client";
 import crypto from "crypto";
 import { HDWalletService } from "./HDWalletService";
 import { StellarService } from "./StellarService";
@@ -12,7 +11,7 @@ import { DepositAddressService } from "./depositAddress.service";
 import { apiError } from "../helpers/apiError.helper";
 import { ErrorCode } from "../types/errors";
 
-const prisma = new PrismaClient();
+import { prisma } from "../prisma";
 
 /** Default payment expiry when no plan/env override is configured (15 minutes). */
 export const DEFAULT_PAYMENT_EXPIRY_SECONDS = 900;

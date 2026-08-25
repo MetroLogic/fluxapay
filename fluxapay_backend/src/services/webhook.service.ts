@@ -79,7 +79,7 @@ export class WebhookDispatcher {
   }
 }
 
-const prisma = new PrismaClient();
+import { prisma } from "../prisma";
 
 interface GetWebhookLogsParams {
   merchantId: string;

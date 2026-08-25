@@ -12,9 +12,8 @@ import { ErrorCode } from "../types/errors";
  *    handle undefined/null for individual fields.
  */
 
-import { PrismaClient } from "../generated/client/client";
 
-const prisma = new PrismaClient();
+import { prisma } from "../prisma";
 
 export interface NotificationPreferences {
   merchantId: string;
@@ -79,12 +78,17 @@ export async function updateNotificationPreferences(
     }
   }
 
-  // Clamp reminder_minutes_before to at least 1 minute
+  // Keep reminder_minutes_before within the supported 1-minute to 24-hour range.
   if (
     updates.reminder_minutes_before !== undefined &&
-    updates.reminder_minutes_before < 1
+    (updates.reminder_minutes_before < 1 ||
+      updates.reminder_minutes_before > 1440)
   ) {
-    throw apiError(400, ErrorCode.INVALID_REMINDER_MINUTES, "reminder_minutes_before must be at least 1");
+    throw apiError(
+      400,
+      ErrorCode.INVALID_REMINDER_MINUTES,
+      "reminder_minutes_before must be between 1 and 1440 (24 hours)",
+    );
   }
 
   const existing = await prisma.merchantNotificationPreferences.findUnique({

@@ -2,11 +2,10 @@ import { apiError } from "../helpers/apiError.helper";
 import { ErrorCode } from "../types/errors";
 import {
   AlertSeverity,
-  PrismaClient,
   ReconciliationStatus,
 } from "../generated/client/client";
 
-const prisma = new PrismaClient();
+import { prisma } from "../prisma";
 
 function toNumber(value: unknown): number {
   if (typeof value === "number") {

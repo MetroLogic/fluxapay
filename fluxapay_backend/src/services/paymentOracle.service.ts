@@ -15,7 +15,8 @@
 
 import { Horizon, Asset } from "@stellar/stellar-sdk";
 import type { Horizon as HorizonNamespace } from "@stellar/stellar-sdk";
-import { PrismaClient, Payment, PaymentStatus } from "../generated/client/client";
+import { Payment, PaymentStatus } from "../generated/client/client";
+import type { PrismaClient } from "../generated/client/client";
 import { Decimal } from "@prisma/client/runtime/library";
 import { paymentContractService } from "./paymentContract.service";
 import { getLogger, getMetricsCollector } from "../utils/logger";
@@ -26,7 +27,7 @@ import { isSorobanVerificationEnabled } from "../utils/sorobanVerification.util"
 import { getSorobanHealthStatus } from "./SorobanService";
 import { redisClient } from "../middleware/redisIdempotency.middleware";
 
-const prisma = new PrismaClient();
+import { prisma } from "../prisma";
 const logger = getLogger("PaymentOracleService");
 const metrics = getMetricsCollector();
 
