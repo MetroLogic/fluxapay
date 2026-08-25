@@ -16,13 +16,13 @@
  */
 
 import { Decimal } from "@prisma/client/runtime/library";
-import { Merchant, Prisma } from "../generated/client/client";
+import { Merchant, PrismaClient, Prisma } from "../generated/client/client";
+import { prisma } from "../config/prisma";
 import { getExchangePartner } from "./exchange.service";
 import { createAndDeliverWebhook } from "./webhook.service";
 import { logSettlementBatch, updateSettlementBatchCompletion } from "./audit.service";
 import { sendSettlementFailureAlert } from "./settlementAlert.service";
 
-import { prisma } from "../prisma";
 
 /** Fee percentage charged by FluxaPay (default 2%). Configurable via env. */
 function getSettlementFeePercent(): number {

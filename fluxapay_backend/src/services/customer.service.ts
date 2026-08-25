@@ -1,8 +1,8 @@
 import { apiError } from "../helpers/apiError.helper";
 import { ErrorCode } from "../types/errors";
-import { Prisma } from "../generated/client/client";
+import { PrismaClient, Prisma } from "../generated/client/client";
 
-import { prisma } from "../prisma";
+import { prisma } from "../config/prisma";
 
 function validateAndNormalizeEmail(email: string): string {
   // RFC 5322 basic validation

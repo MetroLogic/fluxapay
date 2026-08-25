@@ -16,8 +16,9 @@ import { Response, NextFunction } from "express";
 import { ErrorCode } from "../types/errors";
 import { apiError, sendApiError } from "../helpers/apiError.helper";
 import { AuthRequest } from "../types/express";
+import { PrismaClient } from "../generated/client/client";
+import { prisma } from "../config/prisma";
 
-import { prisma } from "../prisma";
 
 /**
  * Enforces KYC gate: merchant must have approved KYC status to create payments.

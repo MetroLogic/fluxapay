@@ -1,6 +1,8 @@
 import { ErrorCode } from "../types/errors";
 import { apiError, sendApiError } from "../helpers/apiError.helper";
 import { Request, Response } from "express";
+import { PrismaClient } from "../generated/client/client";
+import { prisma } from "../config/prisma";
 import { PaymentService } from "../services/payment.service";
 import { normalizeCheckoutAccentHex } from "../utils/checkout-branding.util";
 import { AuthRequest } from "../types/express";
@@ -13,7 +15,6 @@ import { isTerminalStatus, PaymentStatus } from "../types/payment";
 import { assertValidPositiveAmount, AmountValidationError } from "../utils/amount.util";
 
 
-import { prisma } from "../prisma";
 
 export const createPayment = async (req: Request, res: Response) => {
   try {

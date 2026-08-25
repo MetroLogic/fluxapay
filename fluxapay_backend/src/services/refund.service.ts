@@ -1,14 +1,15 @@
 import { apiError } from "../helpers/apiError.helper";
 import { ErrorCode } from "../types/errors";
 import {
+  PrismaClient,
   RefundStatus,
   WebhookEventType,
   Prisma,
 } from "../generated/client/client";
+import { prisma } from "../config/prisma";
 import { createAndDeliverWebhook } from "./webhook.service";
 import { PaymentStatus, getRefundableStatuses } from "../types/payment";
 
-import { prisma } from "../prisma";
 
 /**
  * Validates that a payment can be refunded

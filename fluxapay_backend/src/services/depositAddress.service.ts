@@ -1,10 +1,10 @@
 import { Keypair } from "@stellar/stellar-sdk";
-import { DepositAddressStatus } from "../generated/client/client";
+import { PrismaClient, DepositAddressStatus } from "../generated/client/client";
 import { KMSFactory } from "./kms";
 import * as crypto from "crypto";
 import { eventBus, AppEvents } from "./EventService";
 
-import { prisma } from "../prisma";
+import { prisma } from "../config/prisma";
 
 export class DepositAddressService {
   /**

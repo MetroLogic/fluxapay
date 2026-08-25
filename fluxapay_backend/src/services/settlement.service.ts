@@ -1,5 +1,6 @@
+import { PrismaClient } from "../generated/client/client";
+import { prisma } from "../config/prisma";
 
-import { prisma } from "../prisma";
 
 interface ListSettlementsParams {
     merchantId: string;

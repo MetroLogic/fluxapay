@@ -15,7 +15,7 @@ import { runSettlementBatch } from "../services/settlementBatch.service";
 import { adminAuth } from "../middleware/adminAuth.middleware";
 import { apiError, sendApiError } from "../helpers/apiError.helper";
 import { ErrorCode } from "../types/errors";
-import { prisma } from "../prisma";
+import { prisma } from "../config/prisma";
 
 const router = Router();
 

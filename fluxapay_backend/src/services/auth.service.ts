@@ -1,10 +1,11 @@
 import { apiError } from "../helpers/apiError.helper";
 import { ErrorCode } from "../types/errors";
+import { PrismaClient } from "../generated/client/client";
 import bcrypt from "bcrypt";
 import { generateAccessToken, generateRefreshTokenPair } from "../helpers/jwt.helper";
 import { sendSecurityAlertEmail } from "./email.service";
 
-import { prisma } from "../prisma";
+import { prisma } from "../config/prisma";
 
 const REFRESH_TOKEN_EXPIRY_DAYS = 30;
 const FAILED_LOGIN_THRESHOLD = 10;

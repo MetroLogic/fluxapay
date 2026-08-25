@@ -1,9 +1,10 @@
 import { Request, Response, NextFunction } from "express";
 import { apiError, sendApiError } from "../helpers/apiError.helper";
 import { ErrorCode } from "../types/errors";
+import { PrismaClient } from "../generated/client/client";
+import { prisma } from "../config/prisma";
 import crypto from "crypto";
 
-import { prisma } from "../prisma";
 
 const IDEMPOTENCY_TTL_HOURS = 24;
 

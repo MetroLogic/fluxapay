@@ -1,5 +1,6 @@
+import { PrismaClient } from "../generated/client/client";
 
-import { prisma } from "../prisma";
+import { prisma } from "../config/prisma";
 
 export async function getDashboardOverview() {
   const sampleMetrics = {

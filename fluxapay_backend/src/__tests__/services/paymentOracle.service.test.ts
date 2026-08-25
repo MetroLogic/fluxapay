@@ -43,6 +43,10 @@ jest.mock("../../generated/client/client", () => ({
       count: mockCount,
       updateMany: mockUpdateMany,
     },
+    invoice: {
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+      findFirst: jest.fn(),
+    },
   })),
 }));
 

@@ -1,6 +1,6 @@
 import { apiError } from "../helpers/apiError.helper";
 import { ErrorCode } from "../types/errors";
-import { DataExportStatus } from "../generated/client/client";
+import { PrismaClient, DataExportStatus } from "../generated/client/client";
 import { redactEmail } from "../utils/piiRedactor";
 import {
   logDataExportRequested,
@@ -10,7 +10,7 @@ import {
 } from "./audit.service";
 import { getMerchantPlanFeatures, merchantHasFeature } from "./usage.service";
 
-import { prisma } from "../prisma";
+import { prisma } from "../config/prisma";
 
 /** How long a completed export download link is valid (24 h). */
 const EXPORT_TTL_MS = 24 * 60 * 60 * 1000;

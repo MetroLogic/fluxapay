@@ -1,6 +1,7 @@
 import { apiError } from "../helpers/apiError.helper";
 import { ErrorCode } from "../types/errors";
-import { Prisma } from "../generated/client/client";
+import { PrismaClient, Prisma } from "../generated/client/client";
+import { prisma } from "../config/prisma";
 import {
   normalizeCheckoutAccentHex,
   normalizeCheckoutLogoUrl,
@@ -22,7 +23,6 @@ import {
   logWebhookSecretRotation,
 } from "./audit.service";
 
-import { prisma } from "../prisma";
 
 export async function signupMerchantService(data: {
   business_name: string;

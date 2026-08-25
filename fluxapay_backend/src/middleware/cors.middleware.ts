@@ -1,6 +1,6 @@
 import cors, { CorsOptions } from 'cors';
 import { getEnvConfig } from '../config/env.config';
-import { prisma } from '../prisma';
+import { prisma } from '../config/prisma';
 
 /**
  * CORS Middleware Configuration

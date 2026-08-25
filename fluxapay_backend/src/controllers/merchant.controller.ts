@@ -107,8 +107,9 @@ export const rotateWebhookSecret = createController(
 // ── Admin-only controllers ────────────────────────────────────────────────────
 
 import { Request, Response } from "express";
+import { PrismaClient } from "../generated/client/client";
+import { prisma as adminPrisma } from "../config/prisma";
 
-import { prisma as adminPrisma } from "../prisma";
 
 /**
  * Defense-in-depth admin gate. Mirrors the logic in adminAuth middleware so

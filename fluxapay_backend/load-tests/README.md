@@ -1,5 +1,15 @@
 # k6 load tests
 
+## Prisma connection pool scenario
+
+`k6-prisma-pool.js` sends 100 concurrent authenticated requests to a database-backed endpoint for 60 seconds. A passing run requires fewer than 2% failed requests and no connection-exhaustion responses (`500` or `503`).
+
+```bash
+BASE_URL="https://api.staging.fluxapay.com" \
+API_KEY="sk_live_xxx" \
+k6 run load-tests/k6-prisma-pool.js
+```
+
 ## Payment create + list scenario
 
 `k6-payment-create-list.js` runs a baseline flow for:

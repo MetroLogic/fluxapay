@@ -1,9 +1,10 @@
 import { Keypair } from '@stellar/stellar-sdk';
 import * as crypto from 'crypto';
 import { derivePath } from "ed25519-hd-key";
+import { PrismaClient } from "../generated/client/client";
 import { IKMSProvider, KMSFactory } from "./kms";
 
-import { prisma } from "../prisma";
+import { prisma } from "../config/prisma";
 
 /**
  * Coin type 148 = Stellar (SLIP-0044)

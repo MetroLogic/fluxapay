@@ -1,8 +1,9 @@
 import { apiError } from "../helpers/apiError.helper";
 import { ErrorCode } from "../types/errors";
+import { PrismaClient } from "../generated/client/client";
 import { isDevEnv } from "../helpers/env.helper";
 
-import { prisma } from "../prisma";
+import { prisma } from "../config/prisma";
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 1000;

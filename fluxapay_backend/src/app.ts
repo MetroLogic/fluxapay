@@ -4,7 +4,7 @@ import swaggerUi from "swagger-ui-express";
 import { specs } from "./docs/swagger";
 import { apiError, sendApiError } from "./helpers/apiError.helper";
 import { ErrorCode } from "./types/errors";
-import { prisma } from "./prisma";
+import { prisma } from "./config/prisma";
 import { requestIdMiddleware } from "./middleware/requestId.middleware";
 import {
   requestLoggingMiddleware,

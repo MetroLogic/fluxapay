@@ -15,19 +15,19 @@
 
 import { Horizon, Asset } from "@stellar/stellar-sdk";
 import type { Horizon as HorizonNamespace } from "@stellar/stellar-sdk";
-import { Payment, PaymentStatus } from "../generated/client/client";
-import type { PrismaClient } from "../generated/client/client";
+import { PrismaClient, Payment, PaymentStatus } from "../generated/client/client";
+import { prisma } from "../config/prisma";
 import { Decimal } from "@prisma/client/runtime/library";
 import { paymentContractService } from "./paymentContract.service";
 import { getLogger, getMetricsCollector } from "../utils/logger";
 import { createAndDeliverWebhook } from "./webhook.service";
+import { markInvoicePaidForPaymentService } from "./invoice.service";
 import { analyzeDuplicatePayments, MatchedStellarPayment } from "../utils/duplicatePayment.util";
 import {parseHorizonMemo, resolveMemoMatchMode, validateMemoMatch } from "../utils/oracleMemo.util";
 import { isSorobanVerificationEnabled } from "../utils/sorobanVerification.util";
 import { getSorobanHealthStatus } from "./SorobanService";
 import { redisClient } from "../middleware/redisIdempotency.middleware";
 
-import { prisma } from "../prisma";
 const logger = getLogger("PaymentOracleService");
 const metrics = getMetricsCollector();
 
@@ -465,6 +465,10 @@ async function updatePaymentStatus(verification: PaymentVerification): Promise<v
         paymentId: verification.paymentId,
         error: webhookError.message,
       });
+    }
+
+    if (verification.status === "confirmed" || verification.status === "overpaid") {
+      await markInvoicePaidForPaymentService(updatedPayment.merchantId, updatedPayment.id);
     }
   }
 

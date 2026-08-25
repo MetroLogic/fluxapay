@@ -1,19 +1,20 @@
 import { apiError } from "../helpers/apiError.helper";
 import { ErrorCode } from "../types/errors";
 import {
+  PrismaClient,
   KYCStatus as PrismaKYCStatus,
   DocumentType,
   BusinessType,
   GovernmentIdType,
   Prisma,
 } from "../generated/client/client";
+import { prisma } from "../config/prisma";
 import { uploadToCloudinary, deleteFromCloudinary } from "./cloudinary.service";
 import { SubmitKycInput, UpdateKycStatusInput } from "../schemas/kyc.schema";
 import { logKycDecision } from "./audit.service";
 import { KYCStatus as AuditKYCStatus } from "../types/audit.types";
 import { validateKycUploadFile } from "../utils/kycUploadValidation.util";
 
-import { prisma } from "../prisma";
 
 /**
  * Submit KYC information for a merchant

@@ -4,8 +4,9 @@ import { ErrorCode } from "../types/errors";
 import { AuthRequest } from "../types/express";
 import { queryAuditLogs, getAuditLogById } from "../services/audit.service";
 import { AuditActionType } from "../types/audit.types";
+import { PrismaClient } from "../generated/client/client";
+import { prisma } from "../config/prisma";
 
-import { prisma } from "../prisma";
 
 /**
  * GET /api/admin/audit-logs
