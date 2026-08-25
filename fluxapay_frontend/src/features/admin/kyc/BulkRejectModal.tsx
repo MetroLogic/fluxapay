@@ -29,6 +29,16 @@ export default function BulkRejectModal({ count, onConfirm, onClose }: BulkRejec
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ succeeded: number; failed: FailedItem[] } | null>(null);
 
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !loading) {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose, loading]);
+
   const handleConfirm = async () => {
     if (!reason.trim()) return;
     setLoading(true);

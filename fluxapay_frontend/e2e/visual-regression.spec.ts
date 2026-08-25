@@ -95,4 +95,29 @@ test.describe('Visual Regression Tests', () => {
     await expect(page.getByText(/payment confirmed/i)).toBeVisible({ timeout: 5000 });
     await expect(page).toHaveScreenshot('checkout-confirmed.png', { fullPage: true });
   });
+
+  test('Checkout UI visual regression - Address Change', async ({ page }) => {
+    let currentAddress = 'GTEST123STELLARADDRESS';
+    await page.route(`**/api/payments/${paymentId}`, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ...mockPendingPayment, depositAddress: currentAddress }),
+      })
+    );
+
+    await page.goto(`/pay/${paymentId}`);
+    await expect(page.getByAltText(/qr code/i).or(page.getByText(/scan/i))).toBeVisible({ timeout: 5000 });
+
+    currentAddress = 'GNEWADDRESS99999STELLARADDR';
+    await page.route(`**/api/payments/${paymentId}`, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ...mockPendingPayment, depositAddress: currentAddress }),
+      })
+    );
+
+    await expect(page).toHaveScreenshot('checkout-address-updated.png', { fullPage: true });
+  });
 });

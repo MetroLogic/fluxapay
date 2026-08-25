@@ -21,6 +21,7 @@ import { toastApiError } from "@/lib/toastApiError";
 import EmptyState from "@/components/EmptyState";
 import { api } from "@/lib/api";
 import BulkRejectModal from "@/features/admin/kyc/BulkRejectModal";
+import BulkApproveModal from "@/features/admin/kyc/BulkApproveModal";
 import BulkRequestInfoModal from "@/features/admin/kyc/BulkRequestInfoModal";
 import {
   useKycSubmissions,
@@ -48,6 +49,7 @@ const AdminKycPage = () => {
   const [rejectionReason, setRejectionReason] = useState("");
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
+  const [showBulkApproveModal, setShowBulkApproveModal] = useState(false);
   const [showBulkRejectModal, setShowBulkRejectModal] = useState(false);
   const [showBulkRequestInfoModal, setShowBulkRequestInfoModal] = useState(false);
 
@@ -136,6 +138,30 @@ const AdminKycPage = () => {
       "rejected",
       rejectionReason,
     );
+  };
+
+  const handleBulkApprove = async () => {
+    const merchantIds = Array.from(selectedRows);
+    if (merchantIds.length === 0) return { succeeded: 0, failed: [] };
+    try {
+      const results = await Promise.allSettled(
+        merchantIds.map((id) => api.kyc.admin.updateStatus(id, { status: "approved" }))
+      );
+      const succeeded = results.filter((r) => r.status === "fulfilled").length;
+      const failed = results
+        .map((r, idx) => (r.status === "rejected" ? { id: merchantIds[idx], error: "Failed to approve" } : null))
+        .filter(Boolean) as { id: string; error?: string }[];
+      if (succeeded > 0) {
+        toast.success(`${succeeded} applications approved`);
+      }
+      setSelectedRows(new Set());
+      setShowBulkApproveModal(false);
+      void mutate();
+      return { succeeded, failed };
+    } catch (err) {
+      toastApiError(err);
+      return { succeeded: 0, failed: merchantIds.map((id) => ({ id, error: "Failed" })) };
+    }
   };
 
   const handleBulkReject = async (reason: string, notes: string) => {
@@ -336,6 +362,13 @@ const AdminKycPage = () => {
             </span>
             <div className="flex items-center gap-2">
               <button
+                onClick={() => setShowBulkApproveModal(true)}
+                className="px-3 py-1.5 text-sm font-medium text-emerald-700 bg-white border border-emerald-200 rounded-lg hover:bg-emerald-50 transition-colors flex items-center gap-2"
+              >
+                <CheckCircle className="w-4 h-4" />
+                Approve
+              </button>
+              <button
                 onClick={() => setShowBulkRequestInfoModal(true)}
                 className="px-3 py-1.5 text-sm font-medium text-blue-700 bg-white border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors flex items-center gap-2"
               >
@@ -468,6 +501,15 @@ const AdminKycPage = () => {
           </div>
         </div>
       </div>
+
+      {/* Bulk Approve Modal */}
+      {showBulkApproveModal && (
+        <BulkApproveModal
+          count={selectedRows.size}
+          onConfirm={handleBulkApprove}
+          onClose={() => setShowBulkApproveModal(false)}
+        />
+      )}
 
       {/* Bulk Reject Modal */}
       {showBulkRejectModal && (

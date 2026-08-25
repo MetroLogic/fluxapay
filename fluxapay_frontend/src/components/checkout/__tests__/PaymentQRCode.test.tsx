@@ -51,4 +51,20 @@ describe('PaymentQRCode', () => {
     expect(updatedValue).not.toBe(initialValue);
     expect(updatedValue).toContain(newAddress);
   });
+
+  it('re-renders QR code when memo prop changes', () => {
+    const { rerender } = render(<PaymentQRCode address={address} amount={25} memoType="text" memo="MEMO123" />);
+
+    const canvas1 = screen.getByTestId('qr-canvas');
+    const initialValue = canvas1.getAttribute('value');
+    expect(initialValue).toContain('memo=MEMO123');
+
+    rerender(<PaymentQRCode address={address} amount={25} memoType="text" memo="MEMO999" />);
+
+    const canvas2 = screen.getByTestId('qr-canvas');
+    const updatedValue = canvas2.getAttribute('value');
+
+    expect(updatedValue).not.toBe(initialValue);
+    expect(updatedValue).toContain('memo=MEMO999');
+  });
 });
