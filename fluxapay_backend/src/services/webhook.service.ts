@@ -7,6 +7,12 @@ import { webhookEventTypes } from "../schemas/webhook.schema";
 import { normalizeEventName, toLegacyEventName } from "../utils/webhook-event-mapping.util";
 import { trackWebhookDelivery } from "../middleware/metrics.middleware";
 
+/** Get webhook timestamp tolerance from environment (in seconds, default 5 minutes) */
+function getWebhookTimestampToleranceSeconds(): number {
+  const raw = parseInt(process.env.WEBHOOK_TIMESTAMP_TOLERANCE_SECONDS ?? "", 10);
+  return Number.isFinite(raw) && raw > 0 ? raw : 300; // 300 seconds = 5 minutes
+}
+
 export class WebhookDispatcher {
   private prisma: PrismaClient;
 
@@ -714,6 +720,10 @@ export async function deliverWebhook(
     const timeout = setTimeout(() => controller.abort(), 30000);
 
     const timestamp = new Date().toISOString();
+    
+    // Verify timestamp before sending (ensures our timestamp is valid)
+    verifyWebhookTimestamp(timestamp);
+    
     const signature = generateWebhookSignature(payload, merchantSecret, timestamp);
 
     const response = await fetch(endpointUrl, {
@@ -759,19 +769,42 @@ export function generateWebhookSignature(
 
 /**
  * Replay protection: returns true only if the webhook timestamp falls within
- * the allowed window. Default window is 5 minutes (300 000 ms).
+ * the allowed window (configurable via WEBHOOK_TIMESTAMP_TOLERANCE_SECONDS, default 5 minutes).
  *
- * Merchants should call this before processing any incoming webhook to prevent
- * replay attacks. Combine with event_id deduplication for full protection.
+ * This MUST be called before processing any incoming webhook to prevent replay attacks.
+ * Combine with event_id deduplication for full protection.
+ * 
+ * @param timestamp ISO 8601 timestamp string from webhook header
+ * @param toleranceSeconds Optional override for tolerance window (in seconds)
+ * @throws 400 if timestamp is invalid or outside tolerance window
  */
 export function verifyWebhookTimestamp(
   timestamp: string,
-  windowMs: number = 5 * 60 * 1000,
-): boolean {
+  toleranceSeconds?: number,
+): void {
+  const windowSeconds = toleranceSeconds ?? getWebhookTimestampToleranceSeconds();
+  const windowMs = windowSeconds * 1000;
+
   const webhookTime = new Date(timestamp).getTime();
-  if (isNaN(webhookTime)) return false;
-  const diff = Date.now() - webhookTime;
-  return diff >= 0 && diff <= windowMs;
+  if (isNaN(webhookTime)) {
+    throw apiError(
+      400,
+      ErrorCode.INVALID_WEBHOOK_TIMESTAMP,
+      "Invalid timestamp format in webhook headers"
+    );
+  }
+
+  const now = Date.now();
+  const diff = now - webhookTime;
+
+  // Check if timestamp is too far in the past or too far in the future
+  if (diff < -windowMs || diff > windowMs) {
+    throw apiError(
+      400,
+      ErrorCode.WEBHOOK_TIMESTAMP_OUTSIDE_TOLERANCE,
+      `Webhook timestamp is outside the allowed ${windowSeconds}-second tolerance window`
+    );
+  }
 }
 
 // Helper function to generate test payload based on event type

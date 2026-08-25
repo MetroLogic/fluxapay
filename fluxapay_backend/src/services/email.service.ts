@@ -443,3 +443,171 @@ export async function sendBackupFailureAlertEmail(
     // Don't throw — alert failures must not mask the underlying backup error
   }
 }
+export async function sendBillingFailureEmail(data: {
+  to: string;
+  businessName: string;
+  planName: string;
+  gracePeriodDays: number;
+  retryDate: Date;
+  error?: string | null;
+  isDowngrade?: boolean;
+  isRecovery?: boolean;
+}): Promise<void> {
+  try {
+    await sendTransactionalWithSuppressionCheck(data.to, async () => {
+      if (data.isRecovery) {
+        // Payment recovery notification
+        await getEmailProvider().sendEmail({
+          from: process.env.MAIL_FROM || "noreply@fluxapay.com",
+          to: data.to,
+          subject: `✓ Subscription Payment Recovered — ${escapeHtml(data.planName)} Plan`,
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <h2 style="color: #059669;">✓ Payment Successful</h2>
+              <p>Hello ${escapeHtml(data.businessName)},</p>
+              <p>Great news! Your subscription payment has been successfully processed and your account is back in good standing.</p>
+              <div style="background: #ecfdf5; border-left: 4px solid #059669; padding: 16px; border-radius: 4px; margin: 16px 0;">
+                <table style="width: 100%; border-collapse: collapse;">
+                  <tr>
+                    <td style="padding: 6px 0;"><strong>Plan:</strong></td>
+                    <td style="padding: 6px 0;">${escapeHtml(data.planName)}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 6px 0;"><strong>Next Payment:</strong></td>
+                    <td style="padding: 6px 0;">${escapeHtml(data.retryDate.toLocaleDateString())}</td>
+                  </tr>
+                </table>
+              </div>
+              <p>Thank you for using FluxaPay!</p>
+              <p>— The FluxaPay Team</p>
+            </div>
+          `,
+        });
+      } else if (data.isDowngrade) {
+        // Downgrade notification
+        await getEmailProvider().sendEmail({
+          from: process.env.MAIL_FROM || "noreply@fluxapay.com",
+          to: data.to,
+          subject: `Subscription Downgraded — Grace Period Expired`,
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <h2 style="color: #d97706;">⚠️ Subscription Downgraded</h2>
+              <p>Hello ${escapeHtml(data.businessName)},</p>
+              <p>Your subscription payment could not be processed, and the grace period has expired. Your subscription has been automatically downgraded to the free plan.</p>
+              <div style="background: #fef3c7; border-left: 4px solid #d97706; padding: 16px; border-radius: 4px; margin: 16px 0;">
+                <p style="margin: 0; font-weight: bold;">What changed:</p>
+                <ul style="margin: 8px 0;">
+                  <li>You are now on the <strong>Free</strong> plan</li>
+                  <li>Plan limits have been reduced to free tier</li>
+                  <li>You can upgrade anytime by updating your billing information</li>
+                </ul>
+              </div>
+              <p>
+                <a href="${process.env.BASE_URL || 'https://dashboard.fluxapay.com'}/settings/billing"
+                   style="display: inline-block; padding: 10px 20px; background: #0066cc; color: white; text-decoration: none; border-radius: 4px;">
+                  Update Billing Information
+                </a>
+              </p>
+              <p style="color: #666; font-size: 13px;">If you have questions or need help, please contact our support team.</p>
+              <p>— The FluxaPay Team</p>
+            </div>
+          `,
+        });
+      } else {
+        // Billing failure notification
+        await getEmailProvider().sendEmail({
+          from: process.env.MAIL_FROM || "noreply@fluxapay.com",
+          to: data.to,
+          subject: `⚠️ Subscription Payment Failed — ${escapeHtml(data.planName)} Plan`,
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <h2 style="color: #dc2626;">⚠️ Subscription Payment Failed</h2>
+              <p>Hello ${escapeHtml(data.businessName)},</p>
+              <p>We were unable to process your subscription renewal payment for the <strong>${escapeHtml(data.planName)}</strong> plan.</p>
+              <div style="background: #fef2f2; border-left: 4px solid #dc2626; padding: 16px; border-radius: 4px; margin: 16px 0;">
+                <table style="width: 100%; border-collapse: collapse;">
+                  <tr>
+                    <td style="padding: 6px 0;"><strong>Issue:</strong></td>
+                    <td style="padding: 6px 0; color: #991b1b;">${data.error || 'Payment method declined'}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 6px 0;"><strong>Grace Period:</strong></td>
+                    <td style="padding: 6px 0;"><strong>${data.gracePeriodDays} days</strong> to update your billing information</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 6px 0;"><strong>Grace Period Expires:</strong></td>
+                    <td style="padding: 6px 0;">${escapeHtml(new Date(Date.now() + data.gracePeriodDays * 24 * 60 * 60 * 1000).toLocaleDateString())}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 6px 0;"><strong>Next Retry:</strong></td>
+                    <td style="padding: 6px 0;">${escapeHtml(data.retryDate.toLocaleDateString())}</td>
+                  </tr>
+                </table>
+              </div>
+              <p><strong>What happens if I don't update my payment method?</strong></p>
+              <p>After the grace period expires (in ${data.gracePeriodDays} days), your subscription will automatically downgrade to the free plan, and you will lose access to paid features.</p>
+              <p>
+                <a href="${process.env.BASE_URL || 'https://dashboard.fluxapay.com'}/settings/billing"
+                   style="display: inline-block; padding: 10px 20px; background: #0066cc; color: white; text-decoration: none; border-radius: 4px;">
+                  Update Billing Information
+                </a>
+              </p>
+              <p style="color: #666; font-size: 13px;">If you believe this is an error or need help, please reply to this email or contact our support team.</p>
+              <p>— The FluxaPay Team</p>
+            </div>
+          `,
+        });
+      }
+    });
+  } catch (err) {
+    if (isDevEnv()) {
+      console.error("Error sending billing failure email:", err);
+    }
+    // Don't throw — billing notification failures shouldn't block the main billing flow
+  }
+}
+
+export async function sendGracePeriodExpiryWarningEmail(data: {
+  to: string;
+  businessName: string;
+  planName: string;
+  daysRemaining: number;
+}): Promise<void> {
+  try {
+    await sendTransactionalWithSuppressionCheck(data.to, async () => {
+      await getEmailProvider().sendEmail({
+        from: process.env.MAIL_FROM || "noreply@fluxapay.com",
+        to: data.to,
+        subject: `⏰ Final Warning: Subscription Expires in ${data.daysRemaining} Days`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #d97706;">⏰ Time's Running Out!</h2>
+            <p>Hello ${escapeHtml(data.businessName)},</p>
+            <p>Your ${escapeHtml(data.planName)} subscription's grace period is ending in <strong>${data.daysRemaining} days</strong>.</p>
+            <div style="background: #fef3c7; border-left: 4px solid #d97706; padding: 16px; border-radius: 4px; margin: 16px 0;">
+              <p style="margin: 0; font-weight: bold; color: #92400e;">If you don't update your billing information by then:</p>
+              <ul style="margin: 8px 0; color: #92400e;">
+                <li>Your subscription will automatically downgrade to the free plan</li>
+                <li>You will lose access to all paid features</li>
+                <li>Your data will be retained, but feature access will be limited</li>
+              </ul>
+            </div>
+            <p>
+              <a href="${process.env.BASE_URL || 'https://dashboard.fluxapay.com'}/settings/billing"
+                 style="display: inline-block; padding: 10px 20px; background: #0066cc; color: white; text-decoration: none; border-radius: 4px;">
+                Update Billing Information Now
+              </a>
+            </p>
+            <p style="color: #666; font-size: 13px;">Need help? Contact our support team anytime.</p>
+            <p>— The FluxaPay Team</p>
+          </div>
+        `,
+      });
+    });
+  } catch (err) {
+    if (isDevEnv()) {
+      console.error("Error sending grace period warning email:", err);
+    }
+    // Don't throw — warnings shouldn't block other processes
+  }
+}

@@ -209,6 +209,7 @@ model MerchantSubscription {
   merchantId           String
   plan                 Plan     @relation(fields: [planId], references: [id])
   planId               String
+  /// Status: 'active' or 'past_due' (grace period for failed renewal)
   status               String   @default("active")
   billing_cycle        String
   current_period_start DateTime
