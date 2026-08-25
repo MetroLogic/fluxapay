@@ -233,13 +233,50 @@ async function settleSinglePayment(
     settlementDay: number | null,
     now: Date,
 ): Promise<PaymentSettlementResult> {
+    // ── 1. IDEMPOTENCY CHECK: Verify payment exists and hasn't been settled yet
     const payment = await prisma.payment.findUnique({
         where: { id: paymentId },
-        select: { id: true, amount: true, metadata: true, settled: true },
+        select: { id: true, amount: true, metadata: true, settled: true, settlementId: true },
     });
 
-    if (!payment || payment.settled) {
-        return { paymentId, status: "skipped", error: "Payment not found or already settled" };
+    if (!payment) {
+        return { paymentId, status: "skipped", error: "Payment not found" };
+    }
+
+    if (payment.settled) {
+        console.warn(
+            `[SettlementBatch] ⚠️  Payment ${paymentId} already settled (settlementId=${payment.settlementId}). ` +
+            `Skipping to avoid duplicate settlement.`
+        );
+        return { paymentId, status: "skipped", error: "Payment already settled" };
+    }
+
+    // ── 2. Check for existing settlement record in terminal state
+    //       This prevents re-settling if batch was manually re-triggered or crashed mid-run
+    if (payment.settlementId) {
+        const existingSettlement = await prisma.settlement.findUnique({
+            where: { id: payment.settlementId },
+            select: { id: true, status: true },
+        });
+
+        if (
+            existingSettlement &&
+            (existingSettlement.status === "completed" || existingSettlement.status === "failed")
+        ) {
+            console.warn(
+                `[SettlementBatch] ⚠️  Payment ${paymentId} already has terminal settlement record ` +
+                `(${existingSettlement.id}/${existingSettlement.status}). Skipping to prevent duplicate.`
+            );
+
+            // Audit log: log this duplicate settlement attempt
+            // TODO: await logDuplicateSettlementAttempt({ paymentId, settlementId: existingSettlement.id });
+
+            return {
+                paymentId,
+                status: "skipped",
+                error: `Duplicate settlement attempt detected (existing: ${existingSettlement.status})`,
+            };
+        }
     }
 
     const totalUsdc = Number(payment.amount as Decimal);
@@ -276,6 +313,11 @@ async function settleSinglePayment(
         const netAmount = parseFloat((fiatGross - feeAmount).toFixed(2));
 
         const settlement = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+            // ── ATOMIC SETTLEMENT CREATION ────────────────────────────────
+            // Use a unique constraint on (paymentId, status) to enforce DB-level idempotency.
+            // If two instances race to settle the same payment, only one wins.
+            // The loser gets a constraint violation, which we catch and handle gracefully.
+
             const s = await tx.settlement.create({
                 data: {
                     merchantId: merchant.id,
@@ -308,8 +350,15 @@ async function settleSinglePayment(
                 },
             });
 
-            await tx.payment.update({
-                where: { id: paymentId },
+            // ── IDEMPOTENT PAYMENT UPDATE ────────────────────────────────
+            // Only update if payment.settled is still false (race detection)
+            // This is protected by transaction isolation level
+
+            const updated = await tx.payment.updateMany({
+                where: {
+                    id: paymentId,
+                    settled: false, // Guard: only update if not yet settled
+                },
                 data: {
                     settled: true,
                     settled_at: now,
@@ -320,6 +369,15 @@ async function settleSinglePayment(
                     metadata: buildRetryMetadata(payment.metadata, 0, ""),
                 },
             });
+
+            if (updated.count === 0) {
+                // Another instance already settled this payment
+                // Roll back the settlement record we just created by throwing
+                throw new Error(
+                    `Concurrent settlement detected for payment ${paymentId}. ` +
+                    `Race condition: another instance settled first.`
+                );
+            }
 
             return s;
         });

@@ -23,7 +23,27 @@ import { trackPaymentExpired } from "../middleware/metrics.middleware";
 const LOCK_NAME = "payment_expiry";
 const LOCK_TTL_MS = 5 * 60 * 1000; // 5 minutes — matches default cron interval
 
-async function acquireLock(lockedBy: string): Promise<boolean> {
+/**
+ * Acquire a distributed lock with mandatory TTL.
+ * 
+ * @param lockedBy Identifier of lock holder (e.g., "hostname:pid")
+ * @param ttlSeconds Lock TTL in seconds. Required to prevent indefinite lock holds on crash.
+ * @returns true if lock acquired, false if held by another instance
+ * 
+ * The TTL ensures that if the lock holder crashes, the lock will auto-expire
+ * and allow another instance to acquire it after the TTL window.
+ * 
+ * Crash resilience:
+ *  - If process crashes while holding lock, DB row persists but expires_at < now
+ *  - Next instance to run will detect expired lock and take over
+ *  - Lock is re-read after upsert to prevent race condition (two instances think they own it)
+ */
+async function acquireLock(lockedBy: string, ttlSeconds: number): Promise<boolean> {
+  if (!Number.isInteger(ttlSeconds) || ttlSeconds <= 0) {
+    throw new Error(`Invalid TTL: ${ttlSeconds}. Must be positive integer (seconds).`);
+  }
+
+  const ttlMs = ttlSeconds * 1000;
   const now = new Date();
   try {
     await prisma.cronLock.upsert({
@@ -31,13 +51,13 @@ async function acquireLock(lockedBy: string): Promise<boolean> {
       create: {
         job_name: LOCK_NAME,
         locked_at: now,
-        expires_at: new Date(now.getTime() + LOCK_TTL_MS),
+        expires_at: new Date(now.getTime() + ttlMs),
         locked_by: lockedBy,
       },
       update: {
         // Only take the lock if the existing one has expired
         locked_at: now,
-        expires_at: new Date(now.getTime() + LOCK_TTL_MS),
+        expires_at: new Date(now.getTime() + ttlMs),
         locked_by: lockedBy,
       },
     });
@@ -65,7 +85,9 @@ export interface PaymentExpiryResult {
 export async function runPaymentExpiryJob(): Promise<PaymentExpiryResult> {
   const lockedBy = `${process.env.HOSTNAME ?? "app"}:${process.pid}`;
 
-  const acquired = await acquireLock(lockedBy);
+  // Lock with 5-minute TTL (same as cron interval)
+  // If process crashes, lock auto-expires and next instance can run within 5 minutes
+  const acquired = await acquireLock(lockedBy, 300); // 300 seconds = 5 minutes
   if (!acquired) {
     console.log("[PaymentExpiry] Lock held by another instance — skipping.");
     return { processed: 0, expired: 0, webhookErrors: [] };
