@@ -4,6 +4,8 @@ import json
 import hashlib
 import hmac
 import time
+from unittest.mock import patch
+
 import pytest
 import httpx
 import respx
@@ -98,6 +100,14 @@ def test_raises_fluxapay_error_on_4xx():
 def test_missing_api_key_raises():
     with pytest.raises(ValueError):
         FluxaPay(api_key="")
+
+
+def test_sync_context_manager_closes_client():
+    client = FluxaPay(api_key=API_KEY)
+    with patch.object(client, "close") as close:
+        with client as entered:
+            assert entered is client
+    close.assert_called_once_with()
 
 
 # ── Async client ──────────────────────────────────────────────────────────────

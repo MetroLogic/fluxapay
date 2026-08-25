@@ -255,13 +255,13 @@ class FluxaPay(_PaymentsMixin, _SettlementsMixin):
 
         from fluxapay import FluxaPay
 
-        client = FluxaPay(api_key="sk_live_...")
-        payment = client.payments.create(
-            amount=49.99,
-            currency="USD",
-            customer_email="buyer@example.com",
-        )
-        print(payment.checkout_url)
+        with FluxaPay(api_key="sk_live_...") as client:
+            payment = client.payments.create(
+                amount=49.99,
+                currency="USD",
+                customer_email="buyer@example.com",
+            )
+            print(payment.checkout_url)
     """
 
     def __init__(self, api_key: str, base_url: str = _DEFAULT_BASE_URL) -> None:
