@@ -184,9 +184,11 @@ export function validateEnv(): EnvConfig {
     // Validate conditional requirements
     const conditionalErrors: string[] = [];
 
-    // CORS validation
+    // CORS validation — CORS_ORIGINS is REQUIRED in production and staging
     if (config.NODE_ENV === 'production' || config.NODE_ENV === 'staging') {
-        if (config.CORS_ORIGINS) {
+        if (!config.CORS_ORIGINS || config.CORS_ORIGINS.trim() === '') {
+            conditionalErrors.push(`  • CORS_ORIGINS is required in ${config.NODE_ENV} environment (prevents accidental wildcard exposure)`);
+        } else {
             const origins = config.CORS_ORIGINS.split(',').map((o) => o.trim());
             if (origins.includes('*')) {
                 conditionalErrors.push('  • CORS_ORIGINS cannot contain wildcard (*) in production or staging');

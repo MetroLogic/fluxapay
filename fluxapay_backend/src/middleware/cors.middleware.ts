@@ -172,15 +172,18 @@ export function getCorsOptions(): CorsOptions {
     };
   }
 
-  // Staging: staging domains only
+  // Staging: requires CORS_ORIGINS to be set (enforced in env validation)
   if (nodeEnv === 'staging') {
+    const stagingOrigins = parseCorsOrigins();
     return {
       origin: (origin, callback) => {
         if (!origin) {
           callback(new Error('Missing origin'), false);
           return;
         }
-        if (STAGING_ORIGINS.includes(origin)) {
+        // Check both hardcoded staging origins and env-configured origins
+        const allowedOrigins = [...STAGING_ORIGINS, ...stagingOrigins];
+        if (isOriginAllowed(origin, allowedOrigins)) {
           callback(null, true);
         } else {
           console.warn(`🚫 CORS: Blocked origin ${origin} in staging`);
@@ -195,7 +198,8 @@ export function getCorsOptions(): CorsOptions {
     };
   }
   
-  // Production: Strict origin checking
+  // Production: Strict origin checking (CORS_ORIGINS required by env validation)
+  const prodOrigins = parseCorsOrigins();
   return {
     origin: async (origin, callback) => {
       if (!origin) {
@@ -206,6 +210,12 @@ export function getCorsOptions(): CorsOptions {
       
       // Check hardcoded production origins
       if (PRODUCTION_ORIGINS.includes(origin)) {
+        callback(null, true);
+        return;
+      }
+
+      // Check env-configured origins
+      if (isOriginAllowed(origin, prodOrigins)) {
         callback(null, true);
         return;
       }

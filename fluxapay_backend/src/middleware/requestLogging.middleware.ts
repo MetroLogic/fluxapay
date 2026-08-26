@@ -14,10 +14,23 @@ import { redactAuthHeader, redactEmail, hashMerchantId, sanitizeObject, redactRe
  * - Response time
  * - User/merchant context (if available)
  * - PII-safe logging (redacted auth headers, hashed identifiers)
+ * 
+ * Business metrics are excluded from health check endpoints to prevent
+ * metric cardinality explosion from frequent load balancer probes.
  */
+
+/** Paths excluded from business metrics (health checks, readiness probes, etc.) */
+const METRICS_EXCLUSION_LIST = ['/health', '/ready', '/metrics'];
+
+function isExcludedFromMetrics(path: string): boolean {
+  const basePath = path.split('?')[0];
+  return METRICS_EXCLUSION_LIST.includes(basePath);
+}
+
 export function requestLoggingMiddleware(req: Request, res: Response, next: NextFunction): void {
   const startTime = process.hrtime();
   const authReq = req as AuthRequest;
+  const isHealthCheck = isExcludedFromMetrics(req.originalUrl);
   
   // Prepare base context with PII-safe data
   const baseContext: any = {
@@ -37,12 +50,14 @@ export function requestLoggingMiddleware(req: Request, res: Response, next: Next
   
   const requestLogger = getLogger().child(baseContext);
 
-  // Track request start for metrics
+  // Track request start for metrics (exclude health checks)
   const metricsCollector = getMetricsCollector();
-  metricsCollector.increment('http_requests_total', {
-    method: req.method,
-    path: normalizePath(req.originalUrl),
-  });
+  if (!isHealthCheck) {
+    metricsCollector.increment('http_requests_total', {
+      method: req.method,
+      path: normalizePath(req.originalUrl),
+    });
+  }
 
   // Capture response finish event
   res.on('finish', () => {
@@ -52,7 +67,7 @@ export function requestLoggingMiddleware(req: Request, res: Response, next: Next
     const contentLength = req.get('content-length');
     const responseContentLength = res.getHeader('content-length')?.toString();
     
-    // Log the request with PII-safe data
+    // Log the request with PII-safe data (include all requests, even health checks)
     requestLogger.info('HTTP Request', {
       statusCode: res.statusCode,
       responseTime: duration,
@@ -64,56 +79,60 @@ export function requestLoggingMiddleware(req: Request, res: Response, next: Next
       body: redactRequestBody(req.body),
       contentLength: contentLength ? parseInt(contentLength, 10) : undefined,
       responseSize: responseContentLength ? parseInt(responseContentLength, 10) : undefined,
+      isHealthCheck,
     });
 
-    // Record response time metric
-    metricsCollector.timer('http_request_duration_ms', startTime, {
-      method: req.method,
-      path: normalizePath(req.originalUrl),
-      status: res.statusCode.toString(),
-    });
-
-    // Track error responses
-    if (res.statusCode >= 400) {
-      metricsCollector.increment('http_errors_total', {
+    // Record metrics only for non-health-check endpoints
+    if (!isHealthCheck) {
+      // Record response time metric
+      metricsCollector.timer('http_request_duration_ms', startTime, {
         method: req.method,
         path: normalizePath(req.originalUrl),
         status: res.statusCode.toString(),
       });
-    }
 
-    // Track slow requests (>1s threshold)
-    if (duration > 1000) {
-      metricsCollector.increment('http_slow_requests_total', {
-        method: req.method,
-        path: normalizePath(req.originalUrl),
-        threshold: '1000ms',
-      });
+      // Track error responses
+      if (res.statusCode >= 400) {
+        metricsCollector.increment('http_errors_total', {
+          method: req.method,
+          path: normalizePath(req.originalUrl),
+          status: res.statusCode.toString(),
+        });
+      }
+
+      // Track slow requests (>1s threshold)
+      if (duration > 1000) {
+        metricsCollector.increment('http_slow_requests_total', {
+          method: req.method,
+          path: normalizePath(req.originalUrl),
+          threshold: '1000ms',
+        });
+        
+        // Enhanced slow request warning with handler details
+        requestLogger.warn('Slow request detected', {
+          responseTime: duration,
+          threshold: 1000,
+          route: req.route?.path || req.originalUrl,
+          handler: req.route?.stack?.[0]?.name || 'anonymous',
+          method: req.method,
+          statusCode: res.statusCode,
+          contentLength: contentLength,
+          queryParamCount: Object.keys(req.query || {}).length,
+          bodyParamCount: typeof req.body === 'object' && req.body !== null ? Object.keys(req.body).length : 0,
+        });
+      }
       
-      // Enhanced slow request warning with handler details
-      requestLogger.warn('Slow request detected', {
-        responseTime: duration,
-        threshold: 1000,
-        route: req.route?.path || req.originalUrl,
-        handler: req.route?.stack?.[0]?.name || 'anonymous',
-        method: req.method,
-        statusCode: res.statusCode,
-        contentLength: contentLength,
-        queryParamCount: Object.keys(req.query || {}).length,
-        bodyParamCount: typeof req.body === 'object' && req.body !== null ? Object.keys(req.body).length : 0,
-      });
-    }
-    
-    // Track very slow requests (>5s) with higher severity
-    if (duration > 5000) {
-      requestLogger.error('Critical slow request detected', {
-        responseTime: duration,
-        threshold: 5000,
-        route: req.route?.path || req.originalUrl,
-        handler: req.route?.stack?.[0]?.name || 'anonymous',
-        method: req.method,
-        statusCode: res.statusCode,
-      });
+      // Track very slow requests (>5s) with higher severity
+      if (duration > 5000) {
+        requestLogger.error('Critical slow request detected', {
+          responseTime: duration,
+          threshold: 5000,
+          route: req.route?.path || req.originalUrl,
+          handler: req.route?.stack?.[0]?.name || 'anonymous',
+          method: req.method,
+          statusCode: res.statusCode,
+        });
+      }
     }
   });
 

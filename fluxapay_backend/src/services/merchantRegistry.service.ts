@@ -9,6 +9,18 @@ import {
 import { isDevEnv } from "../helpers/env.helper";
 import { PrismaClient } from "../generated/client/client";
 import { prisma } from "../config/prisma";
+import { sendOpsAlert } from "./settlementAlert.service";
+
+
+export interface MerchantRegistryJob {
+  merchantId: string;
+  txHash: string;
+  attempts: number;
+  maxAttempts: number;
+}
+
+const MAX_REGISTRY_ATTEMPTS = 30; // ~5 minutes with exponential backoff
+const BASE_DELAY_MS = 1000;
 
 
 export class MerchantRegistryService {
@@ -17,6 +29,8 @@ export class MerchantRegistryService {
   private contractId: string;
   private adminKeypair: Keypair;
   private server: rpc.Server;
+  private registryQueue: MerchantRegistryJob[] = [];
+  private queueRunning = false;
 
   constructor() {
     this.rpcUrl =
@@ -43,9 +57,9 @@ export class MerchantRegistryService {
 
   /**
    * Registers a merchant on-chain via the Soroban Smart Contract.
-   * Idempotent: checks DB state before each attempt so retries never submit
-   * a second registration transaction for the same merchant.
-   * Throws an error if we exceed max retries.
+   * Sets merchant status to PENDING_CHAIN_REGISTRATION immediately.
+   * The SorobanQueueService polls for confirmation asynchronously.
+   * Throws an error if DB update fails.
    */
   public async register_merchant(
     merchantId: string,
@@ -59,92 +73,232 @@ export class MerchantRegistryService {
       return false;
     }
 
-    // Idempotency guard: if a previous call already completed on-chain, skip.
-    const existing = await prisma.merchant.findUnique({
+    // Check current status
+    const merchant = await prisma.merchant.findUnique({
       where: { id: merchantId },
-      select: { onchain_registered: true, onchain_registry_tx_hash: true },
+      select: { 
+        status: true,
+        onchain_registered: true, 
+        onchain_registry_tx_hash: true 
+      },
     });
-    if (existing?.onchain_registered) {
+
+    // If already registered on-chain, skip
+    if (merchant?.onchain_registered) {
       if (isDevEnv()) {
         console.log(
-          `Merchant ${merchantId} already registered on-chain (tx: ${existing.onchain_registry_tx_hash}). Skipping.`,
+          `Merchant ${merchantId} already registered on-chain (tx: ${merchant.onchain_registry_tx_hash}). Skipping.`,
         );
       }
       return true;
     }
 
-    const MAX_RETRIES = 3;
-    let attempt = 0;
-    const baseDelay = 1000;
+    // If already pending registration, skip
+    if (merchant?.status === "pending_chain_registration") {
+      if (isDevEnv()) {
+        console.log(
+          `Merchant ${merchantId} already has pending chain registration. Skipping.`,
+        );
+      }
+      return true;
+    }
 
-    while (attempt < MAX_RETRIES) {
-      // Re-check DB at each retry boundary to handle concurrent callers.
-      if (attempt > 0) {
-        const recheck = await prisma.merchant.findUnique({
-          where: { id: merchantId },
-          select: { onchain_registered: true },
-        });
-        if (recheck?.onchain_registered) {
-          if (isDevEnv()) {
-            console.log(
-              `Merchant ${merchantId} registered on-chain by a concurrent process. Skipping retry.`,
-            );
-          }
-          return true;
-        }
+    try {
+      // Submit the transaction
+      const txHash = await this.invokeRegisterContract(
+        merchantId,
+        businessName,
+        settlementCurrency,
+      );
+
+      // Set status to PENDING_CHAIN_REGISTRATION (not active yet)
+      await prisma.merchant.update({
+        where: { id: merchantId },
+        data: {
+          status: "pending_chain_registration",
+          onchain_registry_tx_hash: txHash,
+        },
+      });
+
+      if (isDevEnv()) {
+        console.log(
+          `Submitted on-chain registration for merchant ${merchantId} (tx: ${txHash}). Status: PENDING_CHAIN_REGISTRATION`,
+        );
       }
 
-      try {
-        const txHash = await this.invokeRegisterContract(
-          merchantId,
-          businessName,
-          settlementCurrency,
-        );
+      // Enqueue for polling confirmation
+      this.enqueueForPolling(merchantId, txHash);
 
-        // Mark as registered in DB so future calls (or retries) are no-ops.
+      return true;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error(
+        `Failed to submit on-chain registration for merchant ${merchantId}:`,
+        errorMessage,
+      );
+
+      // Set status to CHAIN_REGISTRATION_FAILED
+      await prisma.merchant.update({
+        where: { id: merchantId },
+        data: {
+          status: "chain_registration_failed",
+        },
+      });
+
+      // Log to manual intervention queue
+      await this.logToManualInterventionQueue(merchantId, errorMessage);
+
+      // Alert ops
+      await sendOpsAlert(
+        "MerchantRegistryFailure",
+        `On-chain registration failed for merchant ${merchantId}: ${errorMessage}`,
+      );
+
+      throw error;
+    }
+  }
+
+  /**
+   * Enqueues a merchant registration for polling confirmation
+   */
+  private enqueueForPolling(merchantId: string, txHash: string): void {
+    this.registryQueue.push({
+      merchantId,
+      txHash,
+      attempts: 0,
+      maxAttempts: MAX_REGISTRY_ATTEMPTS,
+    });
+
+    if (!this.queueRunning) {
+      void this.drainQueue();
+    }
+  }
+
+  /**
+   * Poll for merchant registration confirmation
+   */
+  private async drainQueue(): Promise<void> {
+    this.queueRunning = true;
+    while (this.registryQueue.length > 0) {
+      const job = this.registryQueue.shift()!;
+      await this.pollForConfirmation(job);
+    }
+    this.queueRunning = false;
+  }
+
+  /**
+   * Poll the transaction status until confirmed or max attempts exceeded
+   */
+  private async pollForConfirmation(job: MerchantRegistryJob): Promise<void> {
+    job.attempts++;
+
+    try {
+      const txResponse = await this.server.getTransaction(job.txHash);
+
+      if (txResponse.status === "SUCCESS") {
+        // Transaction confirmed on-chain
         await prisma.merchant.update({
-          where: { id: merchantId },
+          where: { id: job.merchantId },
           data: {
+            status: "active",
             onchain_registered: true,
-            onchain_registry_tx_hash: txHash,
           },
         });
 
         if (isDevEnv()) {
           console.log(
-            `Successfully registered merchant ${merchantId} on-chain (tx: ${txHash}).`,
+            `✓ Merchant ${job.merchantId} confirmed on-chain (tx: ${job.txHash})`,
           );
         }
-        return true;
-      } catch (error) {
-        attempt++;
-        let errorMessage = "Unknown error";
-        if (error instanceof Error) errorMessage = error.message;
+        return;
+      }
 
-        console.error(
-          `Attempt ${attempt} to register merchant ${merchantId} on-chain failed:`,
-          errorMessage,
+      if (txResponse.status === "FAILED") {
+        // Transaction failed on-chain
+        await prisma.merchant.update({
+          where: { id: job.merchantId },
+          data: {
+            status: "chain_registration_failed",
+          },
+        });
+
+        await this.logToManualInterventionQueue(
+          job.merchantId,
+          `On-chain transaction failed: ${JSON.stringify(txResponse)}`,
         );
 
-        if (attempt >= MAX_RETRIES) {
-          await this.logToManualInterventionQueue(merchantId, errorMessage);
-          throw new Error(
-            `Max retries reached for on-chain registration: ${errorMessage}`,
-          );
-        }
+        await sendOpsAlert(
+          "MerchantRegistryFailure",
+          `On-chain transaction failed for merchant ${job.merchantId}`,
+        );
 
-        // Exponential backoff
-        await new Promise((resolve) =>
-          setTimeout(resolve, baseDelay * Math.pow(2, attempt - 1)),
+        console.error(
+          `✗ Merchant ${job.merchantId} registration failed on-chain`,
+        );
+        return;
+      }
+
+      // Still NOT_FOUND - keep polling
+      if (job.attempts < job.maxAttempts) {
+        const delay = BASE_DELAY_MS * Math.pow(2, Math.min(job.attempts - 1, 5)); // Cap exponential growth
+        console.log(
+          `[MerchantRegistry] Polling ${job.merchantId} attempt ${job.attempts}/${job.maxAttempts} in ${delay}ms`,
+        );
+        await new Promise((r) => setTimeout(r, delay));
+        this.registryQueue.unshift(job); // Re-queue for retry
+      } else {
+        // Max retries exceeded
+        await prisma.merchant.update({
+          where: { id: job.merchantId },
+          data: {
+            status: "chain_registration_failed",
+          },
+        });
+
+        await this.logToManualInterventionQueue(
+          job.merchantId,
+          `Registration polling exceeded max attempts (${job.maxAttempts})`,
+        );
+
+        await sendOpsAlert(
+          "MerchantRegistryTimeout",
+          `Merchant ${job.merchantId} registration polling timed out after ${job.maxAttempts} attempts`,
+        );
+
+        console.error(
+          `✗ Merchant ${job.merchantId} registration polling timed out after ${job.maxAttempts} attempts`,
+        );
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(
+        `[MerchantRegistry] Polling ${job.merchantId} failed: ${msg}`,
+      );
+
+      if (job.attempts < job.maxAttempts) {
+        const delay = BASE_DELAY_MS * Math.pow(2, Math.min(job.attempts - 1, 5));
+        await new Promise((r) => setTimeout(r, delay));
+        this.registryQueue.unshift(job);
+      } else {
+        await prisma.merchant.update({
+          where: { id: job.merchantId },
+          data: {
+            status: "chain_registration_failed",
+          },
+        });
+
+        await this.logToManualInterventionQueue(job.merchantId, msg);
+        await sendOpsAlert(
+          "MerchantRegistryError",
+          `Merchant ${job.merchantId} registration polling error: ${msg}`,
         );
       }
     }
-    return false;
   }
 
   /**
-   * Submits the register_merchant call to Soroban and waits for confirmation.
-   * Returns the confirmed transaction hash.
+   * Submits the register_merchant call to Soroban and returns the tx hash.
+   * Does NOT wait for confirmation - that's handled by polling.
    */
   private async invokeRegisterContract(
     merchantId: string,
@@ -193,21 +347,6 @@ export class MerchantRegistryService {
       );
     }
 
-    // Poll until the transaction is confirmed or times out.
-    let txResponse = await this.server.getTransaction(sendTxResponse.hash);
-    let retries = 0;
-    while (txResponse.status === "NOT_FOUND" && retries < 10) {
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      txResponse = await this.server.getTransaction(sendTxResponse.hash);
-      retries++;
-    }
-
-    if (txResponse.status === "FAILED") {
-      throw new Error(
-        `Transaction failed on-chain: ${JSON.stringify(txResponse)}`,
-      );
-    }
-
     return sendTxResponse.hash;
   }
 
@@ -216,14 +355,14 @@ export class MerchantRegistryService {
     reason: string,
   ) {
     console.error(
-      `[MANUAL INTERVENTION REQUIRED] Merchant ${merchantId} failed on-chain registration: ${reason}`,
+      `[MANUAL INTERVENTION REQUIRED] Merchant ${merchantId} on-chain registration failed: ${reason}`,
     );
     try {
       await prisma.manualIntervention.create({
         data: {
           merchantId,
           issue_type: "onchain_registration_failed",
-          description: `On-chain registration failed after max retries. Reason: ${reason}`,
+          description: `On-chain registration failed. Reason: ${reason}`,
         },
       });
     } catch (dbError) {
@@ -232,6 +371,11 @@ export class MerchantRegistryService {
         dbError,
       );
     }
+  }
+
+  /** Get current queue size for monitoring */
+  get queueSize(): number {
+    return this.registryQueue.length;
   }
 }
 

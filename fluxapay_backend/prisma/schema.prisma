@@ -593,6 +593,8 @@ model IdempotencyRecord {
 
 enum MerchantStatus {
   pending_verification
+  pending_chain_registration  /// Awaiting on-chain Soroban registration confirmation
+  chain_registration_failed   /// On-chain registration failed after max retries
   active
 }
 
