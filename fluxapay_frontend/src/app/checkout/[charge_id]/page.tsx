@@ -252,6 +252,7 @@ export default function CheckoutPage() {
                 assetCode={payment.currency}
                 memo={payment.memo}
                 memoType={payment.memoType}
+                paymentId={chargeId}
               />
             </div>
           </div>
@@ -356,14 +357,14 @@ export default function CheckoutPage() {
               </div>
             )}
 
-            {/* SEP-0007 Deep-link Button */}
-            <div className="mb-6 flex justify-center">
+            <div className="mb-6">
               <StellarPayButton
                 address={payment.address}
                 amount={payment.amount}
                 assetCode={payment.currency}
                 memo={payment.memo}
                 memoType={payment.memoType}
+                paymentId={chargeId}
               />
             </div>
 

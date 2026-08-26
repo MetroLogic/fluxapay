@@ -1,18 +1,26 @@
 "use client";
 
 import React, { useState, useMemo, useEffect } from 'react';
+import { format } from 'date-fns';
 import { subDays, startOfDay } from 'date-fns';
+import { Loader2, AlertCircle } from 'lucide-react';
 import { ReconciliationRecord } from '@/types/reconciliation';
 import { ReconciliationSummary } from '@/components/reconciliation/ReconciliationSummary';
 import { ReconciliationTable } from '@/components/reconciliation/ReconciliationTable';
 import { StatementDownload } from '@/components/reconciliation/StatementDownload';
 import { DiscrepancyAlert } from '@/components/reconciliation/DiscrepancyAlert';
 import { useReconciliation } from '@/hooks/useReconciliation';
-import { exportToPDF, exportToCSV } from '@/utils/exportHelpers';
+import { exportSettlementReportPDF, exportToPDF } from '@/utils/exportHelpers';
 import { api, ApiError } from '@/lib/api';
+
+type AssetFilter = 'all' | 'USDC' | 'XLM';
 
 export default function ReconciliationPage() {
     const [dateRangeFilter, setDateRangeFilter] = useState<'today' | '7days' | '30days'>('30days');
+    const [assetFilter, setAssetFilter] = useState<AssetFilter>('all');
+    const [minDiscrepancy, setMinDiscrepancy] = useState('');
+    const [exportLoading, setExportLoading] = useState<'pdf' | 'csv' | null>(null);
+    const [exportError, setExportError] = useState<string | null>(null);
     const [merchant, setMerchant] = useState<{ name: string; id: string }>({ name: '', id: '' });
 
     useEffect(() => {
@@ -22,7 +30,6 @@ export default function ReconciliationPage() {
         }).catch(() => {});
     }, []);
 
-    // Compute date range based on filter, memoized to prevent infinite loops
     const { startDate, endDate } = useMemo(() => {
         const end = new Date();
         let start = new Date();
@@ -43,17 +50,60 @@ export default function ReconciliationPage() {
         end: endDate
     });
 
-    const handleDownloadPDF = async () => {
-        if (!summary) return;
-        await exportToPDF(
-            records,
-            summary,
-            { name: merchant.name || 'Merchant', id: merchant.id }
-        );
+    const exportParams = useMemo(() => ({
+        date_from: format(startDate, 'yyyy-MM-dd'),
+        date_to: format(endDate, 'yyyy-MM-dd'),
+        asset: assetFilter !== 'all' ? assetFilter : undefined,
+        min_discrepancy: minDiscrepancy ? parseFloat(minDiscrepancy) : undefined,
+    }), [startDate, endDate, assetFilter, minDiscrepancy]);
+
+    const downloadBlob = (blob: Blob, filename: string) => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
     };
 
-    const handleDownloadCSV = () => {
-        exportToCSV(records);
+    const handleDownloadPDF = async () => {
+        setExportError(null);
+        setExportLoading('pdf');
+        try {
+            const result = await api.settlements.exportRange({
+                ...exportParams,
+                format: 'pdf',
+            });
+            const pdfResult = result as { content: Parameters<typeof exportSettlementReportPDF>[0] };
+            exportSettlementReportPDF(
+                pdfResult.content,
+                `reconciliation-${exportParams.date_from}-${exportParams.date_to}.pdf`,
+            );
+        } catch (e) {
+            const message = e instanceof ApiError ? e.message : 'Failed to export PDF from server';
+            setExportError(message);
+        } finally {
+            setExportLoading(null);
+        }
+    };
+
+    const handleDownloadCSV = async () => {
+        setExportError(null);
+        setExportLoading('csv');
+        try {
+            const blob = (await api.settlements.exportRange({
+                ...exportParams,
+                format: 'csv',
+            })) as Blob;
+            downloadBlob(blob, `reconciliation-${exportParams.date_from}-${exportParams.date_to}.csv`);
+        } catch (e) {
+            const message = e instanceof ApiError ? e.message : 'Failed to export CSV from server';
+            setExportError(message);
+        } finally {
+            setExportLoading(null);
+        }
     };
 
     const handleResolveAlert = async (id: string) => {
@@ -77,7 +127,12 @@ export default function ReconciliationPage() {
             startDate: record.date,
             endDate: record.date
         };
-        await exportToPDF([record], singleSummary, { name: merchant.name || 'Merchant', id: merchant.id });
+        try {
+            await exportToPDF([record], singleSummary, { name: merchant.name || 'Merchant', id: merchant.id });
+        } catch (e) {
+            const message = e instanceof Error ? e.message : 'Failed to export record';
+            setExportError(message);
+        }
     };
 
     if (error) {
@@ -95,7 +150,26 @@ export default function ReconciliationPage() {
         <div className="min-h-screen bg-gray-50/50 py-8 px-4 sm:px-6 lg:px-8">
             <div className="max-w-7xl mx-auto space-y-8">
 
-                {/* Header Section */}
+                {exportError && (
+                    <div
+                        className="flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-red-800"
+                        role="alert"
+                    >
+                        <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
+                        <div>
+                            <p className="font-semibold">Export failed</p>
+                            <p className="text-sm mt-1">{exportError}</p>
+                            <button
+                                type="button"
+                                onClick={() => setExportError(null)}
+                                className="text-sm underline mt-2"
+                            >
+                                Dismiss
+                            </button>
+                        </div>
+                    </div>
+                )}
+
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white p-6 rounded-xl shadow-sm border border-gray-200">
                     <div>
                         <h1 className="text-2xl font-bold text-gray-900">Reconciliation & Statements</h1>
@@ -114,30 +188,56 @@ export default function ReconciliationPage() {
                             <option value="30days">Last 30 days</option>
                         </select>
 
+                        <select
+                            value={assetFilter}
+                            onChange={(e) => setAssetFilter(e.target.value as AssetFilter)}
+                            className="w-full sm:w-auto block rounded-md border-gray-300 py-2 pl-3 pr-10 text-base focus:border-indigo-500 focus:outline-none focus:ring-indigo-500 sm:text-sm border shadow-sm bg-white"
+                            aria-label="Filter by asset"
+                        >
+                            <option value="all">All assets</option>
+                            <option value="USDC">USDC</option>
+                            <option value="XLM">XLM</option>
+                        </select>
+
+                        <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            placeholder="Min discrepancy"
+                            value={minDiscrepancy}
+                            onChange={(e) => setMinDiscrepancy(e.target.value)}
+                            className="w-full sm:w-36 block rounded-md border-gray-300 py-2 px-3 text-sm border shadow-sm bg-white"
+                            aria-label="Minimum discrepancy filter"
+                        />
+
                         <StatementDownload
                             onDownloadPDF={handleDownloadPDF}
                             onDownloadCSV={handleDownloadCSV}
-                            disabled={loading || records.length === 0}
+                            disabled={loading || exportLoading !== null}
+                            isExporting={exportLoading}
                         />
                     </div>
                 </div>
 
-                {/* Alerts Section */}
                 <DiscrepancyAlert
                     alerts={discrepancies}
                     onResolve={handleResolveAlert}
                 />
 
-                {/* Summary Card Grid */}
                 <ReconciliationSummary
                     summary={summary}
                     loading={loading}
                 />
 
-                {/* Detailed Table Section */}
                 <div className="space-y-4">
                     <div className="flex items-center justify-between">
                         <h2 className="text-lg font-medium text-gray-900">Settlement Records</h2>
+                        {exportLoading && (
+                            <span className="inline-flex items-center gap-2 text-sm text-gray-500">
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                Exporting {exportLoading.toUpperCase()}…
+                            </span>
+                        )}
                     </div>
 
                     <ReconciliationTable

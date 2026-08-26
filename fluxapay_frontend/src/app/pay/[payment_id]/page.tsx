@@ -12,7 +12,7 @@ import { TxHashLink } from '@/components/TxHashLink';
 import { PaymentQRCode } from '@/components/checkout/PaymentQRCode';
 import { PaymentTimer } from '@/components/checkout/PaymentTimer';
 import { PaymentStatus } from '@/components/checkout/PaymentStatus';
-import { BrowserWalletButtons } from '@/components/checkout/BrowserWalletButtons';
+import { StellarPayButton } from '@/components/checkout/StellarPayButton';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import {
   CheckoutBrandingShell,
@@ -503,7 +503,7 @@ export default function CheckoutPage() {
             </div>
 
             <div className="mt-4">
-              <BrowserWalletButtons
+              <StellarPayButton
                 address={payment.address}
                 amount={payment.amount}
                 memo={payment.memo}

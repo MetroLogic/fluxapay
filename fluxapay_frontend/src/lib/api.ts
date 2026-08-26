@@ -528,12 +528,16 @@ export const api = {
       date_from?: string;
       date_to?: string;
       currency?: string;
+      asset?: string;
+      min_discrepancy?: number;
       format?: "pdf" | "csv";
     }): Promise<Blob | Record<string, unknown>> => {
       const sp = new URLSearchParams();
       if (params.date_from) sp.set("date_from", params.date_from);
       if (params.date_to) sp.set("date_to", params.date_to);
       if (params.currency) sp.set("currency", params.currency);
+      if (params.asset) sp.set("asset", params.asset);
+      if (params.min_discrepancy != null) sp.set("min_discrepancy", String(params.min_discrepancy));
       sp.set("format", params.format || "csv");
       const response = await fetch(
         `${API_BASE_URL}/api/v1/settlements/export?${sp.toString()}`,

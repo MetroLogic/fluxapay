@@ -20,6 +20,8 @@ import toast from "react-hot-toast";
 
 export function PaymentLinksPage() {
   const [links, setLinks] = useState<PaymentLink[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [label, setLabel] = useState("");
   const [amount, setAmount] = useState("");
   const [currency, setCurrency] = useState("USD");
@@ -35,8 +37,18 @@ export function PaymentLinksPage() {
   const [editMaxUses, setEditMaxUses] = useState("");
 
   const load = useCallback(async () => {
-    const res = await fetch("/api/links");
-    setLinks(await res.json());
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const res = await fetch("/api/links");
+      if (!res.ok) throw new Error("Failed to load payment links");
+      setLinks(await res.json());
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : "Failed to load payment links");
+      setLinks([]);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -334,8 +346,28 @@ export function PaymentLinksPage() {
         </div>
       )}
 
-      {/* Table */}
-      {links.length === 0 ? (
+      {/* Table / loading / empty */}
+      {loading ? (
+        <div
+          className="rounded-lg border border-border p-12 text-center"
+          data-testid="payment-links-skeleton"
+          aria-hidden="true"
+        >
+          <div className="mx-auto h-8 w-8 animate-pulse rounded-full bg-muted mb-3" />
+          <div className="mx-auto h-4 w-48 animate-pulse rounded bg-muted" />
+        </div>
+      ) : loadError ? (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-8 text-center text-red-700">
+          <p className="font-medium">{loadError}</p>
+          <button
+            type="button"
+            onClick={() => void load()}
+            className="mt-3 text-sm underline"
+          >
+            Retry
+          </button>
+        </div>
+      ) : links.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border p-12 text-center">
           <Link2 className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
           <p className="text-sm font-medium">No payment links yet</p>
