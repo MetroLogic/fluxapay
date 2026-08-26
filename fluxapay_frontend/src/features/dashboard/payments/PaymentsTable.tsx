@@ -1,7 +1,7 @@
-import { Badge } from "@/components/Badge";
 import { DataTableBodyState } from "@/components/data-table";
 import { VirtualizedTable } from "@/components/VirtualizedTable";
-import { Payment, PaymentStatus } from "./types";
+import { Payment } from "./types";
+import { PaymentStatusBadge } from "./PaymentStatusBadge";
 import { ChevronDown, ChevronUp, Copy, Eye, ExternalLink } from "lucide-react";
 import { useState, useMemo, memo, useCallback } from "react";
 import { getStellarExpertTxUrl } from "@/lib/stellar";
@@ -31,33 +31,6 @@ const SortIcon = memo(({ column, sortConfig }: SortIconProps) => {
   );
 });
 SortIcon.displayName = "SortIcon";
-
-const StatusBadge = memo(({ status }: { status: PaymentStatus }) => {
-  switch (status) {
-    case "confirmed":
-      return <Badge variant="success">Confirmed</Badge>;
-    case "pending":
-      return <Badge variant="warning">Pending</Badge>;
-    case "failed":
-      return <Badge variant="error">Failed</Badge>;
-    case "expired":
-      return <Badge variant="secondary">Expired</Badge>;
-    case "paid":
-    case "completed":
-      return <Badge variant="success">{status === "paid" ? "Paid" : "Completed"}</Badge>;
-    case "partially_paid":
-      return (
-        <Badge className="border-transparent bg-orange-500/10 text-orange-500 hover:bg-orange-500/20">
-          Partially Paid
-        </Badge>
-      );
-    case "overpaid":
-      return <Badge variant="info">Overpaid</Badge>;
-    default:
-      return <Badge>{status}</Badge>;
-  }
-});
-StatusBadge.displayName = "StatusBadge";
 
 interface PaymentRowProps {
   payment: Payment;
@@ -142,7 +115,7 @@ const PaymentRow = memo(({ payment, onRowClick }: PaymentRowProps) => {
         </div>
       </td>
       <td role="cell" className="px-4 py-4">
-        <StatusBadge status={payment.status} />
+        <PaymentStatusBadge status={payment.status} />
       </td>
       <td role="cell" className="px-4 py-4">
         <div className="flex flex-col">

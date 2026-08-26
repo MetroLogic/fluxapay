@@ -7,7 +7,6 @@ import { CheckoutBrandingShell, DEFAULT_ACCENT } from '@/components/checkout/Che
 import { PaymentQRCode } from '@/components/checkout/PaymentQRCode';
 import { PaymentTimer } from '@/components/checkout/PaymentTimer';
 import { StellarPayButton } from '@/components/checkout/StellarPayButton';
-import { BrowserWalletButtons } from '@/components/checkout/BrowserWalletButtons';
 import { FiatEquivalent } from '@/components/checkout/FiatEquivalent';
 import { api } from '@/lib/api';
 
@@ -334,16 +333,7 @@ export default function InvoicePaymentPage() {
                   </div>
                 )}
 
-                <div className="flex justify-center">
-                  <StellarPayButton
-                    address={invoice.payment.address}
-                    amount={invoice.payment.amount}
-                    memo={invoice.payment.memo}
-                    memoType={invoice.payment.memoType}
-                  />
-                </div>
-
-                <BrowserWalletButtons
+                <StellarPayButton
                   address={invoice.payment.address}
                   amount={invoice.payment.amount}
                   memo={invoice.payment.memo}
