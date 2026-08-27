@@ -1,4 +1,16 @@
 import { handleSessionExpired } from "./session";
+import { ApiError } from "./errors";
+import {
+  getToken,
+  storeToken,
+  clearToken,
+  getRefreshToken,
+  storeRefreshToken,
+  clearRefreshToken,
+  isAdmin,
+  setAdminStatus,
+  clearAuth,
+} from "./auth";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
@@ -68,78 +80,7 @@ export interface MerchantExportJobStatus {
   error?: string;
 }
 
-class ApiError extends Error {
-  public retryAfterSeconds?: number;
-  constructor(
-    public status: number,
-    message: string,
-    public code?: string,
-    retryAfterSeconds?: number,
-  ) {
-    super(message);
-    this.name = "ApiError";
-    this.retryAfterSeconds = retryAfterSeconds;
-  }
-}
-
-export function getToken(): string {
-  const token = localStorage.getItem("token") ?? sessionStorage.getItem("token");
-  if (!token) {
-    if (typeof window !== "undefined" && !window.location.pathname.includes("/login")) {
-      const currentUrl = window.location.pathname + window.location.search;
-      window.location.href = `/login?redirect=${encodeURIComponent(currentUrl)}`;
-    }
-    throw new ApiError(401, "No authentication token found");
-  }
-  return token;
-}
-
-/** Persist auth token.
- *  keepLoggedIn=true  → localStorage  (survives browser close, expires with JWT TTL ~30 days)
- *  keepLoggedIn=false → sessionStorage (cleared when the tab/browser is closed)
- */
-export function storeToken(token: string, keepLoggedIn = false): void {
-  if (keepLoggedIn) {
-    localStorage.setItem("token", token);
-    sessionStorage.removeItem("token"); // clear any leftover session token
-  } else {
-    sessionStorage.setItem("token", token);
-    localStorage.removeItem("token"); // ensure no persistent copy remains
-  }
-}
-
-/** Remove auth token from all storage locations. */
-export function clearToken(): void {
-  localStorage.removeItem("token");
-  sessionStorage.removeItem("token");
-}
-
-const REFRESH_TOKEN_KEY = "refresh_token";
-
-/** Persist the refresh token beside the access token, in the same storage. */
-export function storeRefreshToken(refreshToken: string, keepLoggedIn = false): void {
-  if (keepLoggedIn) {
-    localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
-    sessionStorage.removeItem(REFRESH_TOKEN_KEY);
-  } else {
-    sessionStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
-    localStorage.removeItem(REFRESH_TOKEN_KEY);
-  }
-}
-
-/** The stored refresh token, or null when the session has none. */
-export function getRefreshToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return (
-    localStorage.getItem(REFRESH_TOKEN_KEY) ??
-    sessionStorage.getItem(REFRESH_TOKEN_KEY)
-  );
-}
-
-export function clearRefreshToken(): void {
-  localStorage.removeItem(REFRESH_TOKEN_KEY);
-  sessionStorage.removeItem(REFRESH_TOKEN_KEY);
-}
+// Token functions are now imported from auth.ts for single source of truth
 
 export interface RefreshedSession {
   accessToken: string;
@@ -998,4 +939,17 @@ export const fetchPricingConfig = async () => {
   }
 };
 
-export { ApiError };
+// Re-export auth functions for backwards compatibility with existing imports
+export {
+  getToken,
+  storeToken,
+  clearToken,
+  getRefreshToken,
+  storeRefreshToken,
+  clearRefreshToken,
+  isAdmin,
+  setAdminStatus,
+  clearAuth,
+} from "./auth";
+
+export { ApiError } from "./errors";
