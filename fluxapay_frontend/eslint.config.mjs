@@ -31,6 +31,26 @@ const eslintConfig = defineConfig([
       "@typescript-eslint/no-explicit-any": "off",
     },
   },
+  {
+    files: ["**/*.ts", "**/*.tsx"],
+    ignores: [
+      "**/*.test.ts",
+      "**/*.test.tsx",
+      "**/__tests__/**",
+      "src/__tests__/**",
+    ],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: ["*mock*"],
+          message:
+            "Mock files should only be imported in test files, not in production code. " +
+            "Move the mock file import to a .test.ts/.test.tsx file or __tests__ directory.",
+        },
+      ],
+    },
+  },
 ]);
 
 export default eslintConfig;
