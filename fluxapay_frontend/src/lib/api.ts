@@ -249,30 +249,6 @@ async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
   return response.json();
 }
 
-/** Build headers including the optional admin secret for internal endpoints. */
-function adminHeaders(): Record<string, string> {
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
-  const secret = process.env.NEXT_PUBLIC_ADMIN_SECRET;
-  if (secret) headers["X-Admin-Secret"] = secret;
-  return headers;
-}
-
-/** Authenticated fetch that builds the full URL */
-function adminFetch(endpoint: string, options: RequestInit = {}): Promise<Response> {
-  return fetch(`${API_BASE_URL}${endpoint}`, {
-    ...options,
-    headers: { ...adminHeaders(), ...(options.headers as Record<string, string> || {}) },
-  });
-}
-
-function refundAdminKeyHeader(): Record<string, string> {
-  const header: Record<string, string> = {};
-  const adminApiKey = process.env.NEXT_PUBLIC_ADMIN_API_KEY;
-  if (adminApiKey) header["X-Admin-API-Key"] = adminApiKey;
-  return header;
-}
 
 export const api = {
   // Authentication — routes match backend /api/merchants/*
@@ -434,45 +410,23 @@ export const api = {
       }),
   },
 
-  // Sweep / Settlement Batch endpoints (admin-only)
+  // Sweep / Settlement Batch endpoints (admin-only, JWT authenticated server-side routes)
   sweep: {
-    getStatus: (): Promise<Response> =>
-      fetch(`${API_BASE_URL}/api/v1/admin/settlement/status`, {
-        headers: adminHeaders(),
-      }),
+    getStatus: () =>
+      fetchWithAuth("/api/admin/sweep/status"),
 
     /** Manually trigger a full accounts sweep (settlement batch) */
-    runSweep: (dryRun?: boolean): Promise<Response> =>
-      fetch(`${API_BASE_URL}/api/v1/admin/sweep/run`, {
+    runSweep: (dryRun?: boolean) =>
+      fetchWithAuth("/api/admin/sweep/run", {
         method: "POST",
-        headers: adminHeaders(),
         body: JSON.stringify({ dry_run: dryRun || false }),
       }),
 
     /** Preview eligible payments before running a sweep */
-    previewSweep: (): Promise<Response> =>
-      fetch(`${API_BASE_URL}/api/v1/admin/sweep/preview`, {
-        headers: adminHeaders(),
-      }),
+    previewSweep: () =>
+      fetchWithAuth("/api/admin/sweep/preview"),
   },
 
-  // Admin merchant management
-  adminMerchants: {
-    list: (params?: { page?: number; limit?: number; status?: string }) => {
-      const qs = new URLSearchParams();
-      if (params?.page) qs.set("page", String(params.page));
-      if (params?.limit) qs.set("limit", String(params.limit));
-      if (params?.status) qs.set("status", params.status);
-      return adminFetch(`/api/v1/merchants/admin/list?${qs.toString()}`);
-    },
-    get: (merchantId: string) =>
-      adminFetch(`/api/v1/merchants/admin/${merchantId}`),
-    updateStatus: (merchantId: string, status: string) =>
-      adminFetch(`/api/v1/merchants/admin/${merchantId}/status`, {
-        method: "PATCH",
-        body: JSON.stringify({ status }),
-      }),
-  },
 
   // Admin KYC management
   adminKyc: {
@@ -628,12 +582,11 @@ export const api = {
     },
   },
 
-  // Refunds
+  // Refunds (server-side routes with admin secret)
   refunds: {
     initiate: (data: InitiateRefundRequest) =>
-      fetchWithAuth("/api/refunds", {
+      fetchWithAuth("/api/admin/refunds/initiate", {
         method: "POST",
-        headers: refundAdminKeyHeader(),
         body: JSON.stringify(data),
       }),
     list: (params?: ListRefundsParams) => {
@@ -644,12 +597,10 @@ export const api = {
       if (params?.page != null) sp.set("page", String(params.page));
       if (params?.limit != null) sp.set("limit", String(params.limit));
       const query = sp.toString();
-      return fetchWithAuth(`/api/refunds${query ? `?${query}` : ""}`, {
-        headers: refundAdminKeyHeader(),
-      });
+      return fetchWithAuth(`/api/admin/refunds/list${query ? `?${query}` : ""}`);
     },
     getById: (refundId: string) =>
-      fetchWithAuth(`/api/refunds/${refundId}`, { headers: refundAdminKeyHeader() }),
+      fetchWithAuth(`/api/admin/refunds/${encodeURIComponent(refundId)}`),
   },
 
   // Payments (merchant-scoped) — backend mounts at /api/v1/payments
@@ -943,12 +894,9 @@ export const api = {
           body: JSON.stringify({ merchantIds, status, reason }),
         }),
       disableWebhook: (merchantId: string) =>
-        adminFetch(`/api/v1/merchants/admin/${merchantId}/webhook`, {
+        fetchWithAuth(`/api/admin/merchants/${encodeURIComponent(merchantId)}/webhook`, {
           method: "PATCH",
           body: JSON.stringify({ webhook_url: "" }),
-        }).then(async res => {
-          if (!res.ok) throw new Error("Failed to disable webhook");
-          return res.json();
         }),
     },
     settlements: {
@@ -1029,16 +977,10 @@ export const api = {
         if (params?.search) sp.set("search", params.search);
         if (params?.page != null) sp.set("page", String(params.page));
         if (params?.limit != null) sp.set("limit", String(params.limit));
-        return adminFetch(`/api/v1/webhooks/admin/logs?${sp.toString()}`).then(async res => {
-          if (!res.ok) throw new Error("Failed to fetch admin webhook logs");
-          return res.json();
-        });
+        return fetchWithAuth(`/api/admin/webhooks/logs?${sp.toString()}`);
       },
       retry: (logId: string) =>
-        adminFetch(`/api/v1/webhooks/admin/logs/${logId}/retry`, { method: "POST" }).then(async res => {
-          if (!res.ok) throw new Error("Failed to retry webhook");
-          return res.json();
-        }),
+        fetchWithAuth(`/api/admin/webhooks/${encodeURIComponent(logId)}/retry`, { method: "POST" }),
     },
   },
 };
