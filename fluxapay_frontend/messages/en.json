@@ -21,7 +21,8 @@
     "export": "Export",
     "import": "Import",
     "download": "Download",
-    "upload": "Upload"
+    "upload": "Upload",
+    "offlineMessage": "You are offline. Showing cached data. Reconnect to see the latest updates."
   },
   "nav": {
     "home": "Home",

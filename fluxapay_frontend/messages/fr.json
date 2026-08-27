@@ -21,7 +21,8 @@
     "export": "Exporter",
     "import": "Importer",
     "download": "Télécharger",
-    "upload": "Téléverser"
+    "upload": "Téléverser",
+    "offlineMessage": "Vous êtes hors ligne. Affichage des données en cache. Reconnectez-vous pour voir les dernières mises à jour."
   },
   "nav": {
     "home": "Accueil",

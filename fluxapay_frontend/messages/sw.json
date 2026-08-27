@@ -21,7 +21,8 @@
     "export": "Hamisha nje",
     "import": "Hamisha ndani",
     "download": "Pakua",
-    "upload": "Pakia"
+    "upload": "",
+    "offlineMessage": "Wewe si na mtandao. Inaonyesha data inayohifadhiwa. Kuunganisha upya ili kuona mwisho wa sasisho."
   },
   "nav": {
     "home": "Nyumba",

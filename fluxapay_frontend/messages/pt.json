@@ -21,7 +21,8 @@
     "export": "Exportar",
     "import": "Importar",
     "download": "Baixar",
-    "upload": "Enviar"
+    "upload": "",
+    "offlineMessage": "Você está offline. Exibindo dados em cache. Reconecte-se para ver as últimas atualizações."
   },
   "nav": {
     "home": "Início",

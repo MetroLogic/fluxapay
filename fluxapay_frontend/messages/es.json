@@ -21,7 +21,8 @@
     "export": "Exportar",
     "import": "Importar",
     "download": "Descargar",
-    "upload": "Subir"
+    "upload": "",
+    "offlineMessage": "Estás sin conexión. Mostrando datos en caché. Reconéctate para ver las últimas actualizaciones."
   },
   "nav": {
     "home": "Inicio",
