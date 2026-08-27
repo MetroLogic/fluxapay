@@ -12,7 +12,31 @@ import {
   clearAuth,
 } from "./auth";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+function getApiBaseUrl(): string {
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+
+  if (!apiUrl) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error(
+        "NEXT_PUBLIC_API_URL environment variable is not set. " +
+        "This is a configuration error — the API URL must be explicitly configured in production. " +
+        "Set NEXT_PUBLIC_API_URL to the correct backend API endpoint (e.g., https://api.example.com)."
+      );
+    }
+
+    if (typeof console !== "undefined" && console.warn) {
+      console.warn(
+        "NEXT_PUBLIC_API_URL is not set; falling back to http://localhost:3001. " +
+        "Set NEXT_PUBLIC_API_URL in your .env.local or environment to use a different API endpoint."
+      );
+    }
+    return "http://localhost:3001";
+  }
+
+  return apiUrl;
+}
+
+const API_BASE_URL = getApiBaseUrl();
 
 // Re-export auth functions for backward compatibility
 
@@ -929,7 +953,7 @@ export const api = {
 // Public pricing config endpoint (no auth required)
 export const fetchPricingConfig = async () => {
   try {
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/v1/public/pricing-config`, {
+    const res = await fetch(`${API_BASE_URL}/api/v1/public/pricing-config`, {
       headers: { "Content-Type": "application/json" },
     });
     if (!res.ok) return null;
