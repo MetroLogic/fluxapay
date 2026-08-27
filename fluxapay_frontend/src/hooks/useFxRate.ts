@@ -11,10 +11,11 @@ export interface FxRateResponse {
 }
 
 async function fetchFxRate(currency: string): Promise<FxRateResponse> {
-  const raw = await api.fx.getRate(currency);
-  if (!raw) {
+  const result = await api.fx.getRate(currency);
+  if ('error' in result) {
     throw new Error("FX rate unavailable");
   }
+  const raw = result.data;
   return {
     rate: raw.rate,
     currency: raw.base_currency,
