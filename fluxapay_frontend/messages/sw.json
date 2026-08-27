@@ -1,0 +1,387 @@
+{
+  "common": {
+    "getStarted": "Anza",
+    "learnMore": "Jifunze Zaidi",
+    "contactUs": "Wasiliana Nasi",
+    "signUp": "Jisajili",
+    "signIn": "Ingia",
+    "dashboard": "Hazina",
+    "logout": "Toka nje",
+    "loading": "Inakuamua...",
+    "error": "Hitilafu",
+    "success": "Ilifanikiwa",
+    "cancel": "Ghairi",
+    "confirm": "Thibitisha",
+    "save": "Hifadhi",
+    "delete": "Futa",
+    "edit": "Hariri",
+    "view": "Tazama",
+    "search": "Tafuta",
+    "filter": "Chuja",
+    "export": "Hamisha nje",
+    "import": "Hamisha ndani",
+    "download": "Pakua",
+    "upload": "Pakia"
+  },
+  "nav": {
+    "home": "Nyumba",
+    "features": "Vipengele",
+    "pricing": "Bei",
+    "about": "Kuhusu",
+    "contact": "Wasiliana",
+    "docs": "Nyaraka",
+    "login": "Ingia",
+    "joinFluxapay": "Jiunge na Fluxapay"
+  },
+  "hero": {
+    "title": "Miundombinu ya Fikira Ulimwenguni",
+    "subtitle": "Pokea malipo ya kriptografia na fiat kwa urahisi katika soko inayotokea",
+    "description": "Fluxapay inaweza kumruhusu mfanyabiashara kukubali malipo ya USDC kwenye Stellar na kukamatiana katika sarafu ya ndani kwa API inayofanana na Stripe bila ugumu wa mlangoni.",
+    "cta": "Jiunge na Fluxapay",
+    "secondaryCta": "Tazama Nyaraka",
+    "transfer": "Kuhamisha",
+    "mainTitle": "Pokea",
+    "crypto": "Kriptografia",
+    "mainSubtitle": "Pokea Kama Fiat Sasa"
+  },
+  "whyFluxapay": {
+    "title": "Kwa Nini FluxaPay?",
+    "subtitle": "Iliyoundwa kwa siku zijazo za biashara ulimwenguni",
+    "instant": {
+      "title": "Suluhisho Haraka",
+      "description": "Pata pesa katika sekunde, si siku. Kumkamatiana kwa wakati halisi kwa akaunti yako."
+    },
+    "lowFees": {
+      "title": "Gharama za Biashara Chini",
+      "description": "Okoa hadi 70% kwenye gharama za usindikaji wa malipo inkilinganishwa na watoa huduma ya kitamaduni."
+    },
+    "global": {
+      "title": "Mlipuko wa Ulimwengu",
+      "description": "Pokea malipo kutoka mahali popote ulimwenguni kwa uingiliano wa sarafu nyingi."
+    },
+    "secure": {
+      "title": "Usalama wa Kiwango cha Benki",
+      "description": "Usalama wa kiwango cha taasisi kwa akaunti zaidi ya saini na siri."
+    }
+  },
+  "bridges": {
+    "title": "Kuunganisha Kriptografia na Nchi",
+    "subtitle": "Kuunganisha malipo ya nchi na kriptografia kwa urahisi",
+    "crypto": {
+      "title": "Malipo ya Kriptografia",
+      "description": "Pokea Bitcoin, Ethereum, USDC, na zaidi"
+    },
+    "fiat": {
+      "title": "Muunganisho wa Sarafu halisi",
+      "description": "Badilisha kwa sarafu ya ndani sasa"
+    },
+    "settlement": {
+      "title": "Kumkamatiana Sawa",
+      "description": "Chagua jinsi na wakati wa kupokea pesa"
+    },
+    "realtime": {
+      "title": "Kumkamatiana kwa Wakati Halisi",
+      "description": "Pesa zinasogea sasa juu ya mtandao wa Stella, bila kusubiri siku nyingi kwa kumkamatiana"
+    },
+    "emerging": {
+      "title": "Tayari kwa Soko inayotokea",
+      "description": "Iliyoundwa kwa maeneo yenye ukuaji wa juu ambapo ukamatiani wa kriptografia unaozidi benki za kitamaduni"
+    },
+    "stripe": {
+      "title": "Muunganisho Rahisi wa Wigo",
+      "description": "Uzoefu wa mbuzi inayojua - REST API, webhooks, na SDKs ambayo unajua"
+    }
+  },
+  "globalReach": {
+    "title": "Ulimwengu Halisi",
+    "subtitle": "Kumtumikia soko inayotokea ulimwenguni",
+    "africa": "Afrika",
+    "latinAmerica": "Amerika ya Latino",
+    "asia": "Aziya",
+    "countries": "Nchi Zilizoidhinishwa",
+    "currencies": "Sarafu",
+    "transactions": "Miamala Iliyosindikwa"
+  },
+  "useCases": {
+    "title": "Iliyoundwa kwa Kila Biashara",
+    "subtitle": "Kutoka kwa zaidi kwa mikakati",
+    "ecommerce": {
+      "title": "Biashara ya Mtandao",
+      "description": "Pokea malipo kwenye duka lako la mtandao kwa muunganisho rahisi"
+    },
+    "marketplace": {
+      "title": "Soko la Ulimwengu",
+      "description": "Gawanisha malipo kati ya wauzaji wengi kwa otomatiki"
+    },
+    "subscription": {
+      "title": "Ushindani",
+      "description": "Ukutaji wa mara kwa mara umefanywa rahisi kwa malipo ya otomatiki"
+    },
+    "remittance": {
+      "title": "Mipango",
+      "description": "Kuhamisha mahali pote duniani kwa gharama ndogo"
+    }
+  },
+  "faq": {
+    "title": "Maswali Yanayouliziwa Mara kwa Mara",
+    "subtitle": "Kila kitu unachohitaji kujua",
+    "q1": {
+      "question": "Je, muunganisho unachukua muda gani?",
+      "answer": "Wauzaji wengi wanakamilisha muunganisho katika saa chini ya 2 kwa API yetu rahisi na SDKs."
+    },
+    "q2": {
+      "question": "Ni nini bei?",
+      "answer": "Tunatoza 1.5% kwa kila miamala bila gharama zilizofichwa au malipo ya kila mwezi."
+    },
+    "q3": {
+      "question": "Je, sarafu gani za kriptografia unazoidhinisha?",
+      "answer": "Tunatumia Bitcoin, Ethereum, USDC, USDT, na mali yote kuu ya Stella."
+    },
+    "q4": {
+      "question": "Kumkamatiana jinsi gani inafanya kazi?",
+      "answer": "Unaweza kuchagua kumkamatiana kwa haraka kwa akaunti yako au kumkamatiana kwa malundi kwenye ratiba."
+    },
+    "q5": {
+      "question": "Je, ni salama?",
+      "answer": "Ndiyo, tunatumia siri ya kiwango cha benki, akaunti zaidi ya saini, na tunakubaliana na viwango vya usalama vya ulimwengu."
+    }
+  },
+  "footer": {
+    "tagline": "Siku zijazo za fikira za ulimwengu",
+    "product": "Bidhaa",
+    "features": "Vipengele",
+    "pricing": "Bei",
+    "security": "Usalama",
+    "company": "Kampuni",
+    "about": "Kuhusu Sisi",
+    "careers": "Ajira",
+    "blog": "Blogu",
+    "developers": "Waendelezi",
+    "documentation": "Nyaraka",
+    "apiReference": "Kumbukumbu ya API",
+    "support": "Msaada",
+    "legal": "Kisheria",
+    "privacy": "Sera ya Faragha",
+    "terms": "Masharti ya Huduma",
+    "copyright": "© {year} borderless. Haki zote zimehifadhiwa.",
+    "signUp": "Jisajili",
+    "login": "Ingia",
+    "faqs": "Maswali Yanayouliziwa Mara kwa Mara / Msaada",
+    "contact": "Wasiliana Nasi",
+    "resources": "Rasilimali",
+    "status": "Hali ya Mfumo"
+  },
+  "dashboard": {
+    "overview": "Muhtasari",
+    "payments": "Malipo",
+    "settlements": "Suluhisho",
+    "analytics": "Uchambuzi",
+    "developers": "Waendelezi",
+    "settings": "Mipango",
+    "webhooks": "Webhooks",
+    "totalRevenue": "Mapato Yote",
+    "successfulPayments": "Malipo Yaliyofanikiwa",
+    "pendingSettlements": "Suluhisho Linalingana",
+    "activeCustomers": "Wateja Wanzuki",
+    "recentTransactions": "Miamala Halisi",
+    "amount": "Kiasi",
+    "status": "Hali",
+    "date": "Tarehe",
+    "customer": "Mteja",
+    "viewAll": "Tazama Yote"
+  },
+  "payment": {
+    "title": "Kamilisha Malipo Yako",
+    "amount": "Kiasi",
+    "merchant": "Mfanyabiashara",
+    "description": "Maelezo",
+    "payWith": "Lipa kwa",
+    "crypto": "Kriptografia",
+    "card": "Kadi ya Mkopo/Mikopo",
+    "processing": "Kusindika malipo...",
+    "success": "Malipo yaliyofanikiwa!",
+    "failed": "Malipo hayakufanikia",
+    "expired": "Kazi ya malipo imeishia",
+    "scanQR": "Piga picha ya QR kulipa",
+    "orCopyAddress": "Au kunakili anwani hapa chini",
+    "copyAddress": "Nakili Anwani",
+    "addressCopied": "Anwani ilinakiliwa!",
+    "waitingForPayment": "Inangoja malipo...",
+    "confirmations": "Visifa",
+    "timeRemaining": "Muda uliosalia",
+    "checkout": {
+      "offlineMessage": "Wewe ni nje ya mtandao. Tutaendelea na malipo yenye sasisho wakati mitandao yako inarudisha.",
+      "retryNow": "Jaribu Tena Sasa",
+      "loadingDetails": "Kupakia maelezo ya malipo...",
+      "notFound": "Malipo Hayapatikani",
+      "notFoundDescription": "Malipo unayotafuta hayapo au yamefutwa.",
+      "checkLink": "Tafadhali angalia kazi ya malipo na jaribu tena.",
+      "confirmed": "Malipo Yamethibitishwa!",
+      "confirmedDescription": "Malipo yako yamefanywa haraka.",
+      "redirecting": "Inarejeza kwako...",
+      "expiredDescription": "Kazi hii ya malipo imeishia.",
+      "requestNew": "Tafadhali omba kazi ya malipo mpya kutoka kwa mfanyabiashara.",
+      "failedDescription": "Malipo hayakuweza kusindikwa.",
+      "tryAgainOrSupport": "Tafadhali jaribu tena au wasiliana na msaada kama tatizo linaendelea.",
+      "partialReceived": "Malipo ya Sehemu Yapokewa",
+      "partialDescription": "Malipo yako ya {paidAmount} {currency} yalikuwa chini ya inatarajiwa {amount} {currency}.",
+      "contactMerchantResolve": "Tafadhali wasiliana na mfanyabiashara kutatua salio linalosalia.",
+      "returnToMerchant": "Kurudi kwa Mfanyabiashara",
+      "overpaymentReceived": "Malipo Mengi Yapokewa",
+      "overpaymentDescription": "Malipo yako ya {paidAmount} {currency} ilizidi inatarajiwa {amount} {currency}.",
+      "contactMerchantExcess": "Tafadhali wasiliana na mfanyabiashara kuhusu kiasi kilichozidi.",
+      "completePayment": "Kamilisha Malipo Yako",
+      "toMerchant": "kwa {merchantName}",
+      "amountToPay": "Kiasi Cha Kulipa",
+      "memoRequired": "Kumbukumbu inahitajika",
+      "memoDescription": "Shabaka hili la malipo linahitaji kumbukumbu/tabu. Tafadhali jumuisha kumbukumbu sawa kwa sawa, au malipo yako hayaweza kuganiwa.",
+      "howToPay": "Jinsi Ya Kulipa:",
+      "step1": "Piga picha ya QR hapo juu na programu ya akaunti ya Stella",
+      "step2": "Hakikisha kiasi na anwani ya malipo inatofautiana",
+      "step2Memo": " (na jumuisha kumbukumbu inahitajika)",
+      "step3": "Kamilisha miamala katika akaunti yako",
+      "step4": "Utareusha kiotomatiki baada ya uthibitisho",
+      "contactSupport": "Wasiliana na Msaada",
+      "payAmount": "Lipa {amount} {currency}",
+      "paymentTo": "Malipo kwa",
+      "close": "Funga",
+      "timerExpired": "Imeishia",
+      "timerExpiredAria": "Muda wa malipo umeishia",
+      "timeRemainingAria": "Muda uliosalia: {minutes} dakika na {seconds} sekunde"
+    }
+  },
+  "auth": {
+    "login": "Ingia",
+    "signup": "Jisajili",
+    "email": "Barua Pepe",
+    "password": "Neno la Siri",
+    "confirmPassword": "Thibitisha Neno la Siri",
+    "forgotPassword": "Je, ulisahau Neno la Siri?",
+    "noAccount": "Je, wewe huna akaunti?",
+    "hasAccount": "Je, wako na akaunti tayari?",
+    "businessName": "Jina la Biashara",
+    "fullName": "Jina Kamili",
+    "country": "Nchi",
+    "createAccount": "Unda Akaunti",
+    "signingIn": "Ingia...",
+    "creatingAccount": "Kuunda akaunti...",
+    "keepLoggedIn": "Niweka Nikubaki",
+    "sessionExpiry": "Utaondolewa wakati utafunga kivinjari chako.",
+    "sessionPersistent": "Utakaa umeingia kwa siku 30. Tumia hii tu kwenye kifaa kilichoaminiana.",
+    "loginToContinue": "Tafadhali ingia kuendelea na akaunti yako.",
+    "emailPlaceholder": "test@gmail.com",
+    "passwordPlaceholder": "Neno la Siri",
+    "agreeToTerms": "Kwa kuingia, unakubaliana na",
+    "agreeToTermsSignup": "Kwa kuunda akaunti, unakubaliana na",
+    "needAccount": "Je, unahitaji akaunti?",
+    "createOne": "Unda moja",
+    "validation": {
+      "emailInvalid": "Tafadhali weka anwani halali ya barua pepe",
+      "emailRequired": "Barua pepe inahitajika",
+      "passwordMin": "Neno la siri lazima liwe na angalau hati 6",
+      "passwordRequired": "Neno la siri linahitajika",
+      "nameRequired": "Jina linahitajika",
+      "businessNameRequired": "Jina la biashara linahitajika",
+      "countryRequired": "Nchi inahitajika",
+      "currencyRequired": "Sarafu ya kumkamatiana inahitajika",
+      "phoneNumberRequired": "Idadi ya simu inahitajika",
+      "phoneNumberInvalid": "Muundo wa idadi ya simu batili (tumia muundo wa ulimwengu)",
+      "accountNumberRequired": "Idadi ya akaunti inahitajika",
+      "bankNameRequired": "Jina la benki linahitajika",
+      "bankCodeRequired": "Kodis ya benki inahitajika"
+    },
+    "signupPrompt": "Tafadhali jisajili kuanza.",
+    "fullNamePlaceholder": "Jina lako",
+    "businessNamePlaceholder": "Jina la biashara",
+    "emailSignupPlaceholder": "wewe@mfano.com",
+    "phoneNumber": "Idadi ya Simu",
+    "phoneNumberPlaceholder": "+255...",
+    "selectCountry": "Chagua Nchi",
+    "currencyLabel": "Sarafu",
+    "bankLabel": "Benki",
+    "codeLabel": "Kodis",
+    "accountLabel": "Akaunti",
+    "bankNamePlaceholder": "Jina la Benki",
+    "bankCodePlaceholder": "Kodis ya Benki",
+    "accountNumberPlaceholder": "Idadi ya Akaunti",
+    "signupSuccess": "Usajili ulifanikiwa! Tafadhali thibitisha akaunti yako.",
+    "resetPassword": "Weka Neno la Siri Upya",
+    "forgotPasswordDescription": "Weka anwani yako ya barua pepe na tutakutumia kiungo cha kuweka neno la siri upya.",
+    "resetLinkSent": "Tumetuma kiungo cha kuweka neno la siri upya kwenye barua pepe yako.",
+    "sending": "Inatuma...",
+    "sendAgainIn": "Tuma tena katika {seconds}s",
+    "sendResetLink": "Tuma Kiungo cha Kuweka Upya",
+    "rememberPassword": "Je, unakumbuka neno lako la siri?",
+    "setNewPassword": "Weka Neno la Siri Jipya",
+    "setNewPasswordDescription": "Tafadhali weka neno la siri jipya hapa chini.",
+    "newPassword": "Neno la Siri Jipya",
+    "newPasswordPlaceholder": "Weka neno la siri jipya",
+    "confirmNewPasswordPlaceholder": "Thibitisha neno la siri jipya",
+    "updating": "Ina-update...",
+    "linkExpired": "Kiungo Kimeishia",
+    "linkExpiredDescription": "Kiungo hiki cha kuweka neno la siri upya si halali au kimeishia.",
+    "requestNewLink": "Omba Kiungo Kipya",
+    "returnToSignIn": "Kurudi kwenye ingia",
+    "validatingLink": "Kuhakiki kiungo cha kuweka siri upya...",
+    "missingResetToken": "Kielekezi cha kuweka upya hakipo"
+  },
+  "settings": {
+    "profile": "Wasifu",
+    "security": "Usalama",
+    "apiKeys": "Funguo za API",
+    "billing": "Matumizi",
+    "notifications": "Taarifa",
+    "team": "Timu",
+    "updateProfile": "Wa-update Wasifu",
+    "changePassword": "Badilisha Neno la Siri",
+    "twoFactor": "Uthibitisho wa Mambo Mawili",
+    "generateKey": "Tengeneza Kigeni Kipya",
+    "revokeKey": "Kuondoa Funguo"
+  },
+  "currency": {
+    "usd": "Dola ya Kimarekani",
+    "eur": "Yuro",
+    "gbp": "Pauni ya Uingereza",
+    "ngn": "Naira ya Nijeria",
+    "kes": "Shilingi ya Kenya",
+    "zar": "Rand ya Afrika Kusini",
+    "brl": "Real ya Mbrazili",
+    "mxn": "Peso ya Meksiko",
+    "btc": "Bitcoin",
+    "eth": "Ethereum",
+    "usdc": "Sarafu ya USD",
+    "usdt": "Tether"
+  },
+  "status": {
+    "pending": "Inangoja",
+    "processing": "Kusindika",
+    "completed": "Kamilika",
+    "failed": "Kushindwa",
+    "cancelled": "Ghairi",
+    "expired": "Imeishia"
+  },
+  "errors": {
+    "generic": "Kitu kigine kikatoka vibaya. Tafadhali jaribu tena.",
+    "network": "Hitilafu ya mtandao. Tafadhali angalia muunganisho wako.",
+    "unauthorized": "Wewe si na ruhusa ya kufanya hatua hii.",
+    "notFound": "Mali inayoombwa haikupatikana.",
+    "validation": "Tafadhali angalia maingizo yako na jaribu tena.",
+    "paymentFailed": "Usindikaji wa malipo kushindwa. Tafadhali jaribu tena."
+  },
+  "commandPalette": {
+    "overview": "Muhtasari",
+    "payments": "Malipo",
+    "paymentLinks": "Viungo vya Malipo",
+    "invoices": "Ankara",
+    "refunds": "Marejesho",
+    "settlements": "Suluhisho",
+    "webhooks": "Webhooks",
+    "analytics": "Uchambuzi",
+    "settings": "Mipango",
+    "developers": "Waendelezi",
+    "adminOverview": "Muhtasari wa Administrasia",
+    "forceOracleSync": "Kusanya Kwa Nguvu",
+    "flushWebhookQueue": "Pakia Upya Webhook",
+    "viewKYCQueue": "Tazama Eneo la KYC"
+  }
+}

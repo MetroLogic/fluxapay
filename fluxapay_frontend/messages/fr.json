@@ -367,5 +367,21 @@
     "notFound": "La ressource demandée n'a pas été trouvée.",
     "validation": "Veuillez vérifier votre saisie et réessayer.",
     "paymentFailed": "Le traitement du paiement a échoué. Veuillez réessayer."
+  },
+  "commandPalette": {
+    "overview": "Aperçu",
+    "payments": "Paiements",
+    "paymentLinks": "Liens de Paiement",
+    "invoices": "Factures",
+    "refunds": "Remboursements",
+    "settlements": "Liquidations",
+    "webhooks": "Webhooks",
+    "analytics": "Analyses",
+    "settings": "Paramètres",
+    "developers": "Développeurs",
+    "adminOverview": "Aperçu Admin",
+    "forceOracleSync": "Forcer la Synchronisation Oracle",
+    "flushWebhookQueue": "Vider la File d'Attente Webhook",
+    "viewKYCQueue": "Afficher la File KYC"
   }
 }

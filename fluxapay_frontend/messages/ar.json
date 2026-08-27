@@ -1,0 +1,387 @@
+{
+  "common": {
+    "getStarted": "ابدأ الآن",
+    "learnMore": "تعرف على المزيد",
+    "contactUs": "اتصل بنا",
+    "signUp": "إنشاء حساب",
+    "signIn": "تسجيل الدخول",
+    "dashboard": "لوحة التحكم",
+    "logout": "تسجيل الخروج",
+    "loading": "جاري التحميل...",
+    "error": "خطأ",
+    "success": "نجح",
+    "cancel": "إلغاء",
+    "confirm": "تأكيد",
+    "save": "حفظ",
+    "delete": "حذف",
+    "edit": "تعديل",
+    "view": "عرض",
+    "search": "بحث",
+    "filter": "تصفية",
+    "export": "تصدير",
+    "import": "استيراد",
+    "download": "تحميل",
+    "upload": "رفع"
+  },
+  "nav": {
+    "home": "الرئيسية",
+    "features": "الميزات",
+    "pricing": "الأسعار",
+    "about": "حول",
+    "contact": "اتصل",
+    "docs": "التوثيق",
+    "login": "تسجيل الدخول",
+    "joinFluxapay": "انضم إلى Fluxapay"
+  },
+  "hero": {
+    "title": "بنية تحتية عالمية للدفع",
+    "subtitle": "اقبل المدفوعات المشفرة والنقدية بسهولة عبر الأسواق الناشئة",
+    "description": "يتيح Fluxapay للتجار قبول مدفوعات USDC على Stellar والحصول على تسوية بالعملة المحلية برسالة API تشبه Stripe بدون تعقيد على السلسلة.",
+    "cta": "انضم إلى Fluxapay",
+    "secondaryCta": "عرض التوثيق",
+    "transfer": "التحويل",
+    "mainTitle": "قبول",
+    "crypto": "العملات المشفرة",
+    "mainSubtitle": "احصل على الأموال بالعملة الحقيقية على الفور"
+  },
+  "whyFluxapay": {
+    "title": "لماذا FluxaPay؟",
+    "subtitle": "مصمم لمستقبل التجارة العالمية",
+    "instant": {
+      "title": "التسويات الفورية",
+      "description": "احصل على الأموال في ثوانٍ وليس أيام. تسوية فورية إلى محفظتك."
+    },
+    "lowFees": {
+      "title": "رسوم معاملات منخفضة",
+      "description": "وفر ما يصل إلى 70% على رسوم معالجة الدفع مقارنة بمزودي الخدمات التقليديين."
+    },
+    "global": {
+      "title": "نطاق عالمي",
+      "description": "قبول المدفوعات من أي مكان في العالم مع دعم عملات متعددة."
+    },
+    "secure": {
+      "title": "أمان على مستوى البنك",
+      "description": "أمان على مستوى المؤسسة مع محافظ متعددة التوقيع والتشفير."
+    }
+  },
+  "bridges": {
+    "title": "ربط التمويل التقليدي والعملات المشفرة",
+    "subtitle": "ربط مدفوعات النقد والعملات المشفرة بسلاسة",
+    "crypto": {
+      "title": "مدفوعات العملات المشفرة",
+      "description": "قبول Bitcoin و Ethereum و USDC والمزيد"
+    },
+    "fiat": {
+      "title": "تكامل العملة الحقيقية",
+      "description": "تحويل إلى العملة المحلية على الفور"
+    },
+    "settlement": {
+      "title": "التسوية المرنة",
+      "description": "اختر كيف ومتى تتلقى الأموال"
+    },
+    "realtime": {
+      "title": "التسوية في الوقت الفعلي",
+      "description": "تتحرك الأموال على الفور على شبكة Stellar، بدون انتظار أيام للتسوية"
+    },
+    "emerging": {
+      "title": "جاهز للأسواق الناشئة",
+      "description": "مصمم للمناطق ذات النمو المرتفع حيث تتجاوز اعتماد العملات المشفرة البنوك التقليدية"
+    },
+    "stripe": {
+      "title": "التكامل البسيط",
+      "description": "تجربة مطور مألوفة — REST API و webhooks و SDKs التي تعرفها بالفعل"
+    }
+  },
+  "globalReach": {
+    "title": "عالمي حقًا",
+    "subtitle": "خدمة الأسواق الناشئة في جميع أنحاء العالم",
+    "africa": "أفريقيا",
+    "latinAmerica": "أمريكا اللاتينية",
+    "asia": "آسيا",
+    "countries": "الدول المدعومة",
+    "currencies": "العملات",
+    "transactions": "المعاملات المعالجة"
+  },
+  "useCases": {
+    "title": "مصمم لكل عمل تجاري",
+    "subtitle": "من الشركات الناشئة إلى المؤسسات",
+    "ecommerce": {
+      "title": "التجارة الإلكترونية",
+      "description": "قبول المدفوعات في متجرك عبر الإنترنت بتكامل بسيط"
+    },
+    "marketplace": {
+      "title": "الأسواق",
+      "description": "تقسيم المدفوعات بين عدة بائعين تلقائيًا"
+    },
+    "subscription": {
+      "title": "الاشتراكات",
+      "description": "الفوترة المتكررة مع الدفع الآلي"
+    },
+    "remittance": {
+      "title": "التحويلات",
+      "description": "تحويلات عبر الحدود برسوم منخفضة"
+    }
+  },
+  "faq": {
+    "title": "الأسئلة الشائعة",
+    "subtitle": "كل ما تحتاج إلى معرفته",
+    "q1": {
+      "question": "كم من الوقت يستغرق التكامل؟",
+      "answer": "يكمل معظم التجار التكامل في أقل من ساعتين مع API البسيطة و SDKs الخاصة بنا."
+    },
+    "q2": {
+      "question": "ما هي الرسوم؟",
+      "answer": "نحن نفرض 1.5% لكل معاملة بدون رسوم مخفية أو رسوم شهرية."
+    },
+    "q3": {
+      "question": "ما هي العملات المشفرة التي تدعمونها؟",
+      "answer": "ندعم Bitcoin و Ethereum و USDC و USDT وجميع أصول Stellar الرئيسية."
+    },
+    "q4": {
+      "question": "كيف تعمل التسويات؟",
+      "answer": "يمكنك اختيار التسوية الفورية إلى محفظتك أو تسويات دفعات في جدول زمني."
+    },
+    "q5": {
+      "question": "هل هو آمن؟",
+      "answer": "نعم، نستخدم تشفيرًا على مستوى البنك ومحافظ متعددة التوقيع والامتثال لمعايير الأمان الدولية."
+    }
+  },
+  "footer": {
+    "tagline": "مستقبل المدفوعات العالمية",
+    "product": "المنتج",
+    "features": "الميزات",
+    "pricing": "الأسعار",
+    "security": "الأمان",
+    "company": "الشركة",
+    "about": "عن الشركة",
+    "careers": "الوظائف",
+    "blog": "المدونة",
+    "developers": "المطورون",
+    "documentation": "التوثيق",
+    "apiReference": "مرجع API",
+    "support": "الدعم",
+    "legal": "قانوني",
+    "privacy": "سياسة الخصوصية",
+    "terms": "شروط الخدمة",
+    "copyright": "© {year} borderless. جميع الحقوق محفوظة.",
+    "signUp": "إنشاء حساب",
+    "login": "تسجيل الدخول",
+    "faqs": "الأسئلة الشائعة / الدعم",
+    "contact": "اتصل بنا",
+    "resources": "الموارد",
+    "status": "حالة النظام"
+  },
+  "dashboard": {
+    "overview": "النظرة العامة",
+    "payments": "المدفوعات",
+    "settlements": "التسويات",
+    "analytics": "التحليلات",
+    "developers": "المطورون",
+    "settings": "الإعدادات",
+    "webhooks": "Webhooks",
+    "totalRevenue": "إجمالي الإيرادات",
+    "successfulPayments": "المدفوعات الناجحة",
+    "pendingSettlements": "التسويات المعلقة",
+    "activeCustomers": "العملاء النشطون",
+    "recentTransactions": "المعاملات الأخيرة",
+    "amount": "المبلغ",
+    "status": "الحالة",
+    "date": "التاريخ",
+    "customer": "العميل",
+    "viewAll": "عرض الكل"
+  },
+  "payment": {
+    "title": "أكمل الدفع",
+    "amount": "المبلغ",
+    "merchant": "التاجر",
+    "description": "الوصف",
+    "payWith": "الدفع باستخدام",
+    "crypto": "العملات المشفرة",
+    "card": "بطاقة ائتمان/خصم",
+    "processing": "جاري معالجة الدفع...",
+    "success": "تم الدفع بنجاح!",
+    "failed": "فشل الدفع",
+    "expired": "انتهت صلاحية رابط الدفع",
+    "scanQR": "قم بمسح رمز QR للدفع",
+    "orCopyAddress": "أو انسخ العنوان أدناه",
+    "copyAddress": "انسخ العنوان",
+    "addressCopied": "تم نسخ العنوان!",
+    "waitingForPayment": "في انتظار الدفع...",
+    "confirmations": "التأكيدات",
+    "timeRemaining": "الوقت المتبقي",
+    "checkout": {
+      "offlineMessage": "أنت غير متصل بالإنترنت. سنستأنف تحديثات الدفع عند إعادة الاتصال.",
+      "retryNow": "أعد المحاولة الآن",
+      "loadingDetails": "جاري تحميل تفاصيل الدفع...",
+      "notFound": "لم يتم العثور على الدفع",
+      "notFoundDescription": "الدفع الذي تبحث عنه غير موجود أو تم حذفه.",
+      "checkLink": "يرجى التحقق من رابط الدفع والمحاولة مرة أخرى.",
+      "confirmed": "تم تأكيد الدفع!",
+      "confirmedDescription": "تم معالجة دفعتك بنجاح.",
+      "redirecting": "جاري إعادة التوجيه...",
+      "expiredDescription": "انتهت صلاحية رابط الدفع هذا.",
+      "requestNew": "يرجى طلب رابط دفع جديد من التاجر.",
+      "failedDescription": "تعذر معالجة الدفع.",
+      "tryAgainOrSupport": "يرجى المحاولة مرة أخرى أو الاتصال بالدعم إذا استمرت المشكلة.",
+      "partialReceived": "تم استلام دفع جزئي",
+      "partialDescription": "دفعتك بمبلغ {paidAmount} {currency} أقل من المتوقع {amount} {currency}.",
+      "contactMerchantResolve": "يرجى الاتصال بالتاجر لحل الرصيد المتبقي.",
+      "returnToMerchant": "العودة إلى التاجر",
+      "overpaymentReceived": "تم استلام دفع زائد",
+      "overpaymentDescription": "دفعتك بمبلغ {paidAmount} {currency} تجاوز المتوقع {amount} {currency}.",
+      "contactMerchantExcess": "يرجى الاتصال بالتاجر بشأن المبلغ الزائد.",
+      "completePayment": "أكمل الدفع",
+      "toMerchant": "إلى {merchantName}",
+      "amountToPay": "المبلغ المراد دفعه",
+      "memoRequired": "الملاحظة مطلوبة",
+      "memoDescription": "وجهة الدفع هذه تتطلب ملاحظة/علامة. يرجى تضمين الملاحظة بالضبط كما هو موضح، أو قد لا يتم الاعتراف بدفعتك.",
+      "howToPay": "كيفية الدفع:",
+      "step1": "قم بمسح رمز QR أعلاه باستخدام تطبيق محفظة Stellar",
+      "step2": "تأكد من تطابق المبلغ وعنوان الدفع",
+      "step2Memo": " (وتضمين الملاحظة المطلوبة)",
+      "step3": "أكمل المعاملة في محفظتك",
+      "step4": "سيتم إعادة توجيهك تلقائيًا بعد التأكيد",
+      "contactSupport": "الاتصال بالدعم",
+      "payAmount": "ادفع {amount} {currency}",
+      "paymentTo": "الدفع إلى",
+      "close": "إغلاق",
+      "timerExpired": "انتهت الصلاحية",
+      "timerExpiredAria": "انتهت صلاحية مؤقت الدفع",
+      "timeRemainingAria": "الوقت المتبقي: {minutes} دقائق و {seconds} ثوانٍ"
+    }
+  },
+  "auth": {
+    "login": "تسجيل الدخول",
+    "signup": "إنشاء حساب",
+    "email": "البريد الإلكتروني",
+    "password": "كلمة المرور",
+    "confirmPassword": "تأكيد كلمة المرور",
+    "forgotPassword": "هل نسيت كلمة المرور؟",
+    "noAccount": "لا تملك حسابًا؟",
+    "hasAccount": "هل لديك حساب بالفعل؟",
+    "businessName": "اسم العمل",
+    "fullName": "الاسم الكامل",
+    "country": "البلد",
+    "createAccount": "إنشاء حساب",
+    "signingIn": "جاري تسجيل الدخول...",
+    "creatingAccount": "جاري إنشاء الحساب...",
+    "keepLoggedIn": "اجعلني متصلاً",
+    "sessionExpiry": "سيتم تسجيل خروجك عند إغلاق المتصفح.",
+    "sessionPersistent": "ستبقى متصلاً لمدة 30 يومًا. استخدم هذا فقط على جهاز موثوق به.",
+    "loginToContinue": "يرجى تسجيل الدخول للمتابعة إلى حسابك.",
+    "emailPlaceholder": "test@gmail.com",
+    "passwordPlaceholder": "كلمة المرور",
+    "agreeToTerms": "بتسجيل الدخول، فإنك توافق على",
+    "agreeToTermsSignup": "بإنشاء حساب، فإنك توافق على",
+    "needAccount": "هل تحتاج إلى حساب؟",
+    "createOne": "أنشئ واحدًا",
+    "validation": {
+      "emailInvalid": "يرجى إدخال عنوان بريد إلكتروني صحيح",
+      "emailRequired": "البريد الإلكتروني مطلوب",
+      "passwordMin": "يجب أن تكون كلمة المرور 6 أحرف على الأقل",
+      "passwordRequired": "كلمة المرور مطلوبة",
+      "nameRequired": "الاسم مطلوب",
+      "businessNameRequired": "اسم العمل مطلوب",
+      "countryRequired": "البلد مطلوب",
+      "currencyRequired": "عملة التسوية مطلوبة",
+      "phoneNumberRequired": "رقم الهاتف مطلوب",
+      "phoneNumberInvalid": "صيغة رقم هاتف غير صحيحة (استخدم الصيغة الدولية)",
+      "accountNumberRequired": "رقم الحساب مطلوب",
+      "bankNameRequired": "اسم البنك مطلوب",
+      "bankCodeRequired": "رمز البنك مطلوب"
+    },
+    "signupPrompt": "يرجى الاشتراك للبدء.",
+    "fullNamePlaceholder": "اسمك",
+    "businessNamePlaceholder": "اسم العمل",
+    "emailSignupPlaceholder": "انت@مثال.com",
+    "phoneNumber": "رقم الهاتف",
+    "phoneNumberPlaceholder": "+966...",
+    "selectCountry": "اختر البلد",
+    "currencyLabel": "العملة",
+    "bankLabel": "البنك",
+    "codeLabel": "الرمز",
+    "accountLabel": "الحساب",
+    "bankNamePlaceholder": "اسم البنك",
+    "bankCodePlaceholder": "رمز البنك",
+    "accountNumberPlaceholder": "رقم الحساب",
+    "signupSuccess": "تم التسجيل بنجاح! يرجى التحقق من حسابك.",
+    "resetPassword": "إعادة تعيين كلمة المرور",
+    "forgotPasswordDescription": "أدخل عنوان بريدك الإلكتروني وسنرسل لك رابطًا لإعادة تعيين كلمة المرور.",
+    "resetLinkSent": "لقد أرسلنا رابط إعادة تعيين كلمة المرور إلى بريدك الإلكتروني.",
+    "sending": "جاري الإرسال...",
+    "sendAgainIn": "إرسال مرة أخرى في {seconds}s",
+    "sendResetLink": "إرسال رابط إعادة التعيين",
+    "rememberPassword": "هل تتذكر كلمة المرور؟",
+    "setNewPassword": "تعيين كلمة مرور جديدة",
+    "setNewPasswordDescription": "يرجى إدخال كلمة المرور الجديدة أدناه.",
+    "newPassword": "كلمة مرور جديدة",
+    "newPasswordPlaceholder": "أدخل كلمة مرور جديدة",
+    "confirmNewPasswordPlaceholder": "أكد كلمة المرور الجديدة",
+    "updating": "جاري التحديث...",
+    "linkExpired": "انتهت صلاحية الرابط",
+    "linkExpiredDescription": "رابط إعادة تعيين كلمة المرور غير صحيح أو انتهت صلاحيته.",
+    "requestNewLink": "طلب رابط جديد",
+    "returnToSignIn": "العودة إلى تسجيل الدخول",
+    "validatingLink": "جاري التحقق من رابط إعادة التعيين...",
+    "missingResetToken": "رمز إعادة التعيين غير موجود"
+  },
+  "settings": {
+    "profile": "الملف الشخصي",
+    "security": "الأمان",
+    "apiKeys": "مفاتيح API",
+    "billing": "الفواتير",
+    "notifications": "الإشعارات",
+    "team": "الفريق",
+    "updateProfile": "تحديث الملف الشخصي",
+    "changePassword": "تغيير كلمة المرور",
+    "twoFactor": "المصادقة الثنائية",
+    "generateKey": "إنشاء مفتاح جديد",
+    "revokeKey": "إلغاء المفتاح"
+  },
+  "currency": {
+    "usd": "الدولار الأمريكي",
+    "eur": "اليورو",
+    "gbp": "الجنيه الإسترليني",
+    "ngn": "النيرة النيجيرية",
+    "kes": "الشلن الكيني",
+    "zar": "الراند الجنوب أفريقي",
+    "brl": "الريال البرازيلي",
+    "mxn": "البيزو المكسيكي",
+    "btc": "البيتكوين",
+    "eth": "إيثيريوم",
+    "usdc": "عملة USD",
+    "usdt": "Tether"
+  },
+  "status": {
+    "pending": "معلق",
+    "processing": "جاري المعالجة",
+    "completed": "مكتمل",
+    "failed": "فشل",
+    "cancelled": "ملغى",
+    "expired": "انتهت الصلاحية"
+  },
+  "errors": {
+    "generic": "حدث خطأ ما. يرجى المحاولة مرة أخرى.",
+    "network": "خطأ في الشبكة. يرجى التحقق من اتصالك.",
+    "unauthorized": "أنت غير مصرح بتنفيذ هذا الإجراء.",
+    "notFound": "المورد المطلوب لم يتم العثور عليه.",
+    "validation": "يرجى التحقق من المدخلات والمحاولة مرة أخرى.",
+    "paymentFailed": "فشلت معالجة الدفع. يرجى المحاولة مرة أخرى."
+  },
+  "commandPalette": {
+    "overview": "النظرة العامة",
+    "payments": "المدفوعات",
+    "paymentLinks": "روابط الدفع",
+    "invoices": "الفواتير",
+    "refunds": "المبالغ المستردة",
+    "settlements": "التسويات",
+    "webhooks": "Webhooks",
+    "analytics": "التحليلات",
+    "settings": "الإعدادات",
+    "developers": "المطورون",
+    "adminOverview": "نظرة عامة على الإدارة",
+    "forceOracleSync": "فرض مزامنة Oracle",
+    "flushWebhookQueue": "تفريغ طابور Webhook",
+    "viewKYCQueue": "عرض طابور KYC"
+  }
+}
