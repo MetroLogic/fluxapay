@@ -1,6 +1,42 @@
 import { handleSessionExpired } from "./session";
+import { ApiError } from "./errors";
+import {
+  getToken,
+  storeToken,
+  clearToken,
+  getRefreshToken,
+  storeRefreshToken,
+  clearRefreshToken,
+  isAdmin,
+  setAdminStatus,
+  clearAuth,
+} from "./auth";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+function getApiBaseUrl(): string {
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+
+  if (!apiUrl) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error(
+        "NEXT_PUBLIC_API_URL environment variable is not set. " +
+        "This is a configuration error — the API URL must be explicitly configured in production. " +
+        "Set NEXT_PUBLIC_API_URL to the correct backend API endpoint (e.g., https://api.example.com)."
+      );
+    }
+
+    if (typeof console !== "undefined" && console.warn) {
+      console.warn(
+        "NEXT_PUBLIC_API_URL is not set; falling back to http://localhost:3001. " +
+        "Set NEXT_PUBLIC_API_URL in your .env.local or environment to use a different API endpoint."
+      );
+    }
+    return "http://localhost:3001";
+  }
+
+  return apiUrl;
+}
+
+const API_BASE_URL = getApiBaseUrl();
 
 /**
  * Standard result type for all API methods.
@@ -77,78 +113,7 @@ export interface MerchantExportJobStatus {
   error?: string;
 }
 
-class ApiError extends Error {
-  public retryAfterSeconds?: number;
-  constructor(
-    public status: number,
-    message: string,
-    public code?: string,
-    retryAfterSeconds?: number,
-  ) {
-    super(message);
-    this.name = "ApiError";
-    this.retryAfterSeconds = retryAfterSeconds;
-  }
-}
-
-export function getToken(): string {
-  const token = localStorage.getItem("token") ?? sessionStorage.getItem("token");
-  if (!token) {
-    if (typeof window !== "undefined" && !window.location.pathname.includes("/login")) {
-      const currentUrl = window.location.pathname + window.location.search;
-      window.location.href = `/login?redirect=${encodeURIComponent(currentUrl)}`;
-    }
-    throw new ApiError(401, "No authentication token found");
-  }
-  return token;
-}
-
-/** Persist auth token.
- *  keepLoggedIn=true  → localStorage  (survives browser close, expires with JWT TTL ~30 days)
- *  keepLoggedIn=false → sessionStorage (cleared when the tab/browser is closed)
- */
-export function storeToken(token: string, keepLoggedIn = false): void {
-  if (keepLoggedIn) {
-    localStorage.setItem("token", token);
-    sessionStorage.removeItem("token"); // clear any leftover session token
-  } else {
-    sessionStorage.setItem("token", token);
-    localStorage.removeItem("token"); // ensure no persistent copy remains
-  }
-}
-
-/** Remove auth token from all storage locations. */
-export function clearToken(): void {
-  localStorage.removeItem("token");
-  sessionStorage.removeItem("token");
-}
-
-const REFRESH_TOKEN_KEY = "refresh_token";
-
-/** Persist the refresh token beside the access token, in the same storage. */
-export function storeRefreshToken(refreshToken: string, keepLoggedIn = false): void {
-  if (keepLoggedIn) {
-    localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
-    sessionStorage.removeItem(REFRESH_TOKEN_KEY);
-  } else {
-    sessionStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
-    localStorage.removeItem(REFRESH_TOKEN_KEY);
-  }
-}
-
-/** The stored refresh token, or null when the session has none. */
-export function getRefreshToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return (
-    localStorage.getItem(REFRESH_TOKEN_KEY) ??
-    sessionStorage.getItem(REFRESH_TOKEN_KEY)
-  );
-}
-
-export function clearRefreshToken(): void {
-  localStorage.removeItem(REFRESH_TOKEN_KEY);
-  sessionStorage.removeItem(REFRESH_TOKEN_KEY);
-}
+// Token functions are now imported from auth.ts for single source of truth
 
 export interface RefreshedSession {
   accessToken: string;
@@ -391,30 +356,6 @@ async function fetchWithAuth<T>(
   };
 }
 
-/** Build headers including the optional admin secret for internal endpoints. */
-function adminHeaders(): Record<string, string> {
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
-  const secret = process.env.NEXT_PUBLIC_ADMIN_SECRET;
-  if (secret) headers["X-Admin-Secret"] = secret;
-  return headers;
-}
-
-/** Authenticated fetch that builds the full URL */
-function adminFetch(endpoint: string, options: RequestInit = {}): Promise<Response> {
-  return fetch(`${API_BASE_URL}${endpoint}`, {
-    ...options,
-    headers: { ...adminHeaders(), ...(options.headers as Record<string, string> || {}) },
-  });
-}
-
-function refundAdminKeyHeader(): Record<string, string> {
-  const header: Record<string, string> = {};
-  const adminApiKey = process.env.NEXT_PUBLIC_ADMIN_API_KEY;
-  if (adminApiKey) header["X-Admin-API-Key"] = adminApiKey;
-  return header;
-}
 
 export const api = {
   // Authentication — routes match backend /api/merchants/*
@@ -700,205 +641,23 @@ export const api = {
       ),
   },
 
-  // Sweep / Settlement Batch endpoints (admin-only)
+  // Sweep / Settlement Batch endpoints (admin-only, JWT authenticated server-side routes)
   sweep: {
-    getStatus: async (): Promise<Result<Record<string, unknown>>> => {
-      try {
-        const res = await fetch(
-          `${API_BASE_URL}/api/v1/admin/settlement/status`,
-          {
-            headers: adminHeaders(),
-          },
-        );
-        if (!res.ok) {
-          const error = await res
-            .json()
-            .catch(() => ({ message: "Failed to fetch sweep status" }));
-          return {
-            error: new ApiError(
-              res.status,
-              (error as { message?: string }).message ||
-                "Failed to fetch sweep status",
-            ),
-          };
-        }
-        const data = await res.json();
-        return { data };
-      } catch (err) {
-        return {
-          error: new ApiError(
-            500,
-            err instanceof Error ? err.message : "Failed to fetch sweep status",
-          ),
-        };
-      }
-    },
+    getStatus: () =>
+      fetchWithAuth("/api/admin/sweep/status"),
 
     /** Manually trigger a full accounts sweep (settlement batch) */
-    runSweep: async (dryRun?: boolean): Promise<Result<Record<string, unknown>>> => {
-      try {
-        const res = await fetch(`${API_BASE_URL}/api/v1/admin/sweep/run`, {
-          method: "POST",
-          headers: adminHeaders(),
-          body: JSON.stringify({ dry_run: dryRun || false }),
-        });
-        if (!res.ok) {
-          const error = await res
-            .json()
-            .catch(() => ({ message: "Failed to run sweep" }));
-          return {
-            error: new ApiError(
-              res.status,
-              (error as { message?: string }).message ||
-                "Failed to run sweep",
-            ),
-          };
-        }
-        const data = await res.json();
-        return { data };
-      } catch (err) {
-        return {
-          error: new ApiError(
-            500,
-            err instanceof Error ? err.message : "Failed to run sweep",
-          ),
-        };
-      }
-    },
+    runSweep: (dryRun?: boolean) =>
+      fetchWithAuth("/api/admin/sweep/run", {
+        method: "POST",
+        body: JSON.stringify({ dry_run: dryRun || false }),
+      }),
 
     /** Preview eligible payments before running a sweep */
-    previewSweep: async (): Promise<Result<Record<string, unknown>>> => {
-      try {
-        const res = await fetch(`${API_BASE_URL}/api/v1/admin/sweep/preview`, {
-          headers: adminHeaders(),
-        });
-        if (!res.ok) {
-          const error = await res
-            .json()
-            .catch(() => ({ message: "Failed to preview sweep" }));
-          return {
-            error: new ApiError(
-              res.status,
-              (error as { message?: string }).message ||
-                "Failed to preview sweep",
-            ),
-          };
-        }
-        const data = await res.json();
-        return { data };
-      } catch (err) {
-        return {
-          error: new ApiError(
-            500,
-            err instanceof Error ? err.message : "Failed to preview sweep",
-          ),
-        };
-      }
-    },
+    previewSweep: () =>
+      fetchWithAuth("/api/admin/sweep/preview"),
   },
 
-  // Admin merchant management
-  adminMerchants: {
-    list: async (params?: {
-      page?: number;
-      limit?: number;
-      status?: string;
-    }): Promise<Result<Record<string, unknown>>> => {
-      try {
-        const qs = new URLSearchParams();
-        if (params?.page) qs.set("page", String(params.page));
-        if (params?.limit) qs.set("limit", String(params.limit));
-        if (params?.status) qs.set("status", params.status);
-        const res = await adminFetch(
-          `/api/v1/merchants/admin/list?${qs.toString()}`,
-        );
-        if (!res.ok) {
-          const error = await res
-            .json()
-            .catch(() => ({ message: "Failed to fetch merchants" }));
-          return {
-            error: new ApiError(
-              res.status,
-              (error as { message?: string }).message ||
-                "Failed to fetch merchants",
-            ),
-          };
-        }
-        const data = await res.json();
-        return { data };
-      } catch (err) {
-        return {
-          error: new ApiError(
-            500,
-            err instanceof Error ? err.message : "Failed to fetch merchants",
-          ),
-        };
-      }
-    },
-    get: async (merchantId: string): Promise<Result<Record<string, unknown>>> => {
-      try {
-        const res = await adminFetch(
-          `/api/v1/merchants/admin/${merchantId}`,
-        );
-        if (!res.ok) {
-          const error = await res
-            .json()
-            .catch(() => ({ message: "Failed to fetch merchant" }));
-          return {
-            error: new ApiError(
-              res.status,
-              (error as { message?: string }).message ||
-                "Failed to fetch merchant",
-            ),
-          };
-        }
-        const data = await res.json();
-        return { data };
-      } catch (err) {
-        return {
-          error: new ApiError(
-            500,
-            err instanceof Error ? err.message : "Failed to fetch merchant",
-          ),
-        };
-      }
-    },
-    updateStatus: async (
-      merchantId: string,
-      status: string,
-    ): Promise<Result<Record<string, unknown>>> => {
-      try {
-        const res = await adminFetch(
-          `/api/v1/merchants/admin/${merchantId}/status`,
-          {
-            method: "PATCH",
-            body: JSON.stringify({ status }),
-          },
-        );
-        if (!res.ok) {
-          const error = await res
-            .json()
-            .catch(() => ({ message: "Failed to update merchant status" }));
-          return {
-            error: new ApiError(
-              res.status,
-              (error as { message?: string }).message ||
-                "Failed to update merchant status",
-            ),
-          };
-        }
-        const data = await res.json();
-        return { data };
-      } catch (err) {
-        return {
-          error: new ApiError(
-            500,
-            err instanceof Error ? err.message : "Failed to update merchant status",
-          ),
-        };
-      }
-    },
-  },
 
   // Admin KYC management
   adminKyc: {
@@ -1139,12 +898,11 @@ export const api = {
     },
   },
 
-  // Refunds
+  // Refunds (server-side routes with admin secret)
   refunds: {
     initiate: (data: InitiateRefundRequest) =>
-      fetchWithAuth<Record<string, unknown>>("/api/refunds", {
+      fetchWithAuth("/api/admin/refunds/initiate", {
         method: "POST",
-        headers: refundAdminKeyHeader(),
         body: JSON.stringify(data),
       }),
     list: (params?: ListRefundsParams) => {
@@ -1155,17 +913,10 @@ export const api = {
       if (params?.page != null) sp.set("page", String(params.page));
       if (params?.limit != null) sp.set("limit", String(params.limit));
       const query = sp.toString();
-      return fetchWithAuth<Record<string, unknown>>(
-        `/api/refunds${query ? `?${query}` : ""}`,
-        {
-          headers: refundAdminKeyHeader(),
-        },
-      );
+      return fetchWithAuth(`/api/admin/refunds/list${query ? `?${query}` : ""}`);
     },
     getById: (refundId: string) =>
-      fetchWithAuth<Record<string, unknown>>(`/api/refunds/${refundId}`, {
-        headers: refundAdminKeyHeader(),
-      }),
+      fetchWithAuth(`/api/admin/refunds/${encodeURIComponent(refundId)}`),
   },
 
   // Payments (merchant-scoped) — backend mounts at /api/v1/payments
@@ -1650,6 +1401,21 @@ export const api = {
           };
         }
       },
+      updateStatus: (merchantId: string, status: "active" | "suspended") =>
+        fetchWithAuth(`/api/v1/admin/merchants/${merchantId}/status`, {
+          method: "PATCH",
+          body: JSON.stringify({ status }),
+        }),
+      bulkUpdateStatus: (merchantIds: string[], status: "active" | "suspended", reason: string) =>
+        fetchWithAuth("/api/merchants/admin/bulk-status", {
+          method: "POST",
+          body: JSON.stringify({ merchantIds, status, reason }),
+        }),
+      disableWebhook: (merchantId: string) =>
+        fetchWithAuth(`/api/admin/merchants/${encodeURIComponent(merchantId)}/webhook`, {
+          method: "PATCH",
+          body: JSON.stringify({ webhook_url: "" }),
+        }),
     },
     settlements: {
       list: (params?: {
@@ -1739,65 +1505,20 @@ export const api = {
         search?: string;
         page?: number;
         limit?: number;
-      }): Promise<Result<Record<string, unknown>>> => {
-        try {
-          const sp = new URLSearchParams();
-          if (params?.merchant_id) sp.set("merchant_id", params.merchant_id);
-          if (params?.event_type && params.event_type !== "all")
-            sp.set("event_type", params.event_type);
-          if (params?.status && params.status !== "all")
-            sp.set("status", params.status);
-          if (params?.date_from) sp.set("date_from", params.date_from);
-          if (params?.date_to) sp.set("date_to", params.date_to);
-          if (params?.search) sp.set("search", params.search);
-          if (params?.page != null) sp.set("page", String(params.page));
-          if (params?.limit != null) sp.set("limit", String(params.limit));
-          const res = await adminFetch(
-            `/api/v1/webhooks/admin/logs?${sp.toString()}`,
-          );
-          if (!res.ok) {
-            return {
-              error: new ApiError(
-                res.status,
-                "Failed to fetch admin webhook logs",
-              ),
-            };
-          }
-          const data = await res.json();
-          return { data };
-        } catch (err) {
-          return {
-            error: new ApiError(
-              500,
-              err instanceof Error
-                ? err.message
-                : "Failed to fetch admin webhook logs",
-            ),
-          };
-        }
+      }) => {
+        const sp = new URLSearchParams();
+        if (params?.merchant_id) sp.set("merchant_id", params.merchant_id);
+        if (params?.event_type && params.event_type !== "all") sp.set("event_type", params.event_type);
+        if (params?.status && params.status !== "all") sp.set("status", params.status);
+        if (params?.date_from) sp.set("date_from", params.date_from);
+        if (params?.date_to) sp.set("date_to", params.date_to);
+        if (params?.search) sp.set("search", params.search);
+        if (params?.page != null) sp.set("page", String(params.page));
+        if (params?.limit != null) sp.set("limit", String(params.limit));
+        return fetchWithAuth(`/api/admin/webhooks/logs?${sp.toString()}`);
       },
-      retry: async (logId: string): Promise<Result<Record<string, unknown>>> => {
-        try {
-          const res = await adminFetch(
-            `/api/v1/webhooks/admin/logs/${logId}/retry`,
-            { method: "POST" },
-          );
-          if (!res.ok) {
-            return {
-              error: new ApiError(res.status, "Failed to retry webhook"),
-            };
-          }
-          const data = await res.json();
-          return { data };
-        } catch (err) {
-          return {
-            error: new ApiError(
-              500,
-              err instanceof Error ? err.message : "Failed to retry webhook",
-            ),
-          };
-        }
-      },
+      retry: (logId: string) =>
+        fetchWithAuth(`/api/admin/webhooks/${encodeURIComponent(logId)}/retry`, { method: "POST" }),
     },
   },
 };
@@ -1807,29 +1528,27 @@ export const fetchPricingConfig = async (): Promise<
   Result<Record<string, unknown>>
 > => {
   try {
-    const res = await fetch(
-      `${
-        process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"
-      }/api/v1/public/pricing-config`,
-      {
-        headers: { "Content-Type": "application/json" },
-      },
-    );
-    if (!res.ok) {
-      return {
-        error: new ApiError(res.status, "Failed to fetch pricing config"),
-      };
-    }
-    const data = await res.json();
-    return { data };
-  } catch (err) {
-    return {
-      error: new ApiError(
-        500,
-        err instanceof Error ? err.message : "Failed to fetch pricing config",
-      ),
-    };
+    const res = await fetch(`${API_BASE_URL}/api/v1/public/pricing-config`, {
+      headers: { "Content-Type": "application/json" },
+    });
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
   }
 };
 
-export { ApiError };
+// Re-export auth functions for backwards compatibility with existing imports
+export {
+  getToken,
+  storeToken,
+  clearToken,
+  getRefreshToken,
+  storeRefreshToken,
+  clearRefreshToken,
+  isAdmin,
+  setAdminStatus,
+  clearAuth,
+} from "./auth";
+
+export { ApiError } from "./errors";
