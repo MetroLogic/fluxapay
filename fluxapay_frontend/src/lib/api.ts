@@ -209,7 +209,33 @@ export async function refreshAccessToken(): Promise<RefreshedSession | null> {
   return { accessToken: data.access_token, expiresIn: data.expires_in };
 }
 
-async function fetchWithAuth<T>(endpoint: string, options: RequestInit = {}): Promise<Result<T>> {
+/**
+ * Determines if a given HTTP status code is retryable.
+ * Retryable errors: 429 (too many requests), 502/503/504 (server errors).
+ * Non-retryable: 4xx errors except 429, 5xx except 502/503/504.
+ */
+function isRetryableStatus(status: number): boolean {
+  // Explicitly retryable: rate limit + gateway/service unavailable errors
+  return status === 429 || status === 502 || status === 503 || status === 504;
+}
+
+/**
+ * Calculate delay for exponential backoff with optional jitter.
+ * Base delay = 2^(attempt) * 100ms, capped at 32s.
+ */
+function calculateBackoffMs(attempt: number): number {
+  const baseDelay = Math.pow(2, attempt) * 100;
+  const cappedDelay = Math.min(baseDelay, 32000);
+  // Add jitter: ±10%
+  const jitter = cappedDelay * 0.1 * (Math.random() * 2 - 1);
+  return Math.max(100, cappedDelay + jitter);
+}
+
+async function fetchWithAuth<T>(
+  endpoint: string,
+  options: RequestInit = {},
+  maxRetries: number = 3,
+): Promise<Result<T>> {
   // We use getToken() to automatically handle missing token redirects
   let token;
   try {
@@ -231,40 +257,138 @@ async function fetchWithAuth<T>(endpoint: string, options: RequestInit = {}): Pr
     headers["Authorization"] = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-    ...options,
-    headers,
-  });
+  let lastError: ApiError | null = null;
 
-  if (!response.ok) {
-    // A 401 from any authenticated call means the token is dead — expired,
-    // revoked, or invalidated server-side. Ending the session here is what
-    // stops a user sitting on a dashboard where every request silently fails.
-    if (response.status === 401) {
-      handleSessionExpired();
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+        ...options,
+        headers,
+      });
+
+      if (!response.ok) {
+        // A 401 from any authenticated call means the token is dead — expired,
+        // revoked, or invalidated server-side. Ending the session here is what
+        // stops a user sitting on a dashboard where every request silently fails.
+        if (response.status === 401) {
+          handleSessionExpired();
+          // Don't retry on 401, it's terminal
+          const error = await response
+            .json()
+            .catch(() => ({ message: "An error occurred" }));
+          const body = error as {
+            message?: string;
+            code?: string;
+            retry_after?: number;
+          };
+          return {
+            error: new ApiError(
+              response.status,
+              body.message || "Request failed",
+              body.code,
+              body.retry_after,
+            ),
+          };
+        }
+
+        // Check if retryable
+        if (isRetryableStatus(response.status) && attempt < maxRetries) {
+          const error = await response
+            .json()
+            .catch(() => ({ message: "An error occurred" }));
+          const body = error as {
+            message?: string;
+            code?: string;
+            retry_after?: number;
+          };
+
+          lastError = new ApiError(
+            response.status,
+            body.message || "Request failed",
+            body.code,
+            body.retry_after,
+          );
+
+          // Determine wait time: use Retry-After header if provided (for 429s),
+          // otherwise use exponential backoff
+          let waitMs: number;
+          if (response.status === 429 && body.retry_after) {
+            // retry_after is in seconds
+            waitMs = body.retry_after * 1000;
+          } else {
+            waitMs = calculateBackoffMs(attempt);
+          }
+
+          // Wait before retry
+          await new Promise((resolve) => setTimeout(resolve, waitMs));
+          continue; // Proceed to next retry
+        }
+
+        // Non-retryable error
+        const error = await response
+          .json()
+          .catch(() => ({ message: "An error occurred" }));
+        const body = error as {
+          message?: string;
+          code?: string;
+          retry_after?: number;
+        };
+        return {
+          error: new ApiError(
+            response.status,
+            body.message || "Request failed",
+            body.code,
+            body.retry_after,
+          ),
+        };
+      }
+
+      // Success
+      try {
+        const data = (await response.json()) as T;
+        return { data };
+      } catch (err) {
+        return {
+          error: new ApiError(
+            500,
+            "Failed to parse response",
+            undefined,
+            undefined,
+          ),
+        };
+      }
+    } catch (err) {
+      // Network error or other fetch-level error — retryable
+      if (attempt < maxRetries) {
+        lastError = new ApiError(
+          0,
+          err instanceof Error ? err.message : "Network error",
+        );
+        const waitMs = calculateBackoffMs(attempt);
+        await new Promise((resolve) => setTimeout(resolve, waitMs));
+        continue;
+      } else {
+        // Exhausted retries, return the last error
+        return {
+          error:
+            lastError ||
+            new ApiError(
+              0,
+              err instanceof Error
+                ? err.message
+                : "Request failed after retries",
+            ),
+        };
+      }
     }
-    const error = await response
-      .json()
-      .catch(() => ({ message: "An error occurred" }));
-    const body = error as { message?: string; code?: string; retry_after?: number };
-    return {
-      error: new ApiError(
-        response.status,
-        body.message || "Request failed",
-        body.code,
-        body.retry_after,
-      ),
-    };
   }
 
-  try {
-    const data = (await response.json()) as T;
-    return { data };
-  } catch (err) {
-    return {
-      error: new ApiError(500, "Failed to parse response", undefined, undefined),
-    };
-  }
+  // This should not be reached, but return last error if it somehow is
+  return {
+    error:
+      lastError ||
+      new ApiError(0, "Request failed after exhausting all retries"),
+  };
 }
 
 /** Build headers including the optional admin secret for internal endpoints. */
