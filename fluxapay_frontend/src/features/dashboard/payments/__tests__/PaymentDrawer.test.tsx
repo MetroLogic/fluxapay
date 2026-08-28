@@ -27,7 +27,7 @@ describe("PaymentDrawer", () => {
     jest.clearAllMocks();
   });
 
-  const mockPayment: any = {
+  const mockPayment = {
     id: "pay_123",
     amount: 100,
     currency: "USD",
@@ -35,7 +35,7 @@ describe("PaymentDrawer", () => {
     createdAt: new Date().toISOString(),
     customerEmail: "test@example.com",
     customerName: "Test User",
-  };
+  } as unknown as import("../types").Payment;
 
   it("renders the drawer when open", () => {
     render(<PaymentDrawer payment={mockPayment} isOpen={true} onClose={mockOnClose} />);
