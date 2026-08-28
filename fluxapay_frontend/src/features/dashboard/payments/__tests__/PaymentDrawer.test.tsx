@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { PaymentDrawer } from "../PaymentDrawer";
 import { useRouter } from "next/navigation";
 
@@ -52,9 +52,6 @@ describe("PaymentDrawer", () => {
     render(<PaymentDrawer payment={mockPayment} isOpen={true} onClose={mockOnClose} />);
     
     // There are two buttons for viewing detailed page (header and bottom). 
-    // We target the one at the bottom by text.
-    const bottomButton = screen.getByRole("button", { name: "View detailed payment page" });
-    
     // If there are multiple, getByRole will fail, so we should be more specific,
     // or just use getAllByRole and click the last one
     const buttons = screen.getAllByRole("button", { name: "View detailed payment page" });
