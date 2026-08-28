@@ -471,6 +471,22 @@ export function PaymentDrawer({ payment, isOpen, onClose }: PaymentDrawerProps) 
               </Button>
             </div>
           )}
+
+          {/* View Detailed Page */}
+          <div className="pt-2">
+            <Button
+              className="w-full gap-2"
+              variant="default"
+              aria-label="View detailed payment page"
+              onClick={() => {
+                onClose();
+                router.push(`/dashboard/payments/${payment.id}`);
+              }}
+            >
+              <LayoutDashboard className="h-4 w-4" />
+              View Full Details
+            </Button>
+          </div>
         </div>
       </aside>
     </>
