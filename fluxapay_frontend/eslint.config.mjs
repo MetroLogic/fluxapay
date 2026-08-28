@@ -18,14 +18,18 @@ const eslintConfig = defineConfig([
       // Pre-existing patterns across the app; enforced setState-in-effect breaks guards/hooks.
       "react-hooks/set-state-in-effect": "off",
       "react-hooks/purity": "off",
+
+      // Prevent shadowing of outer scope names (enums, functions, variables)
+      "@typescript-eslint/no-shadow": "error",
+
+      // Enforce consistent import/export of types
+      "@typescript-eslint/consistent-type-imports": "error",
     },
   },
   {
+    // Narrow no-explicit-any override to only the one test file that genuinely needs it
     files: [
-      "**/*.test.ts",
-      "**/*.test.tsx",
-      "**/__tests__/**",
-      "src/__tests__/**",
+      "src/features/dashboard/components/__tests__/Sidebar.test.tsx",
     ],
     rules: {
       "@typescript-eslint/no-explicit-any": "off",
