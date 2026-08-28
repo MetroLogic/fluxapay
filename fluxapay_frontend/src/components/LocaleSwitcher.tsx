@@ -9,19 +9,21 @@ const localeNames: Record<string, string> = {
   en: "English",
   fr: "Français",
   pt: "Português",
+  es: "Español",
   ar: "العربية",
-  he: "עברית",
+  sw: "Kiswahili",
 };
 
 const localeFlags: Record<string, string> = {
   en: "🇬🇧",
   fr: "🇫🇷",
   pt: "🇧🇷",
+  es: "🇪🇸",
   ar: "🇸🇦",
-  he: "🇮🇱",
+  sw: "🇰🇪",
 };
 
-const rtlLocales = ["ar", "he"];
+const rtlLocales = ["ar"];
 
 export function buildLocalizedPath(
   pathname: string,
@@ -30,7 +32,7 @@ export function buildLocalizedPath(
   hash: string = ""
 ) {
   const currentPath = pathname || "/";
-  const unprefixedPath = currentPath.replace(/^\/(fr|pt|ar|he)(?=\/|$)/, "") || "/";
+  const unprefixedPath = currentPath.replace(/^\/(en|fr|pt|es|ar|sw)(?=\/|$)/, "") || "/";
 
   let basePath = unprefixedPath;
   if (nextLocale !== routing.defaultLocale) {

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Search } from "lucide-react";
 import { isAdmin } from "@/lib/auth";
 import { useDebounce } from "@/hooks/useDebounce";
@@ -16,24 +17,24 @@ import { useDebounce } from "@/hooks/useDebounce";
  */
 export const COMMAND_PALETTE_DEBOUNCE_MS = 250;
 
-const BASE_ROUTES = [
-  { label: "Overview", path: "/dashboard" },
-  { label: "Payments", path: "/dashboard/payments" },
-  { label: "Payment Links", path: "/dashboard/payment-links" },
-  { label: "Invoices", path: "/dashboard/invoices" },
-  { label: "Refunds", path: "/dashboard/refunds" },
-  { label: "Settlements", path: "/dashboard/settlements" },
-  { label: "Webhooks", path: "/dashboard/webhooks" },
-  { label: "Analytics", path: "/dashboard/analytics" },
-  { label: "Settings", path: "/dashboard/settings" },
-  { label: "Developers", path: "/dashboard/developers" },
+const BASE_ROUTE_KEYS = [
+  { key: "overview", path: "/dashboard" },
+  { key: "payments", path: "/dashboard/payments" },
+  { key: "paymentLinks", path: "/dashboard/payment-links" },
+  { key: "invoices", path: "/dashboard/invoices" },
+  { key: "refunds", path: "/dashboard/refunds" },
+  { key: "settlements", path: "/dashboard/settlements" },
+  { key: "webhooks", path: "/dashboard/webhooks" },
+  { key: "analytics", path: "/dashboard/analytics" },
+  { key: "settings", path: "/dashboard/settings" },
+  { key: "developers", path: "/dashboard/developers" },
 ];
 
-const ADMIN_ROUTES = [
-  { label: "Admin Overview", path: "/admin/overview" },
-  { label: "Force Oracle Sync", path: "/admin/overview?action=force-oracle-sync" },
-  { label: "Flush Webhook Queue", path: "/admin/overview?action=flush-webhooks" },
-  { label: "View KYC Queue", path: "/admin/overview?action=kyc-queue" },
+const ADMIN_ROUTE_KEYS = [
+  { key: "adminOverview", path: "/admin/overview" },
+  { key: "forceOracleSync", path: "/admin/overview?action=force-oracle-sync" },
+  { key: "flushWebhookQueue", path: "/admin/overview?action=flush-webhooks" },
+  { key: "viewKYCQueue", path: "/admin/overview?action=kyc-queue" },
 ];
 
 export interface CommandPaletteProps {
@@ -52,6 +53,7 @@ export function CommandPalette({
   debounceMs = COMMAND_PALETTE_DEBOUNCE_MS,
   onSearch,
 }: CommandPaletteProps = {}) {
+  const t = useTranslations("commandPalette");
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
@@ -61,10 +63,11 @@ export function CommandPalette({
   const dialogRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
-  const routes = useMemo(
-    () => (isAdminUser ? [...BASE_ROUTES, ...ADMIN_ROUTES] : BASE_ROUTES),
-    [isAdminUser],
-  );
+  const routes = useMemo(() => {
+    const baseRoutes = BASE_ROUTE_KEYS.map(r => ({ label: t(r.key as any), path: r.path }));
+    const adminRoutes = ADMIN_ROUTE_KEYS.map(r => ({ label: t(r.key as any), path: r.path }));
+    return isAdminUser ? [...baseRoutes, ...adminRoutes] : baseRoutes;
+  }, [isAdminUser, t]);
 
   // Initialize admin status
   useEffect(() => {

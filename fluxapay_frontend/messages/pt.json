@@ -21,7 +21,8 @@
     "export": "Exportar",
     "import": "Importar",
     "download": "Baixar",
-    "upload": "Enviar"
+    "upload": "",
+    "offlineMessage": "Você está offline. Exibindo dados em cache. Reconecte-se para ver as últimas atualizações."
   },
   "nav": {
     "home": "Início",
@@ -367,5 +368,21 @@
     "notFound": "O recurso solicitado não foi encontrado.",
     "validation": "Por favor, verifique sua entrada e tente novamente.",
     "paymentFailed": "Falha no processamento do pagamento. Por favor, tente novamente."
+  },
+  "commandPalette": {
+    "overview": "Visão Geral",
+    "payments": "Pagamentos",
+    "paymentLinks": "Links de Pagamento",
+    "invoices": "Faturas",
+    "refunds": "Reembolsos",
+    "settlements": "Liquidações",
+    "webhooks": "Webhooks",
+    "analytics": "Análise",
+    "settings": "Configurações",
+    "developers": "Desenvolvedores",
+    "adminOverview": "Visão Geral do Admin",
+    "forceOracleSync": "Forçar Sincronização de Oráculo",
+    "flushWebhookQueue": "Limpar Fila de Webhook",
+    "viewKYCQueue": "Exibir Fila de KYC"
   }
 }
