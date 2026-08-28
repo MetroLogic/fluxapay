@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useEffect } from 'react';
+import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 import { subDays, startOfDay } from 'date-fns';
 import { Loader2, AlertCircle } from 'lucide-react';
@@ -111,7 +112,7 @@ export default function ReconciliationPage() {
             await resolveDiscrepancy(id);
         } catch (e) {
             const message = e instanceof ApiError ? e.message : 'Could not resolve alert';
-            window.alert(message);
+            toast.error(message);
         }
     };
 

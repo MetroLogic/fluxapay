@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
+import toast from "react-hot-toast";
 import Input from "@/components/Input";
 import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
@@ -290,7 +291,11 @@ export default function SettingsPage() {
       setTimeout(() => setKeyRegenerated(false), 5000);
     } catch (error) {
       console.error("Failed to regenerate API key:", error);
-      alert("Failed to regenerate API key. Please try again.");
+      toast.error(
+        error instanceof ApiError
+          ? error.message
+          : "Failed to regenerate API key. Please try again.",
+      );
     } finally {
       setIsRegenerating(false);
     }
