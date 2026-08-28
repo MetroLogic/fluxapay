@@ -454,13 +454,18 @@ function CreateApiKeyModal({
     setError(null);
 
     try {
-      const res = await api.keys.createKey({ name: name.trim() });
-      setCreatedSecret(res.secret || res.apiKey);
+      const result = await api.keys.createKey({ name: name.trim() });
+      if ('error' in result) {
+        setError(result.error.message);
+        return;
+      }
+      const res = result.data as Record<string, unknown>;
+      setCreatedSecret((res.secret as string) || (res.apiKey as string));
       onCreateSuccess({
-        id: res.id,
+        id: res.id as string,
         name: name.trim(),
-        masked: `sk_live_${res.lastFour}`,
-        secret: res.secret || res.apiKey,
+        masked: `sk_live_${res.lastFour as string}`,
+        secret: (res.secret as string) || (res.apiKey as string),
       });
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to create API key");
@@ -689,7 +694,17 @@ export default function DevelopersPage() {
   useEffect(() => {
     api.merchant
       .getMe()
-      .then((r) => setApiKey(r.merchant.api_key_masked || "No API key generated"))
+      .then((result) => {
+        if ('error' in result) {
+          setApiKey("Failed to load API key");
+        } else {
+          const r = result.data as Record<string, unknown>;
+          const merchant = r.merchant as Record<string, unknown>;
+          setApiKey(
+            (merchant.api_key_masked as string) || "No API key generated",
+          );
+        }
+      })
       .catch(() => setApiKey("Failed to load API key"));
   }, []);
 
@@ -697,11 +712,16 @@ export default function DevelopersPage() {
     setRotatingApiKey(true);
     setRotateError(null);
     try {
-      const res = await api.keys.rotateApiKey();
-      setNewApiKey(res.apiKey);
+      const result = await api.keys.rotateApiKey();
+      if ('error' in result) {
+        setRotateError(result.error.message);
+        return;
+      }
+      const res = result.data as Record<string, unknown>;
+      setNewApiKey(res.apiKey as string);
       setShowNewApiKey(false);
       // Update masked display with last four from new key
-      const lastFour = res.apiKey.slice(-4);
+      const lastFour = (res.apiKey as string).slice(-4);
       setApiKey(`sk_live_****${lastFour}`);
     } catch (e: unknown) {
       setRotateError(e instanceof Error ? e.message : "Failed to rotate API key");
@@ -715,8 +735,13 @@ export default function DevelopersPage() {
     setRotatingWebhook(true);
     setRotateError(null);
     try {
-      const res = await api.keys.rotateWebhookSecret();
-      setNewWebhookSecret(res.webhookSecret);
+      const result = await api.keys.rotateWebhookSecret();
+      if ('error' in result) {
+        setRotateError(result.error.message);
+        return;
+      }
+      const res = result.data as Record<string, unknown>;
+      setNewWebhookSecret(res.webhookSecret as string);
       setShowNewWebhookSecret(false);
     } catch (e: unknown) {
       setRotateError(

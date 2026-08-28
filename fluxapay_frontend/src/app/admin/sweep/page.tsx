@@ -185,18 +185,16 @@ export default function SweepPage() {
     setStatusLoading(true);
     setStatusError(null);
     try {
-      const res = await api.sweep.getStatus();
-      if (!res.ok) {
-        if (res.status === 403) {
+      const result = await api.sweep.getStatus();
+      if ('error' in result) {
+        const { error } = result;
+        if (error.status === 403) {
           router.replace('/login');
           return;
         }
-        const err = await res
-          .json()
-          .catch(() => ({ message: "Unknown error" }));
-        throw new Error(err.message ?? `HTTP ${res.status}`);
+        throw new Error(error.message);
       }
-      const data: SweepStatus = await res.json();
+      const data = result.data as SweepStatus;
       setSweepStatus(data);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -217,19 +215,23 @@ export default function SweepPage() {
     addLog("info", "▶ Previewing eligible payments...");
 
     try {
-      const res = await api.sweep.previewSweep();
-      if (res.status === 403) {
-        router.replace('/login');
-        return;
-      }
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.message ?? data.error ?? `HTTP ${res.status}`);
+      const result = await api.sweep.previewSweep();
+      if ('error' in result) {
+        const { error } = result;
+        if (error.status === 403) {
+          router.replace('/login');
+          return;
+        }
+        throw new Error(error.message);
       }
 
-      setEligiblePayments(data.payments || []);
+      const data = result.data as Record<string, unknown>;
+      setEligiblePayments((data.payments as EligiblePayment[]) || []);
       setShowPreview(true);
-      addLog("info", `Found ${data.payments?.length || 0} eligible payments`);
+      addLog(
+        "info",
+        `Found ${(data.payments as unknown[])?.length || 0} eligible payments`,
+      );
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       addLog("error", `Preview failed: ${msg}`);
@@ -257,26 +259,26 @@ export default function SweepPage() {
     );
 
     try {
-      const res = await api.sweep.runSweep(dryRun);
-      if (res.status === 403) {
-        router.replace('/login');
-        return;
-      }
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.message ?? data.error ?? `HTTP ${res.status}`);
+      const result = await api.sweep.runSweep(dryRun);
+      if ('error' in result) {
+        const { error } = result;
+        if (error.status === 403) {
+          router.replace('/login');
+          return;
+        }
+        throw new Error(error.message);
       }
 
-      const result = data as SweepResult;
-      setSweepResult(result);
+      const data = result.data as SweepResult;
+      setSweepResult(data);
 
       addLog(
         "info",
-        `Batch ${result.batchId} started at ${fmtDate(result.startedAt)}`,
+        `Batch ${data.batchId} started at ${fmtDate(data.startedAt)}`,
       );
-      addLog("info", `${result.totalMerchantsProcessed} merchant(s) in scope`);
+      addLog("info", `${data.totalMerchantsProcessed} merchant(s) in scope`);
 
-      result.merchantResults.forEach((m) => {
+      data.merchantResults.forEach((m) => {
         if (m.status === "succeeded") {
           addLog(
             "success",
@@ -291,7 +293,7 @@ export default function SweepPage() {
 
       addLog(
         "success",
-        `🏁 Batch complete in ${result.durationMs}ms — ${result.totalMerchantsSucceeded} succeeded, ${result.totalMerchantsFailed} failed`,
+        `🏁 Batch complete in ${data.durationMs}ms — ${data.totalMerchantsSucceeded} succeeded, ${data.totalMerchantsFailed} failed`,
       );
 
       await fetchStatus();

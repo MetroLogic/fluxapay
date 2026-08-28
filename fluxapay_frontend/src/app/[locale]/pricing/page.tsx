@@ -114,9 +114,9 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
 }
 
 async function getPricingData() {
-  const config = await fetchPricingConfig();
+  const result = await fetchPricingConfig();
 
-  if (!config) {
+  if ('error' in result) {
     return {
       plans: defaultPlans,
       comparisonFeatures: defaultComparisonFeatures,
@@ -124,10 +124,11 @@ async function getPricingData() {
     };
   }
 
+  const config = result.data as Record<string, unknown>;
   return {
-    plans: config.plans || defaultPlans,
-    comparisonFeatures: config.comparisonFeatures || defaultComparisonFeatures,
-    faqItems: config.faqItems || defaultFaqItems,
+    plans: (config.plans as typeof defaultPlans) || defaultPlans,
+    comparisonFeatures: (config.comparisonFeatures as typeof defaultComparisonFeatures) || defaultComparisonFeatures,
+    faqItems: (config.faqItems as typeof defaultFaqItems) || defaultFaqItems,
   };
 }
 
