@@ -105,7 +105,10 @@ export function formatNumber(
 }
 
 /**
- * Format percentage with locale-specific formatting
+ * Format percentage with locale-specific formatting.
+ *
+ * Takes a whole-number percentage: `formatPercentage(50)` is `"50.00%"`.
+ * The `/ 100` is required because `style: 'percent'` scales by 100 itself.
  */
 export function formatPercentage(
   value: number,
