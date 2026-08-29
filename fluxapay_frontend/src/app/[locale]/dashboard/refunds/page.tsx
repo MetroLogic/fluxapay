@@ -77,7 +77,7 @@ function RefundsContent() {
     setSearch(paymentIdFromQuery);
   }, [paymentIdFromQuery]);
 
-  const fetchRefunds = useCallback(async () => {
+  const fetchRefunds = useCallback(async (signal?: AbortSignal) => {
     try {
       setIsLoading(true);
       setError(null);
@@ -90,6 +90,7 @@ function RefundsContent() {
         status: statusFilter === "all" ? undefined : (statusFilter as RefundStatus),
         page: pageFromQuery,
         limit: PAGE_SIZE,
+        signal,
       })) as {
         refunds?: BackendRefund[];
         total?: number;
@@ -118,7 +119,8 @@ function RefundsContent() {
             (pageFromQuery - 1) * PAGE_SIZE + mapped.length,
         );
       }
-    } catch {
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
       setError("Failed to load refunds. Please try again.");
     } finally {
       setIsLoading(false);
@@ -126,7 +128,9 @@ function RefundsContent() {
   }, [paymentIdFromQuery, pageFromQuery, statusFilter]);
 
   useEffect(() => {
-    void fetchRefunds();
+    const controller = new AbortController();
+    void fetchRefunds(controller.signal);
+    return () => controller.abort();
   }, [fetchRefunds]);
 
   /**
