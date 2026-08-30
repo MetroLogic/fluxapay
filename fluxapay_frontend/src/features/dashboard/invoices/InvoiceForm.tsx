@@ -17,7 +17,7 @@ const ALL_CURRENCIES = [...FIAT_CURRENCIES, ...CRYPTO_CURRENCIES];
 const DRAFT_KEY = "invoice_form_draft";
 
 const isCrypto = (c: string) => CRYPTO_CURRENCIES.includes(c);
-const getDecimalPlaces = (c: string) => (c === "XLM" ? 7 : c === "USDC" ? 7 : 2);
+const getDecimalPlaces = (c: string) => (c === "XLM" ? 7 : c === "USDC" ? 6 : 2);
 
 const emptyLineItem = (): LineItem => ({ description: "", quantity: 1, unit_price: 0 });
 
