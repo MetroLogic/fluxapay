@@ -46,11 +46,23 @@ export function CheckoutWidget({
   const modalRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      // Verify origin for security
-      if (typeof window !== "undefined" && !event.origin.includes(window.location.host)) {
-        if (!event.origin.includes("fluxapay")) return;
+    // Only trust postMessage events from the checkout iframe's own origin.
+    // Comparing full origins (scheme + host + port) via exact match prevents
+    // the substring-spoofing that `origin.includes(host)` allowed.
+    const allowedOrigins = new Set<string>();
+    if (typeof window !== "undefined" && window.location.origin) {
+      allowedOrigins.add(window.location.origin);
+    }
+    if (process.env.NEXT_PUBLIC_APP_URL) {
+      try {
+        allowedOrigins.add(new URL(process.env.NEXT_PUBLIC_APP_URL).origin);
+      } catch {
+        // Ignore malformed env value.
       }
+    }
+
+    const handleMessage = (event: MessageEvent) => {
+      if (!allowedOrigins.has(event.origin)) return;
 
       const { type, data } = event.data;
 
