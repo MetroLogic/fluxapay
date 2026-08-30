@@ -306,6 +306,7 @@
     "bankCodePlaceholder": "Bank Code",
     "accountNumberPlaceholder": "Account Number",
     "signupSuccess": "Signup successful! Please verify your account.",
+    "loginSuccess": "Login successful!",
     "resetPassword": "Reset Password",
     "forgotPasswordDescription": "Enter your email address and we will send you a link to reset your password.",
     "resetLinkSent": "We have sent a password reset link to your email.",

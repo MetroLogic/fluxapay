@@ -62,17 +62,15 @@ const LoginForm = () => {
       if (data.refresh_token) {
         storeRefreshToken(data.refresh_token, Boolean(validData.keepLoggedIn));
       }
-      toast.success(data.message || "Login successful!");
+      toast.success(data.message || tAuth("loginSuccess"));
       
       const redirectUrl = searchParams.get("redirect");
       if (redirectUrl) {
         // We use window.location.href here because redirectUrl might contain the locale
         // and using router.push with next-intl can sometimes double-prefix or strip it.
         window.location.href = redirectUrl;
-      } else {
-        router.push("/dashboard");
+        return;
       }
-      toast.success(data.message || tAuth("signupSuccess")); // Assuming signupSuccess for now or just generic
       router.push("/dashboard");
     } catch (err) {
       if (err instanceof ApiError) {

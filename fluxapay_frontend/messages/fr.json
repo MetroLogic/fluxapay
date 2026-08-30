@@ -306,6 +306,7 @@
     "bankCodePlaceholder": "Code de la banque",
     "accountNumberPlaceholder": "Numéro de compte",
     "signupSuccess": "Inscription réussie ! Veuillez vérifier votre compte.",
+    "loginSuccess": "Connexion réussie !",
     "resetPassword": "Réinitialiser le mot de passe",
     "forgotPasswordDescription": "Entrez votre adresse email et nous vous enverrons un lien pour réinitialiser votre mot de passe.",
     "resetLinkSent": "Nous avons envoyé un lien de réinitialisation de mot de passe à votre email.",

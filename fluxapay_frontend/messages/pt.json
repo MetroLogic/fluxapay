@@ -306,6 +306,7 @@
     "bankCodePlaceholder": "Código do Banco",
     "accountNumberPlaceholder": "Número da Conta",
     "signupSuccess": "Cadastro realizado com sucesso! Por favor, verifique sua conta.",
+    "loginSuccess": "Login realizado com sucesso!",
     "resetPassword": "Redefinir Senha",
     "forgotPasswordDescription": "Insira seu endereço de email e enviaremos um link para redefinir sua senha.",
     "resetLinkSent": "Enviamos um link de redefinição de senha para o seu email.",
