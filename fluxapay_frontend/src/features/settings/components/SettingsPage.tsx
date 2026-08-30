@@ -1,967 +1,164 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo } from "react";
-import Link from "next/link";
-import Input from "@/components/Input";
-import { Button } from "@/components/Button";
-import { Modal } from "@/components/Modal";
-import { api, ApiError } from "@/lib/api";
-import { logout, getToken } from "@/lib/auth";
-import { DOCS_URLS } from "@/lib/docs";
-import { isValidHttpsWebhookUrl } from "@/lib/webhookUrl";
+import React, { useCallback, useEffect, useState } from "react";
+import { api } from "@/lib/api";
+import { getSessionNote } from "@/lib/sessionNote";
 import { SettingsTabs, type TabId } from "./SettingsTabs";
+import { ProfileTab } from "./ProfileTab";
+import { SecurityTab } from "./SecurityTab";
+import { NotificationsTab } from "./NotificationsTab";
+import { WebhooksTab } from "./WebhooksTab";
+import { ApiKeysTab } from "./ApiKeysTab";
+import { KycTab } from "./KycTab";
+import type { MerchantSettingsData } from "./types";
 
-import {
-  Copy,
-  Key,
-  Webhook,
-  Shield,
-  CheckCircle2,
-  CalendarClock,
-  Clock,
-  Palette,
-  AlertTriangle,
-} from "lucide-react";
+const DEFAULT_DATA: MerchantSettingsData = {
+  businessName: "",
+  contactEmail: "",
+  webhookUrl: "",
+  apiKey: "No API key generated",
+  settlementSchedule: "daily",
+  settlementDay: 1,
+  nextSettlementDate: "",
+  accountName: "",
+  accountNumber: "",
+  bankName: "",
+  bankCode: "",
+  currency: "",
+  country: "",
+  checkoutLogoUrl: "",
+  checkoutAccentColor: "#2563eb",
+};
+
+function LoadingState() {
+  return (
+    <div className="flex items-center justify-center min-h-[400px]">
+      <div className="text-center">
+        <svg
+          className="h-8 w-8 animate-spin mx-auto mb-4"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="3"
+        >
+          <circle cx="12" cy="12" r="10" className="opacity-30" />
+          <path d="M22 12a10 10 0 0 1-10 10" />
+        </svg>
+        <p className="text-muted-foreground">Loading settings...</p>
+      </div>
+    </div>
+  );
+}
 
 export default function SettingsPage() {
-  const [activeTab, setActiveTab] = useState<TabId>("profile");
-
-  // Account Details State
-  const [businessName, setBusinessName] = useState("");
-  const [contactEmail, setContactEmail] = useState("");
-  const [accountSaved, setAccountSaved] = useState(false);
-  const [isSavingAccount, setIsSavingAccount] = useState(false);
-  const [accountError, setAccountError] = useState("");
-  const [settlementSchedule, setSettlementSchedule] = useState<
-    "daily" | "weekly"
-  >("daily");
-  const [settlementDay, setSettlementDay] = useState<number>(1);
-  const [nextSettlementDate, setNextSettlementDate] = useState<string>("");
-
-  // Initial snapshot for dirty tracking
-  const [initialSnapshot, setInitialSnapshot] = useState<string>("");
-
-  // API Key State
-  const [apiKey, setApiKey] = useState("Loading...");
-  const [showRegenerateModal, setShowRegenerateModal] = useState(false);
-  const [isRegenerating, setIsRegenerating] = useState(false);
-  const [keyRegenerated, setKeyRegenerated] = useState(false);
-  const [copied, setCopied] = useState(false);
-
-  // Webhook State
-  const [webhookUrl, setWebhookUrl] = useState("");
-  const [webhookError, setWebhookError] = useState("");
-  const [webhookSaved, setWebhookSaved] = useState(false);
-  const [isSavingWebhook, setIsSavingWebhook] = useState(false);
-
-  // Security State
-  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
-  const [isSigningOut, setIsSigningOut] = useState(false);
-  const [isSigningOutAll, setIsSigningOutAll] = useState(false);
-  const [sessionNote, setSessionNote] = useState<string>("Current session active");
-  const [showDeletionModal, setShowDeletionModal] = useState(false);
-  const [isRequestingDeletion, setIsRequestingDeletion] = useState(false);
-  const [deletionRequestScheduled, setDeletionRequestScheduled] =
-    useState(false);
-  const [deletionRequestError, setDeletionRequestError] = useState("");
-
-  // Hosted checkout branding
-  const [checkoutLogoUrl, setCheckoutLogoUrl] = useState("");
-  const [checkoutAccentColor, setCheckoutAccentColor] = useState("#2563eb");
-  const [checkoutLogoError, setCheckoutLogoError] = useState("");
-  const [checkoutBrandingSaved, setCheckoutBrandingSaved] = useState(false);
-  const [isSavingCheckoutBranding, setIsSavingCheckoutBranding] =
-    useState(false);
-
-  // Bank Details State
-  const [accountName, setAccountName] = useState("");
-  const [accountNumber, setAccountNumber] = useState("");
-  const [bankName, setBankName] = useState("");
-  const [bankCode, setBankCode] = useState("");
-  const [currency, setCurrency] = useState("");
-  const [country, setCountry] = useState("");
-  const [bankSaved, setBankSaved] = useState(false);
-  const [isSavingBank, setIsSavingBank] = useState(false);
-  const [bankError, setBankError] = useState("");
-
-  // Loading state
   const [isLoading, setIsLoading] = useState(true);
+  const [data, setData] = useState<MerchantSettingsData>(DEFAULT_DATA);
+  const [activeTab, setActiveTab] = useState<TabId>("profile");
+  const [dirtyTabs, setDirtyTabs] = useState<Partial<Record<TabId, boolean>>>({});
+  const [sessionNote, setSessionNote] = useState("Current session active");
 
-  const currentSnapshot = useMemo(
-    () =>
-      JSON.stringify({
-        businessName,
-        contactEmail,
-        settlementSchedule,
-        settlementDay,
-        checkoutLogoUrl,
-        checkoutAccentColor,
-        webhookUrl,
-        accountName,
-        accountNumber,
-        bankName,
-        bankCode,
-      }),
-    [
-      businessName,
-      contactEmail,
-      settlementSchedule,
-      settlementDay,
-      checkoutLogoUrl,
-      checkoutAccentColor,
-      webhookUrl,
-      accountName,
-      accountNumber,
-      bankName,
-      bankCode,
-    ],
-  );
-
-  const hasUnsavedChanges = initialSnapshot !== "" && currentSnapshot !== initialSnapshot;
+  const hasUnsavedChanges = Object.values(dirtyTabs).some(Boolean);
 
   useEffect(() => {
-    loadMerchantData();
     setSessionNote(getSessionNote());
   }, []);
 
-  const getSessionNote = () => {
-    if (typeof window === "undefined") return "Current session active";
-    try {
-      const token = getToken();
-      if (!token) return "No active session token found";
-      const payloadSegment = token.split(".")[1];
-      if (!payloadSegment) return "Current session active";
-      const base64 = payloadSegment.replace(/-/g, "+").replace(/_/g, "/");
-      const normalized = base64.padEnd(Math.ceil(base64.length / 4) * 4, "=");
-      const payload = JSON.parse(atob(normalized)) as { iat?: number };
-      if (!payload.iat) return "Current session active";
-      return `Last login: ${new Date(payload.iat * 1000).toLocaleString()}`;
-    } catch {
-      return "Current session active";
-    }
-  };
-
-  const loadMerchantData = async () => {
-    try {
-      const response = await api.merchant.getMe();
-      const merchant = response.merchant as Record<string, unknown>;
-
-      setBusinessName((merchant.business_name as string) || "");
-      setContactEmail((merchant.email as string) || "");
-      setWebhookUrl((merchant.webhook_url as string) || "");
-      setApiKey((merchant.api_key as string) || "No API key generated");
-      setSettlementSchedule(
-        (merchant.settlement_schedule as "daily" | "weekly") || "daily",
-      );
-      setSettlementDay((merchant.settlement_day as number) ?? 1);
-
-      if (merchant.bankAccount) {
-        const ba = merchant.bankAccount as Record<string, string | undefined>;
-        setAccountName(ba.account_name || "");
-        setAccountNumber(ba.account_number || "");
-        setBankName(ba.bank_name || "");
-        setBankCode(ba.bank_code || "");
-        setCurrency(ba.currency || "");
-        setCountry(ba.country || "");
-      } else {
-        setCurrency((merchant.settlement_currency as string) || "");
-        setCountry((merchant.country as string) || "");
-      }
-
-      setCheckoutLogoUrl(
-        typeof merchant.checkout_logo_url === "string"
-          ? merchant.checkout_logo_url
-          : "",
-      );
-      setCheckoutAccentColor(
-        typeof merchant.checkout_accent_color === "string" &&
-          merchant.checkout_accent_color
-          ? merchant.checkout_accent_color
-          : "#2563eb",
-      );
-      setCheckoutLogoError("");
-
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
       try {
-        const summary = await api.settlements.summary();
-        if (summary.next_settlement_date) {
-          setNextSettlementDate(summary.next_settlement_date);
+        const response = await api.merchant.getMe();
+        const merchant = response.merchant as Record<string, unknown>;
+
+        let currency = "";
+        let country = "";
+        const bankAccount = merchant.bankAccount as
+          | Record<string, string | undefined>
+          | undefined;
+        if (bankAccount) {
+          currency = bankAccount.currency || "";
+          country = bankAccount.country || "";
+        } else {
+          currency = (merchant.settlement_currency as string) || "";
+          country = (merchant.country as string) || "";
         }
-      } catch (err) {
-        console.error("Failed to load settlement summary:", err);
+
+        const nextData: MerchantSettingsData = {
+          ...DEFAULT_DATA,
+          businessName: (merchant.business_name as string) || "",
+          contactEmail: (merchant.email as string) || "",
+          webhookUrl: (merchant.webhook_url as string) || "",
+          apiKey: (merchant.api_key as string) || "No API key generated",
+          settlementSchedule:
+            (merchant.settlement_schedule as "daily" | "weekly") || "daily",
+          settlementDay: (merchant.settlement_day as number) ?? 1,
+          accountName: bankAccount?.account_name || "",
+          accountNumber: bankAccount?.account_number || "",
+          bankName: bankAccount?.bank_name || "",
+          bankCode: bankAccount?.bank_code || "",
+          currency,
+          country,
+          checkoutLogoUrl:
+            typeof merchant.checkout_logo_url === "string"
+              ? merchant.checkout_logo_url
+              : "",
+          checkoutAccentColor:
+            typeof merchant.checkout_accent_color === "string" &&
+            merchant.checkout_accent_color
+              ? merchant.checkout_accent_color
+              : "#2563eb",
+        };
+
+        try {
+          const summary = await api.settlements.summary();
+          if (summary.next_settlement_date) {
+            nextData.nextSettlementDate = summary.next_settlement_date;
+          }
+        } catch (err) {
+          console.error("Failed to load settlement summary:", err);
+        }
+
+        if (!cancelled) setData(nextData);
+      } catch (error) {
+        console.error("Failed to load merchant data:", error);
+      } finally {
+        if (!cancelled) setIsLoading(false);
       }
-    } catch (error) {
-      console.error("Failed to load merchant data:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    };
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  const handleAccountSave = async () => {
-    setIsSavingAccount(true);
-    setAccountError("");
-    try {
-      await api.merchant.updateProfile({
-        business_name: businessName,
-        email: contactEmail,
-        settlement_schedule: settlementSchedule,
-        settlement_day:
-          settlementSchedule === "weekly" ? settlementDay : undefined,
-      });
-      setAccountSaved(true);
-      setTimeout(() => setAccountSaved(false), 3000);
-      setInitialSnapshot(currentSnapshot);
-    } catch (error) {
-      const message =
-        error instanceof ApiError ? error.message : "Failed to save changes";
-      setAccountError(message);
-    } finally {
-      setIsSavingAccount(false);
-    }
-  };
-
-  const handleBankSave = async () => {
-    setIsSavingBank(true);
-    setBankError("");
-    try {
-      await api.merchant.addBankAccount({
-        account_name: accountName,
-        account_number: accountNumber,
-        bank_name: bankName,
-        bank_code: bankCode,
-        currency,
-        country,
-      });
-      setBankSaved(true);
-      setTimeout(() => setBankSaved(false), 3000);
-      setInitialSnapshot(currentSnapshot);
-    } catch (error) {
-      const message =
-        error instanceof ApiError ? error.message : "Failed to save bank details";
-      setBankError(message);
-    } finally {
-      setIsSavingBank(false);
-    }
-  };
-
-  const handleCheckoutLogoChange = (value: string) => {
-    setCheckoutLogoUrl(value);
-    const v = value.trim();
-    if (v && !v.startsWith("https://")) {
-      setCheckoutLogoError("Logo URL must start with https://");
-    } else {
-      setCheckoutLogoError("");
-    }
-  };
-
-  const handleCheckoutBrandingSave = async () => {
-    if (checkoutLogoError) return;
-    setIsSavingCheckoutBranding(true);
-    try {
-      await api.merchant.updateProfile({
-        checkout_logo_url:
-          checkoutLogoUrl.trim() === "" ? null : checkoutLogoUrl.trim(),
-        checkout_accent_color: checkoutAccentColor || null,
-      });
-      setCheckoutBrandingSaved(true);
-      setTimeout(() => setCheckoutBrandingSaved(false), 3000);
-      setInitialSnapshot(currentSnapshot);
-    } catch (error) {
-      const message =
-        error instanceof ApiError ? error.message : "Failed to save branding";
-      setCheckoutLogoError(message);
-    } finally {
-      setIsSavingCheckoutBranding(false);
-    }
-  };
-
-  const handleCopyApiKey = () => {
-    navigator.clipboard.writeText(apiKey);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const handleRegenerateApiKey = async () => {
-    setIsRegenerating(true);
-    try {
-      const response = await api.keys.regenerate();
-      setApiKey(response.api_key);
-      setShowRegenerateModal(false);
-      setKeyRegenerated(true);
-      setTimeout(() => setKeyRegenerated(false), 5000);
-    } catch (error) {
-      console.error("Failed to regenerate API key:", error);
-      alert("Failed to regenerate API key. Please try again.");
-    } finally {
-      setIsRegenerating(false);
-    }
-  };
-
-  const handleWebhookUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setWebhookUrl(value);
-    if (!value.trim()) {
-      setWebhookError("");
-      return;
-    }
-    const v = isValidHttpsWebhookUrl(value);
-    setWebhookError(v.ok ? "" : v.message);
-  };
-
-  const handleWebhookSave = async () => {
-    if (webhookError) return;
-    setIsSavingWebhook(true);
-    try {
-      await api.merchant.updateWebhook(webhookUrl);
-      setWebhookSaved(true);
-      setTimeout(() => setWebhookSaved(false), 3000);
-      setInitialSnapshot(currentSnapshot);
-    } catch (error) {
-      const message =
-        error instanceof ApiError
-          ? error.message
-          : "Failed to save webhook URL";
-      setWebhookError(message);
-    } finally {
-      setIsSavingWebhook(false);
-    }
-  };
-
-  const handleSignOutCurrentSession = () => {
-    setIsSigningOut(true);
-    logout();
-  };
-
-  const handleSignOutAllSessions = async () => {
-    setIsSigningOutAll(true);
-    try {
-      await api.auth.logoutAllSessions();
-    } catch (error) {
-      if (error instanceof ApiError && error.status !== 404) {
-        console.error("Logout-all request failed:", error);
-      }
-    } finally {
-      logout();
-    }
-  };
-
-  const handleRequestDeletion = async () => {
-    setIsRequestingDeletion(true);
-    setDeletionRequestError("");
-    try {
-      await api.merchant.requestDeletion();
-      setDeletionRequestScheduled(true);
-      setShowDeletionModal(false);
-    } catch (error) {
-      const message =
-        error instanceof ApiError
-          ? error.message
-          : "Failed to request account deletion";
-      setDeletionRequestError(message);
-    } finally {
-      setIsRequestingDeletion(false);
-    }
-  };
-
-  const handleTabChange = useCallback((tab: TabId) => {
-    setActiveTab(tab);
+  const handleDirtyChange = useCallback((tab: TabId) => {
+    return (dirty: boolean) =>
+      setDirtyTabs((prev) => (prev[tab] === dirty ? prev : { ...prev, [tab]: dirty }));
   }, []);
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center">
-          <svg
-            className="h-8 w-8 animate-spin mx-auto mb-4"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="3"
-          >
-            <circle cx="12" cy="12" r="10" className="opacity-30" />
-            <path d="M22 12a10 10 0 0 1-10 10" />
-          </svg>
-          <p className="text-muted-foreground">Loading settings...</p>
-        </div>
-      </div>
-    );
+    return <LoadingState />;
   }
 
   return (
     <SettingsTabs
       activeTab={activeTab}
-      onTabChange={handleTabChange}
+      onTabChange={setActiveTab}
       hasUnsavedChanges={hasUnsavedChanges}
     >
       {activeTab === "profile" && (
-        <div className="space-y-6">
-          {/* Account Details */}
-          <div className="space-y-4 p-6 rounded-2xl border bg-muted/20">
-            <div className="flex items-center gap-2 text-primary font-semibold mb-4">
-              <Shield className="h-5 w-5" />
-              <h3 className="text-lg">Account Details</h3>
-            </div>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-2">Business Name</label>
-                <Input
-                  type="text"
-                  value={businessName}
-                  onChange={(e) => setBusinessName(e.target.value)}
-                  placeholder="Enter your business name"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">Contact Email</label>
-                <Input
-                  type="email"
-                  value={contactEmail}
-                  onChange={(e) => setContactEmail(e.target.value)}
-                  placeholder="contact@example.com"
-                />
-              </div>
-              <div className="flex items-center gap-3 pt-2">
-                <Button
-                  variant="dark"
-                  onClick={handleAccountSave}
-                  disabled={isSavingAccount}
-                  className="gap-2"
-                >
-                  {isSavingAccount && (
-                    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                      <circle cx="12" cy="12" r="10" className="opacity-30" />
-                      <path d="M22 12a10 10 0 0 1-10 10" />
-                    </svg>
-                  )}
-                  {accountSaved && <CheckCircle2 className="h-4 w-4" />}
-                  {isSavingAccount ? "Saving..." : accountSaved ? "Saved!" : "Save Changes"}
-                </Button>
-              </div>
-              {accountError && (
-                <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-800">
-                  <p className="text-sm">{accountError}</p>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Hosted Checkout Branding */}
-          <div className="space-y-4 p-6 rounded-2xl border bg-muted/20">
-            <div className="flex items-center gap-2 text-primary font-semibold mb-4">
-              <Palette className="h-5 w-5" />
-              <h3 className="text-lg">Hosted Checkout</h3>
-            </div>
-            <p className="text-sm text-muted-foreground mb-4">
-              Logo and accent color appear on your customer-facing payment page
-              (<code className="text-xs">/pay/...</code>).
-            </p>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-2">Logo URL</label>
-                <Input
-                  type="url"
-                  value={checkoutLogoUrl}
-                  onChange={(e) => handleCheckoutLogoChange(e.target.value)}
-                  placeholder="https://cdn.example.com/logo.png"
-                  error={checkoutLogoError}
-                />
-                <p className="text-xs text-muted-foreground mt-2">
-                  Must be a public <span className="font-medium">https</span> image URL.
-                </p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">Primary Accent Color</label>
-                <div className="flex flex-wrap items-center gap-3">
-                  <input
-                    type="color"
-                    value={/^#[0-9a-fA-F]{6}$/.test(checkoutAccentColor) ? checkoutAccentColor : "#2563eb"}
-                    onChange={(e) => setCheckoutAccentColor(e.target.value)}
-                    className="h-10 w-14 cursor-pointer rounded border border-input bg-background"
-                    aria-label="Pick accent color"
-                  />
-                  <Input
-                    type="text"
-                    value={checkoutAccentColor}
-                    onChange={(e) => setCheckoutAccentColor(e.target.value)}
-                    placeholder="#2563eb"
-                    className="max-w-[140px] font-mono text-sm"
-                  />
-                </div>
-              </div>
-              <div className="flex flex-wrap items-center gap-3 pt-2">
-                <Button
-                  variant="dark"
-                  onClick={handleCheckoutBrandingSave}
-                  disabled={!!checkoutLogoError || isSavingCheckoutBranding}
-                  className="gap-2"
-                >
-                  {isSavingCheckoutBranding && (
-                    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                      <circle cx="12" cy="12" r="10" className="opacity-30" />
-                      <path d="M22 12a10 10 0 0 1-10 10" />
-                    </svg>
-                  )}
-                  {checkoutBrandingSaved && <CheckCircle2 className="h-4 w-4" />}
-                  {isSavingCheckoutBranding ? "Saving..." : checkoutBrandingSaved ? "Saved!" : "Save checkout appearance"}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    setCheckoutLogoUrl("");
-                    setCheckoutAccentColor("#2563eb");
-                    setCheckoutLogoError("");
-                  }}
-                >
-                  Reset to defaults
-                </Button>
-              </div>
-            </div>
-          </div>
-
-          {/* Settlement Schedule */}
-          <div className="space-y-4 p-6 rounded-2xl border bg-muted/20">
-            <div className="flex items-center gap-2 text-primary font-semibold mb-4">
-              <CalendarClock className="h-5 w-5" />
-              <h3 className="text-lg">Settlement Schedule</h3>
-            </div>
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-2">Schedule Frequency</label>
-                  <select
-                    value={settlementSchedule}
-                    onChange={(e) => setSettlementSchedule(e.target.value as "daily" | "weekly")}
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  >
-                    <option value="daily">Daily</option>
-                    <option value="weekly">Weekly</option>
-                  </select>
-                </div>
-                {settlementSchedule === "weekly" && (
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Settlement Day</label>
-                    <select
-                      value={settlementDay}
-                      onChange={(e) => setSettlementDay(parseInt(e.target.value))}
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                    >
-                      <option value={0}>Sunday</option>
-                      <option value={1}>Monday</option>
-                      <option value={2}>Tuesday</option>
-                      <option value={3}>Wednesday</option>
-                      <option value={4}>Thursday</option>
-                      <option value={5}>Friday</option>
-                      <option value={6}>Saturday</option>
-                    </select>
-                  </div>
-                )}
-              </div>
-              {nextSettlementDate && (
-                <div className="p-4 rounded-xl bg-primary/5 border border-primary/10">
-                  <div className="flex items-center gap-2 text-sm text-primary font-medium">
-                    <Clock className="h-4 w-4" />
-                    <span>
-                      Next Scheduled Settlement:{" "}
-                      {new Date(nextSettlementDate).toLocaleDateString(undefined, {
-                        weekday: "long",
-                        year: "numeric",
-                        month: "long",
-                        day: "numeric",
-                      })}
-                    </span>
-                  </div>
-                </div>
-              )}
-              <div className="flex items-center gap-3 pt-2">
-                <Button
-                  variant="dark"
-                  onClick={handleAccountSave}
-                  disabled={isSavingAccount}
-                  className="gap-2"
-                >
-                  {isSavingAccount && (
-                    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                      <circle cx="12" cy="12" r="10" className="opacity-30" />
-                      <path d="M22 12a10 10 0 0 1-10 10" />
-                    </svg>
-                  )}
-                  {accountSaved && <CheckCircle2 className="h-4 w-4" />}
-                  {isSavingAccount ? "Saving..." : "Update Schedule"}
-                </Button>
-              </div>
-            </div>
-          </div>
-
-          {/* Payout Bank Details */}
-          <div className="space-y-4 p-6 rounded-2xl border bg-muted/20">
-            <div className="flex items-center gap-2 text-primary font-semibold mb-4">
-              <Palette className="h-5 w-5" />
-              <h3 className="text-lg">Payout Bank Details</h3>
-            </div>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-2">Account Holder Name</label>
-                <Input
-                  type="text"
-                  value={accountName}
-                  onChange={(e) => setAccountName(e.target.value)}
-                  placeholder="Full name on bank account"
-                />
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-2">Bank Name</label>
-                  <Input type="text" value={bankName} onChange={(e) => setBankName(e.target.value)} placeholder="e.g. Zenith Bank" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-2">Bank Code (Optional)</label>
-                  <Input type="text" value={bankCode} onChange={(e) => setBankCode(e.target.value)} placeholder="e.g. 057" />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">Account Number</label>
-                <Input type="text" value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} placeholder="Enter account number" />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-2">Country</label>
-                  <Input value={country} readOnly className="bg-muted/50" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-2">Currency</label>
-                  <Input value={currency} readOnly className="bg-muted/50" />
-                </div>
-              </div>
-              <div className="flex items-center gap-3 pt-2">
-                <Button variant="dark" onClick={handleBankSave} disabled={isSavingBank} className="gap-2">
-                  {isSavingBank && (
-                    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                      <circle cx="12" cy="12" r="10" className="opacity-30" />
-                      <path d="M22 12a10 10 0 0 1-10 10" />
-                    </svg>
-                  )}
-                  {bankSaved && <CheckCircle2 className="h-4 w-4" />}
-                  {isSavingBank ? "Saving..." : bankSaved ? "Saved!" : "Save Bank Details"}
-                </Button>
-              </div>
-              {bankError && (
-                <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-800">
-                  <p className="text-sm">{bankError}</p>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+        <ProfileTab data={data} onDirtyChange={handleDirtyChange("profile")} />
       )}
-
-      {activeTab === "security" && (
-        <div className="space-y-6">
-          <div className="space-y-4 p-6 rounded-2xl border bg-muted/20">
-            <div className="flex items-center gap-2 text-primary font-semibold mb-4">
-              <Shield className="h-5 w-5" />
-              <h3 className="text-lg">Security Settings</h3>
-            </div>
-            <div className="space-y-4">
-              <div className="rounded-lg border bg-background p-4">
-                <p className="font-medium">Session status</p>
-                <p className="text-sm text-muted-foreground mt-1">{sessionNote}</p>
-              </div>
-              <div className="flex items-center justify-between p-4 rounded-lg border bg-background">
-                <div>
-                  <p className="font-medium">Two-Factor Authentication</p>
-                  <p className="text-sm text-muted-foreground">Add an extra layer of security to your account</p>
-                </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={twoFactorEnabled}
-                    onChange={(e) => setTwoFactorEnabled(e.target.checked)}
-                    className="sr-only peer"
-                  />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-[#5649DF]/20 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#5649DF]"></div>
-                </label>
-              </div>
-              <div className="rounded-lg border bg-background p-4 space-y-3">
-                <div>
-                  <p className="font-medium">Session controls</p>
-                  <p className="text-sm text-muted-foreground">Sign out this device or invalidate all active sessions.</p>
-                </div>
-                <div className="flex flex-wrap gap-3">
-                  <Button variant="outline" onClick={handleSignOutCurrentSession} disabled={isSigningOut || isSigningOutAll}>
-                    {isSigningOut ? "Signing out..." : "Sign out this session"}
-                  </Button>
-                  <Button variant="destructive" onClick={handleSignOutAllSessions} disabled={isSigningOut || isSigningOutAll}>
-                    {isSigningOutAll ? "Signing out..." : "Sign out all sessions"}
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Danger Zone */}
-          <div className="space-y-4 p-6 rounded-2xl border bg-muted/20">
-            <div className="flex items-center gap-2 text-red-700 font-semibold mb-4">
-              <AlertTriangle className="h-5 w-5" />
-              <h3 className="text-lg">Danger Zone</h3>
-            </div>
-            <div className="rounded-lg border bg-background p-4">
-              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <p className="font-medium">Request account deletion</p>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Schedule your account for admin review, deletion, and PII anonymization.
-                  </p>
-                </div>
-                <Button
-                  variant="destructive"
-                  onClick={() => {
-                    setDeletionRequestError("");
-                    setShowDeletionModal(true);
-                  }}
-                  disabled={deletionRequestScheduled}
-                  className="shrink-0"
-                >
-                  {deletionRequestScheduled ? "Deletion Requested" : "Request Account Deletion"}
-                </Button>
-              </div>
-              {deletionRequestScheduled && (
-                <div className="mt-4 flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 p-3 text-green-800">
-                  <CheckCircle2 className="h-4 w-4" />
-                  <p className="text-sm font-medium">Account deletion request scheduled for admin review.</p>
-                </div>
-              )}
-              {deletionRequestError && (
-                <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-red-800">
-                  <p className="text-sm">{deletionRequestError}</p>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {activeTab === "notifications" && (
-        <div className="space-y-4 p-6 rounded-2xl border bg-muted/20">
-          <div className="flex items-center gap-2 text-primary font-semibold mb-4">
-            <h3 className="text-lg">Notification Preferences</h3>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            Configure how you receive payment notifications, settlement alerts, and account updates.
-          </p>
-          <div className="rounded-lg border bg-background p-4 text-sm text-muted-foreground">
-            Notification preferences coming soon. Currently, you will receive email notifications for payment confirmations and settlement completions.
-          </div>
-        </div>
-      )}
-
+      {activeTab === "security" && <SecurityTab sessionNote={sessionNote} />}
+      {activeTab === "notifications" && <NotificationsTab />}
       {activeTab === "webhooks" && (
-        <div className="space-y-4 p-6 rounded-2xl border bg-muted/20">
-          <div className="flex items-center gap-2 text-primary font-semibold mb-4">
-            <Webhook className="h-5 w-5" />
-            <h3 className="text-lg">Webhook Configuration</h3>
-          </div>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-2">Webhook URL</label>
-              <Input
-                type="url"
-                value={webhookUrl}
-                onChange={handleWebhookUrlChange}
-                placeholder="https://your-domain.com/webhooks"
-                error={webhookError}
-              />
-              <p className="text-xs text-muted-foreground mt-2">
-                We&apos;ll send payment notifications to this public HTTPS endpoint. Learn how to{" "}
-                <Link
-                  href={DOCS_URLS.WEBHOOK_VERIFICATION}
-                  className="text-primary font-medium underline"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  verify webhook signatures
-                </Link>
-                . Use the Webhooks page to send a test delivery.
-              </p>
-            </div>
-            <div className="flex items-center gap-3 pt-2">
-              <Button
-                variant="dark"
-                onClick={handleWebhookSave}
-                disabled={!!webhookError || isSavingWebhook}
-                className="gap-2"
-              >
-                {isSavingWebhook && (
-                  <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                    <circle cx="12" cy="12" r="10" className="opacity-30" />
-                    <path d="M22 12a10 10 0 0 1-10 10" />
-                  </svg>
-                )}
-                {webhookSaved && <CheckCircle2 className="h-4 w-4" />}
-                {isSavingWebhook ? "Saving..." : webhookSaved ? "Saved!" : "Save Webhook URL"}
-              </Button>
-            </div>
-            {webhookError && (
-              <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-800">
-                <p className="text-sm">{webhookError}</p>
-              </div>
-            )}
-          </div>
-        </div>
+        <WebhooksTab
+          initialWebhookUrl={data.webhookUrl}
+          onDirtyChange={handleDirtyChange("webhooks")}
+        />
       )}
-
-      {activeTab === "api-keys" && (
-        <div className="space-y-4 p-6 rounded-2xl border bg-muted/20">
-          <div className="flex items-center gap-2 text-primary font-semibold mb-4">
-            <Key className="h-5 w-5" />
-            <h3 className="text-lg">API Keys</h3>
-          </div>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-2">Live API Key</label>
-              <div className="flex gap-2">
-                <Input
-                  type="text"
-                  value={apiKey}
-                  readOnly
-                  className="font-mono text-sm bg-muted/50"
-                />
-                <Button variant="outline" onClick={handleCopyApiKey} className="gap-2 shrink-0">
-                  {copied ? (
-                    <>
-                      <CheckCircle2 className="h-4 w-4 text-green-600" />
-                      Copied
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="h-4 w-4" />
-                      Copy
-                    </>
-                  )}
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground mt-2">
-                Keep your API key secure. Do not share it publicly.
-              </p>
-            </div>
-            <div className="pt-2">
-              <Button variant="destructive" onClick={() => setShowRegenerateModal(true)}>
-                Regenerate API Key
-              </Button>
-            </div>
-            {keyRegenerated && (
-              <div className="flex items-center gap-2 p-3 rounded-lg bg-green-50 border border-green-200 text-green-800 animate-in fade-in slide-in-from-top-2">
-                <CheckCircle2 className="h-4 w-4" />
-                <p className="text-sm font-medium">
-                  API key regenerated successfully! Make sure to update your integrations.
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {activeTab === "kyc" && (
-        <div className="space-y-4 p-6 rounded-2xl border bg-muted/20">
-          <div className="flex items-center gap-2 text-primary font-semibold mb-4">
-            <h3 className="text-lg">KYC Documents</h3>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            Upload and manage your Know Your Customer documents for account verification.
-          </p>
-          <div className="rounded-lg border bg-background p-4 text-sm text-muted-foreground">
-            KYC document management coming soon. Contact support to submit verification documents.
-          </div>
-        </div>
-      )}
-
-      {/* API Key Regeneration Modal */}
-      <Modal
-        isOpen={showRegenerateModal}
-        onClose={() => setShowRegenerateModal(false)}
-        title="Regenerate API Key"
-      >
-        <div className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            Are you sure you want to regenerate your API key? Your current API
-            key will be immediately invalidated and any integrations using it
-            will stop working.
-          </p>
-          <div className="flex gap-3 pt-4">
-            <Button
-              variant="outline"
-              onClick={() => setShowRegenerateModal(false)}
-              className="flex-1"
-              disabled={isRegenerating}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleRegenerateApiKey}
-              className="flex-1 gap-2"
-              disabled={isRegenerating}
-            >
-              {isRegenerating && (
-                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                  <circle cx="12" cy="12" r="10" className="opacity-30" />
-                  <path d="M22 12a10 10 0 0 1-10 10" />
-                </svg>
-              )}
-              {isRegenerating ? "Regenerating..." : "Regenerate"}
-            </Button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* Account Deletion Request Modal */}
-      <Modal
-        isOpen={showDeletionModal}
-        onClose={() => {
-          if (!isRequestingDeletion) setShowDeletionModal(false);
-        }}
-        title="Request Account Deletion"
-      >
-        <div className="space-y-4">
-          <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-red-800">
-            <div className="flex gap-2">
-              <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-              <p className="text-sm">
-                This starts an admin review for account deletion and PII
-                anonymization. You may lose access to account data after the
-                request is processed.
-              </p>
-            </div>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            The request will be submitted to FluxaPay admins for review before
-            any account deletion or anonymization action is completed.
-          </p>
-          <div className="flex gap-3 pt-4">
-            <Button
-              variant="outline"
-              onClick={() => setShowDeletionModal(false)}
-              className="flex-1"
-              disabled={isRequestingDeletion}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleRequestDeletion}
-              className="flex-1 gap-2"
-              disabled={isRequestingDeletion}
-            >
-              {isRequestingDeletion && (
-                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                  <circle cx="12" cy="12" r="10" className="opacity-30" />
-                  <path d="M22 12a10 10 0 0 1-10 10" />
-                </svg>
-              )}
-              {isRequestingDeletion ? "Submitting..." : "Submit Request"}
-            </Button>
-          </div>
-        </div>
-      </Modal>
+      {activeTab === "api-keys" && <ApiKeysTab initialApiKey={data.apiKey} />}
+      {activeTab === "kyc" && <KycTab />}
     </SettingsTabs>
   );
 }

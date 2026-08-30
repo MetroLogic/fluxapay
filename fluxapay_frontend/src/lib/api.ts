@@ -93,6 +93,7 @@ export interface ListRefundsParams {
   status?: RefundStatus;
   page?: number;
   limit?: number;
+  signal?: AbortSignal;
 }
 
 export type MerchantExportResource = "payments" | "settlements" | "webhooks";
@@ -913,7 +914,9 @@ export const api = {
       if (params?.page != null) sp.set("page", String(params.page));
       if (params?.limit != null) sp.set("limit", String(params.limit));
       const query = sp.toString();
-      return fetchWithAuth(`/api/admin/refunds/list${query ? `?${query}` : ""}`);
+      return fetchWithAuth(`/api/admin/refunds/list${query ? `?${query}` : ""}`, {
+        signal: params?.signal,
+      });
     },
     getById: (refundId: string) =>
       fetchWithAuth(`/api/admin/refunds/${encodeURIComponent(refundId)}`),
@@ -1031,6 +1034,7 @@ export const api = {
       limit?: number;
       status?: string;
       search?: string;
+      signal?: AbortSignal;
     }): Promise<Result<Record<string, unknown>>> => {
       try {
         const sp = new URLSearchParams();
@@ -1047,7 +1051,7 @@ export const api = {
             total: number;
             total_pages?: number;
           };
-        }>(`/api/v1/invoices?${sp.toString()}`);
+        }>(`/api/v1/invoices?${sp.toString()}`, { signal: params?.signal });
         if ("error" in result) return result;
         const raw = result.data;
         return {
