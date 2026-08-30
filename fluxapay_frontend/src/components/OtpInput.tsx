@@ -89,6 +89,7 @@ export const OtpInput = ({
           }}
           type="text"
           inputMode="numeric"
+          autoComplete="one-time-code"
           maxLength={1}
           value={digit}
           onChange={(e) => handleChange(idx, e)}

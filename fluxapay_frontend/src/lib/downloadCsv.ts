@@ -1,5 +1,28 @@
 import { Settlement } from "@/features/dashboard/components/types";
 
+/**
+ * Escape a single CSV cell per RFC 4180:
+ * - Double quotes are escaped as "" (doubled).
+ * - Cells containing commas, double quotes, or newlines are wrapped in quotes.
+ * - Leading CSV injection characters (=, +, -, @) are neutralized.
+ * Always quote every cell so the output is uniformly parseable.
+ */
+export function escapeCsvCell(rawValue: string | number): string {
+  let value = String(rawValue);
+
+  // Neutralize CSV injection: a leading =, +, -, @, tab, or CR would otherwise
+  // be interpreted as a formula by Excel/Sheets. Prefix with a tab or escape char.
+  if (/^[=+\-@\t\r]/.test(value)) {
+    value = `'${value}`;
+  }
+
+  if (/["\n\r,]/.test(value)) {
+    value = `"${value.replace(/"/g, '""')}"`;
+  }
+
+  return value;
+}
+
 export function downloadSettlementCsv(settlement: Settlement) {
     const headerSection = [
         ['FluxaPay Settlement Statement'],
@@ -35,7 +58,9 @@ export function downloadSettlementCsv(settlement: Settlement) {
     ];
 
     const allRows = [...headerSection, ...paymentSection];
-    const csv = allRows.map(r => r.map(cell => `"${cell}"`).join(',')).join('\n');
+    const csv = allRows
+      .map((row) => row.map((cell) => escapeCsvCell(cell)).join(","))
+      .join("\n");
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
 
     const url = URL.createObjectURL(blob);

@@ -18,6 +18,7 @@ import {
   CheckoutBrandingShell,
   DEFAULT_ACCENT,
 } from '@/components/checkout/CheckoutBrandingShell';
+import { sanitizeRedirectUrl } from '@/lib/safeUrl';
 
 /**
  * Hosted checkout page at /checkout/[charge_id]
@@ -59,7 +60,7 @@ export default function CheckoutPage() {
   useEffect(() => {
     if (payment?.status === 'confirmed' && payment.successUrl) {
       const timer = setTimeout(() => {
-        window.location.href = payment.successUrl!;
+        window.location.href = sanitizeRedirectUrl(payment.successUrl);
       }, 2000);
       return () => clearTimeout(timer);
     }
@@ -275,7 +276,7 @@ export default function CheckoutPage() {
             <p className="mb-6 text-sm text-gray-500">{t('checkout.contactMerchantExcess')}</p>
             <div className="flex flex-col gap-4">
               {payment.successUrl && (
-                <a href={payment.successUrl} className="inline-block rounded-lg px-6 py-3 font-semibold text-white transition-opacity hover:opacity-90" style={{ backgroundColor: 'var(--checkout-accent)' }}>
+                <a href={sanitizeRedirectUrl(payment.successUrl)} className="inline-block rounded-lg px-6 py-3 font-semibold text-white transition-opacity hover:opacity-90" style={{ backgroundColor: 'var(--checkout-accent)' }}>
                   {t('checkout.returnToMerchant')}
                 </a>
               )}
