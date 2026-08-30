@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Invoice, LineItem } from "./types";
 import { Button } from "@/components/Button";
 import { ChevronUp, ChevronDown, RefreshCw } from "lucide-react";
@@ -110,8 +110,18 @@ export const InvoiceForm = ({ onSubmit, onCancel }: InvoiceFormProps) => {
 
   const { rateData, isLoading: isRateLoading, mutate: refreshRate } = useFxRate(currency);
 
+  // Debounce draft saves to at most once per second, preventing
+  // localStorage writes on every keystroke during rapid typing.
+  const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
-    saveDraft({ customerName, customerEmail, currency, dueDate, notes, lineItems });
+    if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
+    draftTimerRef.current = setTimeout(() => {
+      saveDraft({ customerName, customerEmail, currency, dueDate, notes, lineItems });
+    }, 1000);
+    return () => {
+      if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
+    };
   }, [customerName, customerEmail, currency, dueDate, notes, lineItems]);
 
   const updateLineItem = (index: number, field: keyof LineItem, value: string | number) => {
@@ -213,6 +223,17 @@ export const InvoiceForm = ({ onSubmit, onCancel }: InvoiceFormProps) => {
   };
 
   const handleCurrencyChange = (newCurrency: string) => {
+    if (newCurrency === currency) return;
+    const wasFiat = !isCrypto(currency);
+    const willBeCrypto = isCrypto(newCurrency);
+
+    // When switching between fiat and crypto families, reset line item
+    // prices to avoid displaying wildly wrong amounts (e.g. fiat prices
+    // shown as crypto amounts).
+    if (wasFiat !== willBeCrypto) {
+      setLineItems((prev) => prev.map((item) => ({ ...item, unit_price: 0 })));
+    }
+
     setCurrency(newCurrency);
   };
 
