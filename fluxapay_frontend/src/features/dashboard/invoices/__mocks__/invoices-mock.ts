@@ -1,6 +1,13 @@
-export type { InvoiceStatus, LineItem, Invoice } from "./types";
+/**
+ * Mock invoices data for testing only.
+ * Do NOT import this in production code.
+ * Use api.invoices.list() instead.
+ */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
-export const MOCK_INVOICES: Invoice[] = [
+export type { InvoiceStatus, LineItem, Invoice } from "../types";
+
+export const MOCK_INVOICES = [
   {
     id: "inv_001",
     invoice_number: "INV-20260201-1234",

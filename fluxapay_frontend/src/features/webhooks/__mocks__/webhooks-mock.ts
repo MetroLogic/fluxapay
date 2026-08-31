@@ -1,3 +1,10 @@
+/**
+ * Mock webhooks data for testing only.
+ * Do NOT import this in production code.
+ * Use api.webhooks.logs() instead.
+ */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 export type WebhookStatus = 'delivered' | 'pending' | 'failed' | 'retrying';
 
 export interface WebhookEvent {

@@ -13,6 +13,7 @@ import { DiscrepancyAlert } from '@/components/reconciliation/DiscrepancyAlert';
 import { useReconciliation } from '@/hooks/useReconciliation';
 import { exportSettlementReportPDF, exportToPDF } from '@/utils/exportHelpers';
 import { api, ApiError } from '@/lib/api';
+import { toast } from 'sonner';
 
 type AssetFilter = 'all' | 'USDC' | 'XLM';
 
@@ -110,6 +111,7 @@ export default function ReconciliationPage() {
     const handleResolveAlert = async (id: string) => {
         try {
             await resolveDiscrepancy(id);
+            toast.success('Alert resolved successfully');
         } catch (e) {
             const message = e instanceof ApiError ? e.message : 'Could not resolve alert';
             toast.error(message);

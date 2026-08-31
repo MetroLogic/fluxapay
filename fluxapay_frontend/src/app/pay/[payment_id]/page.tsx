@@ -20,6 +20,7 @@ import {
 } from '@/components/checkout/CheckoutBrandingShell';
 import { FiatEquivalent } from '@/components/checkout/FiatEquivalent';
 import { CopyField } from '@/components/checkout/CopyField';
+import { sanitizeRedirectUrl } from '@/lib/safeUrl';
 
 /**
  * Main checkout page for FluxaPay payment gateway
@@ -61,7 +62,7 @@ export default function CheckoutPage() {
   useEffect(() => {
     if (payment?.status === 'confirmed' && payment.successUrl) {
       const timer = setTimeout(() => {
-        window.location.href = payment.successUrl!;
+        window.location.href = sanitizeRedirectUrl(payment.successUrl);
       }, 2000); // Wait 2 seconds before redirect
 
       return () => clearTimeout(timer);
@@ -286,7 +287,7 @@ export default function CheckoutPage() {
             <div className="flex flex-col gap-4">
               {payment.successUrl && (
                 <a
-                  href={payment.successUrl}
+                  href={sanitizeRedirectUrl(payment.successUrl)}
                   className="inline-block rounded-lg px-6 py-3 font-semibold text-white transition-opacity hover:opacity-90"
                   style={{ backgroundColor: 'var(--checkout-accent)' }}
                 >
@@ -335,7 +336,7 @@ export default function CheckoutPage() {
             <div className="flex flex-col gap-4">
               {payment.successUrl && (
                 <a
-                  href={payment.successUrl}
+                  href={sanitizeRedirectUrl(payment.successUrl)}
                   className="inline-block rounded-lg px-6 py-3 font-semibold text-white transition-opacity hover:opacity-90"
                   style={{ backgroundColor: 'var(--checkout-accent)' }}
                 >

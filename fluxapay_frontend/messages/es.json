@@ -1,0 +1,388 @@
+{
+  "common": {
+    "getStarted": "Comenzar",
+    "learnMore": "Más Información",
+    "contactUs": "Contáctanos",
+    "signUp": "Registrarse",
+    "signIn": "Iniciar Sesión",
+    "dashboard": "Panel de Control",
+    "logout": "Cerrar Sesión",
+    "loading": "Cargando...",
+    "error": "Error",
+    "success": "Éxito",
+    "cancel": "Cancelar",
+    "confirm": "Confirmar",
+    "save": "Guardar",
+    "delete": "Eliminar",
+    "edit": "Editar",
+    "view": "Ver",
+    "search": "Buscar",
+    "filter": "Filtrar",
+    "export": "Exportar",
+    "import": "Importar",
+    "download": "Descargar",
+    "upload": "",
+    "offlineMessage": "Estás sin conexión. Mostrando datos en caché. Reconéctate para ver las últimas actualizaciones."
+  },
+  "nav": {
+    "home": "Inicio",
+    "features": "Características",
+    "pricing": "Precios",
+    "about": "Acerca de",
+    "contact": "Contacto",
+    "docs": "Documentación",
+    "login": "Iniciar Sesión",
+    "joinFluxapay": "Unirse a Fluxapay"
+  },
+  "hero": {
+    "title": "Infraestructura de Pagos Global",
+    "subtitle": "Acepta pagos cripto y fiat sin problemas en mercados emergentes",
+    "description": "Fluxapay permite a los comerciantes aceptar pagos USDC en Stellar y recibir liquidación en fiat local con una API tipo Stripe sin complejidad en cadena.",
+    "cta": "Unirse a Fluxapay",
+    "secondaryCta": "Ver Documentación",
+    "transfer": "Transferencia",
+    "mainTitle": "Acepta",
+    "crypto": "Cripto",
+    "mainSubtitle": "Recibe Pagos en Fiat Instantáneamente"
+  },
+  "whyFluxapay": {
+    "title": "¿Por Qué FluxaPay?",
+    "subtitle": "Construido para el futuro del comercio global",
+    "instant": {
+      "title": "Liquidaciones Instantáneas",
+      "description": "Recibe pagos en segundos, no en días. Liquidación en tiempo real a tu cartera."
+    },
+    "lowFees": {
+      "title": "Comisiones de Transacción Bajas",
+      "description": "Ahorra hasta el 70% en comisiones de procesamiento de pagos en comparación con proveedores tradicionales."
+    },
+    "global": {
+      "title": "Alcance Global",
+      "description": "Acepta pagos de cualquier parte del mundo con soporte multimoneda."
+    },
+    "secure": {
+      "title": "Seguridad de Nivel Bancario",
+      "description": "Seguridad de nivel empresarial con billeteras multifirma y cifrado."
+    }
+  },
+  "bridges": {
+    "title": "Conectando Cripto y Dinero Tradicional",
+    "subtitle": "Conecta sin problemas pagos fiat y criptomonedas",
+    "crypto": {
+      "title": "Pagos en Cripto",
+      "description": "Acepta Bitcoin, Ethereum, USDC y más"
+    },
+    "fiat": {
+      "title": "Integración Fiat",
+      "description": "Convierte a moneda local al instante"
+    },
+    "settlement": {
+      "title": "Liquidación Flexible",
+      "description": "Elige cómo y cuándo recibir tus pagos"
+    },
+    "realtime": {
+      "title": "Liquidación en Tiempo Real",
+      "description": "Los fondos se mueven al instante en la red Stellar, sin esperar días para la aclaración"
+    },
+    "emerging": {
+      "title": "Listo para Mercados Emergentes",
+      "description": "Construido para regiones de alto crecimiento donde la adopción de criptomonedas supera la banca tradicional"
+    },
+    "stripe": {
+      "title": "Integración Tipo Stripe",
+      "description": "Una experiencia de desarrollador familiar — API REST, webhooks, y SDKs que ya conoces"
+    }
+  },
+  "globalReach": {
+    "title": "Verdaderamente Global",
+    "subtitle": "Sirviendo mercados emergentes en todo el mundo",
+    "africa": "África",
+    "latinAmerica": "América Latina",
+    "asia": "Asia",
+    "countries": "Países Soportados",
+    "currencies": "Monedas",
+    "transactions": "Transacciones Procesadas"
+  },
+  "useCases": {
+    "title": "Construido para Cada Negocio",
+    "subtitle": "Desde startups hasta empresas",
+    "ecommerce": {
+      "title": "Comercio Electrónico",
+      "description": "Acepta pagos en tu tienda en línea con integración simple"
+    },
+    "marketplace": {
+      "title": "Mercados",
+      "description": "Divide pagos entre múltiples vendedores automáticamente"
+    },
+    "subscription": {
+      "title": "Suscripciones",
+      "description": "Facturación recurrente hecha simple con pagos automatizados"
+    },
+    "remittance": {
+      "title": "Remesas",
+      "description": "Transferencias transfronterizas con comisiones mínimas"
+    }
+  },
+  "faq": {
+    "title": "Preguntas Frecuentes",
+    "subtitle": "Todo lo que necesitas saber",
+    "q1": {
+      "question": "¿Cuánto tiempo tarda la integración?",
+      "answer": "La mayoría de los comerciantes completan la integración en menos de 2 horas con nuestra API simple y SDKs."
+    },
+    "q2": {
+      "question": "¿Cuáles son las comisiones?",
+      "answer": "Cobramos el 1.5% por transacción sin comisiones ocultas ni cargos mensuales."
+    },
+    "q3": {
+      "question": "¿Cuáles son las criptomonedas que soportan?",
+      "answer": "Soportamos Bitcoin, Ethereum, USDC, USDT y todos los activos principales de Stellar."
+    },
+    "q4": {
+      "question": "¿Cómo funcionan las liquidaciones?",
+      "answer": "Puedes elegir liquidación instantánea a tu cartera o liquidaciones por lotes en un horario."
+    },
+    "q5": {
+      "question": "¿Es seguro?",
+      "answer": "Sí, usamos cifrado de nivel bancario, billeteras multifirma, y cumplimos con estándares de seguridad internacionales."
+    }
+  },
+  "footer": {
+    "tagline": "El futuro de los pagos globales",
+    "product": "Producto",
+    "features": "Características",
+    "pricing": "Precios",
+    "security": "Seguridad",
+    "company": "Empresa",
+    "about": "Acerca de Nosotros",
+    "careers": "Carreras",
+    "blog": "Blog",
+    "developers": "Desarrolladores",
+    "documentation": "Documentación",
+    "apiReference": "Referencia de API",
+    "support": "Soporte",
+    "legal": "Legal",
+    "privacy": "Política de Privacidad",
+    "terms": "Términos de Servicio",
+    "copyright": "© {year} borderless. Todos los derechos reservados.",
+    "signUp": "Registrarse",
+    "login": "Iniciar Sesión",
+    "faqs": "Preguntas Frecuentes / Soporte",
+    "contact": "Contáctanos",
+    "resources": "Recursos",
+    "status": "Estado del Sistema"
+  },
+  "dashboard": {
+    "overview": "Resumen",
+    "payments": "Pagos",
+    "settlements": "Liquidaciones",
+    "analytics": "Análisis",
+    "developers": "Desarrolladores",
+    "settings": "Configuración",
+    "webhooks": "Webhooks",
+    "totalRevenue": "Ingresos Totales",
+    "successfulPayments": "Pagos Exitosos",
+    "pendingSettlements": "Liquidaciones Pendientes",
+    "activeCustomers": "Clientes Activos",
+    "recentTransactions": "Transacciones Recientes",
+    "amount": "Cantidad",
+    "status": "Estado",
+    "date": "Fecha",
+    "customer": "Cliente",
+    "viewAll": "Ver Todo"
+  },
+  "payment": {
+    "title": "Completa Tu Pago",
+    "amount": "Cantidad",
+    "merchant": "Comerciante",
+    "description": "Descripción",
+    "payWith": "Pagar con",
+    "crypto": "Criptomoneda",
+    "card": "Tarjeta de Crédito/Débito",
+    "processing": "Procesando pago...",
+    "success": "¡Pago exitoso!",
+    "failed": "El pago falló",
+    "expired": "Enlace de pago expirado",
+    "scanQR": "Escanea el código QR para pagar",
+    "orCopyAddress": "O copia la dirección de abajo",
+    "copyAddress": "Copiar Dirección",
+    "addressCopied": "¡Dirección copiada!",
+    "waitingForPayment": "Esperando pago...",
+    "confirmations": "Confirmaciones",
+    "timeRemaining": "Tiempo restante",
+    "checkout": {
+      "offlineMessage": "Estás sin conexión. Reanudaremos las actualizaciones de pago cuando tu red se reconecte.",
+      "retryNow": "Reintentar ahora",
+      "loadingDetails": "Cargando detalles del pago...",
+      "notFound": "Pago No Encontrado",
+      "notFoundDescription": "El pago que buscas no existe o ha sido eliminado.",
+      "checkLink": "Por favor verifica el enlace de pago e intenta de nuevo.",
+      "confirmed": "¡Pago Confirmado!",
+      "confirmedDescription": "Tu pago ha sido procesado exitosamente.",
+      "redirecting": "Redirigiendo...",
+      "expiredDescription": "Este enlace de pago ha expirado.",
+      "requestNew": "Por favor solicita un nuevo enlace de pago al comerciante.",
+      "failedDescription": "El pago no pudo ser procesado.",
+      "tryAgainOrSupport": "Por favor intenta de nuevo o contacta soporte si el problema persiste.",
+      "partialReceived": "Pago Parcial Recibido",
+      "partialDescription": "Tu pago de {paidAmount} {currency} fue menor que los esperados {amount} {currency}.",
+      "contactMerchantResolve": "Por favor contacta al comerciante para resolver el saldo restante.",
+      "returnToMerchant": "Volver al Comerciante",
+      "overpaymentReceived": "Pago Excesivo Recibido",
+      "overpaymentDescription": "Tu pago de {paidAmount} {currency} excedió los esperados {amount} {currency}.",
+      "contactMerchantExcess": "Por favor contacta al comerciante respecto al monto excesivo.",
+      "completePayment": "Completa Tu Pago",
+      "toMerchant": "a {merchantName}",
+      "amountToPay": "Cantidad a Pagar",
+      "memoRequired": "Memo requerido",
+      "memoDescription": "Este destino de pago requiere un memo/etiqueta. Por favor incluye el memo exactamente como se muestra, o tu pago podría no ser acreditado.",
+      "howToPay": "Cómo Pagar:",
+      "step1": "Escanea el código QR de arriba con tu aplicación de cartera Stellar",
+      "step2": "Confirma que la cantidad y la dirección de pago coincidan",
+      "step2Memo": " (e incluye el memo requerido)",
+      "step3": "Completa la transacción en tu cartera",
+      "step4": "Serás redirigido automáticamente después de la confirmación",
+      "contactSupport": "Contactar Soporte",
+      "payAmount": "Pagar {amount} {currency}",
+      "paymentTo": "Pago a",
+      "close": "Cerrar",
+      "timerExpired": "Expirado",
+      "timerExpiredAria": "El temporizador de pago expiró",
+      "timeRemainingAria": "Tiempo restante: {minutes} minutos y {seconds} segundos"
+    }
+  },
+  "auth": {
+    "login": "Iniciar Sesión",
+    "signup": "Registrarse",
+    "email": "Correo Electrónico",
+    "password": "Contraseña",
+    "confirmPassword": "Confirmar Contraseña",
+    "forgotPassword": "¿Olvidaste tu Contraseña?",
+    "noAccount": "¿No tienes una cuenta?",
+    "hasAccount": "¿Ya tienes una cuenta?",
+    "businessName": "Nombre del Negocio",
+    "fullName": "Nombre Completo",
+    "country": "País",
+    "createAccount": "Crear Cuenta",
+    "signingIn": "Iniciando sesión...",
+    "creatingAccount": "Creando cuenta...",
+    "keepLoggedIn": "Mantenerme conectado",
+    "sessionExpiry": "Serás desconectado cuando cierres tu navegador.",
+    "sessionPersistent": "Permanecerás conectado por 30 días. Solo usa esto en un dispositivo de confianza.",
+    "loginToContinue": "Por favor inicia sesión para continuar con tu cuenta.",
+    "emailPlaceholder": "test@gmail.com",
+    "passwordPlaceholder": "Contraseña",
+    "agreeToTerms": "Al iniciar sesión, aceptas nuestros",
+    "agreeToTermsSignup": "Al crear una cuenta, aceptas nuestros",
+    "needAccount": "¿Necesitas una cuenta?",
+    "createOne": "Crear una",
+    "validation": {
+      "emailInvalid": "Por favor ingresa un correo electrónico válido",
+      "emailRequired": "El correo electrónico es requerido",
+      "passwordMin": "La contraseña debe tener al menos 6 caracteres",
+      "passwordRequired": "La contraseña es requerida",
+      "nameRequired": "El nombre es requerido",
+      "businessNameRequired": "El nombre del negocio es requerido",
+      "countryRequired": "El país es requerido",
+      "currencyRequired": "La moneda de liquidación es requerida",
+      "phoneNumberRequired": "El número de teléfono es requerido",
+      "phoneNumberInvalid": "Formato de número de teléfono inválido (usa formato internacional)",
+      "accountNumberRequired": "El número de cuenta es requerido",
+      "bankNameRequired": "El nombre del banco es requerido",
+      "bankCodeRequired": "El código del banco es requerido"
+    },
+    "signupPrompt": "Por favor regístrate para comenzar.",
+    "fullNamePlaceholder": "Tu nombre",
+    "businessNamePlaceholder": "Nombre del negocio",
+    "emailSignupPlaceholder": "tu@ejemplo.com",
+    "phoneNumber": "Número de Teléfono",
+    "phoneNumberPlaceholder": "+34...",
+    "selectCountry": "Seleccionar País",
+    "currencyLabel": "Moneda",
+    "bankLabel": "Banco",
+    "codeLabel": "Código",
+    "accountLabel": "Cuenta",
+    "bankNamePlaceholder": "Nombre del Banco",
+    "bankCodePlaceholder": "Código del Banco",
+    "accountNumberPlaceholder": "Número de Cuenta",
+    "signupSuccess": "¡Registro exitoso! Por favor verifica tu cuenta.",
+    "resetPassword": "Restablecer Contraseña",
+    "forgotPasswordDescription": "Ingresa tu correo electrónico y te enviaremos un enlace para restablecer tu contraseña.",
+    "resetLinkSent": "Hemos enviado un enlace de restablecimiento de contraseña a tu correo electrónico.",
+    "sending": "Enviando...",
+    "sendAgainIn": "Enviar de nuevo en {seconds}s",
+    "sendResetLink": "Enviar Enlace de Restablecimiento",
+    "rememberPassword": "¿Recuerdas tu contraseña?",
+    "setNewPassword": "Establecer Nueva Contraseña",
+    "setNewPasswordDescription": "Por favor ingresa tu nueva contraseña a continuación.",
+    "newPassword": "Nueva Contraseña",
+    "newPasswordPlaceholder": "Ingresa nueva contraseña",
+    "confirmNewPasswordPlaceholder": "Confirma nueva contraseña",
+    "updating": "Actualizando...",
+    "linkExpired": "Enlace Expirado",
+    "linkExpiredDescription": "Este enlace de restablecimiento de contraseña es inválido o ha expirado.",
+    "requestNewLink": "Solicitar Nuevo Enlace",
+    "returnToSignIn": "Volver al inicio de sesión",
+    "validatingLink": "Validando enlace de restablecimiento...",
+    "missingResetToken": "Falta el token de restablecimiento"
+  },
+  "settings": {
+    "profile": "Perfil",
+    "security": "Seguridad",
+    "apiKeys": "Claves de API",
+    "billing": "Facturación",
+    "notifications": "Notificaciones",
+    "team": "Equipo",
+    "updateProfile": "Actualizar Perfil",
+    "changePassword": "Cambiar Contraseña",
+    "twoFactor": "Autenticación de Dos Factores",
+    "generateKey": "Generar Nueva Clave",
+    "revokeKey": "Revocar Clave"
+  },
+  "currency": {
+    "usd": "Dólar Estadounidense",
+    "eur": "Euro",
+    "gbp": "Libra Esterlina",
+    "ngn": "Naira Nigeriana",
+    "kes": "Chelín Keniata",
+    "zar": "Rand Sudafricano",
+    "brl": "Real Brasileño",
+    "mxn": "Peso Mexicano",
+    "btc": "Bitcoin",
+    "eth": "Ethereum",
+    "usdc": "USD Coin",
+    "usdt": "Tether"
+  },
+  "status": {
+    "pending": "Pendiente",
+    "processing": "Procesando",
+    "completed": "Completado",
+    "failed": "Fallido",
+    "cancelled": "Cancelado",
+    "expired": "Expirado"
+  },
+  "errors": {
+    "generic": "Algo salió mal. Por favor intenta de nuevo.",
+    "network": "Error de red. Por favor verifica tu conexión.",
+    "unauthorized": "No estás autorizado para realizar esta acción.",
+    "notFound": "El recurso solicitado no fue encontrado.",
+    "validation": "Por favor verifica tu entrada e intenta de nuevo.",
+    "paymentFailed": "El procesamiento del pago falló. Por favor intenta de nuevo."
+  },
+  "commandPalette": {
+    "overview": "Resumen",
+    "payments": "Pagos",
+    "paymentLinks": "Enlaces de Pago",
+    "invoices": "Facturas",
+    "refunds": "Reembolsos",
+    "settlements": "Liquidaciones",
+    "webhooks": "Webhooks",
+    "analytics": "Análisis",
+    "settings": "Configuración",
+    "developers": "Desarrolladores",
+    "adminOverview": "Resumen de Admin",
+    "forceOracleSync": "Forzar Sincronización de Oráculo",
+    "flushWebhookQueue": "Vaciar Cola de Webhook",
+    "viewKYCQueue": "Ver Cola de KYC"
+  }
+}

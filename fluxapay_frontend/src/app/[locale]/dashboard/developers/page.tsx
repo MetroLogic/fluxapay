@@ -454,13 +454,18 @@ function CreateApiKeyModal({
     setError(null);
 
     try {
-      const res = await api.keys.createKey({ name: name.trim() });
-      setCreatedSecret(res.secret || res.apiKey);
+      const result = await api.keys.createKey({ name: name.trim() });
+      if ('error' in result) {
+        setError(result.error.message);
+        return;
+      }
+      const res = result.data as Record<string, unknown>;
+      setCreatedSecret((res.secret as string) || (res.apiKey as string));
       onCreateSuccess({
-        id: res.id,
+        id: res.id as string,
         name: name.trim(),
-        masked: `sk_live_${res.lastFour}`,
-        secret: res.secret || res.apiKey,
+        masked: `sk_live_${res.lastFour as string}`,
+        secret: (res.secret as string) || (res.apiKey as string),
       });
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to create API key");
@@ -689,7 +694,17 @@ export default function DevelopersPage() {
   useEffect(() => {
     api.merchant
       .getMe()
-      .then((r) => setApiKey(r.merchant.api_key_masked || "No API key generated"))
+      .then((result) => {
+        if ('error' in result) {
+          setApiKey("Failed to load API key");
+        } else {
+          const r = result.data as Record<string, unknown>;
+          const merchant = r.merchant as Record<string, unknown>;
+          setApiKey(
+            (merchant.api_key_masked as string) || "No API key generated",
+          );
+        }
+      })
       .catch(() => setApiKey("Failed to load API key"));
   }, []);
 
@@ -697,11 +712,16 @@ export default function DevelopersPage() {
     setRotatingApiKey(true);
     setRotateError(null);
     try {
-      const res = await api.keys.rotateApiKey();
-      setNewApiKey(res.apiKey);
+      const result = await api.keys.rotateApiKey();
+      if ('error' in result) {
+        setRotateError(result.error.message);
+        return;
+      }
+      const res = result.data as Record<string, unknown>;
+      setNewApiKey(res.apiKey as string);
       setShowNewApiKey(false);
       // Update masked display with last four from new key
-      const lastFour = res.apiKey.slice(-4);
+      const lastFour = (res.apiKey as string).slice(-4);
       setApiKey(`sk_live_****${lastFour}`);
     } catch (e: unknown) {
       setRotateError(e instanceof Error ? e.message : "Failed to rotate API key");
@@ -715,8 +735,13 @@ export default function DevelopersPage() {
     setRotatingWebhook(true);
     setRotateError(null);
     try {
-      const res = await api.keys.rotateWebhookSecret();
-      setNewWebhookSecret(res.webhookSecret);
+      const result = await api.keys.rotateWebhookSecret();
+      if ('error' in result) {
+        setRotateError(result.error.message);
+        return;
+      }
+      const res = result.data as Record<string, unknown>;
+      setNewWebhookSecret(res.webhookSecret as string);
       setShowNewWebhookSecret(false);
     } catch (e: unknown) {
       setRotateError(
@@ -1130,7 +1155,7 @@ export default function DevelopersPage() {
             )}
           </section>
 
-          {/* API Status */}
+          {/* API Status — sandbox / example values */}
           <section style={card}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.5rem" }}>
               <h2 style={{ fontSize: "1.5rem", fontWeight: "bold", color: "#1a1a3e" }}>API Status</h2>
@@ -1143,13 +1168,18 @@ export default function DevelopersPage() {
                 Full status page →
               </a>
             </div>
+            <div style={{ backgroundColor: "#fef3c7", border: "1px solid #fcd34d", borderRadius: "0.5rem", padding: "0.625rem 0.875rem", marginBottom: "0.75rem" }}>
+              <p style={{ fontSize: "0.75rem", color: "#92400e", margin: 0, lineHeight: 1.4 }}>
+                ⚠️ The values below are sandbox examples. Live metrics are available on the full status page.
+              </p>
+            </div>
             <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
               {(
                 [
                   { label: "Status", value: "● Operational", valueStyle: { backgroundColor: "#d1fae5", color: "#065f46", border: "1px solid #a7f3d0", padding: "0.2rem 0.6rem", borderRadius: "9999px", fontSize: "0.75rem", fontWeight: 600 } as React.CSSProperties },
-                  { label: "Uptime", value: "99.99%", valueStyle: { color: "#fbbf24", fontWeight: 600 } as React.CSSProperties },
-                  { label: "Response Time", value: "145ms avg", valueStyle: { color: "#fbbf24", fontWeight: 600 } as React.CSSProperties },
-                  { label: "Rate Limit", value: "5 req/min", valueStyle: { color: "#fbbf24", fontWeight: 600 } as React.CSSProperties },
+                  { label: "Uptime (example)", value: "99.99%", valueStyle: { color: "#fbbf24", fontWeight: 600 } as React.CSSProperties },
+                  { label: "Response Time (example)", value: "145ms avg", valueStyle: { color: "#fbbf24", fontWeight: 600 } as React.CSSProperties },
+                  { label: "Rate Limit (sandbox)", value: "5 req/min", valueStyle: { color: "#fbbf24", fontWeight: 600 } as React.CSSProperties },
                 ] as { label: string; value: string; valueStyle: React.CSSProperties }[]
               ).map(({ label, value, valueStyle }) => (
                 <div key={label} style={{ backgroundColor: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "0.5rem", padding: "0.875rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>

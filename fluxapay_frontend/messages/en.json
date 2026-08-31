@@ -21,7 +21,8 @@
     "export": "Export",
     "import": "Import",
     "download": "Download",
-    "upload": "Upload"
+    "upload": "Upload",
+    "offlineMessage": "You are offline. Showing cached data. Reconnect to see the latest updates."
   },
   "nav": {
     "home": "Home",
@@ -367,5 +368,21 @@
     "notFound": "The requested resource was not found.",
     "validation": "Please check your input and try again.",
     "paymentFailed": "Payment processing failed. Please try again."
+  },
+  "commandPalette": {
+    "overview": "Overview",
+    "payments": "Payments",
+    "paymentLinks": "Payment Links",
+    "invoices": "Invoices",
+    "refunds": "Refunds",
+    "settlements": "Settlements",
+    "webhooks": "Webhooks",
+    "analytics": "Analytics",
+    "settings": "Settings",
+    "developers": "Developers",
+    "adminOverview": "Admin Overview",
+    "forceOracleSync": "Force Oracle Sync",
+    "flushWebhookQueue": "Flush Webhook Queue",
+    "viewKYCQueue": "View KYC Queue"
   }
 }

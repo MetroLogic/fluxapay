@@ -246,6 +246,13 @@ export default function MerchantOnboardingPage() {
     }
   };
 
+  const uploadedDocumentCount = [
+    "businessCertificate",
+    "governmentIdFront",
+    "governmentIdBack",
+    "proofOfAddress",
+  ].filter((key) => documents[key] instanceof File).length;
+
   const nextStep = () => {
     if (step === 1 && (!business.legalName || !business.country || !business.address)) {
       toast.error("Please fill in all required fields before continuing.");
@@ -253,6 +260,10 @@ export default function MerchantOnboardingPage() {
     }
     if (step === 2 && (!owner.fullName || !owner.dateOfBirth || !owner.nationality || !owner.address)) {
       toast.error("Please fill in all required fields before continuing.");
+      return;
+    }
+    if (step === 3 && uploadedDocumentCount === 0) {
+      toast.error("Please upload at least one document before continuing.");
       return;
     }
     if (step === 4 && (!bank.bankName || !bank.accountNumber || !bank.iban || !bank.swift || !bank.currency)) {
@@ -377,7 +388,12 @@ export default function MerchantOnboardingPage() {
             <div />
           )}
           {step < 5 ? (
-            <Button type="button" onClick={nextStep} className="gap-2">
+            <Button
+              type="button"
+              onClick={nextStep}
+              className="gap-2"
+              disabled={step === 3 && uploadedDocumentCount === 0}
+            >
               Continue <ChevronRight className="h-4 w-4" aria-hidden="true" />
             </Button>
           ) : (

@@ -1,3 +1,10 @@
+/**
+ * Mock payments data for testing only.
+ * Do NOT import this in production code.
+ * Use api.payments.list() instead.
+ */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 export type PaymentStatus =
   | "pending"
   | "confirmed"
