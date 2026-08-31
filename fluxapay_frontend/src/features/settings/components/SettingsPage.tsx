@@ -1,5 +1,15 @@
 "use client";
 
+import React, { useState, useEffect, useCallback, useMemo } from "react";
+import Link from "next/link";
+import toast from "react-hot-toast";
+import Input from "@/components/Input";
+import { Button } from "@/components/Button";
+import { Modal } from "@/components/Modal";
+import { api, ApiError } from "@/lib/api";
+import { logout, getToken } from "@/lib/auth";
+import { DOCS_URLS } from "@/lib/docs";
+import { isValidHttpsWebhookUrl } from "@/lib/webhookUrl";
 import React, { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { getSessionNote } from "@/lib/sessionNote";
@@ -83,6 +93,121 @@ export default function SettingsPage() {
           country = (merchant.country as string) || "";
         }
 
+  const handleBankSave = async () => {
+    setIsSavingBank(true);
+    setBankError("");
+    try {
+      await api.merchant.addBankAccount({
+        account_name: accountName,
+        account_number: accountNumber,
+        bank_name: bankName,
+        bank_code: bankCode,
+        currency,
+        country,
+      });
+      setBankSaved(true);
+      setTimeout(() => setBankSaved(false), 3000);
+      setInitialSnapshot(currentSnapshot);
+    } catch (error) {
+      const message =
+        error instanceof ApiError ? error.message : "Failed to save bank details";
+      setBankError(message);
+    } finally {
+      setIsSavingBank(false);
+    }
+  };
+
+  const handleCheckoutLogoChange = (value: string) => {
+    setCheckoutLogoUrl(value);
+    const v = value.trim();
+    if (v && !v.startsWith("https://")) {
+      setCheckoutLogoError("Logo URL must start with https://");
+    } else {
+      setCheckoutLogoError("");
+    }
+  };
+
+  const handleCheckoutBrandingSave = async () => {
+    if (checkoutLogoError) return;
+    setIsSavingCheckoutBranding(true);
+    try {
+      await api.merchant.updateProfile({
+        checkout_logo_url:
+          checkoutLogoUrl.trim() === "" ? null : checkoutLogoUrl.trim(),
+        checkout_accent_color: checkoutAccentColor || null,
+      });
+      setCheckoutBrandingSaved(true);
+      setTimeout(() => setCheckoutBrandingSaved(false), 3000);
+      setInitialSnapshot(currentSnapshot);
+    } catch (error) {
+      const message =
+        error instanceof ApiError ? error.message : "Failed to save branding";
+      setCheckoutLogoError(message);
+    } finally {
+      setIsSavingCheckoutBranding(false);
+    }
+  };
+
+  const handleCopyApiKey = () => {
+    navigator.clipboard.writeText(apiKey);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleRegenerateApiKey = async () => {
+    setIsRegenerating(true);
+    try {
+      const response = await api.keys.regenerate();
+      setApiKey(response.api_key);
+      setShowRegenerateModal(false);
+      setKeyRegenerated(true);
+      setTimeout(() => setKeyRegenerated(false), 5000);
+    } catch (error) {
+      console.error("Failed to regenerate API key:", error);
+      toast.error(
+        error instanceof ApiError
+          ? error.message
+          : "Failed to regenerate API key. Please try again.",
+      );
+    } finally {
+      setIsRegenerating(false);
+    }
+  };
+
+  const handleWebhookUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setWebhookUrl(value);
+    if (!value.trim()) {
+      setWebhookError("");
+      return;
+    }
+    const v = isValidHttpsWebhookUrl(value);
+    setWebhookError(v.ok ? "" : v.message);
+  };
+
+  const handleWebhookSave = async () => {
+    if (webhookError) return;
+    setIsSavingWebhook(true);
+    try {
+      await api.merchant.updateWebhook(webhookUrl);
+      setWebhookSaved(true);
+      setTimeout(() => setWebhookSaved(false), 3000);
+      setInitialSnapshot(currentSnapshot);
+    } catch (error) {
+      const message =
+        error instanceof ApiError
+          ? error.message
+          : "Failed to save webhook URL";
+      setWebhookError(message);
+    } finally {
+      setIsSavingWebhook(false);
+    }
+  };
+
+  const handleSignOutCurrentSession = () => {
+    setIsSigningOut(true);
+    logout();
+  };
         const nextData: MerchantSettingsData = {
           ...DEFAULT_DATA,
           businessName: (merchant.business_name as string) || "",

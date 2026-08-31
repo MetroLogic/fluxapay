@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useEffect } from 'react';
+import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 import { subDays, startOfDay } from 'date-fns';
 import { Loader2, AlertCircle } from 'lucide-react';
