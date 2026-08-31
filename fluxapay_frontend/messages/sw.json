@@ -306,6 +306,7 @@
     "bankCodePlaceholder": "Kodis ya Benki",
     "accountNumberPlaceholder": "Idadi ya Akaunti",
     "signupSuccess": "Usajili ulifanikiwa! Tafadhali thibitisha akaunti yako.",
+    "loginSuccess": "Kuingia kumefaulu!",
     "resetPassword": "Weka Neno la Siri Upya",
     "forgotPasswordDescription": "Weka anwani yako ya barua pepe na tutakutumia kiungo cha kuweka neno la siri upya.",
     "resetLinkSent": "Tumetuma kiungo cha kuweka neno la siri upya kwenye barua pepe yako.",

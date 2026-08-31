@@ -306,6 +306,7 @@
     "bankCodePlaceholder": "رمز البنك",
     "accountNumberPlaceholder": "رقم الحساب",
     "signupSuccess": "تم التسجيل بنجاح! يرجى التحقق من حسابك.",
+    "loginSuccess": "تم تسجيل الدخول بنجاح!",
     "resetPassword": "إعادة تعيين كلمة المرور",
     "forgotPasswordDescription": "أدخل عنوان بريدك الإلكتروني وسنرسل لك رابطًا لإعادة تعيين كلمة المرور.",
     "resetLinkSent": "لقد أرسلنا رابط إعادة تعيين كلمة المرور إلى بريدك الإلكتروني.",

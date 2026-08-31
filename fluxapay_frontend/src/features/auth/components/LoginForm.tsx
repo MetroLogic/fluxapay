@@ -62,8 +62,16 @@ const LoginForm = () => {
       if (data.refresh_token) {
         storeRefreshToken(data.refresh_token, Boolean(validData.keepLoggedIn));
       }
-      toast.success(data.message || "Login successful!");
+      toast.success(data.message || tAuth("loginSuccess"));
       
+      const redirectUrl = searchParams.get("redirect");
+      if (redirectUrl) {
+        // We use window.location.href here because redirectUrl might contain the locale
+        // and using router.push with next-intl can sometimes double-prefix or strip it.
+        window.location.href = redirectUrl;
+        return;
+      }
+      router.push("/dashboard");
       // window.location.href rather than router.push: the path may carry a locale
       // prefix that next-intl's router would double-prefix or strip.
       window.location.href = safeRedirectPath(searchParams.get("redirect"));
