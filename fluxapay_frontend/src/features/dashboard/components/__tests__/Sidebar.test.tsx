@@ -37,6 +37,16 @@ describe("Sidebar", () => {
     expect(overviewLink).toHaveAttribute("aria-current", "page");
   });
 
+  it("uses Tailwind theme tokens instead of hardcoded hex colors for active links", () => {
+    (usePathname as any).mockReturnValue("/dashboard");
+
+    render(<Sidebar />);
+
+    const overviewLink = screen.getByText("Overview").closest("a");
+    expect(overviewLink).toHaveClass("bg-primary-100", "text-primary-500", "border-primary-500");
+    expect(overviewLink?.className).not.toContain("#");
+  });
+
   it("marks Payments as active for /dashboard/payments", () => {
     (usePathname as any).mockReturnValue("/dashboard/payments");
 

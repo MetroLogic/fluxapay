@@ -100,8 +100,8 @@ export function Sidebar({ className, isOpen, onClose }: SidebarProps) {
               className={cn(
                 "group flex items-center gap-3 rounded-md px-3 py-2 text-[16px] font-semibold transition-all border-l-4 min-h-[44px]",
                 isActive
-                  ? "bg-[#F1EFFF] text-[#5F44EC] border-[#5F44EC]"
-                  : "text-grey hover:text-black hover:bg-[#F1EFFF]/50 border-transparent"
+                  ? "bg-primary-100 text-primary-500 border-primary-500"
+                  : "text-grey hover:text-foreground hover:bg-primary-100/50 border-transparent"
               )}
             >
               <item.icon
