@@ -47,10 +47,12 @@ const eslintConfig = defineConfig([
       "no-restricted-imports": [
         "error",
         {
-          patterns: ["*mock*"],
-          message:
-            "Mock files should only be imported in test files, not in production code. " +
-            "Move the mock file import to a .test.ts/.test.tsx file or __tests__ directory.",
+          patterns: [{
+            group: ["*mock*"],
+            message:
+              "Mock files should only be imported in test files, not in production code. " +
+              "Move the mock file import to a .test.ts/.test.tsx file or __tests__ directory.",
+          }],
         },
       ],
     },

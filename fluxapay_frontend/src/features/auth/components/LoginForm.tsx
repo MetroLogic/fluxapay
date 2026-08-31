@@ -4,12 +4,13 @@ import React, { useState } from "react";
 import toast from "react-hot-toast";
 import { toastApiError } from "@/lib/toastApiError";
 import Image from "next/image";
-import { Link, useRouter } from "@/i18n/routing";
+import { Link } from "@/i18n/routing";
 import { useSearchParams } from "next/navigation";
 import * as yup from "yup";
 import Input from "@/components/Input";
 import { Button } from "@/components/Button";
 import { api, ApiError, storeToken, storeRefreshToken } from "@/lib/api";
+import { safeRedirectPath } from "@/lib/safeRedirect";
 import { useTranslations } from "next-intl";
 
 type AuthTranslator = (key: string) => string;
@@ -23,7 +24,6 @@ const loginSchema = (t: AuthTranslator) => yup.object({
 type LoginFormData = yup.InferType<ReturnType<typeof loginSchema>>;
 
 const LoginForm = () => {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const tAuth = useTranslations("auth");
   const [formData, setFormData] = useState<LoginFormData>({ email: "", password: "", keepLoggedIn: false });
@@ -72,6 +72,9 @@ const LoginForm = () => {
         return;
       }
       router.push("/dashboard");
+      // window.location.href rather than router.push: the path may carry a locale
+      // prefix that next-intl's router would double-prefix or strip.
+      window.location.href = safeRedirectPath(searchParams.get("redirect"));
     } catch (err) {
       if (err instanceof ApiError) {
         toast.error(err.message);
