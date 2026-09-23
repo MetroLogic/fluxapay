@@ -49,6 +49,12 @@ export function redactBankForDraft(
   return safe;
 }
 
+/** Mask sensitive bank values in the review step while keeping the last four visible. */
+export function maskBankDetail(value: string): string {
+  if (!value) return "";
+  return "*".repeat(Math.max(4, value.length - 4)) + (value.length > 4 ? value.slice(-4) : "");
+}
+
 function loadDraft(): KycDraft | null {
   try {
     if (typeof window === "undefined") return null;
@@ -618,9 +624,9 @@ function ReviewForm({
     { label: "Owner", value: (owner.fullName as string) ?? "" },
     { label: "Date of Birth", value: (owner.dateOfBirth as string) ?? "" },
     { label: "Bank", value: (bank.bankName as string) ?? "" },
-    { label: "Account", value: (bank.accountNumber as string) ?? "" },
-    { label: "IBAN", value: (bank.iban as string) ?? "" },
-    { label: "SWIFT", value: (bank.swift as string) ?? "" },
+    { label: "Account", value: maskBankDetail((bank.accountNumber as string) ?? "") },
+    { label: "IBAN", value: maskBankDetail((bank.iban as string) ?? "") },
+    { label: "SWIFT", value: maskBankDetail((bank.swift as string) ?? "") },
     { label: "Payout Currency", value: (bank.currency as string) ?? "" },
   ];
 

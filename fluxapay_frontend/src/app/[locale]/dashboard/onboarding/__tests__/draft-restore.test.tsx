@@ -11,6 +11,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { act, render, screen, fireEvent, waitFor } from "@testing-library/react";
 import MerchantOnboardingPage, {
+  maskBankDetail,
   redactBankForDraft,
 } from "@/app/[locale]/dashboard/onboarding/page";
 
@@ -154,6 +155,13 @@ describe("draft restore on mount", () => {
 });
 
 describe("sensitive fields are never persisted", () => {
+  it("masks sensitive bank details while preserving the last four characters", () => {
+    expect(maskBankDetail("0123456789")).toBe("******6789");
+    expect(maskBankDetail("GB33BUKB20201555555555")).toBe("******************5555");
+    expect(maskBankDetail("BUKBGB22")).toBe("****GB22");
+    expect(maskBankDetail("")).toBe("");
+  });
+
   it("strips account number, IBAN and SWIFT from a bank slice", () => {
     const redacted = redactBankForDraft({
       bankName: "First Bank",
