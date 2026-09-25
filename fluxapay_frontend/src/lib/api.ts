@@ -11,6 +11,7 @@ import {
   setAdminStatus,
   clearAuth,
 } from "./auth";
+import type { KycSubmitPayload } from "../services/kyc";
 
 function getApiBaseUrl(): string {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL;
@@ -211,9 +212,8 @@ async function fetchWithAuth<T>(
     return { error: err as ApiError };
   }
 
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
+  const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
+  const headers: Record<string, string> = isFormData ? {} : { "Content-Type": "application/json" };
 
   if (options.headers) {
     Object.assign(headers, options.headers);
@@ -359,11 +359,11 @@ async function fetchWithAuth<T>(
 
 
 export const api = {
-  // Authentication — routes match backend /api/merchants/*
+  // Authentication — routes match backend /api/v1/merchants/*
   auth: {
     signup: async (data: AuthSignupRequest): Promise<Result<Record<string, unknown>>> => {
       try {
-        const res = await fetch(`${API_BASE_URL}/api/merchants/signup`, {
+        const res = await fetch(`${API_BASE_URL}/api/v1/merchants/signup`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(data),
@@ -387,7 +387,7 @@ export const api = {
     },
     login: async (data: AuthLoginRequest): Promise<Result<Record<string, unknown>>> => {
       try {
-        const res = await fetch(`${API_BASE_URL}/api/merchants/login`, {
+        const res = await fetch(`${API_BASE_URL}/api/v1/merchants/login`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(data),
@@ -415,7 +415,7 @@ export const api = {
       otp: string;
     }): Promise<Result<Record<string, unknown>>> => {
       try {
-        const res = await fetch(`${API_BASE_URL}/api/merchants/verify-otp`, {
+        const res = await fetch(`${API_BASE_URL}/api/v1/merchants/verify-otp`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(data),
@@ -438,7 +438,7 @@ export const api = {
       channel: "email" | "phone";
     }): Promise<Result<Record<string, unknown>>> => {
       try {
-        const res = await fetch(`${API_BASE_URL}/api/merchants/resend-otp`, {
+        const res = await fetch(`${API_BASE_URL}/api/v1/merchants/resend-otp`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(data),
@@ -548,7 +548,7 @@ export const api = {
       }
     },
     logoutAllSessions: () =>
-      fetchWithAuth<Record<string, unknown>>("/api/merchants/logout-all", {
+      fetchWithAuth<Record<string, unknown>>("/api/v1/auth/logout-all", {
         method: "POST",
       }),
   },
@@ -556,7 +556,7 @@ export const api = {
   // Merchant endpoints
   merchant: {
     getMe: () =>
-      fetchWithAuth<Record<string, unknown>>("/api/merchants/me"),
+      fetchWithAuth<Record<string, unknown>>("/api/v1/merchants/me"),
 
     updateProfile: (data: {
       business_name?: string;
@@ -566,13 +566,13 @@ export const api = {
       checkout_logo_url?: string | null;
       checkout_accent_color?: string | null;
     }) =>
-      fetchWithAuth<Record<string, unknown>>("/api/merchants/me", {
+      fetchWithAuth<Record<string, unknown>>("/api/v1/merchants/me", {
         method: "PATCH",
         body: JSON.stringify(data),
       }),
 
     updateWebhook: (webhook_url: string) =>
-      fetchWithAuth<Record<string, unknown>>("/api/merchants/me/webhook", {
+      fetchWithAuth<Record<string, unknown>>("/api/v1/merchants/me/webhook", {
         method: "PATCH",
         body: JSON.stringify({ webhook_url }),
       }),
@@ -585,7 +585,7 @@ export const api = {
       currency: string;
       country: string;
     }) =>
-      fetchWithAuth<Record<string, unknown>>("/api/merchants/me/bank-account", {
+      fetchWithAuth<Record<string, unknown>>("/api/v1/merchants/me/bank-account", {
         method: "POST",
         body: JSON.stringify(data),
       }),
@@ -621,28 +621,28 @@ export const api = {
       fetchWithAuth<Record<string, unknown>>("/api/v1/keys/regenerate", {
         method: "POST",
       }),
-    createKey: (data: { name: string }) =>
-      fetchWithAuth<Record<string, unknown>>("/api/merchants/keys/create", {
+    createKey: (data: { name: string; environment: "live" | "test" }) =>
+      fetchWithAuth<Record<string, unknown>>("/api/v1/api-keys", {
         method: "POST",
         body: JSON.stringify(data),
       }),
     rotateApiKey: () =>
       fetchWithAuth<Record<string, unknown>>(
-        "/api/merchants/keys/rotate-api-key",
+        "/api/v1/merchants/keys/rotate-api-key",
         {
           method: "POST",
         },
       ),
     rotateWebhookSecret: () =>
       fetchWithAuth<Record<string, unknown>>(
-        "/api/merchants/keys/rotate-webhook-secret",
+        "/api/v1/merchants/keys/rotate-webhook-secret",
         {
           method: "POST",
         },
       ),
   },
 
-  // Sweep / Settlement Batch endpoints (admin-only, JWT authenticated server-side routes)
+  // Admin sweep endpoints go through the Next.js proxy so the server secret stays private.
   sweep: {
     getStatus: () =>
       fetchWithAuth("/api/admin/sweep/status"),
@@ -851,6 +851,22 @@ export const api = {
 
   // KYC admin
   kyc: {
+    submit: (data: KycSubmitPayload) =>
+      fetchWithAuth<Record<string, unknown>>("/api/v1/merchants/kyc", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    getStatus: () =>
+      fetchWithAuth<Record<string, unknown>>("/api/v1/merchants/kyc/status"),
+    uploadDocument: (file: File, documentType: "government_id" | "proof_of_business_registration" | "proof_of_address") => {
+      const form = new FormData();
+      form.set("document_type", documentType);
+      form.set("file", file);
+      return fetchWithAuth<Record<string, unknown>>("/api/v1/merchants/kyc/documents", {
+        method: "POST",
+        body: form,
+      });
+    },
     admin: {
       getSubmissions: (params?: {
         status?: string;
@@ -862,19 +878,19 @@ export const api = {
         if (params?.page != null) sp.set("page", String(params.page));
         if (params?.limit != null) sp.set("limit", String(params.limit));
         return fetchWithAuth<Record<string, unknown>>(
-          `/api/merchants/kyc/admin/submissions?${sp.toString()}`,
+          `/api/v1/merchants/kyc/admin/submissions?${sp.toString()}`,
         );
       },
       getByMerchantId: (merchantId: string) =>
         fetchWithAuth<Record<string, unknown>>(
-          `/api/merchants/kyc/admin/${merchantId}`,
+          `/api/v1/merchants/kyc/admin/${merchantId}`,
         ),
       updateStatus: (
         merchantId: string,
         body: { status: string; rejection_reason?: string },
       ) =>
         fetchWithAuth<Record<string, unknown>>(
-          `/api/merchants/kyc/admin/${merchantId}/status`,
+          `/api/v1/merchants/kyc/admin/${merchantId}/status`,
           {
             method: "PATCH",
             body: JSON.stringify(body),
@@ -882,7 +898,7 @@ export const api = {
         ),
       bulkReject: (merchantIds: string[], reason: string, notes?: string) =>
         fetchWithAuth<Record<string, unknown>>(
-          "/api/merchants/kyc/admin/bulk-reject",
+          "/api/v1/merchants/kyc/admin/bulk-reject",
           {
             method: "POST",
             body: JSON.stringify({ merchantIds, reason, notes }),
@@ -890,7 +906,7 @@ export const api = {
         ),
       bulkRequestInfo: (merchantIds: string[], message: string) =>
         fetchWithAuth<Record<string, unknown>>(
-          "/api/merchants/kyc/admin/bulk-request-info",
+          "/api/v1/merchants/kyc/admin/bulk-request-info",
           {
             method: "POST",
             body: JSON.stringify({ merchantIds, message }),
@@ -904,12 +920,15 @@ export const api = {
     initiate: (data: InitiateRefundRequest) =>
       fetchWithAuth("/api/admin/refunds/initiate", {
         method: "POST",
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          payment_id: data.paymentId,
+          amount: data.amount,
+          reason: data.reason,
+        }),
       }),
     list: (params?: ListRefundsParams) => {
       const sp = new URLSearchParams();
-      if (params?.paymentId) sp.set("paymentId", params.paymentId);
-      if (params?.merchantId) sp.set("merchantId", params.merchantId);
+      if (params?.paymentId) sp.set("payment_id", params.paymentId);
       if (params?.status) sp.set("status", params.status);
       if (params?.page != null) sp.set("page", String(params.page));
       if (params?.limit != null) sp.set("limit", String(params.limit));
@@ -1350,7 +1369,7 @@ export const api = {
         if (params?.accountStatus)
           sp.set("accountStatus", params.accountStatus);
         return fetchWithAuth<Record<string, unknown>>(
-          `/api/v1/admin/merchants?${sp.toString()}`,
+          `/api/v1/merchants/admin/list?${sp.toString()}`,
         );
       },
       updateStatus: (
@@ -1358,7 +1377,7 @@ export const api = {
         status: "active" | "suspended",
       ) =>
         fetchWithAuth<Record<string, unknown>>(
-          `/api/v1/admin/merchants/${merchantId}/status`,
+          `/api/v1/merchants/admin/${merchantId}/status`,
           {
             method: "PATCH",
             body: JSON.stringify({ status }),
@@ -1370,56 +1389,20 @@ export const api = {
         reason: string,
       ) =>
         fetchWithAuth<Record<string, unknown>>(
-          "/api/merchants/admin/bulk-status",
+          "/api/v1/merchants/admin/bulk-status",
           {
             method: "POST",
             body: JSON.stringify({ merchantIds, status, reason }),
           },
         ),
-      disableWebhook: async (
-        merchantId: string,
-      ): Promise<Result<Record<string, unknown>>> => {
-        try {
-          const res = await adminFetch(
-            `/api/v1/merchants/admin/${merchantId}/webhook`,
-            {
-              method: "PATCH",
-              body: JSON.stringify({ webhook_url: "" }),
-            },
-          );
-          if (!res.ok) {
-            return {
-              error: new ApiError(res.status, "Failed to disable webhook"),
-            };
-          }
-          const data = await res.json();
-          return { data };
-        } catch (err) {
-          return {
-            error: new ApiError(
-              500,
-              err instanceof Error
-                ? err.message
-                : "Failed to disable webhook",
-            ),
-          };
-        }
-      },
-      updateStatus: (merchantId: string, status: "active" | "suspended") =>
-        fetchWithAuth(`/api/v1/admin/merchants/${merchantId}/status`, {
-          method: "PATCH",
-          body: JSON.stringify({ status }),
-        }),
-      bulkUpdateStatus: (merchantIds: string[], status: "active" | "suspended", reason: string) =>
-        fetchWithAuth("/api/merchants/admin/bulk-status", {
-          method: "POST",
-          body: JSON.stringify({ merchantIds, status, reason }),
-        }),
       disableWebhook: (merchantId: string) =>
-        fetchWithAuth(`/api/admin/merchants/${encodeURIComponent(merchantId)}/webhook`, {
-          method: "PATCH",
-          body: JSON.stringify({ webhook_url: "" }),
-        }),
+        fetchWithAuth<Record<string, unknown>>(
+          `/api/v1/merchants/admin/${encodeURIComponent(merchantId)}/webhook`,
+          {
+            method: "PATCH",
+            body: JSON.stringify({ webhook_url: "" }),
+          },
+        ),
     },
     settlements: {
       list: (params?: {

@@ -13,18 +13,18 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
     const query = new URLSearchParams();
-    if (searchParams.has("paymentId")) query.set("paymentId", searchParams.get("paymentId")!);
-    if (searchParams.has("merchantId")) query.set("merchantId", searchParams.get("merchantId")!);
+    if (searchParams.has("paymentId")) query.set("payment_id", searchParams.get("paymentId")!);
+    if (searchParams.has("payment_id")) query.set("payment_id", searchParams.get("payment_id")!);
     if (searchParams.has("status")) query.set("status", searchParams.get("status")!);
     if (searchParams.has("page")) query.set("page", searchParams.get("page")!);
     if (searchParams.has("limit")) query.set("limit", searchParams.get("limit")!);
 
     const response = await fetch(
-      `${API_BASE_URL}/api/refunds${query.toString() ? `?${query}` : ""}`,
+      `${API_BASE_URL}/api/v1/refunds${query.toString() ? `?${query}` : ""}`,
       {
         headers: {
           "Content-Type": "application/json",
-          ...(ADMIN_API_KEY && { "X-Admin-API-Key": ADMIN_API_KEY }),
+          ...(ADMIN_API_KEY && { "X-API-Key": ADMIN_API_KEY }),
         },
       }
     );

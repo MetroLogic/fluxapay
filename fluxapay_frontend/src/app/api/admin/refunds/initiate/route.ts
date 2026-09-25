@@ -13,13 +13,17 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
 
-    const response = await fetch(`${API_BASE_URL}/api/refunds`, {
+    const response = await fetch(`${API_BASE_URL}/api/v1/refunds`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        ...(ADMIN_API_KEY && { "X-Admin-API-Key": ADMIN_API_KEY }),
+        ...(ADMIN_API_KEY && { "X-API-Key": ADMIN_API_KEY }),
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify({
+        payment_id: body.paymentId ?? body.payment_id,
+        amount: body.amount,
+        reason: body.reason,
+      }),
     });
 
     if (!response.ok) {
