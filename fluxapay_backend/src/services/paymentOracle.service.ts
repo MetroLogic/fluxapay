@@ -32,6 +32,7 @@ import {
   HORIZON_POLLER_EVENTS,
   HorizonPaymentDetectedEvent,
 } from "./horizonPoller.service";
+import { eventBus, AppEvents } from "./EventService";
 
 const logger = getLogger("PaymentOracleService");
 const metrics = getMetricsCollector();
@@ -451,6 +452,11 @@ async function updatePaymentStatus(verification: PaymentVerification): Promise<v
 
   // Trigger webhook for confirmed/overpaid payments
   if (verification.verified && updatedPayment.merchant) {
+    // Emit internal event so email notifications, settlement pipeline, and
+    // deposit-pool release all fire (fixes #1004 — these listeners were wired
+    // to this event but it was never emitted from the production oracle path).
+    eventBus.emit(AppEvents.PAYMENT_CONFIRMED, updatedPayment);
+
     try {
       await createAndDeliverWebhook(
         updatedPayment.merchantId,
