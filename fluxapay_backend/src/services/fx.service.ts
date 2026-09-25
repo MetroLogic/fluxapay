@@ -158,6 +158,11 @@ function shouldAttemptLiveFetch(): boolean {
   return false;
 }
 
+/** A usable FX rate is a finite number strictly greater than zero. */
+function isValidRate(rate: unknown): rate is number {
+  return typeof rate === "number" && Number.isFinite(rate) && rate > 0;
+}
+
 async function fetchLiveRates(): Promise<Record<string, number>> {
   const res = await fetch(FX_API_URL);
   if (!res.ok) {
@@ -173,7 +178,9 @@ async function fetchLiveRates(): Promise<Record<string, number>> {
   // so that the result means "1 unit of fiat = X USDC".
   const inverted: Record<string, number> = {};
   for (const [currency, foreignPerUsd] of Object.entries(data.rates)) {
-    if (foreignPerUsd > 0) {
+    // Drop zero, negative, NaN or non-numeric rates so they never reach the
+    // cache; the lookup then falls through to stale/fallback rates instead.
+    if (isValidRate(foreignPerUsd)) {
       inverted[currency] = 1 / foreignPerUsd;
     }
   }
@@ -216,6 +223,26 @@ export class FxService {
    */
   static async getUSDCExchangeRateWithMeta(fiatCurrency: string): Promise<FxRateResult> {
     const currency = fiatCurrency.toUpperCase();
+    const result = await FxService.resolveRate(currency);
+
+    // Last line of defence: never hand a zero/negative/NaN rate to callers,
+    // which would persist a payment with an invalid usdc_amount.
+    if (!isValidRate(result.rate)) {
+      logger.error("FX rate resolution produced an invalid rate", {
+        currency,
+        rate: result.rate,
+      });
+      throw apiError(
+        502,
+        ErrorCode.FX_INVALID_RATE,
+        `FX rate for "${currency}" could not be resolved: received invalid rate ${result.rate}.`,
+      );
+    }
+
+    return result;
+  }
+
+  private static async resolveRate(currency: string): Promise<FxRateResult> {
 
     // USDC (and USD) are pegged 1:1 — no conversion needed
     if (currency === "USDC" || currency === "USD") {

@@ -152,6 +152,13 @@ export class PaymentService {
     // FX conversion
     const fxResult = await FxService.getUSDCExchangeRateWithMeta(currency);
     const fxRate = fxResult.rate;
+    if (!Number.isFinite(fxRate) || fxRate <= 0) {
+      throw apiError(
+        502,
+        ErrorCode.FX_INVALID_RATE,
+        `Unable to convert ${amount} ${currency} to USDC: invalid FX rate ${fxRate}.`,
+      );
+    }
     const usdcAmount = amount * fxRate;
 
     // Persist the payment first so pool allocation can satisfy the

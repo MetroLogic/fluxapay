@@ -107,6 +107,39 @@ describe("FxService circuit breaker", () => {
     });
   });
 
+  describe("rate validation", () => {
+    it.each([0, -1550, NaN, "1550"])(
+      "drops an invalid live rate (%p) and serves the fallback instead",
+      async (bad) => {
+        (global.fetch as jest.Mock).mockResolvedValue({
+          ok: true,
+          json: async () => ({ base: "USD", rates: { NGN: bad } }),
+        });
+
+        const result = await FxService.getUSDCExchangeRateWithMeta("NGN");
+
+        expect(result.rate).toBe(0.00065); // hardcoded FALLBACK_RATES.NGN
+        expect(result.rate).toBeGreaterThan(0);
+        expect(result.stale).toBe(true);
+      },
+    );
+
+    it("throws a 502 FX_INVALID_RATE error if rate resolution yields a non-positive rate", async () => {
+      const spy = jest
+        .spyOn(FxService as any, "resolveRate")
+        .mockResolvedValue({ rate: 0, stale: false, circuitState: "closed" });
+
+      await expect(
+        FxService.getUSDCExchangeRateWithMeta("NGN"),
+      ).rejects.toMatchObject({
+        status: 502,
+        code: "FX_INVALID_RATE",
+      });
+
+      spy.mockRestore();
+    });
+  });
+
   describe("open state", () => {
     it("opens after 3 consecutive failures and alerts ops", async () => {
       mockFetchFail();

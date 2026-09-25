@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { WebhookDispatcher, createAndDeliverWebhook, deliverWebhook, generateWebhookSignature, getDeadLetterQueueService, requeueWebhookService, verifyWebhookTimestamp } from "../webhook.service";
 import { PrismaClient } from "../../generated/client/client";
 
@@ -115,6 +116,33 @@ describe("webhook.service", () => {
     const ts = opts.headers["X-FluxaPay-Timestamp"];
     const sig = generateWebhookSignature(payload, secret, ts);
     expect(opts.headers["X-FluxaPay-Signature"]).toBe(sig);
+  });
+
+  it("deliverWebhook signs the exact raw body it sends, bound to the timestamp header", async () => {
+    const payload = { event: "payment.confirmed", amount: "10.00" };
+    const secret = "raw-body-secret";
+
+    const fakeFetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: () => Promise.resolve("OK"),
+    });
+    global.fetch = fakeFetch as any;
+
+    await deliverWebhook("https://example.com", payload, secret);
+    const opts = fakeFetch.mock.calls[0][1];
+    const ts = opts.headers["X-FluxaPay-Timestamp"];
+
+    // Receiver-side verification: HMAC over `${timestamp}.${rawBody}`
+    const expected = crypto.createHmac("sha256", secret).update(`${ts}.${opts.body}`).digest("hex");
+    expect(opts.headers["X-FluxaPay-Signature"]).toBe(expected);
+
+    // A replayed body with a fresh timestamp must not verify
+    const replayed = crypto
+      .createHmac("sha256", secret)
+      .update(`${new Date(Date.now() + 60_000).toISOString()}.${opts.body}`)
+      .digest("hex");
+    expect(opts.headers["X-FluxaPay-Signature"]).not.toBe(replayed);
   });
 
   it("should embed event_id in the outgoing payload", async () => {
