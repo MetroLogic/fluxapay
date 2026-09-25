@@ -6,6 +6,7 @@ import { PrismaClient } from "../generated/client/client";
 import { prisma } from "../config/prisma";
 import { isDevEnv } from "../helpers/env.helper";
 import Redis from "ioredis";
+import { closeRedisClient } from "../utils/redisClose.util";
 
 
 /**
@@ -57,6 +58,13 @@ export function getRedisClientForRateLimit(): Redis {
 
 export function setRedisClientForTests(client: Redis): void {
   redisClient = client;
+}
+
+/** Closes the rate-limit Redis connection, if one was opened (used on shutdown). */
+export async function closeRateLimitRedisClient(): Promise<void> {
+  const client = redisClient;
+  redisClient = null;
+  await closeRedisClient(client);
 }
 
 export function resetRedisClientForTests(): void {

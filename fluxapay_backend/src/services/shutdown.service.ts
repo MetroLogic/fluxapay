@@ -3,8 +3,64 @@ import type { PrismaClient } from "../generated/client/client";
 import { stopCronJobs } from "./cron.service";
 import { stopPaymentOracle } from "./paymentOracle.service";
 import { getLogger } from "../utils/logger";
+import { closeIdempotencyRedisClient } from "../middleware/redisIdempotency.middleware";
+import { closeRateLimitRedisClient } from "../middleware/rateLimit.middleware";
+import { closeOtpRedisClient } from "../sms/otpSmsRateLimiter";
+import { closeAuthRedisClient } from "./auth.service";
 
 const logger = getLogger();
+
+export type ShutdownCleanup = () => void | Promise<void>;
+
+/**
+ * Named cleanup callbacks run during graceful shutdown, after the HTTP server
+ * has drained and before Prisma disconnects. Use this to close long-lived
+ * connections (Redis clients, streams, sockets) so deployments don't leave
+ * dangling sockets or held locks behind.
+ */
+const cleanupCallbacks = new Map<string, ShutdownCleanup>();
+
+/** Registers (or replaces) a named cleanup callback to run on shutdown. */
+export function registerShutdownCleanup(name: string, fn: ShutdownCleanup): void {
+    cleanupCallbacks.set(name, fn);
+}
+
+/** Names of the currently registered cleanup callbacks, in run order. */
+export function getRegisteredShutdownCleanups(): string[] {
+    return [...cleanupCallbacks.keys()];
+}
+
+/** Test-only: removes all registered cleanup callbacks. */
+export function clearShutdownCleanupsForTests(): void {
+    cleanupCallbacks.clear();
+}
+
+/** Registers the built-in cleanups for every Redis client the app opens. */
+export function registerDefaultShutdownCleanups(): void {
+    registerShutdownCleanup("redis:idempotency", closeIdempotencyRedisClient);
+    registerShutdownCleanup("redis:rate-limit", closeRateLimitRedisClient);
+    registerShutdownCleanup("redis:otp", closeOtpRedisClient);
+    registerShutdownCleanup("redis:auth", closeAuthRedisClient);
+}
+
+registerDefaultShutdownCleanups();
+
+/**
+ * Runs all registered cleanup callbacks concurrently. A failing callback is
+ * logged but never prevents the others (or the rest of shutdown) from running.
+ */
+async function runShutdownCleanups(): Promise<void> {
+    const entries = [...cleanupCallbacks.entries()];
+    const results = await Promise.allSettled(entries.map(([, fn]) => Promise.resolve().then(fn)));
+
+    results.forEach((result, i) => {
+        const name = entries[i][0];
+        if (result.status === "rejected") {
+            logger.error(`Shutdown cleanup "${name}" failed`, { error: result.reason });
+        }
+    });
+    logger.info("Shutdown cleanups completed", { count: entries.length });
+}
 
 export interface ShutdownDeps {
     server: Server;
@@ -17,10 +73,11 @@ export interface ShutdownDeps {
  * Performs a graceful shutdown in the following order:
  *
  *  1. Stop cron jobs (no new scheduled ticks)
- *  2. Stop the payment monitor (no new polling)
+ *  2. Stop the payment oracle and its Horizon poller (no new polling)
  *  3. Close the HTTP server (stop accepting connections; drain in-flight requests)
- *  4. Disconnect Prisma
- *  5. Exit 0
+ *  4. Run registered cleanup callbacks (close Redis clients, etc.)
+ *  5. Disconnect Prisma
+ *  6. Exit 0
  *
  * A hard-kill timer fires after `timeoutMs` and exits with code 1 to ensure
  * the process always terminates even when a request hangs.
@@ -59,7 +116,11 @@ export async function gracefulShutdown(
         });
         logger.info("HTTP server closed — all in-flight requests finished");
 
-        // 4. Disconnect from the database.
+        // 4. Close long-lived connections (Redis, streams) now that no
+        //    request or background worker can still be using them.
+        await runShutdownCleanups();
+
+        // 5. Disconnect from the database.
         await prisma.$disconnect();
         logger.info("Database connections closed");
 
