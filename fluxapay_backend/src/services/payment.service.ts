@@ -4,6 +4,7 @@ import crypto from "crypto";
 import { HDWalletService } from "./HDWalletService";
 import { StellarService } from "./StellarService";
 import { sorobanQueue } from "./sorobanQueue.service";
+import { stellarPrepareQueue } from "./stellarPrepareQueue.service";
 import { eventBus, AppEvents } from "./EventService";
 import { validateAndSanitizeMetadata } from "../utils/metadata.util";
 import { PaymentStatus } from "../types/payment";
@@ -228,10 +229,13 @@ export class PaymentService {
     if (process.env.DISABLE_STELLAR_PREPARE !== "true") {
       const stellarService = new StellarService();
       stellarService.prepareAccount(merchantId, paymentId).catch((error) => {
+        // Enqueue for persistent retry instead of silently dropping the failure
+        // so the deposit address is not permanently unusable (closes #1046).
         console.error(
-          `Failed to prepare Stellar account for payment ${paymentId}:`,
+          `[PaymentService] Failed to prepare Stellar account for payment ${paymentId}; scheduling retry:`,
           error,
         );
+        stellarPrepareQueue.enqueue(merchantId, paymentId);
       });
     }
 
