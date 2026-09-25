@@ -140,6 +140,32 @@ export class SweepService {
     });
   }
 
+  public async previewPaidPayments(limit = 200) {
+    const payments = await prisma.payment.findMany({
+      where: {
+        swept: false,
+        stellar_address: { not: null },
+        status: { in: ["confirmed", "overpaid", "paid"] },
+        sweep_needs_manual_review: false,
+      },
+      include: { merchant: { select: { business_name: true } } },
+      orderBy: { confirmed_at: "asc" },
+      take: limit,
+    });
+
+    return payments.map((payment) => ({
+      id: payment.id,
+      merchantId: payment.merchantId,
+      merchantName: payment.merchant.business_name,
+      amount: Number(payment.amount),
+      currency: payment.currency,
+      confirmed: true,
+      createdAt: payment.created_at.toISOString(),
+      minAgeMet: true,
+      notAlreadySwept: true,
+    }));
+  }
+
   private async submitUsdcSweepTx(params: {
     sourceSecret: string;
     destination: string;

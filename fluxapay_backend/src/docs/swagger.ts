@@ -277,3 +277,52 @@ const options: swaggerJsdoc.Options = {
 };
 
 export const specs = swaggerJsdoc(options);
+
+const methods = ['get', 'post', 'put', 'patch', 'delete', 'options', 'head', 'trace'];
+const errorResponse = {
+    description: 'The request failed.',
+    content: {
+        'application/json': {
+            schema: { $ref: '#/components/schemas/ErrorResponse' },
+        },
+    },
+};
+
+for (const [path, pathItem] of Object.entries(specs.paths || {})) {
+    for (const method of methods) {
+        const operation = (pathItem as Record<string, any>)[method];
+        if (!operation) continue;
+
+        const segments = path
+            .split('/')
+            .filter(Boolean)
+            .map((segment) => segment.startsWith('{')
+                ? `by_${segment.slice(1, -1)}`
+                : segment)
+            .join('_');
+        operation.operationId ||= `${method}_${segments}`
+            .replace(/[^a-zA-Z0-9_]/g, '_')
+            .replace(/_+/g, '_');
+
+        const readablePath = path.replace(/[{}]/g, '');
+        operation.summary ||= `${method.toUpperCase()} ${readablePath}`;
+        operation.description ||= `${operation.summary}.`;
+        operation.tags ||= ['API'];
+        operation.responses ||= {};
+        operation.responses.default ||= errorResponse;
+
+        for (const [status, response] of Object.entries(operation.responses) as [string, any][]) {
+            response.description ||= status === 'default'
+                ? errorResponse.description
+                : `${method.toUpperCase()} ${readablePath} response (${status}).`;
+            if (status === '204' || status === '304' || response.content) continue;
+            response.content = {
+                'application/json': {
+                    schema: status === 'default' || Number(status) >= 400
+                        ? { $ref: '#/components/schemas/ErrorResponse' }
+                        : { type: 'object', additionalProperties: true },
+                },
+            };
+        }
+    }
+}

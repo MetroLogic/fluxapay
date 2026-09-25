@@ -16,10 +16,10 @@ export async function GET(
 
     const { id } = params;
 
-    const response = await fetch(`${API_BASE_URL}/api/refunds/${encodeURIComponent(id)}`, {
+    const response = await fetch(`${API_BASE_URL}/api/v1/refunds/${encodeURIComponent(id)}`, {
       headers: {
         "Content-Type": "application/json",
-        ...(ADMIN_API_KEY && { "X-Admin-API-Key": ADMIN_API_KEY }),
+        ...(ADMIN_API_KEY && { "X-API-Key": ADMIN_API_KEY }),
       },
     });
 

@@ -423,6 +423,7 @@ function CreateApiKeyModal({
   existingNames: Set<string>;
 }) {
   const [name, setName] = useState("");
+  const [environment, setEnvironment] = useState<"live" | "test">("test");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [createdSecret, setCreatedSecret] = useState<string | null>(null);
@@ -431,6 +432,7 @@ function CreateApiKeyModal({
   useEffect(() => {
     if (isOpen) {
       setName("");
+      setEnvironment("test");
       setError(null);
       setCreatedSecret(null);
     }
@@ -454,18 +456,20 @@ function CreateApiKeyModal({
     setError(null);
 
     try {
-      const result = await api.keys.createKey({ name: name.trim() });
+      const result = await api.keys.createKey({ name: name.trim(), environment });
       if ('error' in result) {
         setError(result.error.message);
         return;
       }
       const res = result.data as Record<string, unknown>;
-      setCreatedSecret((res.secret as string) || (res.apiKey as string));
+      const secret = (res.key as string) || (res.secret as string) || (res.apiKey as string);
+      if (!secret) throw new Error("The API did not return the new key secret.");
+      setCreatedSecret(secret);
       onCreateSuccess({
         id: res.id as string,
         name: name.trim(),
-        masked: `sk_live_${res.lastFour as string}`,
-        secret: (res.secret as string) || (res.apiKey as string),
+        masked: `fpk_${environment}_****${(res.last_four as string) || secret.slice(-4)}`,
+        secret,
       });
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to create API key");
@@ -610,6 +614,18 @@ function CreateApiKeyModal({
                 if (nameError) setError(nameError);
               }}
             />
+            <label htmlFor="api-key-environment" style={{ display: "block", fontSize: "0.875rem", fontWeight: 500, color: "#1a1a3e", margin: "0.75rem 0 0.5rem" }}>
+              Environment
+            </label>
+            <select
+              id="api-key-environment"
+              value={environment}
+              onChange={(event) => setEnvironment(event.target.value as "live" | "test")}
+              style={{ width: "100%", padding: "0.75rem", border: "1px solid #d1d5db", borderRadius: "0.375rem", marginBottom: "0.5rem" }}
+            >
+              <option value="test">Test</option>
+              <option value="live">Live</option>
+            </select>
             {error && (
               <p style={{ fontSize: "0.75rem", color: "#dc2626", marginBottom: "1rem", margin: 0 }}>
                 {error}
