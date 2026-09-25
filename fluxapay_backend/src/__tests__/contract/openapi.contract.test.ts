@@ -179,6 +179,25 @@ function normalizePath(path: string): string {
 }
 
 describe('OpenAPI Contract Tests', () => {
+  it('provides stable operation metadata and response schemas for every route', () => {
+    for (const [path, pathItem] of Object.entries(specs.paths || {})) {
+      for (const method of ['get', 'post', 'put', 'patch', 'delete', 'options', 'head', 'trace']) {
+        const operation = (pathItem as any)[method];
+        if (!operation) continue;
+
+        expect(operation.operationId).toBeTruthy();
+        expect(operation.description).toBeTruthy();
+        expect(Object.keys(operation.responses || {}).length).toBeGreaterThan(0);
+        for (const response of Object.values(operation.responses) as any[]) {
+          expect(response.description).toBeTruthy();
+          if (response.content) {
+            expect(Object.keys(response.content).length).toBeGreaterThan(0);
+          }
+        }
+      }
+    }
+  });
+
   describe('Payments API', () => {
     let createdPaymentId: string;
 

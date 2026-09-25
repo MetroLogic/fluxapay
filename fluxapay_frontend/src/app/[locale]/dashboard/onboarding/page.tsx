@@ -13,7 +13,7 @@ import {
 import { toast } from "react-hot-toast";
 import { api } from "@/lib/api";
 import { toastApiError } from "@/lib/toastApiError";
-import { COUNTRIES, validateKycFile } from "@/services/kyc";
+import { COUNTRIES, ID_TYPES, validateKycFile } from "@/services/kyc";
 
 type Step = 1 | 2 | 3 | 4 | 5;
 
@@ -119,10 +119,15 @@ export default function MerchantOnboardingPage() {
 
   const [step, setStep] = useState<Step>(1);
   const [business, setBusiness] = useState<Record<string, unknown>>({
+    businessType: "registered_business",
     legalName: "",
     registrationNumber: "",
     country: "",
     address: "",
+    email: "",
+    phone: "",
+    governmentIdType: "passport",
+    governmentIdNumber: "",
     website: "",
   });
   const [owner, setOwner] = useState<Record<string, unknown>>({
@@ -224,8 +229,12 @@ export default function MerchantOnboardingPage() {
       toast.error("Please complete all required business fields.");
       return;
     }
-    if (!owner.fullName || !owner.dateOfBirth || !owner.nationality || !owner.address) {
+    if (!owner.fullName || !owner.dateOfBirth || !owner.nationality || !owner.address || !owner.email || !owner.phone || !owner.governmentIdNumber) {
       toast.error("Please complete all required owner fields.");
+      return;
+    }
+    if (!documents.businessCertificate || !documents.governmentIdFront || !documents.governmentIdBack || !documents.proofOfAddress) {
+      toast.error("Please upload all required verification documents.");
       return;
     }
     if (!bank.bankName || !bank.accountNumber || !bank.iban || !bank.swift || !bank.currency) {
@@ -235,7 +244,33 @@ export default function MerchantOnboardingPage() {
 
     setSubmitting(true);
     try {
-      await api.kyc.admin.updateStatus("me", { status: "pending_review" });
+      const submission = await api.kyc.submit({
+        business_type: business.businessType as "individual" | "registered_business",
+        legal_business_name: business.legalName as string,
+        business_registration_number: (business.registrationNumber as string) || undefined,
+        country_of_registration: business.country as string,
+        business_address: business.address as string,
+        director_full_name: owner.fullName as string,
+        director_date_of_birth: owner.dateOfBirth as string,
+        director_nationality: owner.nationality as string,
+        director_address: owner.address as string,
+        director_email: owner.email as string,
+        director_phone: owner.phone as string,
+        government_id_type: owner.governmentIdType as "passport" | "national_id" | "driver_license",
+        government_id_number: owner.governmentIdNumber as string,
+      });
+      if ("error" in submission) throw new Error(submission.error.message);
+
+      const documentsToUpload = [
+        [documents.businessCertificate, "proof_of_business_registration"],
+        [documents.governmentIdFront, "government_id"],
+        [documents.governmentIdBack, "government_id"],
+        [documents.proofOfAddress, "proof_of_address"],
+      ] as const;
+      for (const [file, documentType] of documentsToUpload) {
+        const upload = await api.kyc.uploadDocument(file as File, documentType);
+        if ("error" in upload) throw new Error(upload.error.message);
+      }
       setSubmitted(true);
       clearDraft();
       toast.success("KYC submission received. We will review it within 1-2 business days.");
@@ -441,6 +476,7 @@ function BusinessForm({
       <div className="md:col-span-2">
         <Field label="Legal Business Name" required id="legalName" value={(business.legalName as string) ?? ""} onChange={(v) => set("legalName", v)} />
       </div>
+      <SelectField label="Business Type" required id="businessType" value={(business.businessType as string) ?? "registered_business"} onChange={(v) => set("businessType", v)} options={[{ value: "registered_business", label: "Registered business" }, { value: "individual", label: "Individual" }]} />
       <Field label="Registration Number" id="registrationNumber" value={(business.registrationNumber as string) ?? ""} onChange={(v) => set("registrationNumber", v)} />
       <SelectField label="Country of Registration" required id="businessCountry" value={(business.country as string) ?? ""} onChange={(v) => set("country", v)} options={COUNTRIES.map((c) => ({ value: c.code, label: c.name }))} />
       <div className="md:col-span-2">
@@ -469,9 +505,13 @@ function OwnerForm({
       </div>
       <Field label="Date of Birth" required id="ownerDob" value={(owner.dateOfBirth as string) ?? ""} onChange={(v) => set("dateOfBirth", v)} type="date" />
       <SelectField label="Nationality" required id="ownerNationality" value={(owner.nationality as string) ?? ""} onChange={(v) => set("nationality", v)} options={COUNTRIES.map((c) => ({ value: c.code, label: c.name }))} />
+      <Field label="Email" required id="ownerEmail" value={(owner.email as string) ?? ""} onChange={(v) => set("email", v)} type="email" />
+      <Field label="Phone" required id="ownerPhone" value={(owner.phone as string) ?? ""} onChange={(v) => set("phone", v)} type="tel" />
       <div className="md:col-span-2">
         <Field label="Residential Address" required id="ownerAddress" value={(owner.address as string) ?? ""} onChange={(v) => set("address", v)} />
       </div>
+      <SelectField label="Government ID Type" required id="governmentIdType" value={(owner.governmentIdType as string) ?? "passport"} onChange={(v) => set("governmentIdType", v)} options={ID_TYPES} />
+      <Field label="Government ID Number" required id="governmentIdNumber" value={(owner.governmentIdNumber as string) ?? ""} onChange={(v) => set("governmentIdNumber", v)} />
     </div>
   );
 }
