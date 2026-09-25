@@ -9,6 +9,33 @@ const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 1000;
 
 /**
+ * Feature flag: set ESCROW_SIMULATION_ENABLED=true to allow the simulated
+ * escrow endpoints to process requests. When false (default in production),
+ * the endpoints return 503 with a clear "not yet implemented" message so
+ * callers are never misled into thinking real on-chain settlement occurred.
+ *
+ * Fixes #1007: the simulate* helpers generate fake contract addresses/tx
+ * hashes and never touch Soroban/Stellar — enabling these endpoints in
+ * production would mark payments as completed/settled with no on-chain
+ * evidence. Gate them behind this flag until real Soroban integration lands.
+ */
+const ESCROW_SIMULATION_ENABLED =
+  process.env.ESCROW_SIMULATION_ENABLED === "true";
+
+function assertEscrowEnabled(): void {
+  if (!ESCROW_SIMULATION_ENABLED) {
+    throw apiError(
+      503,
+      ErrorCode.ESCROW_NOT_IMPLEMENTED,
+      "Escrow contract integration is not yet available. " +
+        "Real Soroban contract calls are pending implementation. " +
+        "Set ESCROW_SIMULATION_ENABLED=true only in non-production environments " +
+        "to enable the simulated flow.",
+    );
+  }
+}
+
+/**
  * Initialize an escrow contract for a payment
  * This calls the escrow contract's initialize() function via Stellar SDK
  *
@@ -29,6 +56,8 @@ export async function initializeEscrowContract(data: {
   currency: string;
   merchantPublicKey: string;
 }) {
+  assertEscrowEnabled();
+
   const { paymentId, amount, currency, merchantPublicKey } = data;
 
   // Get the payment
@@ -130,6 +159,7 @@ export async function initializeEscrowContract(data: {
 
       return {
         message: "Escrow contract initialized successfully",
+        simulated: true,
         payment: updatedPayment,
         contractAddress,
         txHash,
@@ -179,6 +209,8 @@ export async function releaseEscrowFunds(data: {
   paymentId: string;
   merchantId: string;
 }) {
+  assertEscrowEnabled();
+
   const { paymentId, merchantId } = data;
 
   const payment = await prisma.payment.findUnique({
@@ -228,6 +260,7 @@ export async function releaseEscrowFunds(data: {
 
       return {
         message: "Escrow funds released successfully",
+        simulated: true,
         payment: updatedPayment,
       };
     } catch (error: any) {
@@ -262,6 +295,8 @@ export async function refundEscrowFunds(data: {
   reason?: string;
   initiatedBy: "admin" | "customer";
 }) {
+  assertEscrowEnabled();
+
   const { paymentId, reason, initiatedBy } = data;
 
   const payment = await prisma.payment.findUnique({
@@ -310,6 +345,7 @@ export async function refundEscrowFunds(data: {
 
       return {
         message: "Escrow funds refunded successfully",
+        simulated: true,
         payment: updatedPayment,
       };
     } catch (error: any) {
