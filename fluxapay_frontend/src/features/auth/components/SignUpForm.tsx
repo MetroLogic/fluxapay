@@ -35,18 +35,18 @@ const signupSchema = (t: AuthTranslator) => yup.object({
     .required(t("validation.emailRequired")),
   phone_number: yup
     .string()
-    .matches(/^\+?[1-9]\d{1,14}$/, "Invalid phone number format (use international format)")
-    .required("Phone number is required"),
+    .matches(/^\+?[1-9]\d{1,14}$/, t("validation.phoneNumberInvalid"))
+    .required(t("validation.phoneNumberRequired")),
   password: yup
     .string()
-    .min(8, "Password must be at least 8 characters")
-    .matches(/[A-Z]/, "Password must contain at least one uppercase letter")
-    .matches(/[a-z]/, "Password must contain at least one lowercase letter")
-    .matches(/[0-9]/, "Password must contain at least one number")
-    .matches(/[@$!%*?&]/, "Password must contain at least one special character (@$!%*?&)")
+    .min(8, t("validation.passwordMinEight"))
+    .matches(/[A-Z]/, t("validation.passwordUppercase"))
+    .matches(/[a-z]/, t("validation.passwordLowercase"))
+    .matches(/[0-9]/, t("validation.passwordNumber"))
+    .matches(/[@$!%*?&]/, t("validation.passwordSpecial"))
     .required(t("validation.passwordRequired")),
-  country: yup.string().length(2, "Country code must be 2 characters").required(t("validation.countryRequired")),
-  settlement_currency: yup.string().length(3, "Currency must be 3 characters").required(t("validation.currencyRequired")),
+  country: yup.string().length(2, t("validation.countryCodeLength")).required(t("validation.countryRequired")),
+  settlement_currency: yup.string().length(3, t("validation.currencyCodeLength")).required(t("validation.currencyRequired")),
 });
 
 type SignUpFormData = yup.InferType<ReturnType<typeof signupSchema>>;
@@ -300,7 +300,7 @@ const SignUpForm = () => {
                   </button>
                 </div>
                 <p className="mt-1 text-xs text-slate-500">
-                  Must be 8+ characters with uppercase, lowercase, number, and special character
+                  {tAuth("validation.passwordHint")}
                 </p>
               </div>
 

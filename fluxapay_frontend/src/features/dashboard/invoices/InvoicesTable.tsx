@@ -2,7 +2,7 @@ import { Badge } from "@/components/Badge";
 import { DataTableBodyState } from "@/components/data-table";
 import { Invoice, InvoiceStatus } from "./types";
 import { ChevronDown, ChevronUp, Copy, Eye } from "lucide-react";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 
 interface InvoicesTableProps {
   invoices: Invoice[];
@@ -62,13 +62,16 @@ export const InvoicesTable = ({
     setSortConfig({ key, direction });
   };
 
-  const sorted = [...invoices].sort((a, b) => {
-    if (!sortConfig) return 0;
-    const { key, direction } = sortConfig;
-    if (a[key]! < b[key]!) return direction === "asc" ? -1 : 1;
-    if (a[key]! > b[key]!) return direction === "asc" ? 1 : -1;
-    return 0;
-  });
+  const sorted = useMemo(() => {
+    const copy = [...invoices];
+    if (!sortConfig) return copy;
+    return copy.sort((a, b) => {
+      const { key, direction } = sortConfig;
+      if (a[key]! < b[key]!) return direction === "asc" ? -1 : 1;
+      if (a[key]! > b[key]!) return direction === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [invoices, sortConfig]);
 
   return (
     <div className="bg-card overflow-hidden">
