@@ -246,13 +246,17 @@ export async function listRefundsService(params: {
   page: number;
   limit: number;
   status?: RefundStatus;
+  paymentId?: string;
 }) {
-  const { merchantId, page, limit, status } = params;
+  const { merchantId, page, limit, status, paymentId } = params;
   const skip = (page - 1) * limit;
 
   const where: Record<string, unknown> = { merchantId };
   if (status) {
     where.status = status;
+  }
+  if (paymentId) {
+    where.paymentId = paymentId;
   }
 
   const [refunds, total] = await Promise.all([
@@ -277,6 +281,16 @@ export async function listRefundsService(params: {
       },
     },
   };
+}
+
+export async function getRefundByIdService(merchantId: string, refundId: string) {
+  const refund = await prisma.refund.findFirst({
+    where: { id: refundId, merchantId },
+  });
+  if (!refund) {
+    throw apiError(404, ErrorCode.REFUND_NOT_FOUND, "Refund not found");
+  }
+  return { message: "Refund retrieved", data: refund };
 }
 
 export async function updateRefundStatusService(params: {

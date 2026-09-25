@@ -5,6 +5,7 @@ import { validateUserId } from "../helpers/request.helper";
 import { AuthRequest } from "../types/express";
 import {
   createRefundService,
+  getRefundByIdService,
   listRefundsService,
   updateRefundStatusService,
 } from "../services/refund.service";
@@ -39,6 +40,7 @@ export async function listRefunds(req: Request, res: Response) {
       page: Number(req.query.page) || 1,
       limit: Number(req.query.limit) || 10,
       status: req.query.status as RefundStatus | undefined,
+      paymentId: req.query.payment_id as string | undefined,
     });
 
     res.status(200).json(result);
@@ -46,6 +48,19 @@ export async function listRefunds(req: Request, res: Response) {
     res
       .status(err.status || 500)
       .json({ message: err.message || "Server error" });
+  }
+}
+
+export async function getRefundById(req: AuthRequest, res: Response) {
+  try {
+    const merchantId = await validateUserId(req);
+    const refundId = Array.isArray(req.params.refund_id)
+      ? req.params.refund_id[0]
+      : req.params.refund_id;
+    const result = await getRefundByIdService(merchantId, refundId);
+    res.status(200).json(result);
+  } catch (err: any) {
+    res.status(err.status || 500).json({ message: err.message || "Server error" });
   }
 }
 

@@ -5,12 +5,14 @@ import { validate, validateQuery } from "../middleware/validation.middleware";
 import { idempotencyMiddleware } from "../middleware/idempotency.middleware";
 import {
   createRefund,
+  getRefundById,
   listRefunds,
   updateRefundStatus,
 } from "../controllers/refund.controller";
 import {
   createRefundSchema,
   listRefundsQuerySchema,
+  refundParamsSchema,
   updateRefundStatusSchema,
 } from "../schemas/refund.schema";
 
@@ -52,6 +54,11 @@ const router = Router();
  *         schema:
  *           type: string
  *           enum: [pending, processing, completed, failed]
+ *       - in: query
+ *         name: payment_id
+ *         schema:
+ *           type: string
+ *         description: Filter refunds for one payment
  *     responses:
  *       200:
  *         description: Refunds retrieved
@@ -68,6 +75,38 @@ router.get(
   authenticateApiKey, merchantApiKeyRateLimit(),
   validateQuery(listRefundsQuerySchema),
   listRefunds,
+);
+
+/**
+ * @swagger
+ * /api/v1/refunds/{refund_id}:
+ *   get:
+ *     operationId: getRefundById
+ *     summary: Get a merchant-owned refund
+ *     description: Returns a refund only when it belongs to the authenticated merchant.
+ *     tags: [Refunds]
+ *     security:
+ *       - apiKeyAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: refund_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Refund retrieved
+ *       401:
+ *         description: Authentication required
+ *       404:
+ *         description: Refund not found
+ */
+router.get(
+  "/:refund_id",
+  authenticateApiKey,
+  merchantApiKeyRateLimit(),
+  validate(refundParamsSchema),
+  getRefundById,
 );
 
 /**

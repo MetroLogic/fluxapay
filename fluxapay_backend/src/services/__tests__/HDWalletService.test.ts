@@ -114,6 +114,18 @@ describe("HDWalletService", () => {
       expect(r1.publicKey).not.toBe(r2.publicKey);
     });
 
+    it("should allocate distinct payment indices for concurrent requests", async () => {
+      await service.derivePaymentAddress("merchant_concurrent", "first_request");
+      const results = await Promise.all(
+        Array.from({ length: 32 }, (_, index) =>
+          service.derivePaymentAddress("merchant_concurrent", `payment_${index}`),
+        ),
+      );
+
+      expect(new Set(results.map(({ paymentIndex }) => paymentIndex)).size).toBe(32);
+      expect(new Set(results.map(({ publicKey }) => publicKey)).size).toBe(32);
+    });
+
     it("should derive different addresses for different merchant IDs (different merchant_index)", async () => {
       const r1 = await service.derivePaymentAddress("merchant_X", "payment_A");
       const r2 = await service.derivePaymentAddress("merchant_Y", "payment_A");
