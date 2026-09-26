@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Copy,
   Check,
@@ -428,6 +428,9 @@ function CreateApiKeyModal({
   const [error, setError] = useState<string | null>(null);
   const [createdSecret, setCreatedSecret] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (isOpen) {
@@ -436,6 +439,52 @@ function CreateApiKeyModal({
       setError(null);
       setCreatedSecret(null);
     }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || !dialogRef.current) return;
+
+    const dialog = dialogRef.current;
+    const opener = document.activeElement as HTMLElement | null;
+    const focusable = () =>
+      Array.from(
+        dialog.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter((element) => element.offsetParent !== null || element.getClientRects().length > 0);
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onCloseRef.current();
+        return;
+      }
+      if (event.key !== "Tab") return;
+
+      const elements = focusable();
+      if (elements.length === 0) {
+        event.preventDefault();
+        return;
+      }
+
+      const first = elements[0];
+      const last = elements[elements.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    dialog.addEventListener("keydown", handleKeyDown);
+    const focusId = requestAnimationFrame(() => focusable()[0]?.focus());
+
+    return () => {
+      cancelAnimationFrame(focusId);
+      dialog.removeEventListener("keydown", handleKeyDown);
+      if (opener?.isConnected) opener.focus();
+    };
   }, [isOpen]);
 
   const validateName = (value: string): string | null => {
@@ -497,6 +546,10 @@ function CreateApiKeyModal({
       onClick={onClose}
     >
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="create-api-key-modal-title"
         style={{
           backgroundColor: "#ffffff",
           borderRadius: "0.75rem",
@@ -508,11 +561,12 @@ function CreateApiKeyModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
-          <h2 style={{ fontSize: "1.5rem", fontWeight: "bold", color: "#1a1a3e", margin: 0 }}>
+          <h2 id="create-api-key-modal-title" style={{ fontSize: "1.5rem", fontWeight: "bold", color: "#1a1a3e", margin: 0 }}>
             Create API Key
           </h2>
           <button
             onClick={onClose}
+            aria-label="Close Create API Key dialog"
             style={{ background: "none", border: "none", cursor: "pointer", color: "#6b7280" }}
           >
             <X size={20} />
