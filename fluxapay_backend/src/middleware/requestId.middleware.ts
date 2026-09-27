@@ -22,6 +22,7 @@ export function requestIdMiddleware(
 
   // Add to response headers for client visibility
   res.setHeader("x-request-id", requestId);
+  res.setHeader("X-FluxaPay-Request-ID", requestId);
 
   // Run the rest of the request within the async local storage context
   requestContextStorage.run({ requestId }, () => {
