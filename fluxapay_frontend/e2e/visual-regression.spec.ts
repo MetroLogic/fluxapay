@@ -158,4 +158,121 @@ test.describe('Visual Regression Tests', () => {
 
     await expect(page).toHaveScreenshot('analytics-empty.png', { fullPage: true });
   });
+
+  test('Dashboard - Light mode visual regression', async ({ page }) => {
+    await page.route('**/api/merchants/me', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ id: 'merch_visual_test', business_name: 'Visual Test Merchant' }),
+      })
+    );
+
+    await page.route('**/api/payments*', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: [mockPendingPayment],
+          pagination: { total: 1, page: 1, limit: 10 }
+        }),
+      })
+    );
+
+    // Ensure light mode
+    await page.goto('/dashboard');
+    await page.evaluate(() => {
+      localStorage.setItem('theme', 'light');
+      document.documentElement.classList.remove('dark');
+    });
+    await page.reload();
+    await expect(page.getByRole('navigation').or(page.getByText(/payments/i))).toBeVisible();
+
+    await expect(page).toHaveScreenshot('dashboard-light-mode.png', {
+      mask: [page.locator('.dynamic-date'), page.locator('.dynamic-chart')],
+      fullPage: true,
+    });
+  });
+
+  test('Dashboard - Dark mode visual regression', async ({ page }) => {
+    await page.route('**/api/merchants/me', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ id: 'merch_visual_test', business_name: 'Visual Test Merchant' }),
+      })
+    );
+
+    await page.route('**/api/payments*', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: [mockPendingPayment],
+          pagination: { total: 1, page: 1, limit: 10 }
+        }),
+      })
+    );
+
+    // Ensure dark mode
+    await page.goto('/dashboard');
+    await page.evaluate(() => {
+      localStorage.setItem('theme', 'dark');
+      document.documentElement.classList.add('dark');
+    });
+    await page.reload();
+    await expect(page.getByRole('navigation').or(page.getByText(/payments/i))).toBeVisible();
+
+    await expect(page).toHaveScreenshot('dashboard-dark-mode.png', {
+      mask: [page.locator('.dynamic-date'), page.locator('.dynamic-chart')],
+      fullPage: true,
+    });
+  });
+
+  test('Settings Profile tab - Dark mode toggle visual regression', async ({ page }) => {
+    await page.route('**/api/merchants/me', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          id: 'merch_visual_test',
+          business_name: 'Visual Test Merchant',
+          email: 'test@example.com',
+          webhook_url: '',
+          api_key: 'test_api_key',
+          settlement_schedule: 'daily',
+          settlement_day: 1,
+        }),
+      })
+    );
+
+    await page.route('**/api/settlements/summary', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ next_settlement_date: '2024-01-01' }),
+      })
+    );
+
+    // Test in light mode
+    await page.goto('/settings');
+    await page.evaluate(() => {
+      localStorage.setItem('theme', 'light');
+      document.documentElement.classList.remove('dark');
+    });
+    await page.reload();
+    await page.getByRole('tab', { name: 'Profile' }).click();
+    await expect(page.getByText('Appearance')).toBeVisible();
+    await expect(page).toHaveScreenshot('settings-profile-light-mode.png', { fullPage: true });
+
+    // Test in dark mode
+    await page.evaluate(() => {
+      localStorage.setItem('theme', 'dark');
+      document.documentElement.classList.add('dark');
+    });
+    await page.reload();
+    await page.getByRole('tab', { name: 'Profile' }).click();
+    await expect(page.getByText('Appearance')).toBeVisible();
+    await expect(page).toHaveScreenshot('settings-profile-dark-mode.png', { fullPage: true });
+  });
 });
