@@ -252,6 +252,29 @@ describe("PaymentService", () => {
       });
     });
 
+    it.each([0, -1, NaN])(
+      "should reject with 502 and not persist the payment when the FX rate is %p",
+      async (badRate) => {
+        (FxService.getUSDCExchangeRateWithMeta as jest.Mock).mockResolvedValueOnce({
+          rate: badRate,
+          stale: false,
+          circuitState: "closed",
+        });
+
+        await expect(
+          PaymentService.createPayment({
+            amount: 100,
+            currency: "NGN",
+            customer_email: "test@example.com",
+            merchantId: "merchant_1",
+            metadata: {},
+          }),
+        ).rejects.toMatchObject({ status: 502, code: "FX_INVALID_RATE" });
+
+        expect(mockPrisma.payment.create).not.toHaveBeenCalled();
+      },
+    );
+
     it('should sanitize metadata string fields before persistence', async () => {
       const mockStellarAddress =
         'GTEST123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ123456789ABC';

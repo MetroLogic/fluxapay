@@ -1,6 +1,11 @@
 /**
  * Simple virtualized table component for rendering large datasets efficiently
  * Only renders visible rows in the viewport
+ *
+ * Renders a single <table> with a <thead> and <tbody> to maintain correct HTML
+ * semantics.  Virtualisation is achieved by adjusting paddingTop / paddingBottom
+ * on the <tbody> so the browser keeps the scroll-bar at the right size while
+ * only the visible <tr> elements are in the DOM.
  */
 
 import { useRef, useState, useEffect, memo } from 'react';
@@ -23,6 +28,10 @@ interface VirtualizedTableProps<T> {
   emptyMessage?: string;
   /** Optional icon shown above the empty message. */
   emptyIcon?: React.ReactNode;
+  /** Optional number of columns – used for the empty-state colSpan. */
+  colSpan?: number;
+  /** Optional ARIA label for the table element. */
+  ariaLabel?: string;
 }
 
 function VirtualizedTableInner<T>({
@@ -35,6 +44,8 @@ function VirtualizedTableInner<T>({
   className = '',
   emptyMessage = 'No data available.',
   emptyIcon,
+  colSpan,
+  ariaLabel,
 }: VirtualizedTableProps<T>) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
@@ -53,7 +64,11 @@ function VirtualizedTableInner<T>({
   );
 
   const visibleData = rows.slice(startIndex, endIndex + 1);
-  const offsetY = startIndex * rowHeight;
+
+  // Padding used on <tbody> to push rows into the right visual position
+  // while keeping a single <table>.
+  const paddingTop = startIndex * rowHeight;
+  const paddingBottom = Math.max(0, totalHeight - (endIndex + 1) * rowHeight);
 
   // Scroll handler with manual throttling
   useEffect(() => {
@@ -92,24 +107,34 @@ function VirtualizedTableInner<T>({
       className={`overflow-auto ${className}`}
       style={{ height: containerHeight }}
     >
-      {renderHeader && (
-        <div className="sticky top-0 z-10 bg-background">
-          {renderHeader()}
-        </div>
-      )}
-      {isEmpty ? (
-        <EmptyState variant="block" className="py-12" message={emptyMessage} icon={emptyIcon} />
-      ) : (
-        <div style={{ height: totalHeight, position: 'relative' }}>
-          <div style={{ transform: `translateY(${offsetY}px)` }}>
-            {visibleData.map((item, idx) => (
-              <div key={startIndex + idx} style={{ height: rowHeight }}>
-                {renderRow(item, startIndex + idx)}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      <table
+        className="w-full text-sm text-left"
+        role="table"
+        {...(ariaLabel ? { 'aria-label': ariaLabel } : {})}
+      >
+        {renderHeader && (
+          <thead className="sticky top-0 z-10 bg-background">
+            {renderHeader()}
+          </thead>
+        )}
+        <tbody
+          style={{
+            paddingTop: isEmpty ? 0 : paddingTop,
+            paddingBottom: isEmpty ? 0 : paddingBottom,
+            display: isEmpty ? undefined : 'block',
+          }}
+        >
+          {isEmpty ? (
+            <tr>
+              <td colSpan={colSpan ?? 1} className="py-12">
+                <EmptyState variant="block" message={emptyMessage} icon={emptyIcon} />
+              </td>
+            </tr>
+          ) : (
+            visibleData.map((item, idx) => renderRow(item, startIndex + idx))
+          )}
+        </tbody>
+      </table>
     </div>
   );
 }

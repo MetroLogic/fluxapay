@@ -20,7 +20,7 @@ const OUTPUT_FILE = path.join(__dirname, '../route-drift-report.md');
 
 // Critical routes that must exist in both frontend and backend
 const CRITICAL_ROUTES = [
-  { method: 'POST', path: '/api/v1/merchants', description: 'Merchant registration' },
+  { method: 'POST', path: '/api/v1/merchants/signup', description: 'Merchant registration' },
   { method: 'POST', path: '/api/v1/merchants/login', description: 'Merchant login' },
   { method: 'GET', path: '/api/v1/merchants/me', description: 'Get current merchant' },
   { method: 'POST', path: '/api/v1/payments', description: 'Create payment' },
@@ -28,7 +28,7 @@ const CRITICAL_ROUTES = [
   { method: 'POST', path: '/api/v1/refunds', description: 'Create refund' },
   { method: 'GET', path: '/api/v1/refunds', description: 'List refunds' },
   { method: 'POST', path: '/api/v1/merchants/kyc', description: 'Submit KYC' },
-  { method: 'GET', path: '/api/v1/dashboard', description: 'Dashboard data' },
+  { method: 'GET', path: '/api/v1/dashboard/overview/metrics', description: 'Dashboard metrics' },
   { method: 'GET', path: '/health', description: 'Health check' },
 ];
 
@@ -37,25 +37,50 @@ const CRITICAL_ROUTES = [
  */
 function extractBackendRoutes() {
   const routes = [];
-  
   try {
-    const files = fs.readdirSync(BACKEND_ROUTES_DIR).filter(f => f.endsWith('.route.ts'));
-    
-    for (const file of files) {
+    const appFile = path.join(BACKEND_ROUTES_DIR, '../app.ts');
+    const appSource = fs.readFileSync(appFile, 'utf-8');
+    const importFiles = new Map();
+    for (const match of appSource.matchAll(/import\s+(\w+)\s+from\s+["']\.\/routes\/([^"']+)["']/g)) {
+      importFiles.set(match[1], match[2].endsWith('.ts') ? match[2] : `${match[2]}.ts`);
+    }
+
+    const mounts = [];
+    for (const match of appSource.matchAll(/app\.use\(\s*["']([^"']+)["']\s*,([\s\S]*?)\);/g)) {
+      const imported = [...importFiles.keys()].find((name) =>
+        new RegExp(`\\b${name}\\b`).test(match[2]),
+      );
+      if (imported) mounts.push({ prefix: match[1], name: imported });
+    }
+
+    const merchantMount = appSource.match(/app\.use\(\s*["']([^"']+)["']\s*,\s*merchantRouter\s*\)/);
+    const merchantPrefix = merchantMount?.[1];
+    if (merchantPrefix) {
+      for (const match of appSource.matchAll(/merchantRouter\.use\(\s*["']([^"']+)["']\s*,\s*(\w+)\s*\);/g)) {
+        if (importFiles.has(match[2])) {
+          mounts.push({ prefix: `${merchantPrefix}${match[1] === '/' ? '' : match[1]}`, name: match[2] });
+        }
+      }
+    }
+
+    const routePattern = /router\.(get|post|put|patch|delete|options|head)\s*\(\s*(["'])([^"']+)\2/g;
+    for (const { prefix, name } of mounts) {
+      const file = importFiles.get(name);
+      if (!file) continue;
       const content = fs.readFileSync(path.join(BACKEND_ROUTES_DIR, file), 'utf-8');
-      
-      // Match router.get/post/put/patch/delete calls
-      const routeMatches = content.matchAll(/router\.(get|post|put|patch|delete)\(['"]([^'"]+)['"]/g);
-      
-      for (const match of routeMatches) {
-        const method = match[1].toUpperCase();
-        const routePath = match[2];
+      for (const match of content.matchAll(routePattern)) {
+        const localPath = match[3] === '/' ? '' : `/${match[3].replace(/^\//, '')}`;
         routes.push({
-          method,
-          path: routePath,
+          method: match[1].toUpperCase(),
+          path: `${prefix.replace(/\/$/, '')}${localPath}` || '/',
           source: file,
         });
       }
+    }
+
+    // Health handlers are registered directly on the Express app.
+    for (const match of appSource.matchAll(/app\.(get|post|put|patch|delete)\(\s*(["'])([^"']+)\2/g)) {
+      routes.push({ method: match[1].toUpperCase(), path: match[3], source: 'app.ts' });
     }
   } catch (error) {
     console.error('Error extracting backend routes:', error.message);
@@ -69,13 +94,6 @@ function extractBackendRoutes() {
  */
 function extractFrontendRoutes() {
   const routes = [];
-  const apiPatterns = [
-    /fetch\(['"]([^'"]+)['"]/g,
-    /axios\.(get|post|put|patch|delete)\(['"]([^'"]+)['"]/g,
-    /api\.(get|post|put|patch|delete)\(['"]([^'"]+)['"]/g,
-    /\$fetch\(['"]([^'"]+)['"]/g,
-  ];
-  
   try {
     const findFiles = (dir) => {
       const files = [];
@@ -100,22 +118,26 @@ function extractFrontendRoutes() {
     for (const file of tsFiles) {
       const content = fs.readFileSync(file, 'utf-8');
       const relativePath = path.relative(FRONTEND_SRC_DIR, file);
-      
-      for (const pattern of apiPatterns) {
-        let match;
-        while ((match = pattern.exec(content)) !== null) {
-          const method = match[1] ? match[1].toUpperCase() : 'GET';
-          const routePath = match[2] || match[1];
-          
-          // Only include API routes
-          if (routePath.includes('/api/')) {
-            routes.push({
-              method,
-              path: routePath,
-              source: relativePath,
-            });
-          }
-        }
+      if (relativePath.includes(`${path.sep}docs${path.sep}`)) continue;
+
+      const callPattern = /(?:fetchWithAuth|fetch|axios\.(?:get|post|put|patch|delete)|api\.(?:get|post|put|patch|delete)|\$fetch)\s*(?:<[\s\S]{0,100}?>)?\s*\(\s*([`'"])([\s\S]*?)\1/g;
+      for (const match of content.matchAll(callPattern)) {
+        const routeTemplate = match[2].replace(/\$\{[^}]*\}/g, ':id');
+        const routeMatch = routeTemplate.match(/(?:\/api(?:\/v\d+)?\/[a-zA-Z0-9_/:.-]+|\/health)(?=[?$#\s'"`]|$)/);
+        if (!routeMatch) continue;
+
+        const routePath = routeMatch[0]
+          .replace(/\/+$/, '') || '/';
+        const callTail = content.slice(match.index + match[0].length, match.index + match[0].length + 180);
+        const nextCall = callTail.search(/(?:fetchWithAuth|fetch|axios\.(?:get|post|put|patch|delete)|api\.(?:get|post|put|patch|delete)|\$fetch)\s*(?:<[\s\S]{0,100}?>)?\s*\(/i);
+        const callOptions = nextCall < 0 ? callTail : callTail.slice(0, nextCall);
+        const options = callOptions.match(/method\s*:\s*["'](GET|POST|PUT|PATCH|DELETE)["']/i);
+        const axiosMethod = match[0].match(/axios\.(get|post|put|patch|delete)/i)?.[1];
+        routes.push({
+          method: (options?.[1] || axiosMethod || 'GET').toUpperCase(),
+          path: routePath,
+          source: relativePath,
+        });
       }
     }
   } catch (error) {
@@ -137,15 +159,19 @@ function checkRouteDrift(backendRoutes, frontendRoutes) {
   };
   
   // Create lookup maps
+  const normalizePath = (routePath) => routePath
+    .replace(/\{[^}]+\}/g, ':id')
+    .replace(/:[A-Za-z_][A-Za-z0-9_]*/g, ':id')
+    .replace(/\/+$/, '') || '/';
   const backendMap = new Map();
   backendRoutes.forEach(route => {
-    const key = `${route.method}:${route.path}`;
+    const key = `${route.method}:${normalizePath(route.path)}`;
     backendMap.set(key, route);
   });
   
   const frontendMap = new Map();
   frontendRoutes.forEach(route => {
-    const key = `${route.method}:${route.path}`;
+    const key = `${route.method}:${normalizePath(route.path)}`;
     frontendMap.set(key, route);
   });
   
@@ -154,7 +180,7 @@ function checkRouteDrift(backendRoutes, frontendRoutes) {
     const key = `${route.method}:${route.path}`;
     if (!backendMap.has(key)) {
       // Check if path exists but method differs
-      const pathExistsInBackend = backendRoutes.some(r => r.path === route.path);
+      const pathExistsInBackend = backendRoutes.some(r => normalizePath(r.path) === normalizePath(route.path));
       
       if (pathExistsInBackend) {
         drift.methodMismatch.push({
@@ -180,7 +206,7 @@ function checkRouteDrift(backendRoutes, frontendRoutes) {
   
   // Check critical routes
   CRITICAL_ROUTES.forEach(critical => {
-    const key = `${critical.method}:${critical.path}`;
+    const key = `${critical.method}:${normalizePath(critical.path)}`;
     const existsInBackend = backendMap.has(key);
     const existsInFrontend = frontendMap.has(key);
     

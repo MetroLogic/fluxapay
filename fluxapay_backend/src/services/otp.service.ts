@@ -1,4 +1,5 @@
 import bcrypt from 'bcrypt';
+import crypto from 'crypto';
 import { PrismaClient } from '../generated/client/client';
 import { prisma } from "../config/prisma";
 import { assertOtpEmailRateLimit } from './otpEmailRateLimiter';
@@ -9,7 +10,8 @@ export async function createOtp(merchantId: string, channel: 'email' | 'phone', 
     await assertOtpEmailRateLimit(email);
   }
 
-  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  // Use CSPRNG instead of Math.random() to prevent predictable OTP codes (closes #1047)
+  const otp = crypto.randomInt(100000, 1000000).toString();
   const hashedOtp = await bcrypt.hash(otp, 10);
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 min expiry
 

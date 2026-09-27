@@ -72,10 +72,11 @@ try {
    * Register SIGTERM / SIGINT / uncaughtException / unhandledRejection handlers.
    *
    * Shutdown sequence (see shutdown.service.ts for full details):
-   *  1. Stop cron jobs and payment monitor (no new background work)
+   *  1. Stop cron jobs and payment oracle / Horizon poller (no new background work)
    *  2. Close the HTTP server (drain in-flight requests)
-   *  3. Disconnect Prisma
-   *  4. Exit 0
+   *  3. Run registered cleanup callbacks (close Redis clients)
+   *  4. Disconnect Prisma
+   *  5. Exit 0
    *
    * A hard-kill timer fires after SHUTDOWN_TIMEOUT_MS (default 30 s) to
    * guarantee the process always terminates even when a request hangs.

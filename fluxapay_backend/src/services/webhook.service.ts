@@ -50,7 +50,8 @@ export class WebhookDispatcher {
       }
     });
 
-    const signature = generateWebhookSignature(JSON.parse(payload), merchant.webhook_secret, timestamp);
+    // Sign the exact bytes we send so receivers can verify against the raw body.
+    const signature = generateWebhookSignature(payload, merchant.webhook_secret, timestamp);
 
     let deliveryStatus: 'SUCCESS' | 'FAILED' = 'FAILED';
 
@@ -724,7 +725,9 @@ export async function deliverWebhook(
     // Verify timestamp before sending (ensures our timestamp is valid)
     verifyWebhookTimestamp(timestamp);
     
-    const signature = generateWebhookSignature(payload, merchantSecret, timestamp);
+    // Serialize once and sign the exact body we send.
+    const body = JSON.stringify(payload);
+    const signature = generateWebhookSignature(body, merchantSecret, timestamp);
 
     const response = await fetch(endpointUrl, {
       method: "POST",
@@ -733,7 +736,7 @@ export async function deliverWebhook(
         "X-FluxaPay-Signature": signature,
         "X-FluxaPay-Timestamp": timestamp,
       },
-      body: JSON.stringify(payload),
+      body,
       signal: controller.signal,
     });
 
@@ -757,13 +760,24 @@ export async function deliverWebhook(
   }
 }
 
-// Signs with per-merchant secret using timestamp.payload signing string
+/**
+ * Signs a webhook with the per-merchant secret:
+ *   HMAC-SHA256(secret, `${timestamp}.${body}`)
+ *
+ * Binding the timestamp into the signed string lets receivers reject replayed
+ * deliveries: the `X-FluxaPay-Timestamp` header cannot be altered without
+ * invalidating `X-FluxaPay-Signature`.
+ *
+ * Pass the raw body string that is actually sent whenever possible; an object
+ * is serialized with JSON.stringify, which must match the sent body exactly.
+ */
 export function generateWebhookSignature(
-  payload: Record<string, unknown>,
+  payload: Record<string, unknown> | string,
   merchantSecret: string,
   timestamp: string
 ): string {
-  const signingString = `${timestamp}.${JSON.stringify(payload)}`;
+  const body = typeof payload === "string" ? payload : JSON.stringify(payload);
+  const signingString = `${timestamp}.${body}`;
   return crypto.createHmac("sha256", merchantSecret).update(signingString).digest("hex");
 }
 

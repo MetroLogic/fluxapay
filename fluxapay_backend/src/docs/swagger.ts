@@ -286,21 +286,49 @@ const options: swaggerJsdoc.Options = {
 
 export const specs = swaggerJsdoc(options);
 
-for (const pathItem of Object.values(specs.paths ?? {})) {
-    for (const operation of Object.values(pathItem ?? {})) {
-        if (!operation || typeof operation !== 'object' || !('responses' in operation)) {
-            continue;
-        }
+const methods = ['get', 'post', 'put', 'patch', 'delete', 'options', 'head', 'trace'];
+const errorResponse = {
+    description: 'The request failed.',
+    content: {
+        'application/json': {
+            schema: { $ref: '#/components/schemas/ErrorResponse' },
+        },
+    },
+};
 
-        const responses = (operation as {
-            responses?: Record<string, { headers?: Record<string, unknown> }>;
-        }).responses;
+for (const [path, pathItem] of Object.entries(specs.paths || {})) {
+    for (const method of methods) {
+        const operation = (pathItem as Record<string, any>)[method];
+        if (!operation) continue;
 
-        for (const response of Object.values(responses ?? {})) {
-            response.headers = {
-                ...response.headers,
-                'X-FluxaPay-Request-ID': {
-                    $ref: '#/components/headers/FluxaPayRequestId',
+        const segments = path
+            .split('/')
+            .filter(Boolean)
+            .map((segment) => segment.startsWith('{')
+                ? `by_${segment.slice(1, -1)}`
+                : segment)
+            .join('_');
+        operation.operationId ||= `${method}_${segments}`
+            .replace(/[^a-zA-Z0-9_]/g, '_')
+            .replace(/_+/g, '_');
+
+        const readablePath = path.replace(/[{}]/g, '');
+        operation.summary ||= `${method.toUpperCase()} ${readablePath}`;
+        operation.description ||= `${operation.summary}.`;
+        operation.tags ||= ['API'];
+        operation.responses ||= {};
+        operation.responses.default ||= errorResponse;
+
+        for (const [status, response] of Object.entries(operation.responses) as [string, any][]) {
+            response.description ||= status === 'default'
+                ? errorResponse.description
+                : `${method.toUpperCase()} ${readablePath} response (${status}).`;
+            if (status === '204' || status === '304' || response.content) continue;
+            response.content = {
+                'application/json': {
+                    schema: status === 'default' || Number(status) >= 400
+                        ? { $ref: '#/components/schemas/ErrorResponse' }
+                        : { type: 'object', additionalProperties: true },
                 },
             };
         }

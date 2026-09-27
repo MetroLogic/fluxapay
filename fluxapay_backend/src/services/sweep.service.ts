@@ -21,6 +21,7 @@ import {
   getMaxSweepRetryAttempts,
   getSweepMinBalanceUsdc,
 } from "../config/sweep.config";
+import { KMSFactory } from "./kms";
 
 
 export interface SweepOptions {
@@ -137,6 +138,32 @@ export class SweepService {
       orderBy: { confirmed_at: "asc" },
       take: limit,
     });
+  }
+
+  public async previewPaidPayments(limit = 200) {
+    const payments = await prisma.payment.findMany({
+      where: {
+        swept: false,
+        stellar_address: { not: null },
+        status: { in: ["confirmed", "overpaid", "paid"] },
+        sweep_needs_manual_review: false,
+      },
+      include: { merchant: { select: { business_name: true } } },
+      orderBy: { confirmed_at: "asc" },
+      take: limit,
+    });
+
+    return payments.map((payment) => ({
+      id: payment.id,
+      merchantId: payment.merchantId,
+      merchantName: payment.merchant.business_name,
+      amount: Number(payment.amount),
+      currency: payment.currency,
+      confirmed: true,
+      createdAt: payment.created_at.toISOString(),
+      minAgeMet: true,
+      notAlreadySwept: true,
+    }));
   }
 
   private async submitUsdcSweepTx(params: {
@@ -366,11 +393,34 @@ export class SweepService {
               seedVersion,
             );
           } else {
-            kp = await this.hdWalletService.regenerateKeypair(
-              p.merchantId,
-              p.id,
-              seedVersion,
-            );
+            // Pool-address path (fixes #1006): when neither derivation_path nor
+            // encrypted_key_data is set the payment was assigned a randomly-
+            // generated pool address whose secret key was stored encrypted in
+            // DepositAddress.secret_key. Look that up and decrypt via KMS
+            // instead of trying (and always failing) to re-derive via HD wallet.
+            const depositAddr = p.stellar_address
+              ? await prisma.depositAddress.findFirst({
+                  where: { public_key: p.stellar_address },
+                  select: { secret_key: true },
+                })
+              : null;
+
+            if (depositAddr?.secret_key) {
+              const kmsProvider = KMSFactory.getProvider();
+              const decryptedSecret = kmsProvider.decrypt
+                ? await kmsProvider.decrypt(depositAddr.secret_key)
+                : depositAddr.secret_key;
+              const keypair = Keypair.fromSecret(decryptedSecret);
+              kp = { publicKey: keypair.publicKey(), secretKey: keypair.secret() };
+            } else {
+              // Last-resort HD derivation — will fail the address-mismatch
+              // guard below if the address truly came from the pool.
+              kp = await this.hdWalletService.regenerateKeypair(
+                p.merchantId,
+                p.id,
+                seedVersion,
+              );
+            }
           }
 
           if (p.stellar_address && kp.publicKey !== p.stellar_address) {

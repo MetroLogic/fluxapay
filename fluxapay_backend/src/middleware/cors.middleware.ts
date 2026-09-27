@@ -248,18 +248,20 @@ export function createCorsMiddleware() {
 }
 
 /**
- * Default CORS middleware instance
- * For most use cases, use this directly: app.use(corsMiddleware)
- * The middleware is lazily initialized on first use
+ * Default CORS middleware.
+ *
+ * Options are evaluated eagerly once at application startup (when this module is
+ * first imported).  This guarantees that validated environment variables – which
+ * are loaded before any route handler runs – are used consistently.
+ *
+ * The previous lazy-singleton pattern deferred evaluation to the first inbound
+ * request, which meant a misconfigured or missing CORS_ORIGINS value could go
+ * undetected until the first cross-origin call arrived in production (#1049).
+ *
+ * For test resets, call resetCorsOptions() to force a fresh evaluation on the
+ * next request.
  */
-let _corsMiddleware: ReturnType<typeof cors> | undefined;
-
-function getCorsMiddleware(): ReturnType<typeof cors> {
-  if (!_corsMiddleware) {
-    _corsMiddleware = cors(getCorsOptions());
-  }
-  return _corsMiddleware;
-}
+let _corsMiddleware: ReturnType<typeof cors> = cors(getCorsOptions());
 
 // Export a wrapper function that behaves like middleware
 export const corsMiddleware = (
@@ -267,14 +269,14 @@ export const corsMiddleware = (
   res: any,
   next: () => void
 ) => {
-  const middleware = getCorsMiddleware();
-  return middleware(req, res, next);
+  return _corsMiddleware(req, res, next);
 };
 
 /**
- * Reset CORS options (useful for testing)
+ * Reset CORS options (useful for testing).
+ * Forces getCorsOptions() to be re-evaluated on the next request so that changes
+ * to environment variables (e.g. in test setup) take effect.
  */
 export function resetCorsOptions(): void {
-  // This function exists for testing purposes
-  // The actual reset happens via environment variables
+  _corsMiddleware = cors(getCorsOptions());
 }

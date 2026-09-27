@@ -7,6 +7,7 @@ import { sendSecurityAlertEmail } from "./email.service";
 import { createAuditLog } from "./audit.service";
 import { prisma } from "../config/prisma";
 import Redis from "ioredis";
+import { closeRedisClient } from "../utils/redisClose.util";
 
 const REFRESH_TOKEN_EXPIRY_DAYS = 30;
 const FAILED_LOGIN_THRESHOLD = 10;
@@ -27,6 +28,13 @@ function getRedisClient(): Redis {
     redisClient = new Redis(redisUrl);
   }
   return redisClient;
+}
+
+/** Closes the refresh-token blocklist Redis connection, if one was opened (used on shutdown). */
+export async function closeAuthRedisClient(): Promise<void> {
+  const client = redisClient;
+  redisClient = null;
+  await closeRedisClient(client);
 }
 
 /** Max failed login attempts per IP (across all emails) before a 429 lockout. Env-configurable. */
