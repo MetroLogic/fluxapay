@@ -337,4 +337,176 @@ describe("runPaymentExpiryReminderJob – notification preference checks", () =>
       expect(sendCheckoutExpiryReminderEmail).not.toHaveBeenCalled();
     });
   });
+
+  describe("payment.expiring_soon webhook event", () => {
+    it("fires webhook with payment_expiring_soon event type", async () => {
+      const payment = makePayment("pay-webhook-001", MERCHANT_A);
+      mockPrismaClient.payment.findMany.mockResolvedValue([payment]);
+      mockPrismaClient.merchant.findMany.mockResolvedValue([
+        {
+          id: MERCHANT_A,
+          email: "a@example.com",
+          business_name: "Alpha",
+          email_notifications_enabled: true,
+          notify_on_payment: true,
+        },
+      ]);
+
+      (getNotificationPreferences as jest.Mock).mockResolvedValue({
+        merchantId: MERCHANT_A,
+        payment_expiry_reminder: true,
+        reminder_minutes_before: 5,
+      });
+
+      await runPaymentExpiryReminderJob();
+
+      expect(createAndDeliverWebhook).toHaveBeenCalledWith(
+        MERCHANT_A,
+        "payment_expiring_soon",
+        expect.any(Object),
+        "pay-webhook-001",
+        undefined,
+        "pay-webhook-001:reminder"
+      );
+    });
+
+    it("includes all required fields in webhook payload", async () => {
+      const payment = makePayment("pay-webhook-002", MERCHANT_A, 3);
+      mockPrismaClient.payment.findMany.mockResolvedValue([payment]);
+      mockPrismaClient.merchant.findMany.mockResolvedValue([
+        {
+          id: MERCHANT_A,
+          email: "a@example.com",
+          business_name: "Alpha",
+          email_notifications_enabled: true,
+          notify_on_payment: true,
+        },
+      ]);
+
+      (getNotificationPreferences as jest.Mock).mockResolvedValue({
+        merchantId: MERCHANT_A,
+        payment_expiry_reminder: true,
+        reminder_minutes_before: 5,
+      });
+
+      await runPaymentExpiryReminderJob();
+
+      const webhookCall = (createAndDeliverWebhook as jest.Mock).mock.calls[0];
+      const payload = webhookCall[2];
+
+      expect(payload).toMatchObject({
+        payment_id: "pay-webhook-002",
+        amount: "10.00",
+        currency: "USDC",
+        customer_email: "customer@example.com",
+        checkout_url: "https://pay.fluxapay.com/p/test",
+        expires_at: expect.any(String),
+        minutes_remaining: 3,
+      });
+
+      // Verify expires_at is ISO 8601 format
+      expect(new Date(payload.expires_at).toISOString()).toBe(payload.expires_at);
+    });
+
+    it("calculates minutes_remaining correctly", async () => {
+      const payment = makePayment("pay-webhook-003", MERCHANT_A, 2);
+      mockPrismaClient.payment.findMany.mockResolvedValue([payment]);
+      mockPrismaClient.merchant.findMany.mockResolvedValue([
+        {
+          id: MERCHANT_A,
+          email: "a@example.com",
+          business_name: "Alpha",
+          email_notifications_enabled: true,
+          notify_on_payment: true,
+        },
+      ]);
+
+      (getNotificationPreferences as jest.Mock).mockResolvedValue({
+        merchantId: MERCHANT_A,
+        payment_expiry_reminder: true,
+        reminder_minutes_before: 5,
+      });
+
+      await runPaymentExpiryReminderJob();
+
+      const payload = (createAndDeliverWebhook as jest.Mock).mock.calls[0][2];
+      expect(payload.minutes_remaining).toBe(2);
+    });
+
+    it("uses stable event_id for idempotency", async () => {
+      const payment = makePayment("pay-webhook-004", MERCHANT_A);
+      mockPrismaClient.payment.findMany.mockResolvedValue([payment]);
+      mockPrismaClient.merchant.findMany.mockResolvedValue([
+        {
+          id: MERCHANT_A,
+          email: "a@example.com",
+          business_name: "Alpha",
+          email_notifications_enabled: true,
+          notify_on_payment: true,
+        },
+      ]);
+
+      (getNotificationPreferences as jest.Mock).mockResolvedValue({
+        merchantId: MERCHANT_A,
+        payment_expiry_reminder: true,
+        reminder_minutes_before: 5,
+      });
+
+      await runPaymentExpiryReminderJob();
+
+      const webhookCall = (createAndDeliverWebhook as jest.Mock).mock.calls[0];
+      const eventId = webhookCall[5];
+      
+      expect(eventId).toBe("pay-webhook-004:reminder");
+    });
+
+    it("continues processing other payments if webhook fails for one", async () => {
+      const payments = [
+        makePayment("pay-webhook-005", MERCHANT_A),
+        makePayment("pay-webhook-006", MERCHANT_B),
+      ];
+      mockPrismaClient.payment.findMany.mockResolvedValue(payments);
+      mockPrismaClient.merchant.findMany.mockResolvedValue([
+        {
+          id: MERCHANT_A,
+          email: "a@example.com",
+          business_name: "Alpha",
+          email_notifications_enabled: true,
+          notify_on_payment: true,
+        },
+        {
+          id: MERCHANT_B,
+          email: "b@example.com",
+          business_name: "Beta",
+          email_notifications_enabled: true,
+          notify_on_payment: true,
+        },
+      ]);
+
+      (getNotificationPreferences as jest.Mock).mockImplementation(
+        async (merchantId: string) => ({
+          merchantId,
+          payment_expiry_reminder: true,
+          reminder_minutes_before: 5,
+        })
+      );
+
+      // Mock webhook to fail for first payment
+      (createAndDeliverWebhook as jest.Mock)
+        .mockRejectedValueOnce(new Error("Webhook endpoint unreachable"))
+        .mockResolvedValueOnce(undefined);
+
+      const result = await runPaymentExpiryReminderJob();
+
+      expect(result.processed).toBe(2);
+      expect(result.errors.length).toBe(1);
+      expect(result.errors[0]).toMatchObject({
+        paymentId: "pay-webhook-005",
+        error: expect.stringContaining("webhook"),
+      });
+      
+      // Second webhook should still be sent
+      expect(createAndDeliverWebhook).toHaveBeenCalledTimes(2);
+    });
+  });
 });

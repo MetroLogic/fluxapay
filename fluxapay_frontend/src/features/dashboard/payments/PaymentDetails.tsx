@@ -35,6 +35,8 @@ interface PaymentDetailsProps {
     reasonNote?: string;
   }) => Promise<void>;
   onOpenRefundsSection: () => void;
+  activeTab?: string;
+  onTabChange?: (tab: string) => void;
 }
 
 // Stellar network base fee in XLM (0.00001 XLM per operation, typically 1 op for a refund)
@@ -124,7 +126,10 @@ export const PaymentDetails = ({
   refunds,
   onCreateRefund,
   onOpenRefundsSection,
+  activeTab: externalActiveTab,
+  onTabChange: externalOnTabChange,
 }: PaymentDetailsProps) => {
+  const [internalActiveTab, setInternalActiveTab] = useState<string>("details");
   const [refundType, setRefundType] = useState<"full" | "partial">("full");
   const [partialAmount, setPartialAmount] = useState(payment.amount.toString());
   const [reason, setReason] = useState<RefundReason>("customer_request");
@@ -132,6 +137,10 @@ export const PaymentDetails = ({
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showFeeEstimate, setShowFeeEstimate] = useState(false);
+
+  // Use external tab state if provided, otherwise use internal state
+  const activeTab = externalActiveTab ?? internalActiveTab;
+  const setActiveTab = externalOnTabChange ?? setInternalActiveTab;
 
   const copyToClipboard = async (text: string) => {
     try {
@@ -249,7 +258,39 @@ export const PaymentDetails = ({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      {/* Tab Navigation */}
+      <div className="flex gap-1 border-b">
+        <button
+          onClick={() => setActiveTab("details")}
+          className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
+            activeTab === "details"
+              ? "border-primary text-primary"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          Details
+        </button>
+        <button
+          onClick={() => setActiveTab("refunds")}
+          className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
+            activeTab === "refunds"
+              ? "border-primary text-primary"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          Refunds
+          {paymentRefunds.length > 0 && (
+            <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-xs">
+              {paymentRefunds.length}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {/* Details Tab */}
+      {activeTab === "details" && (
+        <>
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <div className="space-y-4 rounded-2xl border bg-muted/20 p-5">
           <div className="flex items-center gap-2 font-semibold text-primary">
             <User className="h-4 w-4" />
@@ -433,21 +474,40 @@ export const PaymentDetails = ({
         </div>
       </div>
 
-      <div className="space-y-4 rounded-2xl border bg-card p-4 md:p-5">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2 font-semibold text-primary">
-            <RefreshCcw className="h-4 w-4" />
-            <h3>Refund Actions</h3>
+          <div className="flex flex-col gap-3 pt-2 sm:flex-row">
+            <Button 
+              className="flex-1 gap-2"
+              onClick={() => {
+                const url = payment.stellarExpertUrl || (payment.txHash ? getStellarExpertTxUrl(payment.txHash) : null);
+                if (url) window.open(url, "_blank");
+              }}
+              disabled={!payment.txHash && !payment.stellarExpertUrl}
+            >
+              <ExternalLink className="h-4 w-4" />
+              Open in Explorer
+            </Button>
           </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            className="w-full sm:w-auto"
-            onClick={onOpenRefundsSection}
-          >
-            View All Refunds
-          </Button>
-        </div>
+        </>
+      )}
+
+      {/* Refunds Tab */}
+      {activeTab === "refunds" && (
+        <>
+          <div className="space-y-4 rounded-2xl border bg-card p-4 md:p-5">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-2 font-semibold text-primary">
+                <RefreshCcw className="h-4 w-4" />
+                <h3>Refund Actions</h3>
+              </div>
+              <Button
+                variant="secondary"
+                size="sm"
+                className="w-full sm:w-auto"
+                onClick={onOpenRefundsSection}
+              >
+                View All Refunds
+              </Button>
+            </div>
 
         {!canRefundCurrency && (
           <p className="rounded-lg bg-muted p-3 text-sm text-muted-foreground">
@@ -641,6 +701,8 @@ export const PaymentDetails = ({
           </div>
         )}
       </div>
+        </>
+      )}
 
       <div className="flex flex-col gap-3 pt-2 sm:flex-row">
         <Button 
