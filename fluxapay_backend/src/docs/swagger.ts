@@ -90,6 +90,12 @@ const options: swaggerJsdoc.Options = {
                             description: 'Optional Customer id (must belong to the authenticated merchant)',
                             example: 'clxyz123customer',
                         },
+                        note: {
+                            type: 'string',
+                            maxLength: 500,
+                            description: 'Optional internal note for merchant reference (not exposed to customer)',
+                            example: 'Order #1234 - Support Ticket #567',
+                        },
                         metadata: {
                             type: 'object',
                             additionalProperties: true,

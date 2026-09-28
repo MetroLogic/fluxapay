@@ -71,6 +71,12 @@ export const validatePayment = [
     .trim()
     .isLength({ max: 500 })
     .withMessage('description must be a string with a maximum of 500 characters'),
+  body('note')
+    .optional()
+    .isString()
+    .trim()
+    .isLength({ max: 500 })
+    .withMessage('note must be a string with a maximum of 500 characters'),
   body('metadata')
     .optional()
     .isObject()
@@ -115,5 +121,15 @@ export const validatePayment = [
     .isInt({ gt: 0 })
     .withMessage('expires_in_seconds must be a positive integer')
     .toInt(),
+  validate,
+];
+
+export const validateUpdatePayment = [
+  body('note')
+    .optional({ nullable: true })
+    .isString()
+    .trim()
+    .isLength({ max: 500 })
+    .withMessage('note must be a string with a maximum of 500 characters'),
   validate,
 ];

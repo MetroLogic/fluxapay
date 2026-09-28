@@ -24,6 +24,7 @@ export const createPayment = async (req: Request, res: Response) => {
       currency,
       customer_email,
       description,
+      note,
       metadata,
       success_url,
       cancel_url,
@@ -91,6 +92,7 @@ export const createPayment = async (req: Request, res: Response) => {
       currency,
       customer_email,
       description,
+      note,
       metadata: metadata || {},
       success_url,
       cancel_url,
@@ -616,6 +618,23 @@ export const getAdminPayments = async (req: Request, res: Response) => {
   } catch (error: unknown) {
     console.error("Error in getAdminPayments:", error);
     return res.status(500).json({ error: "Internal Server Error" });
+  }
+};
+
+export const updatePayment = async (req: Request, res: Response) => {
+  try {
+    const merchantId = await validateUserId(req as AuthRequest);
+    if (!merchantId) {
+      return sendApiError(res, apiError(401, ErrorCode.UNAUTHORIZED, "Unauthorized"));
+    }
+
+    const paymentId = String(req.params.id);
+    const { note } = req.body;
+
+    const updated = await PaymentService.updatePayment(paymentId, merchantId, { note });
+    return res.json(updated);
+  } catch (error: unknown) {
+    return sendApiError(res, error);
   }
 };
 

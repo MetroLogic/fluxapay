@@ -363,6 +363,7 @@ model Payment {
   fx_rate_stale      Boolean  @default(false)
   customer_email     String
   description        String?
+  note               String?
   metadata           Json
   expiration         DateTime
   status             PaymentStatus   @default(pending)
