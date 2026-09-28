@@ -176,5 +176,30 @@ describe("DepositAddressService - Pool Exhaustion & Alerting (#751)", () => {
         DepositAddressService.allocateAddress("pay_depleted_test"),
       ).rejects.toThrow(PoolExhaustedError);
     });
+
+    it("fires an immediate ops alert (with merchant ID and timestamp) when a race condition depletes the pool below the 80% pre-check", async () => {
+      // Stats snapshot shows utilization at 0.5 (< 0.8), so the pre-check
+      // above would not have sent an alert. But a concurrent allocation
+      // depletes the pool before the row-locking query runs.
+      mockPrisma.depositAddress.groupBy.mockResolvedValueOnce([
+        { status: "available", _count: { status: 5 } },
+        { status: "assigned", _count: { status: 5 } },
+      ]);
+      mockPrisma.$queryRaw.mockResolvedValueOnce([]);
+
+      await expect(
+        DepositAddressService.allocateAddress("pay_race_test", "merchant_123"),
+      ).rejects.toThrow(PoolExhaustedError);
+
+      expect(sendDepositPoolAlert).toHaveBeenCalledTimes(1);
+      expect(sendDepositPoolAlert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          utilizationPct: 0.5,
+          totalCount: 10,
+          merchantId: "merchant_123",
+          timestamp: expect.any(String),
+        }),
+      );
+    });
   });
 });

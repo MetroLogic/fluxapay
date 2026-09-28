@@ -13,7 +13,7 @@ import { uploadToCloudinary, deleteFromCloudinary } from "./cloudinary.service";
 import { SubmitKycInput, UpdateKycStatusInput } from "../schemas/kyc.schema";
 import { logKycDecision } from "./audit.service";
 import { KYCStatus as AuditKYCStatus } from "../types/audit.types";
-import { validateKycUploadFile } from "../utils/kycUploadValidation.util";
+import { validateKycUploadFile, KYC_MAX_FILE_SIZE_BYTES } from "../utils/kycUploadValidation.util";
 import { scanFile, handleScanFailure } from "../utils/fileScan.util";
 
 
@@ -130,10 +130,20 @@ export async function uploadKycDocumentService(
   }
 
   // ── 2. File size limit (enforced at middleware layer for DoS protection,
-  //       re-checked here for defense-in-depth)
-  const maxSize = 10 * 1024 * 1024; // 10MB
-  if (file.size > maxSize) {
-    throw apiError(413, ErrorCode.FILE_TOO_LARGE, "File size exceeds 10MB limit");
+  //       re-checked here for defense-in-depth in case this service is
+  //       invoked directly and Multer's `limits.fileSize` is bypassed).
+  //       Configurable via MAX_KYC_FILE_SIZE_BYTES (defaults to 10MB).
+  if (file.size > KYC_MAX_FILE_SIZE_BYTES) {
+    // Nothing has been written to disk (Multer uses memory storage), so
+    // there is no temp file to clean up — dropping the reference to the
+    // in-memory buffer here is sufficient to let it be garbage collected
+    // immediately instead of being held onto for the rest of the request.
+    file.buffer = Buffer.alloc(0);
+    throw apiError(
+      413,
+      ErrorCode.FILE_TOO_LARGE,
+      `File size exceeds ${Math.floor(KYC_MAX_FILE_SIZE_BYTES / (1024 * 1024))}MB limit`,
+    );
   }
 
   // ── 3. Additional MIME/magic-byte validation

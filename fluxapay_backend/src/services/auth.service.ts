@@ -2,6 +2,7 @@ import { apiError } from "../helpers/apiError.helper";
 import { ErrorCode } from "../types/errors";
 import { PrismaClient } from "../generated/client/client";
 import bcrypt from "bcrypt";
+import crypto from "crypto";
 import { generateAccessToken, generateRefreshTokenPair } from "../helpers/jwt.helper";
 import { sendSecurityAlertEmail } from "./email.service";
 import { createAuditLog } from "./audit.service";
@@ -242,68 +243,40 @@ export async function refreshAccessToken(data: {
   const { refreshToken, ipAddress, userAgent } = data;
   const redis = getRedisClient();
 
-  // First, check if this token is already in the blocklist (reuse detection)
-  const tokenHash = await bcrypt.hash(refreshToken, BCRYPT_COST);
-  const blocklistKey = `${REFRESH_TOKEN_BLOCKLIST_PREFIX}${tokenHash}`;
-  const isBlocklisted = await redis.exists(blocklistKey);
+  // Deterministic fingerprint of the presented token, used as the Redis
+  // claim/blocklist key. bcrypt.hash() must never be used to build a lookup
+  // key — it's salted randomly on every call, so the key computed here when
+  // *checking* would never equal the key computed later when *setting* it,
+  // making the blocklist check a permanent no-op.
+  const tokenFingerprint = crypto.createHash("sha256").update(refreshToken).digest("hex");
+  const blocklistKey = `${REFRESH_TOKEN_BLOCKLIST_PREFIX}${tokenFingerprint}`;
 
-  if (isBlocklisted) {
-    // Token reuse detected — this is a security breach indicator
-    // Find the merchant and invalidate all their tokens
-    const activeTokens = await prisma.refreshToken.findMany({
-      where: {
-        is_revoked: false,
-        is_reused: false,
-        expires_at: {
-          gte: new Date(),
-        },
-      },
-      include: {
-        merchant: true,
-      },
-    });
+  // Atomically claim this token for rotation *before* touching the DB. If
+  // the key already exists, this exact token was already rotated (or is
+  // being rotated right now by a concurrent request) — either way this call
+  // is a reuse/replay attempt and must be rejected immediately, without a
+  // check-then-set race window.
+  const claimTtlSeconds = REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60;
+  const claimed = await redis.set(blocklistKey, "1", "EX", claimTtlSeconds, "NX");
 
-    // Find which merchant this token belongs to by checking hashes
-    let merchantId = null;
-    for (const token of activeTokens) {
-      const isValid = await bcrypt.compare(refreshToken, token.token_hash);
-      if (isValid) {
-        merchantId = token.merchantId;
-        break;
-      }
-    }
+  if (claimed !== "OK") {
+    // Token reuse detected — this is a security breach indicator.
+    // Identify the merchant (searching revoked-but-not-yet-flagged tokens,
+    // since the legitimate rotation already marked the original as revoked)
+    // and invalidate every active session for them.
+    const reuseResult = await detectTokenReuse({ refreshToken });
 
-    if (merchantId) {
-      // Invalidate all tokens for this merchant
-      await invalidateAllMerchantTokens(merchantId);
-
-      // Mark the token as reused
-      await prisma.refreshToken.updateMany({
-        where: { merchantId, token_hash: { in: activeTokens.map(t => t.token_hash) } },
-        data: { is_reused: true },
-      });
-
-      // Create audit log entry
+    if (reuseResult.detected && reuseResult.merchantId) {
       await createAuditLog({
         action: "token_reuse_detected",
         entityType: "merchant",
-        entityId: merchantId,
+        entityId: reuseResult.merchantId,
         details: {
           ip_address: ipAddress,
           user_agent: userAgent,
           message: "Refresh token reuse detected - possible token theft",
         },
-      });
-
-      // Send security alert email
-      const merchant = await prisma.merchant.findUnique({ where: { id: merchantId } });
-      if (merchant) {
-        await sendSecurityAlertEmail({
-          to: merchant.email,
-          subject: "Security Alert: Potential Token Theft Detected",
-          message: "We detected a potential security incident with your account. All sessions have been invalidated for your protection. Please login again.",
-        });
-      }
+      }).catch(err => console.error("Failed to create audit log:", err));
     }
 
     throw apiError(
@@ -342,16 +315,9 @@ export async function refreshAccessToken(data: {
     throw apiError(401, ErrorCode.INVALID_REFRESH_TOKEN, "Invalid or expired refresh token");
   }
 
-  // Add old token to Redis blocklist with TTL matching token expiration
-  const tokenExpiryMs = matchedToken.expires_at.getTime() - Date.now();
-  const tokenExpirySeconds = Math.max(1, Math.ceil(tokenExpiryMs / 1000));
-  
-  try {
-    await redis.setex(blocklistKey, tokenExpirySeconds, "1");
-  } catch (err) {
-    console.error("Failed to add token to blocklist:", err);
-    // Log but don't fail the refresh — continue with rotation
-  }
+  // Note: the old token was already claimed in the Redis blocklist above,
+  // atomically, before this DB lookup ran — so it's already unusable for a
+  // second rotation regardless of how long this DB update takes.
 
   // Revoke the old refresh token in database
   await prisma.refreshToken.update({
@@ -465,7 +431,7 @@ export async function logoutAll(data: {
 /**
  * Invalidate all refresh tokens for a merchant (security incident response)
  */
-async function invalidateAllMerchantTokens(merchantId: string) {
+export async function invalidateAllMerchantTokens(merchantId: string) {
   await prisma.refreshToken.updateMany({
     where: {
       merchantId,
