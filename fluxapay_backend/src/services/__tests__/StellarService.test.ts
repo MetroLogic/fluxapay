@@ -127,6 +127,88 @@ describe('StellarService', () => {
         });
     });
 
+    describe('retryWithBackoff', () => {
+        beforeEach(() => {
+            jest.useFakeTimers();
+            jest.spyOn(Math, 'random').mockReturnValue(0);
+            (stellarService as any).MAX_RETRIES = 4;
+            (stellarService as any).BASE_DELAY_MS = 100;
+        });
+
+        afterEach(() => {
+            jest.useRealTimers();
+            jest.restoreAllMocks();
+        });
+
+        it('should apply exponential backoff between retries and respect the retry limit', async () => {
+            const retryableError = new Error('Temporary horizon outage') as any;
+            retryableError.response = { status: 503 };
+
+            const operation = jest
+                .fn()
+                .mockRejectedValueOnce(retryableError)
+                .mockRejectedValueOnce(retryableError)
+                .mockRejectedValueOnce(retryableError)
+                .mockResolvedValue('success');
+
+            const setTimeoutSpy = jest.spyOn(global, 'setTimeout');
+            const promise = (stellarService as any).retryWithBackoff(
+                operation,
+                'createAndFundAccount',
+                { destination: 'G_DEST' }
+            );
+
+            await Promise.resolve();
+            expect(operation).toHaveBeenCalledTimes(1);
+            expect(setTimeoutSpy).toHaveBeenNthCalledWith(1, expect.any(Function), 100);
+
+            await jest.advanceTimersByTimeAsync(100);
+            await Promise.resolve();
+            expect(operation).toHaveBeenCalledTimes(2);
+            expect(setTimeoutSpy).toHaveBeenNthCalledWith(2, expect.any(Function), 200);
+
+            await jest.advanceTimersByTimeAsync(200);
+            await Promise.resolve();
+            expect(operation).toHaveBeenCalledTimes(3);
+            expect(setTimeoutSpy).toHaveBeenNthCalledWith(3, expect.any(Function), 400);
+
+            await jest.advanceTimersByTimeAsync(400);
+            await Promise.resolve();
+
+            await expect(promise).resolves.toBe('success');
+            expect(operation).toHaveBeenCalledTimes(4);
+        });
+
+        it('should rethrow the last error after all retries are exhausted', async () => {
+            const retryableError = new Error('Persistent outage') as any;
+            retryableError.response = { status: 503 };
+
+            const operation = jest.fn().mockRejectedValue(retryableError);
+            const setTimeoutSpy = jest.spyOn(global, 'setTimeout');
+
+            const promise = (stellarService as any).retryWithBackoff(
+                operation,
+                'createAndFundAccount',
+                { destination: 'G_DEST' }
+            );
+
+            const assertion = expect(promise).rejects.toThrow(
+                'createAndFundAccount failed after 4 attempts: Persistent outage'
+            );
+
+            await jest.advanceTimersByTimeAsync(100);
+            await Promise.resolve();
+            await jest.advanceTimersByTimeAsync(200);
+            await Promise.resolve();
+            await jest.advanceTimersByTimeAsync(400);
+            await Promise.resolve();
+
+            await assertion;
+            expect(operation).toHaveBeenCalledTimes(4);
+            expect(setTimeoutSpy.mock.calls.map(([, delay]) => delay)).toEqual([100, 200, 400]);
+        });
+    });
+
     describe('prepareAccount flow logic', () => {
         it('should only add trustline if account exists but lacks trustline', async () => {
             // Mock account exists
