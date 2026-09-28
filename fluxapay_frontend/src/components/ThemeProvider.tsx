@@ -1,6 +1,15 @@
 "use client";
 
-import { ReactNode, useEffect, useState } from "react";
+import { ReactNode, createContext, useContext, useEffect, useState } from "react";
+
+interface ThemeContextType {
+  isDark: boolean;
+  isMounted: boolean;
+  toggleTheme: () => void;
+  setTheme: (isDark: boolean) => void;
+}
+
+const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [isMounted, setIsMounted] = useState(false);
@@ -33,24 +42,27 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     }
   }, [isDark, isMounted]);
 
-  return children;
-}
-
-export function useTheme() {
-  const [isDark, setIsDark] = useState(false);
-  const [isMounted, setIsMounted] = useState(false);
-
-  useEffect(() => {
-    const savedTheme = localStorage.getItem("theme");
-    const prefersDark = savedTheme ? savedTheme === "dark" : window.matchMedia("(prefers-color-scheme: dark)").matches;
-    setIsDark(prefersDark);
-    setIsMounted(true);
-  }, []);
-
   const toggleTheme = () => {
     if (!isMounted) return;
     setIsDark(prev => !prev);
   };
 
-  return { isDark, isMounted, toggleTheme };
+  const setTheme = (value: boolean) => {
+    if (!isMounted) return;
+    setIsDark(value);
+  };
+
+  return (
+    <ThemeContext.Provider value={{ isDark, isMounted, toggleTheme, setTheme }}>
+      {children}
+    </ThemeContext.Provider>
+  );
+}
+
+export function useTheme() {
+  const context = useContext(ThemeContext);
+  if (context === undefined) {
+    throw new Error("useTheme must be used within a ThemeProvider");
+  }
+  return context;
 }
