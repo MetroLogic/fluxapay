@@ -14,6 +14,11 @@ import { toast } from "react-hot-toast";
 import { api } from "@/lib/api";
 import { toastApiError } from "@/lib/toastApiError";
 import { COUNTRIES, ID_TYPES, validateKycFile } from "@/services/kyc";
+import {
+  validateBusinessRegistration,
+  getRegistrationFormat,
+  hasRegistrationValidation,
+} from "@/lib/businessRegistrationValidation";
 
 type Step = 1 | 2 | 3 | 4 | 5;
 
@@ -295,9 +300,21 @@ export default function MerchantOnboardingPage() {
   ].filter((key) => documents[key] instanceof File).length;
 
   const nextStep = () => {
-    if (step === 1 && (!business.legalName || !business.country || !business.address)) {
-      toast.error("Please fill in all required fields before continuing.");
-      return;
+    if (step === 1) {
+      if (!business.legalName || !business.country || !business.address) {
+        toast.error("Please fill in all required fields before continuing.");
+        return;
+      }
+      // Validate registration number if provided and country supports validation
+      const regNumber = business.registrationNumber as string;
+      const country = business.country as string;
+      if (regNumber && regNumber.trim() && country) {
+        const result = validateBusinessRegistration(regNumber, country);
+        if (!result.valid) {
+          toast.error(result.message || "Invalid registration number format.");
+          return;
+        }
+      }
     }
     if (step === 2 && (!owner.fullName || !owner.dateOfBirth || !owner.nationality || !owner.address)) {
       toast.error("Please fill in all required fields before continuing.");
@@ -475,7 +492,40 @@ function BusinessForm({
   business: Record<string, unknown>;
   onChange: (v: Record<string, unknown>) => void;
 }) {
+  const [registrationError, setRegistrationError] = useState<string | null>(null);
   const set = (key: string, value: unknown) => onChange({ ...business, [key]: value });
+
+  const handleRegistrationNumberChange = (value: string) => {
+    set("registrationNumber", value);
+    
+    // Validate if country is selected and registration number is not empty
+    const country = business.country as string;
+    if (country && value.trim()) {
+      const result = validateBusinessRegistration(value, country);
+      if (!result.valid) {
+        setRegistrationError(result.message || "Invalid format");
+      } else {
+        setRegistrationError(null);
+      }
+    } else {
+      setRegistrationError(null);
+    }
+  };
+
+  const handleCountryChange = (value: string) => {
+    set("country", value);
+    
+    // Re-validate registration number if it exists
+    const regNumber = business.registrationNumber as string;
+    if (regNumber && regNumber.trim()) {
+      const result = validateBusinessRegistration(regNumber, value);
+      if (!result.valid) {
+        setRegistrationError(result.message || "Invalid format");
+      } else {
+        setRegistrationError(null);
+      }
+    }
+  };
 
   return (
     <div className="grid gap-4 md:grid-cols-2">
@@ -483,8 +533,18 @@ function BusinessForm({
         <Field label="Legal Business Name" required id="legalName" value={(business.legalName as string) ?? ""} onChange={(v) => set("legalName", v)} />
       </div>
       <SelectField label="Business Type" required id="businessType" value={(business.businessType as string) ?? "registered_business"} onChange={(v) => set("businessType", v)} options={[{ value: "registered_business", label: "Registered business" }, { value: "individual", label: "Individual" }]} />
-      <Field label="Registration Number" id="registrationNumber" value={(business.registrationNumber as string) ?? ""} onChange={(v) => set("registrationNumber", v)} />
-      <SelectField label="Country of Registration" required id="businessCountry" value={(business.country as string) ?? ""} onChange={(v) => set("country", v)} options={COUNTRIES.map((c) => ({ value: c.code, label: c.name }))} />
+      <div>
+        <Field label="Registration Number" id="registrationNumber" value={(business.registrationNumber as string) ?? ""} onChange={handleRegistrationNumberChange} />
+        {registrationError && (
+          <p className="mt-1 text-xs text-red-500">{registrationError}</p>
+        )}
+        {!registrationError && business.country && hasRegistrationValidation(business.country as string) && (
+          <p className="mt-1 text-xs text-muted-foreground">
+            {getRegistrationFormat(business.country as string)}
+          </p>
+        )}
+      </div>
+      <SelectField label="Country of Registration" required id="businessCountry" value={(business.country as string) ?? ""} onChange={handleCountryChange} options={COUNTRIES.map((c) => ({ value: c.code, label: c.name }))} />
       <div className="md:col-span-2">
         <Field label="Business Address" required id="businessAddress" value={(business.address as string) ?? ""} onChange={(v) => set("address", v)} />
       </div>

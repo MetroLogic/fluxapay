@@ -229,16 +229,13 @@ export async function runPaymentExpiryReminderJob(): Promise<ReminderResult> {
       );
 
       const reminderPayload = {
-        event: "payment.expiring_soon",
-        data: {
-          payment_id: payment.id,
-          amount: payment.amount.toString(),
-          currency: payment.currency,
-          customer_email: payment.customer_email,
-          checkout_url: payment.checkout_url,
-          expires_at: payment.expiration.toISOString(),
-          minutes_remaining: minutesRemaining,
-        },
+        payment_id: payment.id,
+        amount: payment.amount.toString(),
+        currency: payment.currency,
+        customer_email: payment.customer_email,
+        checkout_url: payment.checkout_url,
+        expires_at: payment.expiration.toISOString(),
+        minutes_remaining: minutesRemaining,
       };
 
       let hadError = false;
@@ -248,7 +245,7 @@ export async function runPaymentExpiryReminderJob(): Promise<ReminderResult> {
         try {
           await createAndDeliverWebhook(
             payment.merchantId,
-            "payment_pending",          // closest existing event type per spec
+            "payment_expiring_soon",     // legacy event type for backward compat
             reminderPayload,
             payment.id,
             undefined,

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
-import { notFound, useParams, useRouter } from "next/navigation";
+import { notFound, useParams, useRouter, useSearchParams } from "next/navigation";
 import { api, ApiError, InitiateRefundRequest } from "@/lib/api";
 import { PaymentDetails } from "@/features/dashboard/payments/PaymentDetails";
 import { type Payment } from "@/features/dashboard/payments/types";
@@ -54,12 +54,14 @@ export function mapBackendPayment(p: BackendPayment | null | undefined): Payment
 export default function PaymentDetailsPage() {
   const { id } = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [payment, setPayment] = useState<Payment | null>(null);
   const [refunds, setRefunds] = useState<RefundRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notFoundError, setNotFoundError] = useState(false);
   const [serverError, setServerError] = useState(false);
+  const [activeTab, setActiveTab] = useState<string>("details");
 
   const fetchPaymentDetails = useCallback(async () => {
     setLoading(true);
@@ -100,6 +102,14 @@ export default function PaymentDetailsPage() {
   useEffect(() => {
     if (id) fetchPaymentDetails();
   }, [id, fetchPaymentDetails]);
+
+  // Set active tab from query parameter on mount
+  useEffect(() => {
+    const tabParam = searchParams.get("tab");
+    if (tabParam === "refunds") {
+      setActiveTab("refunds");
+    }
+  }, [searchParams]);
 
   const handleInitiateRefund = async (payload: InitiateRefundRequest) => {
     try {
@@ -181,6 +191,8 @@ export default function PaymentDetailsPage() {
           refunds={refunds}
           onCreateRefund={handleInitiateRefund}
           onOpenRefundsSection={() => router.push(`/dashboard/refunds?paymentId=${payment.id}`)}
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
         />
       </div>
     </div>
