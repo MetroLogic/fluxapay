@@ -43,6 +43,7 @@ import oracleRoutes from "./routes/oracle.route";
 import chargesRoutes from "./routes/charges.route";
 import apiKeyRoutes from "./routes/apiKey.route";
 import authRoutes from "./routes/auth.route";
+import passwordRoutes from "./routes/password.route";
 import escrowRoutes from "./routes/escrow.route";
 import emailRoutes from "./routes/email.route";
 
@@ -180,6 +181,7 @@ app.use("/api/v1/merchants", merchantRouter);
 
 // ── Core resource routes ───────────────────────────────────────────────────────
 app.use("/api/v1/auth", authRoutes);
+app.use("/api/v1", passwordRoutes);
 app.use("/api/v1", escrowRoutes);
 app.use("/api/v1/settlements", settlementRoutes);
 app.use("/api/v1/webhooks", webhookRoutes);
