@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "test:ci": "echo 'Running integration tests...' && .github/workflows/integration-tests.yml",
+    "test:ci": "npm run test:backend && npm run test:frontend",
     "test:backend": "cd fluxapay_backend && npm test",
     "test:frontend": "cd fluxapay_frontend && npm test",
     "test:e2e": "cd fluxapay_frontend && npm run test:e2e",

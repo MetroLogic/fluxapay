@@ -212,13 +212,17 @@ ORDER BY idx_scan DESC;
    SELECT * FROM pg_stat_user_indexes WHERE idx_blks_read > 0;
    ```
 
-## Future Optimizations
+## Status-Filtered Composite Indexes
 
-### Additional Indexes to Consider
+**Issue Reference**: Issue #718 - [Performance] [Backend] Add Status-Filtered Composite Indexes for Payments, Invoices, and Webhooks
 
-1. **Payment Status Index**: `(merchantId, status, createdAt DESC)` - for status-filtered queries
-2. **Invoice Status Index**: `(merchantId, status, created_at DESC)` - for status-filtered queries
-3. **WebhookLog Status Index**: `(merchantId, status, created_at DESC)` - for status-filtered queries
+The merchant dashboard and API routes frequently filter by payment/invoice/webhook status (e.g., searching only for pending or confirmed payments) in addition to sorting by merchant and creation date. The following composite indexes were added to cover that pattern:
+
+1. **Payment**: `Payment_merchantId_status_createdAt_idx` — `(merchantId, status, createdAt DESC)`
+2. **Invoice**: `Invoice_merchantId_status_created_at_idx` — `(merchantId, status, created_at DESC)`
+3. **WebhookLog**: `WebhookLog_merchantId_status_created_at_idx` — `(merchantId, status, created_at DESC)`
+
+The Payment and Invoice indexes were introduced in `prisma/migrations/20260424000000_add_performance_indexes/migration.sql`. The WebhookLog index was added in `prisma/migrations/20260628000000_add_webhooklog_status_composite_index/migration.sql`, replacing the narrower `WebhookLog_merchantId_status_idx` index since the new composite index already covers `(merchantId, status)` lookups.
 
 ### Partial Indexes
 

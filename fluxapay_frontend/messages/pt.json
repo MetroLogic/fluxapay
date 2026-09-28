@@ -21,7 +21,8 @@
     "export": "Exportar",
     "import": "Importar",
     "download": "Baixar",
-    "upload": "Enviar"
+    "upload": "",
+    "offlineMessage": "Você está offline. Exibindo dados em cache. Reconecte-se para ver as últimas atualizações."
   },
   "nav": {
     "home": "Início",
@@ -78,6 +79,18 @@
     "settlement": {
       "title": "Liquidação Flexível",
       "description": "Escolha como e quando você recebe"
+    },
+    "realtime": {
+      "title": "Liquidação em Tempo Real",
+      "description": "Os fundos circulam instantaneamente na rede Stellar, sem esperar dias"
+    },
+    "emerging": {
+      "title": "Pronto para Mercados Emergentes",
+      "description": "Construído para regiões de alto crescimento onde a adoção de cripto supera o banco tradicional"
+    },
+    "stripe": {
+      "title": "Integração Simples como Stripe",
+      "description": "Uma experiência de desenvolvedor familiar — API REST, webhooks e SDKs que você já conhece"
     }
   },
   "globalReach": {
@@ -267,11 +280,19 @@
       "emailInvalid": "Por favor, insira um endereço de email válido",
       "emailRequired": "O email é obrigatório",
       "passwordMin": "A senha deve ter pelo menos 6 caracteres",
+      "passwordMinEight": "A senha deve ter pelo menos 8 caracteres",
       "passwordRequired": "A senha é obrigatória",
+      "passwordUppercase": "A senha deve conter pelo menos uma letra maiúscula",
+      "passwordLowercase": "A senha deve conter pelo menos uma letra minúscula",
+      "passwordNumber": "A senha deve conter pelo menos um número",
+      "passwordSpecial": "A senha deve conter pelo menos um caractere especial (@$!%*?&)",
+      "passwordHint": "Mínimo de 8 caracteres com maiúscula, minúscula, número e caractere especial",
       "nameRequired": "O nome é obrigatório",
       "businessNameRequired": "O nome da empresa é obrigatório",
       "countryRequired": "O país é obrigatório",
+      "countryCodeLength": "O código do país deve ter 2 caracteres",
       "currencyRequired": "A moeda de liquidação é obrigatória",
+      "currencyCodeLength": "A moeda deve ter 3 caracteres",
       "phoneNumberRequired": "O número de telefone é obrigatório",
       "phoneNumberInvalid": "Formato de número de telefone inválido (use o formato internacional)",
       "accountNumberRequired": "O número da conta é obrigatório",
@@ -293,6 +314,7 @@
     "bankCodePlaceholder": "Código do Banco",
     "accountNumberPlaceholder": "Número da Conta",
     "signupSuccess": "Cadastro realizado com sucesso! Por favor, verifique sua conta.",
+    "loginSuccess": "Login realizado com sucesso!",
     "resetPassword": "Redefinir Senha",
     "forgotPasswordDescription": "Insira seu endereço de email e enviaremos um link para redefinir sua senha.",
     "resetLinkSent": "Enviamos um link de redefinição de senha para o seu email.",
@@ -355,5 +377,21 @@
     "notFound": "O recurso solicitado não foi encontrado.",
     "validation": "Por favor, verifique sua entrada e tente novamente.",
     "paymentFailed": "Falha no processamento do pagamento. Por favor, tente novamente."
+  },
+  "commandPalette": {
+    "overview": "Visão Geral",
+    "payments": "Pagamentos",
+    "paymentLinks": "Links de Pagamento",
+    "invoices": "Faturas",
+    "refunds": "Reembolsos",
+    "settlements": "Liquidações",
+    "webhooks": "Webhooks",
+    "analytics": "Análise",
+    "settings": "Configurações",
+    "developers": "Desenvolvedores",
+    "adminOverview": "Visão Geral do Admin",
+    "forceOracleSync": "Forçar Sincronização de Oráculo",
+    "flushWebhookQueue": "Limpar Fila de Webhook",
+    "viewKYCQueue": "Exibir Fila de KYC"
   }
 }

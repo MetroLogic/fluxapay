@@ -37,6 +37,9 @@ const (
 type Error struct {
 	StatusCode int
 	Message    string
+	Code       string
+	RequestID  string
+	Retryable  bool
 	Raw        json.RawMessage
 }
 
@@ -119,14 +122,35 @@ type ListSettlementsParams struct {
 	DateTo   string
 }
 
-// WebhookEvent is a parsed FluxaPay webhook payload.
-type WebhookEvent struct {
+// WebhookEventBase contains the common fields for all webhook events.
+type WebhookEventBase struct {
 	Event      string                 `json:"event"`
 	PaymentID  string                 `json:"payment_id"`
 	MerchantID string                 `json:"merchant_id"`
 	Timestamp  string                 `json:"timestamp"`
 	Data       map[string]interface{} `json:"data"`
 }
+
+// PaymentCreatedEvent represents a payment.created webhook payload.
+type PaymentCreatedEvent struct { WebhookEventBase }
+
+// PaymentPendingEvent represents a payment.pending webhook payload.
+type PaymentPendingEvent struct { WebhookEventBase }
+
+// PaymentConfirmedEvent represents a payment.confirmed webhook payload.
+type PaymentConfirmedEvent struct { WebhookEventBase }
+
+// PaymentFailedEvent represents a payment.failed webhook payload.
+type PaymentFailedEvent struct { WebhookEventBase }
+
+// PaymentSettledEvent represents a payment.settled webhook payload.
+type PaymentSettledEvent struct { WebhookEventBase }
+
+// RefundCompletedEvent represents a refund.completed webhook payload.
+type RefundCompletedEvent struct { WebhookEventBase }
+
+// WebhookEvent is a parsed FluxaPay webhook payload.
+type WebhookEvent = WebhookEventBase
 
 // ── Client ────────────────────────────────────────────────────────────────────
 
@@ -170,6 +194,11 @@ func WithHTTPClient(hc *http.Client) Option {
 	return func(c *Client) { c.httpClient = hc }
 }
 
+// WithTimeout sets a custom HTTP client timeout.
+func WithTimeout(d time.Duration) Option {
+	return func(c *Client) { c.httpClient.Timeout = d }
+}
+
 // ── Internal HTTP ─────────────────────────────────────────────────────────────
 
 func (c *Client) do(ctx context.Context, method, path string, body interface{}, out interface{}) error {
@@ -204,13 +233,26 @@ func (c *Client) do(ctx context.Context, method, path string, body interface{}, 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		var errBody struct {
 			Message string `json:"message"`
+			Code    string `json:"code"`
 		}
 		_ = json.Unmarshal(raw, &errBody)
 		msg := errBody.Message
 		if msg == "" {
 			msg = fmt.Sprintf("HTTP %d", resp.StatusCode)
 		}
-		return &Error{StatusCode: resp.StatusCode, Message: msg, Raw: raw}
+		reqID := resp.Header.Get("X-Request-ID")
+		if reqID == "" {
+			reqID = resp.Header.Get("x-request-id")
+		}
+		retryable := resp.StatusCode == 429 || resp.StatusCode == 502 || resp.StatusCode == 503 || resp.StatusCode == 504
+		return &Error{
+			StatusCode: resp.StatusCode,
+			Message:    msg,
+			Code:       errBody.Code,
+			RequestID:  reqID,
+			Retryable:  retryable,
+			Raw:        raw,
+		}
 	}
 
 	if out != nil {

@@ -1,5 +1,5 @@
 import { Page, expect } from "@playwright/test";
-import { getTestEmail, getTestPassword, isRealMode } from "./mode";
+import { getTestEmail, getTestPassword } from "./mode";
 import { setupMocks } from "./mocks";
 
 const CP_MERCHANT_ID = "mer_e2e_critical";

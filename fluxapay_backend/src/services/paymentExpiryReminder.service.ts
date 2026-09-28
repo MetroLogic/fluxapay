@@ -27,11 +27,11 @@
  */
 
 import { PrismaClient } from "../generated/client/client";
+import { prisma } from "../config/prisma";
 import { createAndDeliverWebhook } from "./webhook.service";
 import { sendCheckoutExpiryReminderEmail } from "./email.service";
 import { getNotificationPreferences } from "./notificationPreferences.service";
 
-const prisma = new PrismaClient();
 
 const LOCK_NAME = "payment_expiry_reminder";
 const LOCK_TTL_MS = 5 * 60 * 1000;
@@ -48,7 +48,12 @@ function getGlobalReminderConfig() {
   };
 }
 
-async function acquireLock(lockedBy: string): Promise<boolean> {
+async function acquireLock(lockedBy: string, ttlSeconds: number): Promise<boolean> {
+  if (!Number.isInteger(ttlSeconds) || ttlSeconds <= 0) {
+    throw new Error(`Invalid TTL: ${ttlSeconds}. Must be positive integer (seconds).`);
+  }
+
+  const ttlMs = ttlSeconds * 1000;
   const now = new Date();
   try {
     await prisma.cronLock.upsert({
@@ -56,12 +61,12 @@ async function acquireLock(lockedBy: string): Promise<boolean> {
       create: {
         job_name: LOCK_NAME,
         locked_at: now,
-        expires_at: new Date(now.getTime() + LOCK_TTL_MS),
+        expires_at: new Date(now.getTime() + ttlMs),
         locked_by: lockedBy,
       },
       update: {
         locked_at: now,
-        expires_at: new Date(now.getTime() + LOCK_TTL_MS),
+        expires_at: new Date(now.getTime() + ttlMs),
         locked_by: lockedBy,
       },
     });
@@ -93,7 +98,8 @@ export async function runPaymentExpiryReminderJob(): Promise<ReminderResult> {
   }
 
   const lockedBy = `${process.env.HOSTNAME ?? "app"}:${process.pid}`;
-  const acquired = await acquireLock(lockedBy);
+  // Lock with 5-minute TTL (matches cron interval)
+  const acquired = await acquireLock(lockedBy, 300); // 300 seconds = 5 minutes
   if (!acquired) {
     console.log("[ExpiryReminder] Lock held by another instance — skipping.");
     return { processed: 0, notified: 0, skippedOptOut: 0, errors: [] };

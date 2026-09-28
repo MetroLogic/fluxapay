@@ -1,22 +1,23 @@
 import { render, screen } from '@testing-library/react';
+import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { PaymentTimer } from '../PaymentTimer';
 import { useTranslations } from 'next-intl';
 
-jest.mock('next-intl', () => ({
-  useTranslations: jest.fn(),
+vi.mock('next-intl', () => ({
+  useTranslations: vi.fn(),
 }));
 
 describe('PaymentTimer', () => {
-  const mockOnExpire = jest.fn();
-  const mockUseTranslations = useTranslations as jest.MockedFunction<typeof useTranslations>;
+  const mockOnExpire = vi.fn();
+  const mockUseTranslations = useTranslations as ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
-    jest.clearAllMocks();
-    mockUseTranslations.mockReturnValue((key: string, options?: unknown) => {
+    vi.clearAllMocks();
+    mockUseTranslations.mockReturnValue((key: string, options?: Record<string, unknown>) => {
       const translations: Record<string, string> = {
         'timerExpired': 'Payment Expired',
         'timerExpiredAria': 'Payment has expired',
-        'timeRemainingAria': `Time remaining: ${(options as any)?.minutes || 0} minutes ${(options as any)?.seconds || 0} seconds`,
+        'timeRemainingAria': `Time remaining: ${options?.minutes || 0} minutes ${options?.seconds || 0} seconds`,
       };
       return translations[key] || key;
     });
@@ -43,7 +44,7 @@ describe('PaymentTimer', () => {
 
   it('applies server time offset correctly', () => {
     const expiresAt = new Date(Date.now() + 125000);
-    const serverTimeOffset = 5000; // 5 sec ahead
+    const serverTimeOffset = 5000;
     render(
       <PaymentTimer
         expiresAt={expiresAt}
@@ -51,7 +52,6 @@ describe('PaymentTimer', () => {
         serverTimeOffset={serverTimeOffset}
       />
     );
-    // Timer should show less time due to server being ahead
     expect(screen.getByRole('timer')).toBeInTheDocument();
   });
 
@@ -61,13 +61,14 @@ describe('PaymentTimer', () => {
     expect(screen.getByRole('timer')).toHaveAttribute('aria-live', 'polite');
   });
 
-  it('calls onExpire when timer runs out', (done) => {
-    const expiresAt = new Date(Date.now() + 100); // 100ms
-    render(<PaymentTimer expiresAt={expiresAt} onExpire={mockOnExpire} />);
-
-    setTimeout(() => {
-      expect(mockOnExpire).toHaveBeenCalled();
-      done();
-    }, 200);
-  });
+  it('calls onExpire when timer runs out', () =>
+    new Promise<void>((resolve) => {
+      const expiresAt = new Date(Date.now() - 1000); // already expired
+      render(<PaymentTimer expiresAt={expiresAt} onExpire={mockOnExpire} />);
+      setTimeout(() => {
+        expect(mockOnExpire).toHaveBeenCalled();
+        resolve();
+      }, 1200);
+    })
+  );
 });

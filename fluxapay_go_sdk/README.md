@@ -10,6 +10,8 @@ go get github.com/MetroLogic/fluxapay/fluxapay_go_sdk
 
 ## Quick Start
 
+By default, the HTTP client has a 30-second timeout. You can configure this using the `WithTimeout` option.
+
 ```go
 package main
 

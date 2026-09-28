@@ -1,28 +1,16 @@
 /**
- * Performance optimization utilities for React components
+ * Performance optimization utilities for React components.
+ *
+ * For Core Web Vitals tracking (LCP, CLS, FID, INP), see src/app/lib/reportWebVitals.ts
+ * which is initialized in src/app/providers.tsx via useEffect.
+ *
+ * This file provides runtime optimization techniques (throttle, memoize, render performance tracking)
+ * to help components run efficiently and feed into overall Web Vitals.
  */
 
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 
-/**
- * Debounce hook for search inputs and filters
- * Delays execution until after wait milliseconds have elapsed since the last call
- */
-export function useDebounce<T>(value: T, delay: number = 300): T {
-  const [debouncedValue, setDebouncedValue] = React.useState<T>(value);
-
-  React.useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedValue(value);
-    }, delay);
-
-    return () => {
-      clearTimeout(handler);
-    };
-  }, [value, delay]);
-
-  return debouncedValue;
-}
+export { useDebounce } from '@/hooks/useDebounce';
 
 /**
  * Hook to track component render performance

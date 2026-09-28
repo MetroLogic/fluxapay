@@ -5,7 +5,7 @@
  * Tests lock acquisition, release, and concurrent execution prevention.
  */
 
-jest.mock("../redisIdempotency.middleware", () => ({
+jest.mock("../../middleware/redisIdempotency.middleware", () => ({
   redisClient: {
     set: jest.fn(),
     get: jest.fn(),
@@ -14,7 +14,7 @@ jest.mock("../redisIdempotency.middleware", () => ({
 }));
 
 import { acquireCronLock, releaseCronLock } from "../redisLock.util";
-import { redisClient } from "../redisIdempotency.middleware";
+import { redisClient } from "../../middleware/redisIdempotency.middleware";
 
 describe("redisLock.util", () => {
   beforeEach(() => {

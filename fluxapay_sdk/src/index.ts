@@ -10,6 +10,11 @@ export interface FluxaPayConfig {
    * Defaults to the hosted production URL.
    */
   baseUrl?: string;
+  /**
+   * Number of retries for transient 5xx errors and network failures.
+   * Defaults to 3. Set to 0 to disable retries.
+   */
+  retries?: number;
 }
 
 export interface CreatePaymentParams {
@@ -52,13 +57,44 @@ export interface PaymentStatus {
   confirmed_at?: string;
 }
 
-export interface WebhookEvent {
-  event: string;
+export interface WebhookEventBase {
   payment_id: string;
   merchant_id: string;
   timestamp: string;
   data: Record<string, unknown>;
 }
+
+export interface PaymentCreatedEvent extends WebhookEventBase {
+  event: 'payment_created';
+}
+
+export interface PaymentPendingEvent extends WebhookEventBase {
+  event: 'payment_pending';
+}
+
+export interface PaymentConfirmedEvent extends WebhookEventBase {
+  event: 'payment_confirmed';
+}
+
+export interface PaymentFailedEvent extends WebhookEventBase {
+  event: 'payment_failed';
+}
+
+export interface PaymentSettledEvent extends WebhookEventBase {
+  event: 'payment_settled';
+}
+
+export interface RefundCompletedEvent extends WebhookEventBase {
+  event: 'refund_completed';
+}
+
+export type WebhookEvent =
+  | PaymentCreatedEvent
+  | PaymentPendingEvent
+  | PaymentConfirmedEvent
+  | PaymentFailedEvent
+  | PaymentSettledEvent
+  | RefundCompletedEvent;
 
 export interface CreateInvoiceParams {
   /** Customer name for the invoice. */
@@ -104,10 +140,9 @@ export interface VerifyWebhookSignatureOptions {
   toleranceSeconds?: number;
 }
 
-export interface WebhookVerificationResult {
-  valid: boolean;
-  error?: string;
-}
+export type WebhookVerificationResult = 
+  | { valid: true; event: WebhookEvent }
+  | { valid: false; error: string };
 
 /**
  * Verify a FluxaPay webhook signature without instantiating the SDK client.
@@ -127,6 +162,7 @@ export interface WebhookVerificationResult {
  *
  * const result = verifyWebhookSignature(rawBody, sig, ts, process.env.WEBHOOK_SECRET!);
  * if (!result.valid) throw new Error(result.error);
+ * console.log(result.event.event); // typed as 'payment_created' | 'payment_pending' | ...
  * ```
  */
 export function verifyWebhookSignature(
@@ -176,20 +212,29 @@ export function verifyWebhookSignature(
     return { valid: false, error: 'Signature verification failed' };
   }
 
-  return { valid: true };
+  try {
+    const event = JSON.parse(rawBody) as WebhookEvent;
+    return { valid: true, event };
+  } catch {
+    return { valid: false, error: 'Invalid JSON payload' };
+  }
 }
 
 // ── Errors ───────────────────────────────────────────────────────────────────
 
 export class FluxaPayError extends Error {
+  public readonly retryable: boolean;
+
   constructor(
     public readonly statusCode: number,
     message: string,
     public readonly code?: string,
     public readonly raw?: unknown,
+    public readonly requestId?: string,
   ) {
     super(message);
     this.name = 'FluxaPayError';
+    this.retryable = [429, 502, 503, 504].includes(statusCode);
   }
 
   /** Branch on machine-readable error code from the API. */
@@ -225,11 +270,16 @@ async function request<T>(
 
   if (!res.ok) {
     const body = json as { message?: string; code?: string } | null;
+    const requestId =
+      res.headers.get('x-request-id') ??
+      res.headers.get('X-Request-ID') ??
+      undefined;
     throw new FluxaPayError(
       res.status,
       body?.message ?? `HTTP ${res.status}`,
       body?.code,
       json,
+      requestId,
     );
   }
 
@@ -258,11 +308,13 @@ async function request<T>(
 export class FluxaPay {
   private readonly baseUrl: string;
   private readonly apiKey: string;
+  private readonly retries: number;
 
   constructor(config: FluxaPayConfig) {
     if (!config.apiKey) throw new Error('FluxaPay: apiKey is required');
     this.apiKey = config.apiKey;
     this.baseUrl = (config.baseUrl ?? DEFAULT_BASE_URL).replace(/\/$/, '');
+    this.retries = config.retries ?? 3;
   }
 
   // ── payments ───────────────────────────────────────────────────────────────
@@ -275,7 +327,7 @@ export class FluxaPay {
      * Canonical route: POST /api/payments
      */
     create: (params: CreatePaymentParams): Promise<Payment> =>
-      request<Payment>(this.baseUrl, this.apiKey, 'POST', '/api/payments', params),
+      request<Payment>(this.baseUrl, this.apiKey, 'POST', '/api/payments', params, this.retries),
 
     /**
      * Retrieve a payment by its ID.
@@ -283,7 +335,7 @@ export class FluxaPay {
      * Canonical route: GET /api/payments/:payment_id
      */
     get: (paymentId: string): Promise<Payment> =>
-      request<Payment>(this.baseUrl, this.apiKey, 'GET', `/api/payments/${paymentId}`),
+      request<Payment>(this.baseUrl, this.apiKey, 'GET', `/api/payments/${paymentId}`, undefined, this.retries),
 
     /**
      * Poll the current status of a payment.
@@ -292,7 +344,7 @@ export class FluxaPay {
      * (Status is included in the payment object)
      */
     getStatus: (paymentId: string): Promise<PaymentStatus> =>
-      request<PaymentStatus>(this.baseUrl, this.apiKey, 'GET', `/api/payments/${paymentId}`),
+      request<PaymentStatus>(this.baseUrl, this.apiKey, 'GET', `/api/payments/${paymentId}`, undefined, this.retries),
 
     /**
      * List recent payments.
@@ -305,7 +357,7 @@ export class FluxaPay {
       if (params?.limit) qs.set('limit', String(params.limit));
       if (params?.status) qs.set('status', params.status);
       const query = qs.toString();
-      return request(this.baseUrl, this.apiKey, 'GET', `/api/payments${query ? `?${query}` : ''}`);
+      return request(this.baseUrl, this.apiKey, 'GET', `/api/payments${query ? `?${query}` : ''}`, undefined, this.retries);
     },
   };
 
@@ -333,7 +385,7 @@ export class FluxaPay {
       if (params?.date_from) qs.set('date_from', params.date_from);
       if (params?.date_to) qs.set('date_to', params.date_to);
       const query = qs.toString();
-      return request(this.baseUrl, this.apiKey, 'GET', `/api/settlements${query ? `?${query}` : ''}`);
+      return request(this.baseUrl, this.apiKey, 'GET', `/api/settlements${query ? `?${query}` : ''}`, undefined, this.retries);
     },
 
     /**
@@ -342,7 +394,7 @@ export class FluxaPay {
      * Canonical route: GET /api/settlements/summary
      */
     summary: (): Promise<unknown> =>
-      request(this.baseUrl, this.apiKey, 'GET', '/api/settlements/summary'),
+      request(this.baseUrl, this.apiKey, 'GET', '/api/settlements/summary', undefined, this.retries),
 
     /**
      * Get a specific settlement by ID.
@@ -350,7 +402,7 @@ export class FluxaPay {
      * Canonical route: GET /api/settlements/:settlement_id
      */
     get: (settlementId: string): Promise<unknown> =>
-      request(this.baseUrl, this.apiKey, 'GET', `/api/settlements/${settlementId}`),
+      request(this.baseUrl, this.apiKey, 'GET', `/api/settlements/${settlementId}`, undefined, this.retries),
 
     /**
      * Export settlement report.
@@ -358,7 +410,7 @@ export class FluxaPay {
      * Canonical route: GET /api/settlements/:settlement_id/export
      */
     export: (settlementId: string, format: 'pdf' | 'csv' = 'pdf'): Promise<Blob> =>
-      request(this.baseUrl, this.apiKey, 'GET', `/api/settlements/${settlementId}/export?format=${format}`),
+      request(this.baseUrl, this.apiKey, 'GET', `/api/settlements/${settlementId}/export?format=${format}`, undefined, this.retries),
   };
 
   // ── merchant ────────────────────────────────────────────────────────────────
@@ -370,7 +422,7 @@ export class FluxaPay {
      * Canonical route: GET /api/merchants/me
      */
     getProfile: (): Promise<unknown> =>
-      request(this.baseUrl, this.apiKey, 'GET', '/api/merchants/me'),
+      request(this.baseUrl, this.apiKey, 'GET', '/api/merchants/me', undefined, this.retries),
 
     /**
      * Update the authenticated merchant's profile.
@@ -383,7 +435,7 @@ export class FluxaPay {
       settlement_schedule?: 'daily' | 'weekly';
       settlement_day?: number;
     }): Promise<unknown> =>
-      request(this.baseUrl, this.apiKey, 'PATCH', '/api/merchants/me', data),
+      request(this.baseUrl, this.apiKey, 'PATCH', '/api/merchants/me', data, this.retries),
 
     /**
      * Update webhook URL.
@@ -391,7 +443,7 @@ export class FluxaPay {
      * Canonical route: PATCH /api/merchants/me/webhook
      */
     updateWebhook: (webhook_url: string): Promise<unknown> =>
-      request(this.baseUrl, this.apiKey, 'PATCH', '/api/merchants/me/webhook', { webhook_url }),
+      request(this.baseUrl, this.apiKey, 'PATCH', '/api/merchants/me/webhook', { webhook_url }, this.retries),
 
     /**
      * Update settlement schedule.
@@ -402,7 +454,7 @@ export class FluxaPay {
       settlement_schedule: 'daily' | 'weekly';
       settlement_day?: number;
     }): Promise<unknown> =>
-      request(this.baseUrl, this.apiKey, 'PATCH', '/api/merchants/me/settlement-schedule', data),
+      request(this.baseUrl, this.apiKey, 'PATCH', '/api/merchants/me/settlement-schedule', data, this.retries),
 
     /**
      * Add a bank account for settlements.
@@ -415,7 +467,7 @@ export class FluxaPay {
       bank_code: string;
       account_name?: string;
     }): Promise<unknown> =>
-      request(this.baseUrl, this.apiKey, 'POST', '/api/merchants/me/bank-account', data),
+      request(this.baseUrl, this.apiKey, 'POST', '/api/merchants/me/bank-account', data, this.retries),
   };
 
   // ── webhooks ────────────────────────────────────────────────────────────────
@@ -463,7 +515,7 @@ export class FluxaPay {
      * Canonical route: POST /api/invoices
      */
     create: (params: CreateInvoiceParams): Promise<Invoice> =>
-      request<Invoice>(this.baseUrl, this.apiKey, 'POST', '/api/invoices', params),
+      request<Invoice>(this.baseUrl, this.apiKey, 'POST', '/api/invoices', params, this.retries),
 
     /**
      * Retrieve an invoice by its ID.
@@ -471,7 +523,7 @@ export class FluxaPay {
      * Canonical route: GET /api/invoices/:invoice_id
      */
     get: (invoiceId: string): Promise<Invoice> =>
-      request<Invoice>(this.baseUrl, this.apiKey, 'GET', `/api/invoices/${invoiceId}`),
+      request<Invoice>(this.baseUrl, this.apiKey, 'GET', `/api/invoices/${invoiceId}`, undefined, this.retries),
 
     /**
      * List invoices.
@@ -484,7 +536,7 @@ export class FluxaPay {
       if (params?.limit) qs.set('limit', String(params.limit));
       if (params?.status) qs.set('status', params.status);
       const query = qs.toString();
-      return request(this.baseUrl, this.apiKey, 'GET', `/api/invoices${query ? `?${query}` : ''}`);
+      return request(this.baseUrl, this.apiKey, 'GET', `/api/invoices${query ? `?${query}` : ''}`, undefined, this.retries);
     },
 
     /**
@@ -493,7 +545,7 @@ export class FluxaPay {
      * Canonical route: PATCH /api/invoices/:invoice_id/status
      */
     updateStatus: (invoiceId: string, status: Invoice['status']): Promise<Invoice> =>
-      request<Invoice>(this.baseUrl, this.apiKey, 'PATCH', `/api/invoices/${invoiceId}/status`, { status }),
+      request<Invoice>(this.baseUrl, this.apiKey, 'PATCH', `/api/invoices/${invoiceId}/status`, { status }, this.retries),
   };
 }
 

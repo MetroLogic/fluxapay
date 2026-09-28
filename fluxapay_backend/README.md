@@ -138,6 +138,10 @@ https://t.me/+m23gN14007w0ZmQ0
 
 Backend responses now use Helmet defaults plus route-specific CSP profiles:
 
+### Distributed rate limiting
+
+The authenticated and sensitive endpoint rate limiter now uses Redis-backed counters so limits are shared across instances and survive process restarts. Deployments should provide a reachable Redis instance via REDIS_URL; otherwise the middleware will fall back to allowing requests during Redis outages.
+
 - API routes use strict CSP: `default-src 'none'; frame-ancestors 'none'; base-uri 'none'`
 - Swagger docs route uses a relaxed CSP needed by Swagger UI.
 

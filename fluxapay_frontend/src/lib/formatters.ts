@@ -2,6 +2,9 @@
  * Locale-aware formatting utilities for currency, dates, and numbers
  */
 
+/** Fallback string returned when a date value cannot be parsed. */
+const INVALID_DATE_FALLBACK = '—';
+
 /**
  * Format currency with locale-specific formatting
  */
@@ -32,6 +35,10 @@ export function formatDate(
   options?: Intl.DateTimeFormatOptions
 ): string {
   const dateObj = typeof date === 'string' ? new Date(date) : date;
+
+  if (isNaN(dateObj.getTime())) {
+    return INVALID_DATE_FALLBACK;
+  }
   
   const defaultOptions: Intl.DateTimeFormatOptions = {
     year: 'numeric',
@@ -52,6 +59,10 @@ export function formatDateTime(
   options?: Intl.DateTimeFormatOptions
 ): string {
   const dateObj = typeof date === 'string' ? new Date(date) : date;
+
+  if (isNaN(dateObj.getTime())) {
+    return INVALID_DATE_FALLBACK;
+  }
   
   const defaultOptions: Intl.DateTimeFormatOptions = {
     year: 'numeric',
@@ -73,6 +84,11 @@ export function formatRelativeTime(
   locale: string = 'en'
 ): string {
   const dateObj = typeof date === 'string' ? new Date(date) : date;
+
+  if (isNaN(dateObj.getTime())) {
+    return INVALID_DATE_FALLBACK;
+  }
+
   const now = new Date();
   const diffInSeconds = Math.floor((now.getTime() - dateObj.getTime()) / 1000);
 
@@ -105,7 +121,10 @@ export function formatNumber(
 }
 
 /**
- * Format percentage with locale-specific formatting
+ * Format percentage with locale-specific formatting.
+ *
+ * Takes a whole-number percentage: `formatPercentage(50)` is `"50.00%"`.
+ * The `/ 100` is required because `style: 'percent'` scales by 100 itself.
  */
 export function formatPercentage(
   value: number,

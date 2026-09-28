@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Copy,
   Check,
@@ -415,23 +415,76 @@ function CreateApiKeyModal({
   isOpen,
   onClose,
   onCreateSuccess,
+  existingNames,
 }: {
   isOpen: boolean;
   onClose: () => void;
   onCreateSuccess: (key: { id: string; name: string; masked: string; secret: string }) => void;
+  existingNames: Set<string>;
 }) {
   const [name, setName] = useState("");
+  const [environment, setEnvironment] = useState<"live" | "test">("test");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [createdSecret, setCreatedSecret] = useState<string | null>(null);
-  const [existingNames, setExistingNames] = useState<Set<string>>(new Set());
+  const [copied, setCopied] = useState<string | null>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (isOpen) {
       setName("");
+      setEnvironment("test");
       setError(null);
       setCreatedSecret(null);
     }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || !dialogRef.current) return;
+
+    const dialog = dialogRef.current;
+    const opener = document.activeElement as HTMLElement | null;
+    const focusable = () =>
+      Array.from(
+        dialog.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter((element) => element.offsetParent !== null || element.getClientRects().length > 0);
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onCloseRef.current();
+        return;
+      }
+      if (event.key !== "Tab") return;
+
+      const elements = focusable();
+      if (elements.length === 0) {
+        event.preventDefault();
+        return;
+      }
+
+      const first = elements[0];
+      const last = elements[elements.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    dialog.addEventListener("keydown", handleKeyDown);
+    const focusId = requestAnimationFrame(() => focusable()[0]?.focus());
+
+    return () => {
+      cancelAnimationFrame(focusId);
+      dialog.removeEventListener("keydown", handleKeyDown);
+      if (opener?.isConnected) opener.focus();
+    };
   }, [isOpen]);
 
   const validateName = (value: string): string | null => {
@@ -452,13 +505,20 @@ function CreateApiKeyModal({
     setError(null);
 
     try {
-      const res = await api.keys.createKey({ name: name.trim() });
-      setCreatedSecret(res.secret || res.apiKey);
+      const result = await api.keys.createKey({ name: name.trim(), environment });
+      if ('error' in result) {
+        setError(result.error.message);
+        return;
+      }
+      const res = result.data as Record<string, unknown>;
+      const secret = (res.key as string) || (res.secret as string) || (res.apiKey as string);
+      if (!secret) throw new Error("The API did not return the new key secret.");
+      setCreatedSecret(secret);
       onCreateSuccess({
-        id: res.id,
+        id: res.id as string,
         name: name.trim(),
-        masked: `sk_live_${res.lastFour}`,
-        secret: res.secret || res.apiKey,
+        masked: `fpk_${environment}_****${(res.last_four as string) || secret.slice(-4)}`,
+        secret,
       });
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to create API key");
@@ -486,6 +546,10 @@ function CreateApiKeyModal({
       onClick={onClose}
     >
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="create-api-key-modal-title"
         style={{
           backgroundColor: "#ffffff",
           borderRadius: "0.75rem",
@@ -497,11 +561,12 @@ function CreateApiKeyModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
-          <h2 style={{ fontSize: "1.5rem", fontWeight: "bold", color: "#1a1a3e", margin: 0 }}>
+          <h2 id="create-api-key-modal-title" style={{ fontSize: "1.5rem", fontWeight: "bold", color: "#1a1a3e", margin: 0 }}>
             Create API Key
           </h2>
           <button
             onClick={onClose}
+            aria-label="Close Create API Key dialog"
             style={{ background: "none", border: "none", cursor: "pointer", color: "#6b7280" }}
           >
             <X size={20} />
@@ -603,6 +668,18 @@ function CreateApiKeyModal({
                 if (nameError) setError(nameError);
               }}
             />
+            <label htmlFor="api-key-environment" style={{ display: "block", fontSize: "0.875rem", fontWeight: 500, color: "#1a1a3e", margin: "0.75rem 0 0.5rem" }}>
+              Environment
+            </label>
+            <select
+              id="api-key-environment"
+              value={environment}
+              onChange={(event) => setEnvironment(event.target.value as "live" | "test")}
+              style={{ width: "100%", padding: "0.75rem", border: "1px solid #d1d5db", borderRadius: "0.375rem", marginBottom: "0.5rem" }}
+            >
+              <option value="test">Test</option>
+              <option value="live">Live</option>
+            </select>
             {error && (
               <p style={{ fontSize: "0.75rem", color: "#dc2626", marginBottom: "1rem", margin: 0 }}>
                 {error}
@@ -670,7 +747,8 @@ export default function DevelopersPage() {
   const [activeEndpoint, setActiveEndpoint] = useState<Endpoint>("create");
   const [apiKey, setApiKey] = useState("Loading...");
   const [showCreateKeyModal, setShowCreateKeyModal] = useState(false);
-  const [apiKeys, setApiKeys] = useState<Array<{ id: string; name: string; masked: string; createdAt: string }>([]);
+  type ApiKeyEntry = { id: string; name: string; masked: string; createdAt: string };
+  const [apiKeys, setApiKeys] = useState<ApiKeyEntry[]>([]);
 
   // Rotation state
   const [rotatingApiKey, setRotatingApiKey] = useState(false);
@@ -686,7 +764,17 @@ export default function DevelopersPage() {
   useEffect(() => {
     api.merchant
       .getMe()
-      .then((r) => setApiKey(r.merchant.api_key_masked || "No API key generated"))
+      .then((result) => {
+        if ('error' in result) {
+          setApiKey("Failed to load API key");
+        } else {
+          const r = result.data as Record<string, unknown>;
+          const merchant = r.merchant as Record<string, unknown>;
+          setApiKey(
+            (merchant.api_key_masked as string) || "No API key generated",
+          );
+        }
+      })
       .catch(() => setApiKey("Failed to load API key"));
   }, []);
 
@@ -694,11 +782,16 @@ export default function DevelopersPage() {
     setRotatingApiKey(true);
     setRotateError(null);
     try {
-      const res = await api.keys.rotateApiKey();
-      setNewApiKey(res.apiKey);
+      const result = await api.keys.rotateApiKey();
+      if ('error' in result) {
+        setRotateError(result.error.message);
+        return;
+      }
+      const res = result.data as Record<string, unknown>;
+      setNewApiKey(res.apiKey as string);
       setShowNewApiKey(false);
       // Update masked display with last four from new key
-      const lastFour = res.apiKey.slice(-4);
+      const lastFour = (res.apiKey as string).slice(-4);
       setApiKey(`sk_live_****${lastFour}`);
     } catch (e: unknown) {
       setRotateError(e instanceof Error ? e.message : "Failed to rotate API key");
@@ -712,8 +805,13 @@ export default function DevelopersPage() {
     setRotatingWebhook(true);
     setRotateError(null);
     try {
-      const res = await api.keys.rotateWebhookSecret();
-      setNewWebhookSecret(res.webhookSecret);
+      const result = await api.keys.rotateWebhookSecret();
+      if ('error' in result) {
+        setRotateError(result.error.message);
+        return;
+      }
+      const res = result.data as Record<string, unknown>;
+      setNewWebhookSecret(res.webhookSecret as string);
       setShowNewWebhookSecret(false);
     } catch (e: unknown) {
       setRotateError(
@@ -1127,7 +1225,7 @@ export default function DevelopersPage() {
             )}
           </section>
 
-          {/* API Status */}
+          {/* API Status — sandbox / example values */}
           <section style={card}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.5rem" }}>
               <h2 style={{ fontSize: "1.5rem", fontWeight: "bold", color: "#1a1a3e" }}>API Status</h2>
@@ -1140,13 +1238,18 @@ export default function DevelopersPage() {
                 Full status page →
               </a>
             </div>
+            <div style={{ backgroundColor: "#fef3c7", border: "1px solid #fcd34d", borderRadius: "0.5rem", padding: "0.625rem 0.875rem", marginBottom: "0.75rem" }}>
+              <p style={{ fontSize: "0.75rem", color: "#92400e", margin: 0, lineHeight: 1.4 }}>
+                ⚠️ The values below are sandbox examples. Live metrics are available on the full status page.
+              </p>
+            </div>
             <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
               {(
                 [
                   { label: "Status", value: "● Operational", valueStyle: { backgroundColor: "#d1fae5", color: "#065f46", border: "1px solid #a7f3d0", padding: "0.2rem 0.6rem", borderRadius: "9999px", fontSize: "0.75rem", fontWeight: 600 } as React.CSSProperties },
-                  { label: "Uptime", value: "99.99%", valueStyle: { color: "#fbbf24", fontWeight: 600 } as React.CSSProperties },
-                  { label: "Response Time", value: "145ms avg", valueStyle: { color: "#fbbf24", fontWeight: 600 } as React.CSSProperties },
-                  { label: "Rate Limit", value: "5 req/min", valueStyle: { color: "#fbbf24", fontWeight: 600 } as React.CSSProperties },
+                  { label: "Uptime (example)", value: "99.99%", valueStyle: { color: "#fbbf24", fontWeight: 600 } as React.CSSProperties },
+                  { label: "Response Time (example)", value: "145ms avg", valueStyle: { color: "#fbbf24", fontWeight: 600 } as React.CSSProperties },
+                  { label: "Rate Limit (sandbox)", value: "5 req/min", valueStyle: { color: "#fbbf24", fontWeight: 600 } as React.CSSProperties },
                 ] as { label: string; value: string; valueStyle: React.CSSProperties }[]
               ).map(({ label, value, valueStyle }) => (
                 <div key={label} style={{ backgroundColor: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: "0.5rem", padding: "0.875rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -1352,6 +1455,7 @@ export default function DevelopersPage() {
       <CreateApiKeyModal
         isOpen={showCreateKeyModal}
         onClose={() => setShowCreateKeyModal(false)}
+        existingNames={new Set(apiKeys.map((k) => k.name.toLowerCase()))}
         onCreateSuccess={(key) => {
           setApiKeys([...apiKeys, { ...key, createdAt: new Date().toLocaleDateString() }]);
           setShowCreateKeyModal(false);

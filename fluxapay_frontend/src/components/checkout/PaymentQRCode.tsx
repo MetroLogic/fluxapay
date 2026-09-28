@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo } from 'react';
 import { QRCodeCanvas } from 'qrcode.react';
 import { Copy } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -22,29 +23,32 @@ export function PaymentQRCode({ address, amount, memoType, memo, size = 256 }: P
     toast.success(`${label} copied to clipboard.`);
   };
 
-  const query = new URLSearchParams({ amount: String(amount) });
-  if (memo && memoType) {
-    query.set('memo', memo);
-    query.set('memo_type', memoType);
-  }
+  const { stellarUri, qrAltText } = useMemo(() => {
+    const query = new URLSearchParams({ amount: String(amount) });
+    if (memo && memoType) {
+      query.set('memo', memo);
+      query.set('memo_type', memoType);
+    }
 
-  // Keep existing scheme for compatibility with current wallets
-  const stellarUri = `stellar:${address}?${query.toString()}`;
+    // Keep existing scheme for compatibility with current wallets
+    const uri = `stellar:${address}?${query.toString()}`;
+    const altText = `QR code for Stellar payment of ${amount} to deposit address ${address}`;
+    return { stellarUri: uri, qrAltText: altText };
+  }, [address, amount, memoType, memo]);
 
   return (
     <div className="flex flex-col items-center space-y-4">
       {/* QR Code Card */}
-      <div
-        role="img"
-        aria-label={`QR code for Stellar payment of ${amount} to address ${address}`}
-        className="bg-white rounded-lg shadow-lg p-6 flex items-center justify-center"
-      >
+      <div className="bg-white rounded-lg shadow-lg p-6 flex items-center justify-center">
         <QRCodeCanvas
           value={stellarUri}
           size={size}
           level="M"
           includeMargin={true}
           className="rounded"
+          role="img"
+          aria-label={qrAltText}
+          title={qrAltText}
         />
       </div>
 
@@ -63,7 +67,7 @@ export function PaymentQRCode({ address, amount, memoType, memo, size = 256 }: P
             onClick={() => copyToClipboard(address, 'Address')}
             className="shrink-0 inline-flex items-center gap-1 text-xs font-medium hover:opacity-80 transition-opacity"
             style={{ color: 'var(--checkout-accent)' }}
-            aria-label="Copy payment address"
+            aria-label="Copy deposit address"
           >
             <Copy className="w-3 h-3" aria-hidden="true" />
             Copy

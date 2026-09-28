@@ -2,6 +2,7 @@ import { ErrorCode } from "../types/errors";
 import { apiError, sendApiError } from "../helpers/apiError.helper";
 import { Request, Response } from "express";
 import { PrismaClient } from "../generated/client/client";
+import { prisma } from "../config/prisma";
 import { PaymentService } from "../services/payment.service";
 import { normalizeCheckoutAccentHex } from "../utils/checkout-branding.util";
 import { AuthRequest } from "../types/express";
@@ -10,9 +11,10 @@ import { validateUserId } from "../helpers/request.helper";
 import { MetadataValidationError } from "../utils/metadata.util";
 import { paymentSettlementService } from "../services/paymentSettlement.service";
 import { IdempotentRequest, storeIdempotentResponse } from "../middleware/idempotency.middleware";
+import { isTerminalStatus, PaymentStatus } from "../types/payment";
+import { assertValidPositiveAmount, AmountValidationError } from "../utils/amount.util";
 
 
-const prisma = new PrismaClient();
 
 export const createPayment = async (req: Request, res: Response) => {
   try {
@@ -27,6 +29,7 @@ export const createPayment = async (req: Request, res: Response) => {
       success_url,
       cancel_url,
       customer_id,
+      expires_in_seconds,
     } = req.body;
     const authReq = req as AuthRequest;
     const merchantId = authReq.merchantId;
@@ -36,6 +39,18 @@ export const createPayment = async (req: Request, res: Response) => {
         res,
         apiError(401, ErrorCode.UNAUTHORIZED, "Unauthorized: Merchant ID missing"),
       );
+    }
+
+    try {
+      assertValidPositiveAmount(amount, "amount");
+    } catch (validationError) {
+      if (validationError instanceof AmountValidationError) {
+        return sendApiError(
+          res,
+          apiError(400, ErrorCode.INVALID_AMOUNT, validationError.message),
+        );
+      }
+      throw validationError;
     }
 
     let linkedCustomerId: string | undefined;
@@ -82,6 +97,8 @@ export const createPayment = async (req: Request, res: Response) => {
       success_url,
       cancel_url,
       customerId: linkedCustomerId,
+      expires_in_seconds:
+        expires_in_seconds !== undefined ? Number(expires_in_seconds) : undefined,
     });
 
     const responseBody = {
@@ -113,7 +130,7 @@ export const createPayment = async (req: Request, res: Response) => {
       error &&
       typeof error === "object" &&
       "status" in error &&
-      (error as { status?: unknown }).status === 400
+      typeof (error as { status?: unknown }).status === "number"
     ) {
       return sendApiError(res, error);
     }
@@ -359,8 +376,11 @@ export const streamPaymentStatus = async (req: Request, res: Response) => {
         `data: ${JSON.stringify({ status: updatedPayment.status })}\n\n`,
       );
 
-      // If terminal status reached, we could potentially close the stream
-      // but usually let the client handle it.
+      if (isTerminalStatus(updatedPayment.status as PaymentStatus)) {
+        res.write(`data: ${JSON.stringify({ event: "done" })}\n\n`);
+        eventBus.off(AppEvents.PAYMENT_UPDATED, onPaymentUpdate);
+        res.end();
+      }
     }
   };
 

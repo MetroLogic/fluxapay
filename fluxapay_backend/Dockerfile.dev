@@ -1,0 +1,10 @@
+FROM node:18-alpine
+
+WORKDIR /usr/src/app
+
+COPY package*.json ./
+RUN npm install
+
+# We need wait-for script or similar for depending on postgres, but Docker compose healthchecks handle the wait.
+# We will use command from docker-compose, but we can set a default.
+CMD ["sh", "-c", "npx prisma generate && npx prisma db push --skip-generate && npm run seed && npm run dev"]

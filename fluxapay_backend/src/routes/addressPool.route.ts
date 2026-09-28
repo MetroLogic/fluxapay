@@ -18,6 +18,7 @@ const router = Router();
  *       401:
  *         description: Unauthorized
  */
+router.get("/", adminAuth, getAddressPoolStats);
 router.get("/stats", adminAuth, getAddressPoolStats);
 
 export default router;

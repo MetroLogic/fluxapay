@@ -2,7 +2,7 @@
 CREATE TYPE "AdminRole" AS ENUM ('support', 'finance', 'super_admin');
 
 -- CreateTable
-CREATE TABLE "AdminUser" (
+CREATE TABLE IF NOT EXISTS "AdminUser" (
     "id" TEXT NOT NULL,
     "email" TEXT NOT NULL,
     "password" TEXT NOT NULL,
@@ -15,4 +15,4 @@ CREATE TABLE "AdminUser" (
 );
 
 -- CreateIndex
-CREATE UNIQUE INDEX "AdminUser_email_key" ON "AdminUser"("email");
+CREATE UNIQUE INDEX IF NOT EXISTS "AdminUser_email_key" ON "AdminUser"("email");

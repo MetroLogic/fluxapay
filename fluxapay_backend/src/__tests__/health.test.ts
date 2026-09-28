@@ -15,6 +15,7 @@ import {
   resetRedisClientForTests,
   setRedisClientForTests,
 } from "../sms/otpSmsRateLimiter";
+import { resetFxCircuitBreakerForTests } from "../services/fx.service";
 
 jest.mock("../generated/client/client", () => ({
   PrismaClient: jest.fn().mockImplementation(() => ({
@@ -34,11 +35,13 @@ describe("health.service", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     resetRedisClientForTests();
+    resetFxCircuitBreakerForTests();
     global.fetch = jest.fn();
   });
 
   afterEach(() => {
     resetRedisClientForTests();
+    resetFxCircuitBreakerForTests();
     jest.restoreAllMocks();
   });
 
@@ -162,11 +165,13 @@ describe("health routes", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     resetRedisClientForTests();
+    resetFxCircuitBreakerForTests();
     global.fetch = jest.fn();
   });
 
   afterEach(() => {
     resetRedisClientForTests();
+    resetFxCircuitBreakerForTests();
     jest.restoreAllMocks();
   });
 
@@ -179,6 +184,12 @@ describe("health routes", () => {
     expect(response.body).toEqual({
       status: "ok",
       uptime: expect.any(Number),
+      fx_circuit_breaker: {
+        state: "closed",
+        consecutiveFailures: 0,
+        openedAt: null,
+        lastError: null,
+      },
     });
   });
 

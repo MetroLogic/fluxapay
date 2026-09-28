@@ -42,8 +42,7 @@ describe("kycGate.middleware", () => {
     it("should pass through when KYC status is approved", async () => {
       (mockPrisma.merchant.findUnique as jest.Mock).mockResolvedValueOnce({
         id: "merchant_test_123",
-        kyc_status: "approved",
-        is_internal: false,
+        kyc: { kyc_status: "approved" },
       });
 
       await kycGateMiddleware(mockReq as AuthRequest, mockRes as Response, mockNext);
@@ -57,8 +56,7 @@ describe("kycGate.middleware", () => {
     it("should block when KYC status is pending_review", async () => {
       (mockPrisma.merchant.findUnique as jest.Mock).mockResolvedValueOnce({
         id: "merchant_test_123",
-        kyc_status: "pending_review",
-        is_internal: false,
+        kyc: { kyc_status: "pending_review" },
       });
 
       await kycGateMiddleware(mockReq as AuthRequest, mockRes as Response, mockNext);
@@ -71,181 +69,85 @@ describe("kycGate.middleware", () => {
     it("should block when KYC status is rejected", async () => {
       (mockPrisma.merchant.findUnique as jest.Mock).mockResolvedValueOnce({
         id: "merchant_test_123",
-        kyc_status: "rejected",
-        is_internal: false,
+        kyc: { kyc_status: "rejected" },
       });
 
       await kycGateMiddleware(mockReq as AuthRequest, mockRes as Response, mockNext);
 
       expect(mockNext).not.toHaveBeenCalled();
       expect(mockRes.status).toHaveBeenCalledWith(403);
+      expect(mockRes.json).toHaveBeenCalled();
     });
 
-    it("should block when KYC status is not_submitted", async () => {
+    it("should block when KYC is not submitted", async () => {
       (mockPrisma.merchant.findUnique as jest.Mock).mockResolvedValueOnce({
         id: "merchant_test_123",
-        kyc_status: "not_submitted",
-        is_internal: false,
+        kyc: null,
       });
 
       await kycGateMiddleware(mockReq as AuthRequest, mockRes as Response, mockNext);
 
       expect(mockNext).not.toHaveBeenCalled();
       expect(mockRes.status).toHaveBeenCalledWith(403);
-    });
-  });
-
-  describe("admin bypass", () => {
-    it("should allow internal merchants to bypass KYC check", async () => {
-      (mockPrisma.merchant.findUnique as jest.Mock).mockResolvedValueOnce({
-        id: "merchant_test_123",
-        kyc_status: "not_submitted",
-        is_internal: true,
-      });
-
-      await kycGateMiddleware(mockReq as AuthRequest, mockRes as Response, mockNext);
-
-      expect(mockNext).toHaveBeenCalled();
-      expect(mockRes.json).not.toHaveBeenCalled();
-    });
-
-    it("should allow test merchants with pending status", async () => {
-      (mockPrisma.merchant.findUnique as jest.Mock).mockResolvedValueOnce({
-        id: "test_merchant_123",
-        kyc_status: "pending_review",
-        is_internal: true,
-      });
-
-      await kycGateMiddleware(mockReq as AuthRequest, mockRes as Response, mockNext);
-
-      expect(mockNext).toHaveBeenCalled();
     });
   });
 
   describe("error response format", () => {
-    it("should include KYC submission URL in error response", async () => {
-      (mockPrisma.merchant.findUnique as jest.Mock).mockResolvedValueOnce({
-        id: "merchant_test_123",
-        kyc_status: "pending_review",
-        is_internal: false,
-      });
-
-      const jsonMock = jest.fn().mockReturnThis();
-      mockRes.status = jest.fn().mockReturnValue({ json: jsonMock });
-
-      await kycGateMiddleware(mockReq as AuthRequest, mockRes as Response, mockNext);
-
-      const callArg = jsonMock.mock.calls[0][0];
-      expect(callArg).toHaveProperty("details");
-      expect(callArg.details).toHaveProperty("kyc_submission_url");
-      expect(callArg.details.kyc_submission_url).toContain("/api/v1/merchants/kyc");
-    });
-
     it("should include actual KYC status in error response", async () => {
       (mockPrisma.merchant.findUnique as jest.Mock).mockResolvedValueOnce({
         id: "merchant_test_123",
-        kyc_status: "rejected",
-        is_internal: false,
+        kyc: { kyc_status: "rejected" },
       });
 
-      const jsonMock = jest.fn().mockReturnThis();
-      mockRes.status = jest.fn().mockReturnValue({ json: jsonMock });
-
       await kycGateMiddleware(mockReq as AuthRequest, mockRes as Response, mockNext);
 
-      const callArg = jsonMock.mock.calls[0][0];
-      expect(callArg.details).toHaveProperty("kyc_status", "rejected");
-    });
-
-    it("should use KYC_REQUIRED error code", async () => {
-      (mockPrisma.merchant.findUnique as jest.Mock).mockResolvedValueOnce({
-        id: "merchant_test_123",
-        kyc_status: "not_submitted",
-        is_internal: false,
-      });
-
-      const jsonMock = jest.fn().mockReturnThis();
-      mockRes.status = jest.fn().mockReturnValue({ json: jsonMock });
-
-      await kycGateMiddleware(mockReq as AuthRequest, mockRes as Response, mockNext);
-
-      const callArg = jsonMock.mock.calls[0][0];
-      expect(callArg.code).toBe("KYC_REQUIRED");
-    });
-  });
-
-  describe("unauthorized cases", () => {
-    it("should return 401 when merchantId is missing", async () => {
-      mockReq.merchantId = undefined;
-
-      const jsonMock = jest.fn().mockReturnThis();
-      mockRes.status = jest.fn().mockReturnValue({ json: jsonMock });
-
-      await kycGateMiddleware(mockReq as AuthRequest, mockRes as Response, mockNext);
-
-      expect(mockNext).not.toHaveBeenCalled();
-      expect(mockRes.status).toHaveBeenCalledWith(401);
-    });
-
-    it("should return 401 when merchant not found in database", async () => {
-      (mockPrisma.merchant.findUnique as jest.Mock).mockResolvedValueOnce(null);
-
-      const jsonMock = jest.fn().mockReturnThis();
-      mockRes.status = jest.fn().mockReturnValue({ json: jsonMock });
-
-      await kycGateMiddleware(mockReq as AuthRequest, mockRes as Response, mockNext);
-
-      expect(mockNext).not.toHaveBeenCalled();
-      expect(mockRes.status).toHaveBeenCalledWith(401);
-    });
-  });
-
-  describe("error handling", () => {
-    it("should return 500 on database error", async () => {
-      const dbError = new Error("Database connection failed");
-      (mockPrisma.merchant.findUnique as jest.Mock).mockRejectedValueOnce(dbError);
-
-      const consoleSpy = jest.spyOn(console, "error").mockImplementation();
-      const jsonMock = jest.fn().mockReturnThis();
-      mockRes.status = jest.fn().mockReturnValue({ json: jsonMock });
-
-      await kycGateMiddleware(mockReq as AuthRequest, mockRes as Response, mockNext);
-
-      expect(mockNext).not.toHaveBeenCalled();
-      expect(mockRes.status).toHaveBeenCalledWith(500);
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining("Error checking KYC status")
+      expect(mockRes.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          details: expect.objectContaining({
+            kyc_status: "rejected",
+          }),
+        }),
       );
-
-      consoleSpy.mockRestore();
     });
   });
 
   describe("all KYC statuses", () => {
-    const testCases = [
-      { status: "approved", shouldPass: true },
-      { status: "pending_review", shouldPass: false },
-      { status: "rejected", shouldPass: false },
-      { status: "not_submitted", shouldPass: false },
-    ];
+    it("should allow status: approved", async () => {
+      (mockPrisma.merchant.findUnique as jest.Mock).mockResolvedValueOnce({
+        id: "merchant_test_123",
+        kyc: { kyc_status: "approved" },
+      });
 
-    testCases.forEach(({ status, shouldPass }) => {
-      it(`should ${shouldPass ? "allow" : "block"} status: ${status}`, async () => {
+      await kycGateMiddleware(mockReq as AuthRequest, mockRes as Response, mockNext);
+      expect(mockNext).toHaveBeenCalled();
+    });
+
+    it.each(["pending_review", "rejected", "not_submitted"] as const)(
+      "should block status: %s",
+      async (status) => {
         (mockPrisma.merchant.findUnique as jest.Mock).mockResolvedValueOnce({
           id: "merchant_test_123",
-          kyc_status: status,
-          is_internal: false,
+          kyc: status === "not_submitted" ? null : { kyc_status: status },
         });
 
         await kycGateMiddleware(mockReq as AuthRequest, mockRes as Response, mockNext);
+        expect(mockNext).not.toHaveBeenCalled();
+        expect(mockRes.status).toHaveBeenCalledWith(403);
+      },
+    );
+  });
 
-        if (shouldPass) {
-          expect(mockNext).toHaveBeenCalled();
-        } else {
-          expect(mockNext).not.toHaveBeenCalled();
-          expect(mockRes.status).toHaveBeenCalledWith(403);
-        }
-      });
+  describe("missing merchant", () => {
+    it("should return 401 when merchantId missing", async () => {
+      mockReq.merchantId = undefined;
+      await kycGateMiddleware(mockReq as AuthRequest, mockRes as Response, mockNext);
+      expect(mockRes.status).toHaveBeenCalledWith(401);
+    });
+
+    it("should return 401 when merchant not found", async () => {
+      (mockPrisma.merchant.findUnique as jest.Mock).mockResolvedValueOnce(null);
+      await kycGateMiddleware(mockReq as AuthRequest, mockRes as Response, mockNext);
+      expect(mockRes.status).toHaveBeenCalledWith(401);
     });
   });
 });

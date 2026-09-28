@@ -14,11 +14,11 @@ interface PaymentMethodsChartProps {
     data: PaymentDistribution[];
 }
 
-const COLORS = ['#6366f1', '#22c55e', '#f59e0b', '#64748b'];
+const COLORS = ['#0072B2', '#E69F00', '#009E73', '#CC79A7'];
 
 export function PaymentMethodsChart({ data }: PaymentMethodsChartProps) {
     return (
-        <div className="h-[300px] w-full">
+        <div className="h-[300px] w-full" role="img" aria-label="Payment methods distribution pie chart">
             <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                     <Pie

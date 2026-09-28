@@ -163,18 +163,22 @@ export function downloadSettlementPdf(settlement: Settlement) {
         });
     }
 
-    // Footer
-    const footerY = doc.internal.pageSize.getHeight() - 15;
-    doc.setDrawColor(226, 232, 240);
-    doc.setLineWidth(0.3);
-    doc.line(14, footerY - 5, pageWidth - 14, footerY - 5);
+    const pageCount = doc.getNumberOfPages();
+    for (let pageNumber = 1; pageNumber <= pageCount; pageNumber++) {
+        const footerY = doc.internal.pageSize.getHeight() - 15;
 
-    doc.setTextColor(...mutedColor);
-    doc.setFontSize(7);
-    doc.setFont('helvetica', 'normal');
-    doc.text('This is a computer-generated settlement statement from FluxaPay.', 14, footerY);
-    doc.text('For queries, contact support@fluxapay.com', 14, footerY + 4);
-    doc.text(`Page 1 of 1`, pageWidth - 14, footerY, { align: 'right' });
+        doc.setPage(pageNumber);
+        doc.setDrawColor(226, 232, 240);
+        doc.setLineWidth(0.3);
+        doc.line(14, footerY - 5, pageWidth - 14, footerY - 5);
+
+        doc.setTextColor(...mutedColor);
+        doc.setFontSize(7);
+        doc.setFont('helvetica', 'normal');
+        doc.text('This is a computer-generated settlement statement from FluxaPay.', 14, footerY);
+        doc.text('For queries, contact support@fluxapay.com', 14, footerY + 4);
+        doc.text(`Page ${pageNumber} of ${pageCount}`, pageWidth - 14, footerY, { align: 'right' });
+    }
 
     doc.save(`${settlement.id}.pdf`);
 }

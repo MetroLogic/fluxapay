@@ -7,14 +7,22 @@ import {
   Networks,
 } from "@stellar/stellar-sdk";
 import { PrismaClient } from "../generated/client/client";
+import { prisma } from "../config/prisma";
 import { Decimal } from "@prisma/client/runtime/library";
 import { HDWalletService } from "./HDWalletService";
-import { logSweepTrigger, updateSweepCompletion } from "./audit.service";
+import {
+  logSweepFailure,
+  logSweepTrigger,
+  updateSweepCompletion,
+} from "./audit.service";
 import { getLogger, getMetricsCollector } from "../utils/logger";
 import { sweepQueue } from "./sweepQueue.service";
-import { getSweepMinBalanceUsdc } from "../config/sweep.config";
+import {
+  getMaxSweepRetryAttempts,
+  getSweepMinBalanceUsdc,
+} from "../config/sweep.config";
+import { KMSFactory } from "./kms";
 
-const prisma = new PrismaClient();
 
 export interface SweepOptions {
   /** Max number of payments to sweep per run (defensive). */
@@ -85,7 +93,11 @@ export class SweepService {
     this.networkPassphrase =
       process.env.STELLAR_NETWORK_PASSPHRASE || Networks.TESTNET;
     this.baseFee = Number(process.env.STELLAR_BASE_FEE || "100");
-    this.maxFee = Number(process.env.STELLAR_MAX_FEE || "2000");
+    this.maxFee = Number(
+      process.env.SWEEP_MAX_FEE_STROOPS ||
+      process.env.STELLAR_MAX_FEE ||
+      "2000"
+    );
     this.feeBumpMultiplier = Number(
       process.env.STELLAR_FEE_BUMP_MULTIPLIER || "2",
     );
@@ -93,7 +105,7 @@ export class SweepService {
 
     const issuer =
       process.env.USDC_ISSUER_PUBLIC_KEY ||
-      "GBBD47IF6LWK7P7MDEVSCWT73IQIGCEZHR7OMXMBZQ3ZONN2T4U6W23Y";
+      "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5";
     this.usdcAsset = new Asset("USDC", issuer);
 
     const vaultSecret = requiredEnv("MASTER_VAULT_SECRET_KEY");
@@ -102,17 +114,56 @@ export class SweepService {
     this.hdWalletService = new HDWalletService();
   }
 
-  /** Identify eligible payments: confirmed/overpaid/paid, not swept, has derived address. */
+  private getMaxFee(): number {
+    return Number(
+      process.env.SWEEP_MAX_FEE_STROOPS ||
+      process.env.STELLAR_MAX_FEE ||
+      this.maxFee ||
+      "2000"
+    );
+  }
+
+  /**
+   * Identify eligible payments: confirmed/overpaid/paid, not swept, has derived
+   * address, and not already flagged for manual review after exhausting retries.
+   */
   private async getUnsweptPaidPayments(limit: number) {
     return prisma.payment.findMany({
       where: {
         swept: false,
         stellar_address: { not: null },
         status: { in: ["confirmed", "overpaid", "paid"] },
+        sweep_needs_manual_review: false,
       },
       orderBy: { confirmed_at: "asc" },
       take: limit,
     });
+  }
+
+  public async previewPaidPayments(limit = 200) {
+    const payments = await prisma.payment.findMany({
+      where: {
+        swept: false,
+        stellar_address: { not: null },
+        status: { in: ["confirmed", "overpaid", "paid"] },
+        sweep_needs_manual_review: false,
+      },
+      include: { merchant: { select: { business_name: true } } },
+      orderBy: { confirmed_at: "asc" },
+      take: limit,
+    });
+
+    return payments.map((payment) => ({
+      id: payment.id,
+      merchantId: payment.merchantId,
+      merchantName: payment.merchant.business_name,
+      amount: Number(payment.amount),
+      currency: payment.currency,
+      confirmed: true,
+      createdAt: payment.created_at.toISOString(),
+      minAgeMet: true,
+      notAlreadySwept: true,
+    }));
   }
 
   private async submitUsdcSweepTx(params: {
@@ -124,6 +175,26 @@ export class SweepService {
     let lastError: unknown;
 
     for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
+      let p90Fee = this.baseFee;
+      try {
+        if (typeof this.server.feeStats === "function") {
+          const feeStats = await this.server.feeStats();
+          const p90 = feeStats?.fee_charged?.p90;
+          if (p90 !== undefined && p90 !== null) {
+            const parsedP90 = parseInt(String(p90), 10);
+            if (!isNaN(parsedP90) && parsedP90 > 0) {
+              p90Fee = Math.max(this.baseFee, parsedP90);
+            }
+          }
+        }
+      } catch (feeErr) {
+        this.logger.warn("Failed to fetch fee stats from Horizon, falling back to base fee", {
+          error: feeErr instanceof Error ? feeErr.message : String(feeErr),
+        });
+      }
+
+      const attemptFee = this.calculateFeeForAttempt(attempt, p90Fee);
+
       try {
         const sourceKeypair = Keypair.fromSecret(params.sourceSecret);
         const sourceAccount = await this.server.loadAccount(
@@ -131,7 +202,7 @@ export class SweepService {
         );
 
         const builder = new TransactionBuilder(sourceAccount, {
-          fee: this.calculateFeeForAttempt(attempt),
+          fee: attemptFee,
           networkPassphrase: this.networkPassphrase,
         }).addOperation(
           Operation.payment({
@@ -142,6 +213,13 @@ export class SweepService {
         );
 
         if (params.mergeDestination) {
+          builder.addOperation(
+            Operation.changeTrust({
+              asset: this.usdcAsset,
+              limit: "0",
+            }),
+          );
+
           builder.addOperation(
             Operation.accountMerge({
               destination: params.mergeDestination,
@@ -162,13 +240,13 @@ export class SweepService {
         this.logger.warn("Sweep transaction submission failed", {
           attempt,
           maxRetries: this.maxRetries,
-          fee: this.calculateFeeForAttempt(attempt),
+          fee: attemptFee,
           errorMessage,
         });
 
         this.metrics.increment("stellar.sweep.submit.failure", {
           attempt: attempt.toString(),
-          fee: this.calculateFeeForAttempt(attempt),
+          fee: attemptFee,
         });
 
         if (attempt >= this.maxRetries) {
@@ -178,7 +256,7 @@ export class SweepService {
               attempts: attempt,
               feeBudget: {
                 baseFee: this.baseFee,
-                maxFee: this.maxFee,
+                maxFee: this.getMaxFee(),
                 multiplier: this.feeBumpMultiplier,
               },
             },
@@ -193,10 +271,22 @@ export class SweepService {
       : new Error("Failed to submit sweep transaction");
   }
 
-  private calculateFeeForAttempt(attempt: number): string {
+  public calculateFeeForAttempt(attempt: number, p90BaseFee?: number): string {
+    const base = Math.max(this.baseFee, p90BaseFee ?? this.baseFee);
     const bump = Math.pow(this.feeBumpMultiplier, Math.max(0, attempt - 1));
-    const candidateFee = Math.floor(this.baseFee * bump);
-    return Math.min(candidateFee, this.maxFee).toString();
+    const candidateFee = Math.floor(base * bump);
+    const maxFee = this.getMaxFee();
+
+    if (candidateFee >= maxFee) {
+      this.metrics.increment("stellar.sweep.capped_fee_reached", {
+        attempt: attempt.toString(),
+        candidateFee: candidateFee.toString(),
+        maxFee: maxFee.toString(),
+      });
+      return maxFee.toString();
+    }
+
+    return candidateFee.toString();
   }
 
   /**
@@ -240,6 +330,7 @@ export class SweepService {
     });
 
     const payments = await this.getUnsweptPaidPayments(limit);
+    const maxSweepRetryAttempts = getMaxSweepRetryAttempts();
 
     const txHashes: string[] = [];
     const skipped: Array<{ paymentId: string; reason: string }> = [];
@@ -275,11 +366,23 @@ export class SweepService {
             return;
           }
 
+          let seedVersion = 1;
+          if (p.stellar_address) {
+            const depositAddr = await prisma.depositAddress.findFirst({
+              where: { public_key: p.stellar_address },
+              select: { seedVersion: true },
+            });
+            if (depositAddr?.seedVersion) {
+              seedVersion = depositAddr.seedVersion;
+            }
+          }
+
           let kp: { publicKey: string; secretKey: string };
 
           if (p.derivation_path) {
             kp = await this.hdWalletService.regenerateKeypairFromPath(
               p.derivation_path,
+              seedVersion,
             );
           } else if (p.encrypted_key_data) {
             const { merchantIndex, paymentIndex } =
@@ -287,12 +390,37 @@ export class SweepService {
             kp = await this.hdWalletService.regenerateKeypair(
               merchantIndex,
               paymentIndex,
+              seedVersion,
             );
           } else {
-            kp = await this.hdWalletService.regenerateKeypair(
-              p.merchantId,
-              p.id,
-            );
+            // Pool-address path (fixes #1006): when neither derivation_path nor
+            // encrypted_key_data is set the payment was assigned a randomly-
+            // generated pool address whose secret key was stored encrypted in
+            // DepositAddress.secret_key. Look that up and decrypt via KMS
+            // instead of trying (and always failing) to re-derive via HD wallet.
+            const depositAddr = p.stellar_address
+              ? await prisma.depositAddress.findFirst({
+                  where: { public_key: p.stellar_address },
+                  select: { secret_key: true },
+                })
+              : null;
+
+            if (depositAddr?.secret_key) {
+              const kmsProvider = KMSFactory.getProvider();
+              const decryptedSecret = kmsProvider.decrypt
+                ? await kmsProvider.decrypt(depositAddr.secret_key)
+                : depositAddr.secret_key;
+              const keypair = Keypair.fromSecret(decryptedSecret);
+              kp = { publicKey: keypair.publicKey(), secretKey: keypair.secret() };
+            } else {
+              // Last-resort HD derivation — will fail the address-mismatch
+              // guard below if the address truly came from the pool.
+              kp = await this.hdWalletService.regenerateKeypair(
+                p.merchantId,
+                p.id,
+                seedVersion,
+              );
+            }
           }
 
           if (p.stellar_address && kp.publicKey !== p.stellar_address) {
@@ -369,8 +497,55 @@ export class SweepService {
         } catch (err: unknown) {
           const msg = err instanceof Error ? err.message : String(err);
           skipped.push({ paymentId: p.id, reason: msg });
-          if (dryRun)
+
+          if (dryRun) {
             decisions.push({ paymentId: p.id, action: "skip", reason: msg });
+            return;
+          }
+
+          // Per-payment error isolation (#824): a failed sweep must never
+          // abort the batch. Persisting the retry count / manual-review flag
+          // and writing the audit log are themselves guarded so that a
+          // failure in this bookkeeping can't become a new way to do that.
+          const nextRetryCount = (p.sweep_retry_count ?? 0) + 1;
+          const needsManualReview = nextRetryCount >= maxSweepRetryAttempts;
+
+          try {
+            await prisma.payment.update({
+              where: { id: p.id },
+              data: {
+                sweep_retry_count: nextRetryCount,
+                sweep_last_error: msg.slice(0, 500),
+                sweep_failed_at: new Date(),
+                sweep_needs_manual_review: needsManualReview,
+              },
+            });
+          } catch (updateErr: unknown) {
+            this.logger.error("Failed to persist sweep retry tracking", {
+              paymentId: p.id,
+              error:
+                updateErr instanceof Error
+                  ? updateErr.message
+                  : String(updateErr),
+            });
+          }
+
+          try {
+            await logSweepFailure({
+              paymentId: p.id,
+              error: msg,
+              retryCount: nextRetryCount,
+              flaggedForManualReview: needsManualReview,
+            });
+          } catch (auditErr: unknown) {
+            this.logger.error("Failed to write sweep failure audit log", {
+              paymentId: p.id,
+              error:
+                auditErr instanceof Error
+                  ? auditErr.message
+                  : String(auditErr),
+            });
+          }
         }
       };
 
@@ -422,13 +597,11 @@ export class SweepService {
   }
 }
 
-let _sweepService: SweepService | undefined;
+let _sweepService: SweepService;
 try {
   _sweepService = new SweepService();
 } catch (err) {
-  console.warn(
-    "SweepService failed to initialize (missing Stellar env vars?):",
-    err instanceof Error ? err.message : err,
-  );
+  console.error("SweepService failed to initialize", err);
+  throw err;
 }
-export const sweepService = _sweepService as SweepService;
+export const sweepService = _sweepService;

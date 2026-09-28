@@ -7,7 +7,17 @@ test.describe("Payment links flow", () => {
     const linkLabel = "E2E Product Link";
     const amount = "29.99";
 
-    const mockLinks: any[] = [
+    const mockLinks: {
+      id: string;
+      slug: string;
+      label: string;
+      amount: number;
+      currency: string;
+      created_at: string;
+      clicks: number;
+      conversions: number;
+      active: boolean;
+    }[] = [
       {
         id: "link_existing",
         slug: "exist1",

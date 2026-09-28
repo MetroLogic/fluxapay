@@ -1,55 +1,103 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Search } from "lucide-react";
 import { isAdmin } from "@/lib/auth";
+import { useDebounce } from "@/hooks/useDebounce";
 
-const BASE_ROUTES = [
-  { label: "Overview", path: "/dashboard" },
-  { label: "Payments", path: "/dashboard/payments" },
-  { label: "Payment Links", path: "/dashboard/payment-links" },
-  { label: "Invoices", path: "/dashboard/invoices" },
-  { label: "Refunds", path: "/dashboard/refunds" },
-  { label: "Settlements", path: "/dashboard/settlements" },
-  { label: "Webhooks", path: "/dashboard/webhooks" },
-  { label: "Analytics", path: "/dashboard/analytics" },
-  { label: "Settings", path: "/dashboard/settings" },
-  { label: "Developers", path: "/dashboard/developers" },
+/**
+ * Default debounce applied to the palette's search input (#779).
+ *
+ * Every keystroke used to drive the search directly, so typing a nine-letter
+ * route name meant nine passes — and nine requests once a search handler is
+ * wired up. 250ms is short enough to feel instant while collapsing a burst of
+ * typing into a single search.
+ */
+export const COMMAND_PALETTE_DEBOUNCE_MS = 250;
+
+const BASE_ROUTE_KEYS = [
+  { key: "overview", path: "/dashboard" },
+  { key: "payments", path: "/dashboard/payments" },
+  { key: "paymentLinks", path: "/dashboard/payment-links" },
+  { key: "invoices", path: "/dashboard/invoices" },
+  { key: "refunds", path: "/dashboard/refunds" },
+  { key: "settlements", path: "/dashboard/settlements" },
+  { key: "webhooks", path: "/dashboard/webhooks" },
+  { key: "analytics", path: "/dashboard/analytics" },
+  { key: "settings", path: "/dashboard/settings" },
+  { key: "developers", path: "/dashboard/developers" },
 ];
 
-const ADMIN_ROUTES = [
-  { label: "Admin Overview", path: "/admin/overview" },
-  { label: "Force Oracle Sync", path: "/admin/overview?action=force-oracle-sync" },
-  { label: "Flush Webhook Queue", path: "/admin/overview?action=flush-webhooks" },
-  { label: "View KYC Queue", path: "/admin/overview?action=kyc-queue" },
+const ADMIN_ROUTE_KEYS = [
+  { key: "adminOverview", path: "/admin/overview" },
+  { key: "forceOracleSync", path: "/admin/overview?action=force-oracle-sync" },
+  { key: "flushWebhookQueue", path: "/admin/overview?action=flush-webhooks" },
+  { key: "viewKYCQueue", path: "/admin/overview?action=kyc-queue" },
 ];
 
-export function CommandPalette() {
+export interface CommandPaletteProps {
+  /** Debounce applied to the search input, in milliseconds. */
+  debounceMs?: number;
+  /**
+   * Called with the debounced query whenever it settles.
+   *
+   * This is the seam a network-backed search hangs off; it fires once per
+   * settled query rather than once per keystroke.
+   */
+  onSearch?: (query: string) => void;
+}
+
+export function CommandPalette({
+  debounceMs = COMMAND_PALETTE_DEBOUNCE_MS,
+  onSearch,
+}: CommandPaletteProps = {}) {
+  const t = useTranslations("commandPalette");
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const [isAdminUser, setIsAdminUser] = useState(false);
-  const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
-  const routes = isAdminUser ? [...BASE_ROUTES, ...ADMIN_ROUTES] : BASE_ROUTES;
+  const routes = useMemo(() => {
+    const baseRoutes = BASE_ROUTE_KEYS.map(r => ({ label: t(r.key as any), path: r.path }));
+    const adminRoutes = ADMIN_ROUTE_KEYS.map(r => ({ label: t(r.key as any), path: r.path }));
+    return isAdminUser ? [...baseRoutes, ...adminRoutes] : baseRoutes;
+  }, [isAdminUser, t]);
 
-  // Initialize admin status and recent searches
+  // Initialize admin status
   useEffect(() => {
     setIsAdminUser(isAdmin());
-    const saved = sessionStorage.getItem("commandPaletteSearches");
-    if (saved) {
-      setRecentSearches(JSON.parse(saved));
-    }
   }, []);
 
-  const filtered = routes.filter((r) =>
-    r.label.toLowerCase().includes(query.toLowerCase())
+  // `query` drives the input so typing stays responsive; everything downstream
+  // reads the debounced value, so a burst of keystrokes settles into one pass.
+  const debouncedQuery = useDebounce(query, debounceMs);
+
+  const filtered = useMemo(
+    () =>
+      routes.filter((r) =>
+        r.label.toLowerCase().includes(debouncedQuery.toLowerCase()),
+      ),
+    [routes, debouncedQuery],
   );
+
+  // Skips the value present at mount, so an untouched palette issues no search.
+  const lastSearchedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!onSearch) return;
+    if (lastSearchedRef.current === null) {
+      lastSearchedRef.current = debouncedQuery;
+      return;
+    }
+    if (lastSearchedRef.current === debouncedQuery) return;
+    lastSearchedRef.current = debouncedQuery;
+    onSearch(debouncedQuery);
+  }, [debouncedQuery, onSearch]);
 
   const close = useCallback(() => {
     setOpen(false);
@@ -59,11 +107,12 @@ export function CommandPalette() {
 
   const saveSearch = useCallback((searchQuery: string) => {
     if (!searchQuery.trim()) return;
-    setRecentSearches((prev) => {
-      const updated = [searchQuery, ...prev.filter((s) => s !== searchQuery)].slice(0, 10);
-      sessionStorage.setItem("commandPaletteSearches", JSON.stringify(updated));
-      return updated;
-    });
+    const prev: string[] = (() => {
+      try { return JSON.parse(sessionStorage.getItem("commandPaletteSearches") ?? "[]"); }
+      catch { return []; }
+    })();
+    const updated = [searchQuery, ...prev.filter((s) => s !== searchQuery)].slice(0, 10);
+    sessionStorage.setItem("commandPaletteSearches", JSON.stringify(updated));
   }, []);
 
   const navigate = useCallback(
@@ -88,27 +137,96 @@ export function CommandPalette() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  // Focus trap implementation
+  /**
+   * Focus trap (#834).
+   *
+   * The previous implementation listened for Escape and otherwise called
+   * `e.preventDefault()` on every Tab. That is not a trap — it disables Tab
+   * outright, so focus cannot move *within* the palette either, and the moment
+   * focus sat anywhere but the input, Tab escaped to the dashboard behind it.
+   *
+   * This cycles focus across the palette's own focusable elements and wraps at
+   * both ends, so Tab and Shift+Tab stay inside while remaining useful.
+   */
   useEffect(() => {
     if (!open || !dialogRef.current) return;
+    const dialog = dialogRef.current;
+
+    const focusable = () =>
+      Array.from(
+        dialog.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter((el) => el.offsetParent !== null || el.getClientRects().length > 0);
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         close();
+        return;
+      }
+      if (e.key !== "Tab") return;
+
+      // Recomputed per keypress: the result list re-renders as the query
+      // changes, so a list captured on open would immediately go stale.
+      const items = focusable();
+      if (items.length === 0) {
+        e.preventDefault();
+        return;
+      }
+
+      const first = items[0];
+      const last = items[items.length - 1];
+
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
       }
     };
 
-    dialogRef.current.addEventListener("keydown", handleKeyDown);
-    return () => dialogRef.current?.removeEventListener("keydown", handleKeyDown);
+    dialog.addEventListener("keydown", handleKeyDown);
+    return () => dialog.removeEventListener("keydown", handleKeyDown);
   }, [open, close]);
 
+  /**
+   * Hide the background from assistive tech while the palette is open (#834),
+   * and restore focus to whatever opened it on close.
+   *
+   * `inert` is set alongside `aria-hidden` because aria-hidden alone still
+   * leaves background controls clickable and focusable by pointer — it hides
+   * them from screen readers without actually making them inert.
+   */
   useEffect(() => {
     if (!open) return;
+
+    const opener = document.activeElement as HTMLElement | null;
+    const root = document.getElementById("__next") ?? document.body;
+    const siblings = Array.from(root.children).filter(
+      (el) => el !== dialogRef.current && !el.contains(dialogRef.current),
+    ) as HTMLElement[];
+
+    for (const el of siblings) {
+      el.setAttribute("aria-hidden", "true");
+      el.setAttribute("inert", "");
+    }
+
     const id = requestAnimationFrame(() => {
       setActive(0);
       queueMicrotask(() => inputRef.current?.focus());
     });
-    return () => cancelAnimationFrame(id);
+
+    return () => {
+      cancelAnimationFrame(id);
+      for (const el of siblings) {
+        el.removeAttribute("aria-hidden");
+        el.removeAttribute("inert");
+      }
+      // Returning focus to the trigger is what stops a keyboard user being
+      // dumped at the top of the document every time they dismiss the palette.
+      if (opener?.isConnected) opener.focus();
+    };
   }, [open]);
 
   useEffect(() => {
@@ -126,8 +244,6 @@ export function CommandPalette() {
       setActive((i) => (i - 1 + filtered.length) % filtered.length);
     } else if (e.key === "Enter" && filtered[active]) {
       navigate(filtered[active].path);
-    } else if (e.key === "Tab") {
-      e.preventDefault();
     }
   };
 
@@ -140,7 +256,7 @@ export function CommandPalette() {
       aria-modal="true"
       aria-label="Command palette"
       aria-live="polite"
-      aria-busy={filtered.length === 0 && query.length > 0}
+      aria-busy={query !== debouncedQuery}
       className="fixed inset-0 z-50 flex items-start justify-center pt-[20vh] bg-black/50 backdrop-blur-sm"
       onMouseDown={(e) => e.target === e.currentTarget && close()}
     >
@@ -194,7 +310,7 @@ export function CommandPalette() {
           </ul>
         ) : (
           <p className="px-4 py-3 text-sm text-muted-foreground" role="status">
-            {query ? "No results." : "Type to search…"}
+            {debouncedQuery ? "No results." : "Type to search…"}
           </p>
         )}
       </div>

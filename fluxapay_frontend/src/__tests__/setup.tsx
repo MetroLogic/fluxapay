@@ -3,6 +3,21 @@ import { vi } from 'vitest';
 import en from '../../messages/en.json';
 import React from 'react';
 
+// jsdom doesn't implement matchMedia
+Object.defineProperty(window, 'matchMedia', {
+  writable: true,
+  value: vi.fn((query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  })),
+});
+
 // Global mocks
 vi.mock('next/navigation', () => ({
   useRouter: () => ({
@@ -17,7 +32,12 @@ vi.mock('next/navigation', () => ({
 }));
 
 vi.mock('@/i18n/routing', () => ({
-  Link: ({ children, href }: { children: React.ReactNode; href: string }) => children,
+  routing: {
+    locales: ['en', 'fr', 'pt'],
+    defaultLocale: 'en',
+    localePrefix: 'as-needed',
+  },
+  Link: ({ children }: { children: React.ReactNode; href: string }) => children,
   useRouter: () => ({
     push: vi.fn(),
     replace: vi.fn(),
@@ -64,6 +84,6 @@ vi.mock('next/image', () => ({
   __esModule: true,
   default: (props: React.ImgHTMLAttributes<HTMLImageElement>) => {
     // eslint-disable-next-line @next/next/no-img-element
-    return <img {...props} />;
+    return <img alt="" {...props} />;
   },
 }));

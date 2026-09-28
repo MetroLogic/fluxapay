@@ -44,14 +44,11 @@ export function AddressPoolCard() {
   const utilizationPercentage = total > 0 ? (assigned / total) * 100 : 0;
 
   let statusColor = "text-green-500";
-  let bgStatusColor = "bg-green-500";
   
   if (availablePercentage < 10) {
     statusColor = "text-red-500";
-    bgStatusColor = "bg-red-500";
   } else if (availablePercentage <= 30) {
     statusColor = "text-amber-500";
-    bgStatusColor = "bg-amber-500";
   }
 
   return (

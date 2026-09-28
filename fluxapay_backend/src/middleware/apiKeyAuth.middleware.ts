@@ -3,10 +3,10 @@ import { apiError, sendApiError } from "../helpers/apiError.helper";
 import { Response, NextFunction } from "express";
 import { AuthRequest } from "../types/express";
 import { PrismaClient } from "../generated/client/client";
+import { prisma } from "../config/prisma";
 import { compareKeys } from "../helpers/crypto.helper";
 import jwt, { JwtPayload } from "jsonwebtoken";
 
-const prisma = new PrismaClient();
 
 /**
  * Middleware to authenticate requests using an API key or JWT.

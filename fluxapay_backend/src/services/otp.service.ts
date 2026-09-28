@@ -1,9 +1,17 @@
 import bcrypt from 'bcrypt';
+import crypto from 'crypto';
 import { PrismaClient } from '../generated/client/client';
-const prisma = new PrismaClient();
+import { prisma } from "../config/prisma";
+import { assertOtpEmailRateLimit } from './otpEmailRateLimiter';
 
-export async function createOtp(merchantId: string, channel: 'email' | 'phone') {
-  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+export async function createOtp(merchantId: string, channel: 'email' | 'phone', email?: string) {
+  if (channel === 'email') {
+    if (!email) throw new Error('Email is required when creating an email OTP');
+    await assertOtpEmailRateLimit(email);
+  }
+
+  // Use CSPRNG instead of Math.random() to prevent predictable OTP codes (closes #1047)
+  const otp = crypto.randomInt(100000, 1000000).toString();
   const hashedOtp = await bcrypt.hash(otp, 10);
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 min expiry
 
@@ -19,7 +27,7 @@ export async function createOtp(merchantId: string, channel: 'email' | 'phone') 
 
 export async function verifyOtp(merchantId: string, channel: 'email' | 'phone', otp: string) {
   const bypass = process.env.E2E_ACCEPT_OTP;
-  if (bypass && otp === bypass) {
+  if (process.env.NODE_ENV === 'test' && bypass && otp === bypass) {
     await prisma.oTP.deleteMany({ where: { merchantId, channel } });
     return { success: true };
   }

@@ -3,11 +3,12 @@ import { ErrorCode } from "../types/errors";
 import { PrismaClient, Prisma, InvoiceStatus } from "../generated/client/client";
 import crypto from "crypto";
 import { createAndDeliverWebhook } from "./webhook.service";
-import { generateInvoicePdf } from "./invoicePdf.service";
+import { startInvoicePdfGeneration } from "./invoicePdf.service";
 import { sendInvoiceEmail } from "./email.service";
 import { Readable } from "stream";
+import { assertValidPositiveAmount, assertValidLineItems, AmountValidationError } from "../utils/amount.util";
 
-const prisma = new PrismaClient();
+import { prisma } from "../config/prisma";
 
 function buildInvoiceNumber() {
   const d = new Date();
@@ -45,6 +46,22 @@ export async function createInvoiceService(params: {
     due_date,
     tax_rate,
   } = params;
+
+  // Validate amount / line items are positive numbers before using them in
+  // any calculation. Negative or zero values would otherwise flow through
+  // to `subtotal`/`total` and ultimately to settlement as inverted balances.
+  try {
+    if (line_items && line_items.length > 0) {
+      assertValidLineItems(line_items);
+    } else if (params.amount !== undefined) {
+      assertValidPositiveAmount(params.amount, "amount");
+    }
+  } catch (validationError) {
+    if (validationError instanceof AmountValidationError) {
+      throw apiError(400, ErrorCode.INVALID_AMOUNT, validationError.message);
+    }
+    throw validationError;
+  }
 
   // Calculate subtotal from line items
   let subtotal = 0;
@@ -123,9 +140,15 @@ export async function getInvoiceByIdService(merchantId: string, invoiceId: strin
     data: {
       id: invoice.id,
       invoice_number: invoice.invoice_number,
-      amount: Number(invoice.amount),
+      amount: Number(invoice.amount) / 100,
+      subtotal: invoice.subtotal ? Number(invoice.subtotal) / 100 : 0,
+      tax_amount: invoice.tax_amount ? Number(invoice.tax_amount) / 100 : 0,
+      tax_rate: invoice.tax_rate ? Number(invoice.tax_rate) / 100 : 0,
       currency: invoice.currency,
       customer_email: invoice.customer_email,
+      customer_name: invoice.customer_name,
+      line_items: invoice.line_items,
+      notes: invoice.notes,
       status: invoice.status,
       due_date: invoice.due_date,
       created_at: invoice.created_at,
@@ -206,6 +229,7 @@ export async function updateInvoiceStatusService(
 
   const invoice = await prisma.invoice.findFirst({
     where: { id: invoiceId, merchantId },
+    include: { payment: true },
   });
 
   if (!invoice) {
@@ -236,14 +260,22 @@ export async function updateInvoiceStatusService(
       const payload = {
         event: `invoice.${newStatus}`,
         invoice_id: updatedInvoice.id,
+        merchant_id: merchantId,
         invoice_number: updatedInvoice.invoice_number,
         amount: updatedInvoice.amount.toString(),
         currency: updatedInvoice.currency,
         status: newStatus,
         customer_email: updatedInvoice.customer_email,
+        paid_at: updatedInvoice.updated_at.toISOString(),
+        payment_tx_hash: invoice.payment?.transaction_hash ?? null,
         updated_at: updatedInvoice.updated_at.toISOString(),
       };
-      await createAndDeliverWebhook(merchantId, `invoice_${newStatus}` as any, payload);
+      await createAndDeliverWebhook(
+        merchantId,
+        `invoice_${newStatus}` as any,
+        payload,
+        newStatus === "paid" ? updatedInvoice.payment_id ?? undefined : undefined,
+      );
     } catch (err: any) {
       if (!err.message?.includes("has no webhook")) {
         console.error(`[InvoiceService] Webhook delivery failed for invoice ${invoiceId}:`, err);
@@ -260,6 +292,52 @@ export async function updateInvoiceStatusService(
       updated_at: updatedInvoice.updated_at,
     },
   };
+}
+
+/** Mark an invoice paid when its linked payment is confirmed. */
+export async function markInvoicePaidForPaymentService(
+  merchantId: string,
+  paymentId: string,
+) {
+  const claimed = await prisma.invoice.updateMany({
+    where: {
+      merchantId,
+      payment_id: paymentId,
+      status: { in: ["sent", "overdue"] },
+    },
+    data: { status: "paid" },
+  });
+
+  if (claimed.count === 0) {
+    return null;
+  }
+
+  const invoice = await prisma.invoice.findFirst({
+    where: { merchantId, payment_id: paymentId, status: "paid" },
+    include: { payment: true },
+  });
+
+  if (!invoice) {
+    return null;
+  }
+
+  try {
+    await createAndDeliverWebhook(merchantId, "invoice_paid" as any, {
+      event: "invoice.paid",
+      invoice_id: invoice.id,
+      merchant_id: merchantId,
+      amount: invoice.amount.toString(),
+      currency: invoice.currency,
+      paid_at: invoice.updated_at.toISOString(),
+      payment_tx_hash: invoice.payment?.transaction_hash ?? null,
+    }, paymentId);
+  } catch (err: any) {
+    if (!err.message?.includes("has no webhook")) {
+      console.error(`[InvoiceService] Webhook delivery failed for invoice ${invoice.id}:`, err);
+    }
+  }
+
+  return invoice;
 }
 
 export async function sendInvoiceService(merchantId: string, invoiceId: string) {
@@ -387,7 +465,7 @@ export async function voidInvoiceService(merchantId: string, invoiceId: string) 
 export type ExportFormat = "csv" | "json" | "pdf";
 
 export type ExportResult =
-  | { format: "pdf"; stream: Readable; filename: string; contentType: string }
+  | { format: "pdf"; status: "accepted"; jobId: string; filename: string; contentType: string }
   | { format: "csv" | "json"; filename: string; content: string | object; contentType: string };
 
 export async function exportInvoiceService(
@@ -411,31 +489,40 @@ export async function exportInvoiceService(
 
   // ── PDF ──────────────────────────────────────────────────────────────────
   if (format === "pdf") {
-    const stream = generateInvoicePdf({
-      invoice_number: invoice.invoice_number,
-      id: invoice.id,
-      amount: Number(invoice.amount),
-      currency: invoice.currency,
-      customer_email: invoice.customer_email,
-      status: invoice.status,
-      due_date: invoice.due_date,
-      created_at: invoice.created_at,
-      payment_link: invoice.payment_link,
-      merchant_name: invoice.merchant?.business_name,
-      payment: payment
-        ? {
-          id: payment.id,
-          status: payment.status,
-          amount: Number(payment.amount),
-          currency: payment.currency,
-        }
-        : null,
-    });
+    const filename = `invoice-${invoice.invoice_number}.pdf`;
+    const job = startInvoicePdfGeneration(
+      {
+        invoice_number: invoice.invoice_number,
+        id: invoice.id,
+        amount: Number(invoice.amount),
+        currency: invoice.currency,
+        customer_email: invoice.customer_email,
+        status: invoice.status,
+        due_date: invoice.due_date,
+        created_at: invoice.created_at,
+        payment_link: invoice.payment_link,
+        merchant_name: invoice.merchant?.business_name,
+        line_items: (invoice.line_items as any) || undefined,
+        notes: invoice.notes || undefined,
+        payment: payment
+          ? {
+            id: payment.id,
+            status: payment.status,
+            amount: Number(payment.amount),
+            currency: payment.currency,
+          }
+          : null,
+      },
+      filename,
+      merchantId,
+      invoiceId,
+    );
 
     return {
       format: "pdf",
-      stream,
-      filename: `invoice-${invoice.invoice_number}.pdf`,
+      status: "accepted",
+      jobId: job.id,
+      filename,
       contentType: "application/pdf",
     };
   }

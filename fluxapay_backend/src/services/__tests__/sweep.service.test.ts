@@ -13,6 +13,9 @@ jest.mock("@stellar/stellar-sdk", () => {
       Server: jest.fn().mockImplementation(() => ({
         loadAccount: jest.fn(),
         submitTransaction: jest.fn(),
+        feeStats: jest.fn().mockResolvedValue({
+          fee_charged: { p90: "150" },
+        }),
       })),
     },
   };
@@ -24,6 +27,9 @@ const mockPrisma = {
     findMany: jest.fn(),
     update: jest.fn(),
   },
+  depositAddress: {
+    findFirst: jest.fn(),
+  },
   $executeRaw: jest.fn(),
 };
 
@@ -34,6 +40,7 @@ jest.mock("../../generated/client/client", () => ({
 jest.mock("../audit.service", () => ({
   logSweepTrigger: jest.fn().mockResolvedValue({ id: "audit_test" }),
   updateSweepCompletion: jest.fn().mockResolvedValue(undefined),
+  logSweepFailure: jest.fn().mockResolvedValue({ id: "audit_fail_test" }),
 }));
 
 jest.mock("../sweepQueue.service", () => ({
@@ -55,17 +62,34 @@ jest.mock("../HDWalletService", () => ({
 
 jest.mock("../../config/sweep.config", () => ({
   getSweepMinBalanceUsdc: jest.fn(() => 10),
+  getMaxSweepRetryAttempts: jest.fn(() => 5),
 }));
 
-// Import after mocks
 import { Horizon, Keypair, Account } from "@stellar/stellar-sdk";
+
+// Set required env vars for module load
+process.env.MASTER_VAULT_SECRET_KEY = Keypair.random().secret();
+
+// Import after mocks
 import { SweepService } from "../sweep.service";
+import { logSweepFailure } from "../audit.service";
 
 describe("SweepService", () => {
   let sweepService: SweepService;
   let mockServer: any;
   let mockHDWalletService: any;
   let issuerPublicKey: string;
+
+  it("re-throws initialization errors instead of exporting an undefined service", () => {
+    jest.resetModules();
+    delete process.env.MASTER_VAULT_SECRET_KEY;
+
+    expect(() => {
+      jest.isolateModules(() => {
+        require("../sweep.service");
+      });
+    }).toThrow("MASTER_VAULT_SECRET_KEY is required");
+  });
 
   function createSweepFixture(
     paymentOverrides: Record<string, unknown> = {},
@@ -112,6 +136,7 @@ describe("SweepService", () => {
     process.env.STELLAR_NETWORK_PASSPHRASE = "Test SDF Network ; September 2015";
     process.env.STELLAR_BASE_FEE = "100";
     process.env.STELLAR_MAX_FEE = "2000";
+    delete process.env.SWEEP_MAX_FEE_STROOPS;
     process.env.STELLAR_FEE_BUMP_MULTIPLIER = "2";
     process.env.STELLAR_TX_MAX_RETRIES = "3";
     process.env.USDC_ISSUER_PUBLIC_KEY = issuerPublicKey;
@@ -123,6 +148,9 @@ describe("SweepService", () => {
     mockServer = {
       loadAccount: jest.fn(),
       submitTransaction: jest.fn(),
+      feeStats: jest.fn().mockResolvedValue({
+        fee_charged: { p90: "150" },
+      }),
     };
     (Horizon.Server as jest.Mock).mockImplementation(() => mockServer);
 
@@ -282,7 +310,7 @@ describe("SweepService", () => {
       const result = await sweepService.sweepPaidPayments({ adminId: "admin_1" });
 
       expect(mockHDWalletService.decryptKeyData).toHaveBeenCalledWith("encrypted_data");
-      expect(mockHDWalletService.regenerateKeypair).toHaveBeenCalledWith(0, 0);
+      expect(mockHDWalletService.regenerateKeypair).toHaveBeenCalledWith(0, 0, 1);
       expect(result.addressesSwept).toBe(1);
     });
 
@@ -300,14 +328,15 @@ describe("SweepService", () => {
 
       expect(mockHDWalletService.regenerateKeypair).toHaveBeenCalledWith(
         "merchant_1",
-        "payment_1"
+        "payment_1",
+        1,
       );
       expect(result.addressesSwept).toBe(1);
     });
   });
 
-  describe("fee calculation", () => {
-    it("should calculate fees with exponential backoff", () => {
+  describe("fee calculation and dynamic Horizon fee stats (#753)", () => {
+    it("should calculate fees with exponential backoff using base fee", () => {
       const calculateFee = (sweepService as any).calculateFeeForAttempt.bind(sweepService);
 
       expect(calculateFee(1)).toBe("100"); // Base fee
@@ -315,10 +344,58 @@ describe("SweepService", () => {
       expect(calculateFee(3)).toBe("400"); // 4x
     });
 
-    it("should cap fees at max fee", () => {
+    it("should use max(BASE_FEE, feeStats.fee_charged.p90) when Horizon fee stats are higher", () => {
       const calculateFee = (sweepService as any).calculateFeeForAttempt.bind(sweepService);
 
-      expect(calculateFee(10)).toBe("2000"); // Capped at max
+      // p90 is 350 > baseFee 100
+      expect(calculateFee(1, 350)).toBe("350");
+      expect(calculateFee(2, 350)).toBe("700");
+      expect(calculateFee(3, 350)).toBe("1400");
+    });
+
+    it("should use BASE_FEE when Horizon fee stats p90 is lower than base fee", () => {
+      const calculateFee = (sweepService as any).calculateFeeForAttempt.bind(sweepService);
+
+      // p90 is 50 < baseFee 100
+      expect(calculateFee(1, 50)).toBe("100");
+      expect(calculateFee(2, 50)).toBe("200");
+    });
+
+    it("should cap fees at SWEEP_MAX_FEE_STROOPS and emit metric when capped fee is reached", () => {
+      process.env.SWEEP_MAX_FEE_STROOPS = "1500";
+      const metricsMock = (sweepService as any).metrics;
+      const metricsSpy = jest.spyOn(metricsMock, "increment");
+
+      const calculateFee = (sweepService as any).calculateFeeForAttempt.bind(sweepService);
+
+      // 350 * 2^2 = 1400 (< 1500)
+      expect(calculateFee(3, 350)).toBe("1400");
+      // 350 * 2^3 = 2800 (>= 1500 capped)
+      expect(calculateFee(4, 350)).toBe("1500");
+      expect(metricsSpy).toHaveBeenCalledWith(
+        "stellar.sweep.capped_fee_reached",
+        expect.objectContaining({
+          attempt: "4",
+          maxFee: "1500",
+        }),
+      );
+    });
+
+    it("fetches /fee_stats from Horizon before each sweep attempt", async () => {
+      const { payment, keypair, account } = createSweepFixture();
+
+      mockPrisma.payment.findMany.mockResolvedValue([payment]);
+      mockHDWalletService.regenerateKeypairFromPath.mockResolvedValue(keypair);
+      mockServer.loadAccount.mockResolvedValue(account);
+      mockServer.submitTransaction.mockResolvedValue({ hash: "tx_hash_fee_test" });
+      mockServer.feeStats.mockResolvedValue({
+        fee_charged: { p90: "250" },
+      });
+
+      const result = await sweepService.sweepPaidPayments({ adminId: "admin_1" });
+
+      expect(mockServer.feeStats).toHaveBeenCalled();
+      expect(result.addressesSwept).toBe(1);
     });
   });
 
@@ -355,6 +432,179 @@ describe("SweepService", () => {
       expect(mockServer.submitTransaction).toHaveBeenCalledTimes(3); // Max retries
       expect(result.addressesSwept).toBe(0);
       expect(result.skipped).toHaveLength(1);
+    });
+  });
+
+  describe("per-payment error isolation (#824)", () => {
+    it("isolates a single failing sweep: batch of 5 payments with 1 failing completes the other 4", async () => {
+      const fixtures = Array.from({ length: 5 }, (_, i) =>
+        createSweepFixture({
+          id: `payment_${i}`,
+          derivation_path: `m/44'/148'/0'/0/${i}`,
+        }),
+      );
+      const failingFixture = fixtures[2];
+
+      mockPrisma.payment.findMany.mockResolvedValue(
+        fixtures.map((f) => f.payment),
+      );
+
+      mockHDWalletService.regenerateKeypairFromPath.mockImplementation(
+        async (path: string) => {
+          const fixture = fixtures.find(
+            (f) => f.payment.derivation_path === path,
+          );
+          return fixture!.keypair;
+        },
+      );
+
+      mockServer.loadAccount.mockImplementation(async (publicKey: string) => {
+        const fixture = fixtures.find((f) => f.keypair.publicKey === publicKey);
+        return fixture!.account;
+      });
+
+      mockServer.submitTransaction.mockImplementation(async (tx: any) => {
+        if (tx.source === failingFixture.keypair.publicKey) {
+          throw new Error("insufficient XLM for fee");
+        }
+        return { hash: `tx_hash_${tx.source}` };
+      });
+
+      const result = await sweepService.sweepPaidPayments({
+        adminId: "admin_1",
+      });
+
+      expect(result.addressesSwept).toBe(4);
+      expect(result.txHashes).toHaveLength(4);
+      expect(result.skipped).toHaveLength(1);
+      expect(result.skipped[0].paymentId).toBe(failingFixture.payment.id);
+
+      // The failing payment's retry bookkeeping was persisted...
+      expect(mockPrisma.payment.update).toHaveBeenCalledWith({
+        where: { id: failingFixture.payment.id },
+        data: {
+          sweep_retry_count: 1,
+          sweep_last_error: expect.stringContaining("insufficient XLM"),
+          sweep_failed_at: expect.any(Date),
+          sweep_needs_manual_review: false,
+        },
+      });
+
+      // ...and the other 4 were still marked swept despite the one failure.
+      const successfulIds = fixtures
+        .filter((f) => f.payment.id !== failingFixture.payment.id)
+        .map((f) => f.payment.id);
+      for (const id of successfulIds) {
+        expect(mockPrisma.payment.update).toHaveBeenCalledWith({
+          where: { id },
+          data: {
+            swept: true,
+            swept_at: expect.any(Date),
+            sweep_tx_hash: expect.any(String),
+          },
+        });
+      }
+    });
+
+    it("increments sweep_retry_count and logs an audit entry on a failed sweep", async () => {
+      const { payment, keypair, account } = createSweepFixture({
+        sweep_retry_count: 2,
+      });
+
+      mockPrisma.payment.findMany.mockResolvedValue([payment]);
+      mockHDWalletService.regenerateKeypairFromPath.mockResolvedValue(keypair);
+      mockServer.loadAccount.mockResolvedValue(account);
+      mockServer.submitTransaction.mockRejectedValue(
+        new Error("invalid trustline"),
+      );
+
+      const result = await sweepService.sweepPaidPayments({
+        adminId: "admin_1",
+      });
+
+      expect(result.addressesSwept).toBe(0);
+      expect(mockPrisma.payment.update).toHaveBeenCalledWith({
+        where: { id: payment.id },
+        data: {
+          sweep_retry_count: 3,
+          sweep_last_error: expect.stringContaining("invalid trustline"),
+          sweep_failed_at: expect.any(Date),
+          sweep_needs_manual_review: false,
+        },
+      });
+      expect(logSweepFailure).toHaveBeenCalledWith({
+        paymentId: payment.id,
+        error: expect.stringContaining("invalid trustline"),
+        retryCount: 3,
+        flaggedForManualReview: false,
+      });
+    });
+
+    it("flags a payment for manual review once max retry attempts are reached", async () => {
+      const { payment, keypair, account } = createSweepFixture({
+        sweep_retry_count: 4,
+      });
+
+      mockPrisma.payment.findMany.mockResolvedValue([payment]);
+      mockHDWalletService.regenerateKeypairFromPath.mockResolvedValue(keypair);
+      mockServer.loadAccount.mockResolvedValue(account);
+      mockServer.submitTransaction.mockRejectedValue(new Error("tx_failed"));
+
+      await sweepService.sweepPaidPayments({ adminId: "admin_1" });
+
+      // getMaxSweepRetryAttempts() is mocked to 5, so the 5th failure flips the flag.
+      expect(mockPrisma.payment.update).toHaveBeenCalledWith({
+        where: { id: payment.id },
+        data: {
+          sweep_retry_count: 5,
+          sweep_last_error: expect.any(String),
+          sweep_failed_at: expect.any(Date),
+          sweep_needs_manual_review: true,
+        },
+      });
+      expect(logSweepFailure).toHaveBeenCalledWith(
+        expect.objectContaining({
+          retryCount: 5,
+          flaggedForManualReview: true,
+        }),
+      );
+    });
+
+    it("excludes payments already flagged for manual review from the sweep query", async () => {
+      mockPrisma.payment.findMany.mockResolvedValue([]);
+
+      await sweepService.sweepPaidPayments({ adminId: "admin_1" });
+
+      expect(mockPrisma.payment.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            sweep_needs_manual_review: false,
+          }),
+        }),
+      );
+    });
+
+    it("does not abort the batch when persisting sweep-failure bookkeeping itself fails", async () => {
+      const { payment, keypair, account } = createSweepFixture();
+
+      mockPrisma.payment.findMany.mockResolvedValue([payment]);
+      mockHDWalletService.regenerateKeypairFromPath.mockResolvedValue(keypair);
+      mockServer.loadAccount.mockResolvedValue(account);
+      mockServer.submitTransaction.mockRejectedValue(new Error("tx_failed"));
+      mockPrisma.payment.update.mockRejectedValueOnce(
+        new Error("db unavailable"),
+      );
+      (logSweepFailure as jest.Mock).mockRejectedValueOnce(
+        new Error("audit unavailable"),
+      );
+
+      const result = await sweepService.sweepPaidPayments({
+        adminId: "admin_1",
+      });
+
+      expect(result.addressesSwept).toBe(0);
+      expect(result.skipped).toHaveLength(1);
+      expect(result.skipped[0].paymentId).toBe(payment.id);
     });
   });
 

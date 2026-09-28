@@ -9,19 +9,39 @@ const localeNames: Record<string, string> = {
   en: "English",
   fr: "Français",
   pt: "Português",
+  es: "Español",
   ar: "العربية",
-  he: "עברית",
+  sw: "Kiswahili",
 };
 
 const localeFlags: Record<string, string> = {
   en: "🇬🇧",
   fr: "🇫🇷",
   pt: "🇧🇷",
+  es: "🇪🇸",
   ar: "🇸🇦",
-  he: "🇮🇱",
+  sw: "🇰🇪",
 };
 
-const rtlLocales = ["ar", "he"];
+const rtlLocales = ["ar"];
+
+export function buildLocalizedPath(
+  pathname: string,
+  nextLocale: string,
+  search: string = "",
+  hash: string = ""
+) {
+  const currentPath = pathname || "/";
+  const unprefixedPath = currentPath.replace(/^\/(en|fr|pt|es|ar|sw)(?=\/|$)/, "") || "/";
+
+  let basePath = unprefixedPath;
+  if (nextLocale !== routing.defaultLocale) {
+    basePath = unprefixedPath === "/" ? `/${nextLocale}` : `/${nextLocale}${unprefixedPath}`;
+  }
+
+  const formattedSearch = search && !search.startsWith("?") ? `?${search}` : search;
+  return `${basePath}${formattedSearch}${hash}`;
+}
 
 export default function LocaleSwitcher() {
   const locale = useLocale();
@@ -37,26 +57,11 @@ export default function LocaleSwitcher() {
     document.documentElement.lang = locale;
   }, [locale]);
 
-  function buildLocalizedPath(nextLocale: string) {
-    const currentPath = pathname || "/";
-    const unprefixedPath = currentPath.replace(/^\/(fr|pt)(?=\/|$)/, "") || "/";
-
-    if (nextLocale === routing.defaultLocale) {
-      return unprefixedPath;
-    }
-
-    if (unprefixedPath === "/") {
-      return `/${nextLocale}`;
-    }
-
-    return `/${nextLocale}${unprefixedPath}`;
-  }
-
   function onSelectChange(nextLocale: string) {
     startTransition(() => {
-      const nextPath = buildLocalizedPath(nextLocale);
-      const query = searchParams.toString();
-      const target = query ? `${nextPath}?${query}` : nextPath;
+      const search = typeof window !== "undefined" ? window.location.search : (searchParams?.toString() ? `?${searchParams.toString()}` : "");
+      const hash = typeof window !== "undefined" ? window.location.hash : "";
+      const target = buildLocalizedPath(pathname, nextLocale, search, hash);
 
       document.cookie = `NEXT_LOCALE=${nextLocale}; path=/; max-age=31536000`;
 

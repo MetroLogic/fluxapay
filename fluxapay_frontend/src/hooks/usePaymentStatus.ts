@@ -1,77 +1,19 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Payment } from '@/types/payment';
+import {
+  isTerminalStatus,
+  normalizePaymentResponse,
+  PaymentParseError,
+  usePaymentNormalization,
+} from './usePaymentNormalization';
+import { usePaymentPolling, type ConnectionType } from './usePaymentPolling';
+import { useSSE } from './useSSE';
 
-type ConnectionType = 'sse' | 'polling' | null;
-
-function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
-}
-
-function firstString(...values: unknown[]): string | undefined {
-  for (const value of values) {
-    if (typeof value === 'string' && value.trim() !== '') {
-      return value;
-    }
-  }
-  return undefined;
-}
-
-function normalizeHexColor(value: string | undefined): string | undefined {
-  if (!value) return undefined;
-  const color = value.trim();
-  if (/^#[0-9a-fA-F]{6}$/.test(color)) return color;
-  if (/^[0-9a-fA-F]{6}$/.test(color)) return `#${color}`;
-  return color;
-}
-
-export function normalizePaymentResponse(data: unknown): Payment {
-  const raw = asRecord(data);
-  const merchantBranding = asRecord(raw.merchant_branding ?? raw.merchantBranding);
-
-  return {
-    ...(raw as unknown as Payment),
-    expiresAt: new Date(raw.expiresAt as string),
-    merchantName: firstString(
-      raw.merchantName,
-      raw.merchant_name,
-      merchantBranding.businessName,
-      merchantBranding.business_name,
-      merchantBranding.merchantName,
-      merchantBranding.merchant_name
-    ),
-    checkoutLogoUrl: firstString(
-      raw.checkoutLogoUrl,
-      raw.checkout_logo_url,
-      merchantBranding.logoUrl,
-      merchantBranding.logo_url,
-      merchantBranding.checkoutLogoUrl,
-      merchantBranding.checkout_logo_url
-    ),
-    checkoutAccentColor: normalizeHexColor(firstString(
-      raw.checkoutAccentColor,
-      raw.checkout_accent_color,
-      merchantBranding.primaryColor,
-      merchantBranding.primary_color,
-      merchantBranding.brandColor,
-      merchantBranding.brand_color,
-      merchantBranding.accentColor,
-      merchantBranding.accent_color,
-      merchantBranding.checkoutAccentColor,
-      merchantBranding.checkout_accent_color
-    )),
-    paidAmount:
-      (raw.paidAmount as number | undefined) ??
-      (raw.paid_amount as number | undefined),
-    supportUrl:
-      (raw.supportUrl as string | undefined) ??
-      (raw.support_url as string | undefined),
-    transactionHash:
-      (raw.transactionHash as string | undefined) ??
-      (raw.transaction_hash as string | undefined),
-  };
-}
+// Re-exported so existing consumers/tests can import normalization and the
+// payment-parsing error from the original module path.
+export { isTerminalStatus, normalizePaymentResponse, PaymentParseError } from './usePaymentNormalization';
 
 interface UsePaymentStatusReturn {
   payment: Payment | null;
@@ -81,35 +23,37 @@ interface UsePaymentStatusReturn {
   isOffline: boolean;
   retryConnection: () => Promise<void>;
   serverTimeOffset: number;
+  /** True for one render cycle when the deposit address has just changed */
+  depositAddressUpdated: boolean;
 }
 
 /**
  * Custom hook to fetch and stream payment status.
- * Tries SSE (EventSource) first for instant updates.
- * Falls back to 3-second polling if SSE is unavailable.
+ * Composes smaller, single-responsibility hooks:
+ *   - `usePaymentNormalization`  → payment parsing + state/merge management
+ *   - `usePaymentPolling`        → 3s-ish polling fallback with backoff
+ *   - `useSSE`                   → real-time EventSource push channel
+ * Tries SSE first, falls back to polling if SSE is unavailable or fails.
  */
 export function usePaymentStatus(paymentId: string): UsePaymentStatusReturn {
-  const [payment, setPayment] = useState<Payment | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
   const [connectionType, setConnectionType] = useState<ConnectionType>(null);
   const [isOffline, setIsOffline] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
   const [serverTimeOffset, setServerTimeOffset] = useState<number>(0);
 
-  // Use refs to track mutable state without triggering re-renders or lint issues
-  const eventSourceRef = useRef<EventSource | null>(null);
-  const pollingRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const paymentRef = useRef<Payment | null>(null);
-  const pollingBackoffRef = useRef<number>(3000);
-  const reconnectBackoffRef = useRef<number>(1000);
+  const {
+    payment,
+    paymentRef,
+    setPayment,
+    applyPaymentUpdate,
+    depositAddressUpdated,
+    setDepositAddressUpdated,
+  } = usePaymentNormalization();
 
-  // Keep paymentRef in sync
+  // Online/offline tracking
   useEffect(() => {
-    paymentRef.current = payment;
-  }, [payment]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (typeof window === 'undefined') return;
 
     const updateOnlineStatus = () => {
       const offline = !window.navigator.onLine;
@@ -120,23 +64,23 @@ export function usePaymentStatus(paymentId: string): UsePaymentStatusReturn {
     };
 
     updateOnlineStatus();
-    window.addEventListener("online", updateOnlineStatus);
-    window.addEventListener("offline", updateOnlineStatus);
+    window.addEventListener('online', updateOnlineStatus);
+    window.addEventListener('offline', updateOnlineStatus);
 
     return () => {
-      window.removeEventListener("online", updateOnlineStatus);
-      window.removeEventListener("offline", updateOnlineStatus);
+      window.removeEventListener('online', updateOnlineStatus);
+      window.removeEventListener('offline', updateOnlineStatus);
     };
   }, []);
 
-  const calculateServerTimeOffset = (dateHeader: string | null) => {
+  const calculateServerTimeOffset = useCallback((dateHeader: string | null) => {
     if (dateHeader) {
       const serverTime = new Date(dateHeader).getTime();
       const clientTime = new Date().getTime();
       return serverTime - clientTime;
     }
     return 0;
-  };
+  }, []);
 
   const fetchPayment = useCallback(async () => {
     try {
@@ -144,9 +88,9 @@ export function usePaymentStatus(paymentId: string): UsePaymentStatusReturn {
 
       if (!response.ok) {
         if (response.status === 404) {
-          setError("Payment not found");
+          setError('Payment not found');
         } else {
-          setError("Failed to fetch payment details");
+          setError('Failed to fetch payment details');
         }
         setLoading(false);
         return;
@@ -160,166 +104,62 @@ export function usePaymentStatus(paymentId: string): UsePaymentStatusReturn {
       const data = await response.json();
       const paymentData = normalizePaymentResponse(data);
 
-      pollingBackoffRef.current = 3000;
-      reconnectBackoffRef.current = 1000;
       setPayment(paymentData);
       setError(null);
       setLoading(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
+      setError(err instanceof Error ? err.message : 'An error occurred');
       setLoading(false);
     }
-  }, [paymentId]);
+  }, [paymentId, calculateServerTimeOffset, setPayment]);
 
   // Initial fetch
   useEffect(() => {
     void fetchPayment();
   }, [fetchPayment]);
 
-  // Polling callback — uses ref to avoid stale closures
-  const pollStatus = useCallback(async () => {
-    if (isOffline) return;
+  const polling = usePaymentPolling({
+    paymentId,
+    isOffline,
+    paymentRef,
+    applyPaymentUpdate,
+    setConnectionType,
+  });
 
-    const current = paymentRef.current;
-    if (current && ['confirmed', 'expired', 'failed', 'partially_paid', 'overpaid'].includes(current.status)) {
-      return;
-    }
-
-    try {
-      const response = await fetch(`/api/payments/${paymentId}/status`);
-      if (!response.ok) return;
-
-      const data = await response.json();
-
-      setPayment((prev) => {
-        if (!prev) return prev;
-        const statusChanged = prev.status !== data.status;
-        const paidAmountChanged = data.paidAmount !== undefined && prev.paidAmount !== data.paidAmount;
-        if (statusChanged || paidAmountChanged) {
-          return { ...prev, status: data.status, ...(data.paidAmount !== undefined ? { paidAmount: data.paidAmount } : {}) };
-        }
-        return prev;
-      });
-      pollingBackoffRef.current = 3000;
-    } catch (err) {
-      console.error('Polling error:', err);
-      pollingBackoffRef.current = Math.min(pollingBackoffRef.current * 2, 30000);
-    }
-  }, [isOffline, paymentId]);
-
-  // SSE / polling lifecycle — runs once after initial fetch completes
-  useEffect(() => {
-    if (loading || !payment) return;
-
-    // Don't connect if payment is in terminal state
-    if (['confirmed', 'expired', 'failed', 'partially_paid', 'overpaid'].includes(payment.status)) {
-      return;
-    }
-
-    let cancelled = false;
-
-    const stopPolling = () => {
-      if (pollingRef.current) {
-        clearTimeout(pollingRef.current);
-        pollingRef.current = null;
-      }
-    };
-
-    const schedulePoll = () => {
-      if (cancelled) return;
-      stopPolling();
-      const delay = pollingBackoffRef.current;
-      pollingRef.current = setTimeout(async () => {
-        await pollStatus();
-        schedulePoll();
-      }, delay);
-    };
-
-    const startPollingFallback = () => {
-      if (cancelled) return;
-      setConnectionType('polling');
-      schedulePoll();
-    };
-
-    const scheduleSseReconnect = () => {
-      if (cancelled || isOffline) return;
-      const delay = reconnectBackoffRef.current;
-      reconnectBackoffRef.current = Math.min(reconnectBackoffRef.current * 2, 30000);
-      setTimeout(() => {
-        if (cancelled) return;
-        startPollingFallback();
-      }, delay);
-    };
-
-    // Try SSE first
-    if (typeof window !== 'undefined' && 'EventSource' in window) {
-      try {
-        const es = new EventSource(`/api/payments/${paymentId}/stream`);
-        eventSourceRef.current = es;
-
-        es.onopen = () => {
-          if (!cancelled) setConnectionType('sse');
-        };
-
-        es.onmessage = (event) => {
-          if (cancelled) return;
-          try {
-            const data = JSON.parse(event.data);
-            setPayment((prev) => {
-              if (!prev) return prev;
-              const statusChanged = prev.status !== data.status;
-              const paidAmountChanged = data.paidAmount !== undefined && prev.paidAmount !== data.paidAmount;
-              if (statusChanged || paidAmountChanged) {
-                return { ...prev, status: data.status, ...(data.paidAmount !== undefined ? { paidAmount: data.paidAmount } : {}) };
-              }
-              return prev;
-            });
-
-            // Close SSE on terminal states
-            if (['confirmed', 'expired', 'failed', 'partially_paid', 'overpaid'].includes(data.status)) {
-              es.close();
-              eventSourceRef.current = null;
-            }
-          } catch {
-            // Ignore parse errors
-          }
-        };
-
-        es.onerror = () => {
-          // SSE failed — close and fall back to polling
-          es.close();
-          eventSourceRef.current = null;
-          scheduleSseReconnect();
-        };
-      } catch {
-        // EventSource construction failed — fall back to polling
-        startPollingFallback();
-      }
-    } else {
-      // No EventSource support — use polling
-      startPollingFallback();
-    }
-
-    return () => {
-      cancelled = true;
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-        eventSourceRef.current = null;
-      }
-      if (pollingRef.current) {
-        clearTimeout(pollingRef.current);
-        pollingRef.current = null;
-      }
-    };
-    // Only re-run when paymentId changes or initial load completes
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOffline, loading, paymentId, pollStatus]);
+  // Connect the real-time channel once the initial fetch has landed and the
+  // payment is not already in a terminal state.
+  useSSE({
+    paymentId,
+    active: !loading && !!payment && !isTerminalStatus(payment.status),
+    isOffline,
+    applyPaymentUpdate,
+    setConnectionType,
+    onFallbackToPolling: polling.startPolling,
+    onTeardown: polling.stop,
+  });
 
   const retryConnection = useCallback(async () => {
     setError(null);
     setLoading(paymentRef.current === null);
     await fetchPayment();
-  }, [fetchPayment]);
+  }, [fetchPayment, paymentRef]);
 
-  return { payment, loading, error, connectionType, isOffline, retryConnection, serverTimeOffset };
+  // Auto-clear the depositAddressUpdated flag after one tick so consumers
+  // can use it as a one-shot signal without managing their own reset.
+  useEffect(() => {
+    if (!depositAddressUpdated) return;
+    const id = setTimeout(() => setDepositAddressUpdated(false), 0);
+    return () => clearTimeout(id);
+  }, [depositAddressUpdated, setDepositAddressUpdated]);
+
+  return {
+    payment,
+    loading,
+    error,
+    connectionType,
+    isOffline,
+    retryConnection,
+    serverTimeOffset,
+    depositAddressUpdated,
+  };
 }

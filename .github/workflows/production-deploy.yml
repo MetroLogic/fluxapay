@@ -1,0 +1,82 @@
+name: Production Deployment
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  migration-safety:
+    runs-on: ubuntu-latest
+    
+    defaults:
+      run:
+        working-directory: ./fluxapay_backend
+
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      DB_BACKUP_ENCRYPTION_KEY: ${{ secrets.DB_BACKUP_ENCRYPTION_KEY }}
+      
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: './fluxapay_backend/package-lock.json'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check Migration Safety
+        id: safety_check
+        run: |
+          set +e
+          npx ts-node scripts/migration-safety.ts
+          EXIT_CODE=$?
+          set -e
+          
+          if [ $EXIT_CODE -eq 2 ]; then
+            echo "Destructive migration detected."
+            echo "is_destructive=true" >> $GITHUB_OUTPUT
+          elif [ $EXIT_CODE -eq 0 ]; then
+            echo "Migration is safe/additive."
+            echo "is_destructive=false" >> $GITHUB_OUTPUT
+          else
+            echo "Migration safety script failed."
+            exit 1
+          fi
+
+      - name: Verify Approval for Destructive Migration
+        if: steps.safety_check.outputs.is_destructive == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Fetch PR labels associated with this commit
+          # Using gh cli
+          PR_LABELS=$(gh pr list --search "${{ github.sha }}" --state merged --json labels --jq '.[0].labels[].name' || echo "")
+          
+          if [[ "$PR_LABELS" != *"migration-approved"* ]]; then
+            echo "::error::Destructive migration detected, but 'migration-approved' label is missing on the PR."
+            exit 1
+          fi
+          echo "Migration approved via PR label."
+
+      - name: Trigger Database Backup
+        if: steps.safety_check.outputs.is_destructive == 'true'
+        run: |
+          echo "Triggering database backup before destructive migration..."
+          npx ts-node src/services/dbBackup.service.ts
+
+  deploy:
+    needs: migration-safety
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy Application
+        run: echo "Deploying application to production..."
+        # Actual deployment steps would go here

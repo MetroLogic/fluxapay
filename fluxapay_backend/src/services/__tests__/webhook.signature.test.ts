@@ -33,6 +33,21 @@ describe("Webhook Signature Generation (HMAC-SHA256)", () => {
       expect(signature).toBe(expectedSignature);
     });
 
+    it("should sign a raw body string verbatim as HMAC(secret, `${timestamp}.${body}`)", () => {
+      const rawBody = '{"event":"payment.confirmed","amount":"100.00"}';
+      const secret = "test_secret_key";
+      const timestamp = "2024-01-15T10:00:00.000Z";
+
+      const expected = crypto
+        .createHmac("sha256", secret)
+        .update(`${timestamp}.${rawBody}`)
+        .digest("hex");
+
+      expect(generateWebhookSignature(rawBody, secret, timestamp)).toBe(expected);
+      // Object and its serialized form produce the same signature
+      expect(generateWebhookSignature(JSON.parse(rawBody), secret, timestamp)).toBe(expected);
+    });
+
     it("should produce different signatures for different payloads", () => {
       const secret = "test_secret";
       const timestamp = "2024-01-15T10:00:00.000Z";

@@ -27,6 +27,7 @@
 import Redis from "ioredis";
 import { apiError } from "../helpers/apiError.helper";
 import { ErrorCode } from "../types/errors";
+import { closeRedisClient } from "../utils/redisClose.util";
 
 // ── Redis singleton ────────────────────────────────────────────────────────────
 
@@ -56,6 +57,13 @@ export function getRedisClient(): Redis {
     });
   }
   return _redis;
+}
+
+/** Closes the OTP rate-limiter Redis connection, if one was opened (used on shutdown). */
+export async function closeOtpRedisClient(): Promise<void> {
+  const client = _redis;
+  _redis = null;
+  await closeRedisClient(client);
 }
 
 /** Test helper: replace the Redis client with a mock. */

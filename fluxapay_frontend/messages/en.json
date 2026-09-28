@@ -21,7 +21,8 @@
     "export": "Export",
     "import": "Import",
     "download": "Download",
-    "upload": "Upload"
+    "upload": "Upload",
+    "offlineMessage": "You are offline. Showing cached data. Reconnect to see the latest updates."
   },
   "nav": {
     "home": "Home",
@@ -78,6 +79,18 @@
     "settlement": {
       "title": "Flexible Settlement",
       "description": "Choose how and when you get paid"
+    },
+    "realtime": {
+      "title": "Real-Time Settlement",
+      "description": "Funds move instantly on the Stellar network, no waiting days for clearance"
+    },
+    "emerging": {
+      "title": "Emerging Market Ready",
+      "description": "Built for high-growth regions where crypto adoption is outpacing traditional banking"
+    },
+    "stripe": {
+      "title": "Stripe-Simple Integration",
+      "description": "A familiar developer experience — REST API, webhooks, and SDKs you already know"
     }
   },
   "globalReach": {
@@ -267,11 +280,19 @@
       "emailInvalid": "Please enter a valid email address",
       "emailRequired": "Email is required",
       "passwordMin": "Password must be at least 6 characters",
+      "passwordMinEight": "Password must be at least 8 characters",
       "passwordRequired": "Password is required",
+      "passwordUppercase": "Password must contain at least one uppercase letter",
+      "passwordLowercase": "Password must contain at least one lowercase letter",
+      "passwordNumber": "Password must contain at least one number",
+      "passwordSpecial": "Password must contain at least one special character (@$!%*?&)",
+      "passwordHint": "Must be 8+ characters with uppercase, lowercase, number, and special character",
       "nameRequired": "Name is required",
       "businessNameRequired": "Business name is required",
       "countryRequired": "Country is required",
+      "countryCodeLength": "Country code must be 2 characters",
       "currencyRequired": "Settlement currency is required",
+      "currencyCodeLength": "Currency must be 3 characters",
       "phoneNumberRequired": "Phone number is required",
       "phoneNumberInvalid": "Invalid phone number format (use international format)",
       "accountNumberRequired": "Account number is required",
@@ -293,6 +314,7 @@
     "bankCodePlaceholder": "Bank Code",
     "accountNumberPlaceholder": "Account Number",
     "signupSuccess": "Signup successful! Please verify your account.",
+    "loginSuccess": "Login successful!",
     "resetPassword": "Reset Password",
     "forgotPasswordDescription": "Enter your email address and we will send you a link to reset your password.",
     "resetLinkSent": "We have sent a password reset link to your email.",
@@ -355,5 +377,21 @@
     "notFound": "The requested resource was not found.",
     "validation": "Please check your input and try again.",
     "paymentFailed": "Payment processing failed. Please try again."
+  },
+  "commandPalette": {
+    "overview": "Overview",
+    "payments": "Payments",
+    "paymentLinks": "Payment Links",
+    "invoices": "Invoices",
+    "refunds": "Refunds",
+    "settlements": "Settlements",
+    "webhooks": "Webhooks",
+    "analytics": "Analytics",
+    "settings": "Settings",
+    "developers": "Developers",
+    "adminOverview": "Admin Overview",
+    "forceOracleSync": "Force Oracle Sync",
+    "flushWebhookQueue": "Flush Webhook Queue",
+    "viewKYCQueue": "View KYC Queue"
   }
 }

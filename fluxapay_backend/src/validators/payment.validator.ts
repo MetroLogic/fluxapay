@@ -116,6 +116,11 @@ export const validatePayment = [
     .withMessage('cancel_url must not exceed 2048 characters')
     .custom(isHttpsUrl)
     .withMessage('cancel_url must be a valid https URL'),
+  body('expires_in_seconds')
+    .optional()
+    .isInt({ gt: 0 })
+    .withMessage('expires_in_seconds must be a positive integer')
+    .toInt(),
   validate,
 ];
 

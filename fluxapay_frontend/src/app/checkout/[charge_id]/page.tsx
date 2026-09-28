@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Loader2, XCircle, CheckCircle, AlertCircle, RefreshCw } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { usePaymentStatus } from '@/hooks/usePaymentStatus';
 import { TxHashLink } from '@/components/TxHashLink';
 import { PaymentQRCode } from '@/components/checkout/PaymentQRCode';
@@ -12,51 +13,12 @@ import { PaymentTimer } from '@/components/checkout/PaymentTimer';
 import { PaymentStatus } from '@/components/checkout/PaymentStatus';
 import { StellarPayButton } from '@/components/checkout/StellarPayButton';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
+import { CopyField } from '@/components/checkout/CopyField';
 import {
   CheckoutBrandingShell,
   DEFAULT_ACCENT,
 } from '@/components/checkout/CheckoutBrandingShell';
-
-// Re-usable CopyField — inline since it's tightly coupled with checkout
-function CopyField({
-  label,
-  value,
-  truncate,
-  required,
-}: {
-  label: string;
-  value: string;
-  truncate?: boolean;
-  required?: boolean;
-}) {
-  const [copied, setCopied] = useState(false);
-  const handleCopy = async () => {
-    await navigator.clipboard.writeText(value);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  return (
-    <div className="rounded-lg border bg-gray-50 p-3">
-      <div className="flex items-center justify-between mb-1">
-        <p className="text-xs font-medium text-gray-500">
-          {label}
-          {required && <span className="text-red-500 ml-1">*Required</span>}
-        </p>
-        <button
-          onClick={handleCopy}
-          className="text-xs font-medium text-[color:var(--checkout-accent)] hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--checkout-accent)] rounded"
-          aria-label={`Copy ${label}`}
-        >
-          {copied ? '✓ Copied' : 'Copy'}
-        </button>
-      </div>
-      <p className={`font-mono text-sm break-all ${truncate ? 'truncate' : ''}`}>
-        {value}
-      </p>
-    </div>
-  );
-}
+import { sanitizeRedirectUrl } from '@/lib/safeUrl';
 
 /**
  * Hosted checkout page at /checkout/[charge_id]
@@ -69,8 +31,19 @@ export default function CheckoutPage() {
   const searchParams = useSearchParams();
   const chargeId = params.charge_id as string;
 
-  const { payment, loading, error, isOffline, retryConnection } =
+  const { payment, loading, error, isOffline, retryConnection, depositAddressUpdated, connectionType } =
     usePaymentStatus(chargeId);
+
+  // Notify the customer when the deposit address has changed (e.g. after timeout reset).
+  useEffect(() => {
+    if (depositAddressUpdated) {
+      toast('Address updated — please use the new address shown below.', {
+        icon: '🔄',
+        duration: 5000,
+        id: 'address-updated',
+      });
+    }
+  }, [depositAddressUpdated]);
 
   // Customization from query params (SDK overrides)
   const qAccent = searchParams.get('accentColor') || searchParams.get('primaryColor');
@@ -87,7 +60,7 @@ export default function CheckoutPage() {
   useEffect(() => {
     if (payment?.status === 'confirmed' && payment.successUrl) {
       const timer = setTimeout(() => {
-        window.location.href = payment.successUrl!;
+        window.location.href = sanitizeRedirectUrl(payment.successUrl);
       }, 2000);
       return () => clearTimeout(timer);
     }
@@ -130,6 +103,19 @@ export default function CheckoutPage() {
               {t('checkout.retryNow')}
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Polling fallback banner — shown when SSE max retries are exhausted */}
+      {!isOffline && connectionType === 'polling' && (
+        <div
+          className="mx-auto mt-4 w-full max-w-2xl rounded-lg border border-yellow-300 bg-yellow-50 px-4 py-3 text-yellow-900"
+          role="status"
+          aria-live="polite"
+        >
+          <p className="text-sm font-medium">
+            Real-time updates unavailable. Checking for status every 10 seconds.
+          </p>
         </div>
       )}
 
@@ -255,9 +241,9 @@ export default function CheckoutPage() {
             <p className="mb-6 text-sm text-gray-500">{t('checkout.contactMerchantResolve')}</p>
             {/* Allow top-up: show address again */}
             <div className="mx-auto max-w-md space-y-4 text-left">
-              <CopyField label="Payment Address" value={payment.address} truncate />
+              <CopyField label="Payment Address" value={payment.address} truncate copyAriaLabel="Copy deposit address" fieldId="deposit-address-partial" />
               {payment.memo && (
-                <CopyField label={`Memo (${payment.memoType?.replace('MEMO_', '') || 'TEXT'})`} value={payment.memo} required={payment.memoRequired} />
+                <CopyField label={`Memo (${payment.memoType?.replace('MEMO_', '') || 'TEXT'})`} value={payment.memo} required={payment.memoRequired} copyAriaLabel="Copy memo" fieldId="payment-memo-partial" />
               )}
             </div>
             <div className="mt-6">
@@ -267,6 +253,7 @@ export default function CheckoutPage() {
                 assetCode={payment.currency}
                 memo={payment.memo}
                 memoType={payment.memoType}
+                paymentId={chargeId}
               />
             </div>
           </div>
@@ -289,7 +276,7 @@ export default function CheckoutPage() {
             <p className="mb-6 text-sm text-gray-500">{t('checkout.contactMerchantExcess')}</p>
             <div className="flex flex-col gap-4">
               {payment.successUrl && (
-                <a href={payment.successUrl} className="inline-block rounded-lg px-6 py-3 font-semibold text-white transition-opacity hover:opacity-90" style={{ backgroundColor: 'var(--checkout-accent)' }}>
+                <a href={sanitizeRedirectUrl(payment.successUrl)} className="inline-block rounded-lg px-6 py-3 font-semibold text-white transition-opacity hover:opacity-90" style={{ backgroundColor: 'var(--checkout-accent)' }}>
                   {t('checkout.returnToMerchant')}
                 </a>
               )}
@@ -325,7 +312,7 @@ export default function CheckoutPage() {
             </div>
 
             {/* Amount display with fiat equivalent */}
-            <div className="mb-8 text-center" aria-label={`${t('checkout.amountToPay')}: ${payment.amount} ${payment.currency}`}>
+            <div className="mb-8 text-center" role="region" aria-label={`Payment amount: ${payment.amount} ${payment.currency}`}>
               <p className="mb-2 text-sm text-gray-500">{t('checkout.amountToPay')}</p>
               <p className="text-3xl font-bold text-gray-900 sm:text-4xl">
                 {payment.amount} {payment.currency}
@@ -351,12 +338,14 @@ export default function CheckoutPage() {
 
             {/* Copy fields */}
             <div className="mb-8 space-y-4">
-              <CopyField label="Payment Address" value={payment.address} truncate />
+              <CopyField label="Payment Address" value={payment.address} truncate copyAriaLabel="Copy deposit address" fieldId="deposit-address" />
               {payment.memo && (
                 <CopyField
                   label={`Memo (${payment.memoType?.replace('MEMO_', '') || 'TEXT'})`}
                   value={payment.memo}
                   required={payment.memoRequired}
+                  copyAriaLabel="Copy memo"
+                  fieldId="payment-memo"
                 />
               )}
             </div>
@@ -369,14 +358,14 @@ export default function CheckoutPage() {
               </div>
             )}
 
-            {/* SEP-0007 Deep-link Button */}
-            <div className="mb-6 flex justify-center">
+            <div className="mb-6">
               <StellarPayButton
                 address={payment.address}
                 amount={payment.amount}
                 assetCode={payment.currency}
                 memo={payment.memo}
                 memoType={payment.memoType}
+                paymentId={chargeId}
               />
             </div>
 

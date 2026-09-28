@@ -16,16 +16,24 @@
 import { Horizon, Asset } from "@stellar/stellar-sdk";
 import type { Horizon as HorizonNamespace } from "@stellar/stellar-sdk";
 import { PrismaClient, Payment, PaymentStatus } from "../generated/client/client";
+import { prisma } from "../config/prisma";
 import { Decimal } from "@prisma/client/runtime/library";
 import { paymentContractService } from "./paymentContract.service";
 import { getLogger, getMetricsCollector } from "../utils/logger";
 import { createAndDeliverWebhook } from "./webhook.service";
+import { markInvoicePaidForPaymentService } from "./invoice.service";
 import { analyzeDuplicatePayments, MatchedStellarPayment } from "../utils/duplicatePayment.util";
 import {parseHorizonMemo, resolveMemoMatchMode, validateMemoMatch } from "../utils/oracleMemo.util";
 import { isSorobanVerificationEnabled } from "../utils/sorobanVerification.util";
 import { getSorobanHealthStatus } from "./SorobanService";
+import { redisClient } from "../middleware/redisIdempotency.middleware";
+import {
+  horizonPoller,
+  HORIZON_POLLER_EVENTS,
+  HorizonPaymentDetectedEvent,
+} from "./horizonPoller.service";
+import { eventBus, AppEvents } from "./EventService";
 
-const prisma = new PrismaClient();
 const logger = getLogger("PaymentOracleService");
 const metrics = getMetricsCollector();
 
@@ -40,6 +48,7 @@ const SHARED_DEPOSIT_ADDRESS = process.env.SHARED_DEPOSIT_ADDRESS;
 const ENABLE_ADDRESS_POOL = process.env.ENABLE_ADDRESS_POOL === "true";
 const BATCH_SIZE = parseInt(process.env.ORACLE_BATCH_SIZE || "50", 10);
 const HORIZON_TIMEOUT_MS = parseInt(process.env.ORACLE_HORIZON_TIMEOUT_MS || "10000", 10);
+const ORACLE_PENDING_CURSOR_KEY = "oracle:pending_payments_cursor";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -443,6 +452,11 @@ async function updatePaymentStatus(verification: PaymentVerification): Promise<v
 
   // Trigger webhook for confirmed/overpaid payments
   if (verification.verified && updatedPayment.merchant) {
+    // Emit internal event so email notifications, settlement pipeline, and
+    // deposit-pool release all fire (fixes #1004 — these listeners were wired
+    // to this event but it was never emitted from the production oracle path).
+    eventBus.emit(AppEvents.PAYMENT_CONFIRMED, updatedPayment);
+
     try {
       await createAndDeliverWebhook(
         updatedPayment.merchantId,
@@ -462,6 +476,10 @@ async function updatePaymentStatus(verification: PaymentVerification): Promise<v
         paymentId: verification.paymentId,
         error: webhookError.message,
       });
+    }
+
+    if (verification.status === "confirmed" || verification.status === "overpaid") {
+      await markInvoicePaidForPaymentService(updatedPayment.merchantId, updatedPayment.id);
     }
   }
 
@@ -556,10 +574,71 @@ async function processBatch(payments: Payment[]): Promise<void> {
   }
 }
 
+function activePendingWhere(now: Date) {
+  return {
+    status: { in: ["pending", "partially_paid"] as PaymentStatus[] },
+    expiration: { gt: now },
+    stellar_address: { not: null },
+  };
+}
+
+/**
+ * Cursor-paginated fetch of pending payments (max ORACLE_BATCH_SIZE per cycle).
+ * Cursor is stored in Redis so subsequent ticks resume where the last left off.
+ */
+export async function fetchPendingPaymentsPage(now: Date = new Date()): Promise<Payment[]> {
+  const baseWhere = activePendingWhere(now);
+  let lastCursor: string | null = null;
+
+  try {
+    lastCursor = await redisClient.get(ORACLE_PENDING_CURSOR_KEY);
+  } catch (error: any) {
+    logger.warn("Failed to read oracle pending cursor from Redis", {
+      error: error?.message,
+    });
+  }
+
+  const queryPage = (cursor: string | null) =>
+    prisma.payment.findMany({
+      where: cursor
+        ? { ...baseWhere, id: { gt: cursor } }
+        : baseWhere,
+      take: BATCH_SIZE,
+      orderBy: { id: "asc" },
+    });
+
+  let payments = await queryPage(lastCursor);
+
+  // Wrap to the start when the cursor is past the end of the backlog
+  if (payments.length === 0 && lastCursor) {
+    payments = await queryPage(null);
+  }
+
+  try {
+    if (payments.length > 0) {
+      await redisClient.set(ORACLE_PENDING_CURSOR_KEY, payments[payments.length - 1].id);
+    } else {
+      await redisClient.del(ORACLE_PENDING_CURSOR_KEY);
+    }
+  } catch (error: any) {
+    logger.warn("Failed to persist oracle pending cursor to Redis", {
+      error: error?.message,
+    });
+  }
+
+  if (payments.length > BATCH_SIZE) {
+    throw new Error(
+      `Oracle page size ${payments.length} exceeds ORACLE_BATCH_SIZE ${BATCH_SIZE}`,
+    );
+  }
+
+  return payments;
+}
+
 /**
  * Main oracle polling tick - runs on schedule
  */
-async function runOracleTick(): Promise<void> {
+export async function runOracleTick(): Promise<void> {
   const startTime = Date.now();
   const now = new Date();
 
@@ -599,26 +678,33 @@ async function runOracleTick(): Promise<void> {
       data: { status: "expired" },
     });
 
-    // 2. Fetch active payments to monitor
-    const payments = await prisma.payment.findMany({
-      where: {
-        status: { in: ["pending", "partially_paid"] },
-        expiration: { gt: now },
-        stellar_address: { not: null },
-      },
-      take: BATCH_SIZE,
-      orderBy: { createdAt: "asc" },
+    // 2. Emit backlog gauge, then fetch one cursor page of active payments
+    const backlog = await prisma.payment.count({
+      where: activePendingWhere(now),
     });
+    metrics.gauge("oracle_pending_payments_backlog", backlog);
+
+    const payments = await fetchPendingPaymentsPage(now);
 
     logger.info("Oracle monitoring active payments", {
       count: payments.length,
       batchSize: BATCH_SIZE,
+      backlog,
     });
 
     if (payments.length === 0) {
       logger.debug("No active payments to monitor");
       oracleState.updateMetrics({ pollsCompleted: oracleState.getMetrics().pollsCompleted + 1 });
       return;
+    }
+
+    // Register each pending payment's Stellar address with the shared poller so
+    // the poller watches them next tick. This ensures Horizon is polled exactly
+    // once per address per interval across all consumers.
+    for (const payment of payments) {
+      if (payment.stellar_address) {
+        horizonPoller.watchAddress(payment.stellar_address);
+      }
     }
 
     // 3. Process payments in batch
@@ -688,7 +774,10 @@ async function runOracleTick(): Promise<void> {
 // ─── Public API ──────────────────────────────────────────────────────────────
 
 /**
- * Starts the payment oracle service
+ * Starts the payment oracle service.
+ * Issue #771: Oracle subscribes to the shared HorizonPollerService instead of
+ * polling Horizon directly on its own interval. The poller fires exactly once
+ * per tick and emits "payment:detected" events that the oracle handles here.
  */
 export function startPaymentOracle(): void {
   if (oracleState.isOracleRunning()) {
@@ -705,12 +794,28 @@ export function startPaymentOracle(): void {
 
   oracleState.setRunning(true);
 
-  // Run first tick immediately
+  // Subscribe to the shared HorizonPoller — oracle no longer polls directly.
+  // The poller emits one "payment:detected" event per discovered payment per tick.
+  horizonPoller.on(
+    HORIZON_POLLER_EVENTS.PAYMENT_DETECTED,
+    (_event: HorizonPaymentDetectedEvent) => {
+      // Acknowledge receipt for metrics tracking (events_emitted vs events_processed).
+      horizonPoller.acknowledgeEvent();
+      metrics.increment("oracle.horizon_event.received");
+    },
+  );
+
+  // Oracle tick: fetches pending payments, registers their addresses with the
+  // shared poller, then verifies and updates statuses. The heavy Horizon calls
+  // inside verifyPayment() are retained for full per-payment detail — the poller
+  // is used for initial change detection to avoid redundant polling by multiple
+  // services.
   runOracleTick().catch((error) => {
     logger.error("Initial oracle tick failed", { error: error.message });
   });
 
-  // Schedule recurring ticks
+  // Schedule recurring ticks aligned to the same interval as the poller so
+  // both fire once per window.
   const interval = setInterval(() => {
     if (oracleState.isOracleRunning()) {
       runOracleTick().catch((error) => {
@@ -720,6 +825,9 @@ export function startPaymentOracle(): void {
   }, POLLING_INTERVAL_MS);
 
   oracleState.setPollInterval(interval);
+
+  // Start the shared Horizon poller (no-op if already started by another consumer).
+  horizonPoller.start();
 
   logger.info("Payment oracle service started successfully");
 }
@@ -742,6 +850,10 @@ export function stopPaymentOracle(): void {
   }
 
   oracleState.setRunning(false);
+
+  // Stop the shared Horizon poller — no other service polls Horizon independently.
+  horizonPoller.stop();
+  horizonPoller.removeAllListeners(HORIZON_POLLER_EVENTS.PAYMENT_DETECTED);
 
   logger.info("Payment oracle service stopped");
 }

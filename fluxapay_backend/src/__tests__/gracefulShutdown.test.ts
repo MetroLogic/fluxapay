@@ -4,9 +4,9 @@
  * Tests gracefulShutdown() and registerShutdownHandlers() from shutdown.service.ts.
  *
  * Shutdown sequence verified:
- *   1. Stop cron jobs
- *   2. Stop the payment monitor
- *   3. Close the HTTP server (drain in-flight requests)
+ *   1. Stop cron jobs and payment oracle (no new background work)
+ *   2. Close the HTTP server (drain in-flight requests)
+ *   3. Run registered cleanup callbacks (close Redis clients)
  *   4. Disconnect Prisma
  *   5. Exit 0
  *
@@ -36,10 +36,36 @@ jest.mock("../services/paymentOracle.service", () => ({
     stopPaymentOracle: jest.fn(),
 }));
 
-import { gracefulShutdown, registerShutdownHandlers } from "../services/shutdown.service";
+jest.mock("../middleware/redisIdempotency.middleware", () => ({
+    closeIdempotencyRedisClient: jest.fn().mockResolvedValue(undefined),
+}));
+
+jest.mock("../middleware/rateLimit.middleware", () => ({
+    closeRateLimitRedisClient: jest.fn().mockResolvedValue(undefined),
+}));
+
+jest.mock("../sms/otpSmsRateLimiter", () => ({
+    closeOtpRedisClient: jest.fn().mockResolvedValue(undefined),
+}));
+
+jest.mock("../services/auth.service", () => ({
+    closeAuthRedisClient: jest.fn().mockResolvedValue(undefined),
+}));
+
+import {
+    clearShutdownCleanupsForTests,
+    getRegisteredShutdownCleanups,
+    gracefulShutdown,
+    registerDefaultShutdownCleanups,
+    registerShutdownCleanup,
+    registerShutdownHandlers,
+} from "../services/shutdown.service";
 import { stopCronJobs } from "../services/cron.service";
-import { stopPaymentMonitor } from "../services/paymentMonitor.service";
 import { stopPaymentOracle } from "../services/paymentOracle.service";
+import { closeIdempotencyRedisClient } from "../middleware/redisIdempotency.middleware";
+import { closeRateLimitRedisClient } from "../middleware/rateLimit.middleware";
+import { closeOtpRedisClient } from "../sms/otpSmsRateLimiter";
+import { closeAuthRedisClient } from "../services/auth.service";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -57,6 +83,11 @@ function makeMockPrisma(opts: { rejectWith?: Error } = {}) {
             ? jest.fn().mockRejectedValue(opts.rejectWith)
             : jest.fn().mockResolvedValue(undefined),
     };
+}
+
+/** Drains pending microtasks so async shutdown steps can settle under fake timers. */
+async function flushPromises(): Promise<void> {
+    for (let i = 0; i < 20; i++) await Promise.resolve();
 }
 
 // ── gracefulShutdown() ────────────────────────────────────────────────────────
@@ -77,16 +108,60 @@ describe("gracefulShutdown()", () => {
         exitSpy.mockRestore();
     });
 
-    it("stops cron, stops monitor, closes server, disconnects prisma, exits 0", async () => {
+    it("stops cron, stops oracle, closes server, disconnects prisma, exits 0", async () => {
         const server = makeMockServer();
         const prisma = makeMockPrisma();
 
         await gracefulShutdown("SIGTERM", { server: server as any, prisma });
 
         expect(stopCronJobs).toHaveBeenCalledTimes(1);
-        expect(stopPaymentMonitor).toHaveBeenCalledTimes(1);
         expect(stopPaymentOracle).toHaveBeenCalledTimes(1);
         expect(server.close).toHaveBeenCalledTimes(1);
+        expect(prisma.$disconnect).toHaveBeenCalledTimes(1);
+        expect(exitSpy).toHaveBeenCalledWith(0);
+    });
+
+    it("closes every Redis client on shutdown", async () => {
+        await gracefulShutdown("SIGTERM", { server: makeMockServer() as any, prisma: makeMockPrisma() });
+
+        expect(closeIdempotencyRedisClient).toHaveBeenCalledTimes(1);
+        expect(closeRateLimitRedisClient).toHaveBeenCalledTimes(1);
+        expect(closeOtpRedisClient).toHaveBeenCalledTimes(1);
+        expect(closeAuthRedisClient).toHaveBeenCalledTimes(1);
+        expect(exitSpy).toHaveBeenCalledWith(0);
+    });
+
+    it("runs cleanups after the HTTP server drains and before Prisma disconnects", async () => {
+        const callOrder: string[] = [];
+        (closeIdempotencyRedisClient as jest.Mock).mockImplementationOnce(async () => {
+            callOrder.push("redis");
+        });
+
+        const server = {
+            close: jest.fn((cb?: (err?: Error) => void) => {
+                callOrder.push("server.close");
+                if (cb) cb();
+            }),
+        };
+        const prisma = {
+            $disconnect: jest.fn(async () => {
+                callOrder.push("prisma.$disconnect");
+            }),
+        };
+
+        await gracefulShutdown("SIGTERM", { server: server as any, prisma });
+
+        expect(callOrder).toEqual(["server.close", "redis", "prisma.$disconnect"]);
+    });
+
+    it("still disconnects Prisma and exits 0 when a cleanup callback fails", async () => {
+        (closeRateLimitRedisClient as jest.Mock).mockRejectedValueOnce(new Error("redis down"));
+        const prisma = makeMockPrisma();
+
+        await gracefulShutdown("SIGTERM", { server: makeMockServer() as any, prisma });
+
+        expect(closeIdempotencyRedisClient).toHaveBeenCalledTimes(1);
+        expect(closeOtpRedisClient).toHaveBeenCalledTimes(1);
         expect(prisma.$disconnect).toHaveBeenCalledTimes(1);
         expect(exitSpy).toHaveBeenCalledWith(0);
     });
@@ -95,7 +170,6 @@ describe("gracefulShutdown()", () => {
         const callOrder: string[] = [];
 
         (stopCronJobs as jest.Mock).mockImplementation(() => callOrder.push("stopCronJobs"));
-        (stopPaymentMonitor as jest.Mock).mockImplementation(() => callOrder.push("stopPaymentMonitor"));
         (stopPaymentOracle as jest.Mock).mockImplementation(() => callOrder.push("stopPaymentOracle"));
 
         const server = {
@@ -107,7 +181,7 @@ describe("gracefulShutdown()", () => {
 
         await gracefulShutdown("SIGTERM", { server: server as any, prisma: makeMockPrisma() });
 
-        expect(callOrder).toEqual(["stopCronJobs", "stopPaymentMonitor", "stopPaymentOracle", "server.close"]);
+        expect(callOrder).toEqual(["stopCronJobs", "stopPaymentOracle", "server.close"]);
     });
 
     it("exits with code 1 when server.close returns an error", async () => {
@@ -213,8 +287,7 @@ describe("registerShutdownHandlers()", () => {
         register(server, prisma);
         process.emit("SIGTERM");
 
-        await Promise.resolve();
-        await Promise.resolve();
+        await flushPromises();
 
         expect(stopCronJobs).toHaveBeenCalledTimes(1);
         expect(exitSpy).toHaveBeenCalledWith(0);
@@ -227,8 +300,7 @@ describe("registerShutdownHandlers()", () => {
         register(server, prisma);
         process.emit("SIGINT");
 
-        await Promise.resolve();
-        await Promise.resolve();
+        await flushPromises();
 
         expect(stopCronJobs).toHaveBeenCalledTimes(1);
         expect(exitSpy).toHaveBeenCalledWith(0);
@@ -255,8 +327,7 @@ describe("registerShutdownHandlers()", () => {
         register(server, prisma);
         process.emit("uncaughtException", new Error("boom"));
 
-        await Promise.resolve();
-        await Promise.resolve();
+        await flushPromises();
 
         expect(stopCronJobs).toHaveBeenCalledTimes(1);
         expect(exitSpy).toHaveBeenCalledWith(0);
@@ -269,10 +340,58 @@ describe("registerShutdownHandlers()", () => {
         register(server, prisma);
         process.emit("unhandledRejection", new Error("unhandled"), Promise.resolve());
 
-        await Promise.resolve();
-        await Promise.resolve();
+        await flushPromises();
 
         expect(stopCronJobs).toHaveBeenCalledTimes(1);
         expect(exitSpy).toHaveBeenCalledWith(0);
+    });
+});
+
+// ── registerShutdownCleanup() ─────────────────────────────────────────────────
+
+describe("registerShutdownCleanup()", () => {
+    let exitSpy: jest.SpyInstance;
+
+    beforeEach(() => {
+        jest.useFakeTimers();
+        exitSpy = jest
+            .spyOn(process, "exit")
+            .mockImplementation(() => undefined as never);
+        jest.clearAllMocks();
+    });
+
+    afterEach(() => {
+        jest.useRealTimers();
+        exitSpy.mockRestore();
+        clearShutdownCleanupsForTests();
+        registerDefaultShutdownCleanups();
+    });
+
+    it("registers the Redis cleanups by default", () => {
+        expect(getRegisteredShutdownCleanups()).toEqual(
+            expect.arrayContaining(["redis:idempotency", "redis:rate-limit", "redis:otp", "redis:auth"]),
+        );
+    });
+
+    it("runs custom callbacks during shutdown", async () => {
+        const custom = jest.fn().mockResolvedValue(undefined);
+        registerShutdownCleanup("custom:stream", custom);
+
+        await gracefulShutdown("SIGTERM", { server: makeMockServer() as any, prisma: makeMockPrisma() });
+
+        expect(custom).toHaveBeenCalledTimes(1);
+        expect(exitSpy).toHaveBeenCalledWith(0);
+    });
+
+    it("replaces a callback registered under the same name", async () => {
+        const first = jest.fn();
+        const second = jest.fn();
+        registerShutdownCleanup("custom", first);
+        registerShutdownCleanup("custom", second);
+
+        await gracefulShutdown("SIGTERM", { server: makeMockServer() as any, prisma: makeMockPrisma() });
+
+        expect(first).not.toHaveBeenCalled();
+        expect(second).toHaveBeenCalledTimes(1);
     });
 });

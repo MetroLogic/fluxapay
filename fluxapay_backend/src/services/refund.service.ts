@@ -6,10 +6,10 @@ import {
   WebhookEventType,
   Prisma,
 } from "../generated/client/client";
+import { prisma } from "../config/prisma";
 import { createAndDeliverWebhook } from "./webhook.service";
 import { PaymentStatus, getRefundableStatuses } from "../types/payment";
 
-const prisma = new PrismaClient();
 
 /**
  * Validates that a payment can be refunded
@@ -99,7 +99,7 @@ function validateRefundAmount(
   if (refundAmount > remainingRefundable) {
     throw apiError(
       422,
-      "refund_amount_exceeds_refundable_balance",
+      ErrorCode.REFUND_AMOUNT_EXCEEDS_REFUNDABLE_BALANCE,
       `Refund amount (${refundAmount}) exceeds remaining refundable amount (${remainingRefundable}). Already refunded: ${totalRefunded}`,
     );
   }
@@ -230,6 +230,9 @@ export async function createRefundService(params: {
 
       return createdRefund;
     },
+    {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+    },
   );
 
   return {
@@ -243,13 +246,17 @@ export async function listRefundsService(params: {
   page: number;
   limit: number;
   status?: RefundStatus;
+  paymentId?: string;
 }) {
-  const { merchantId, page, limit, status } = params;
+  const { merchantId, page, limit, status, paymentId } = params;
   const skip = (page - 1) * limit;
 
   const where: Record<string, unknown> = { merchantId };
   if (status) {
     where.status = status;
+  }
+  if (paymentId) {
+    where.paymentId = paymentId;
   }
 
   const [refunds, total] = await Promise.all([
@@ -274,6 +281,16 @@ export async function listRefundsService(params: {
       },
     },
   };
+}
+
+export async function getRefundByIdService(merchantId: string, refundId: string) {
+  const refund = await prisma.refund.findFirst({
+    where: { id: refundId, merchantId },
+  });
+  if (!refund) {
+    throw apiError(404, ErrorCode.REFUND_NOT_FOUND, "Refund not found");
+  }
+  return { message: "Refund retrieved", data: refund };
 }
 
 export async function updateRefundStatusService(params: {

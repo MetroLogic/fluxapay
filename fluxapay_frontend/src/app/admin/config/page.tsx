@@ -99,6 +99,7 @@ const AdminConfigPage = () => {
 
   useEffect(() => {
     setOriginalConfig(config);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -179,7 +180,7 @@ const AdminConfigPage = () => {
         }, 1500);
       });
       toast.success("Configuration saved successfully");
-    } catch (error) {
+    } catch {
       setOriginalConfig(previousConfig);
       setIsDirty(true);
       toast.error("Failed to save configuration. Changes have been reverted.");
@@ -193,15 +194,6 @@ const AdminConfigPage = () => {
     setIsDirty(false);
     setShowUnsavedDialog(false);
     toast.success("Changes discarded");
-  };
-
-  const handleNavigation = (path: string) => {
-    if (isDirty) {
-      pendingNavigationRef.current = path;
-      setShowUnsavedDialog(true);
-    } else {
-      router.push(path);
-    }
   };
 
   const handleLeavePage = () => {

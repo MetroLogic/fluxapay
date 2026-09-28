@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import { CheckCircle2, Circle } from "lucide-react";
 
 export interface ComparisonFeature {
@@ -37,8 +38,8 @@ export default function ComparisonTable({ features }: ComparisonTableProps) {
           </tr>
         </thead>
         <tbody>
-          {features.map((featureGroup, groupIndex) => (
-            <tbody key={featureGroup.category}>
+          {features.map((featureGroup) => (
+            <React.Fragment key={featureGroup.category}>
               <tr className="border-b border-slate-200 bg-slate-50">
                 <td colSpan={4} className="px-6 py-3 text-sm font-semibold text-slate-700">
                   {featureGroup.category}
@@ -77,7 +78,7 @@ export default function ComparisonTable({ features }: ComparisonTableProps) {
                   </td>
                 </tr>
               ))}
-            </tbody>
+            </React.Fragment>
           ))}
         </tbody>
       </table>

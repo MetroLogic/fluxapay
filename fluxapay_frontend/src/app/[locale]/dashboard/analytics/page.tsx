@@ -1,5 +1,6 @@
 'use client';
 
+import { useCallback, useState } from 'react';
 import { RevenueByCountryChart } from '@/features/analytics/components/RevenueByCountryChart';
 import { PaymentMethodsChart } from '@/features/analytics/components/PaymentMethodsChart';
 import { RevenueTrendsChart } from '@/features/analytics/components/RevenueTrendsChart';
@@ -15,34 +16,64 @@ import {
     Loader2,
     AlertCircle,
     BarChart2,
+    Download,
+    Check,
 } from 'lucide-react';
 
 function EmptyChart({ label }: { label: string }) {
+    // Matches the rendered chart height so swapping between them shifts nothing.
     return (
-        <div className="h-[300px] w-full flex flex-col items-center justify-center gap-2 text-muted-foreground">
+        <div
+            data-testid="empty-chart"
+            role="status"
+            className="h-[300px] w-full flex flex-col items-center justify-center gap-2 text-muted-foreground"
+        >
             <BarChart2 className="h-10 w-10 opacity-30" />
             <p className="text-sm">No {label} data for this period</p>
         </div>
     );
 }
 
+/**
+ * Loading placeholder for the analytics dashboard.
+ *
+ * Every wrapper here mirrors the loaded layout's grid and column spans exactly
+ * — same `space-y-6`, same `md:grid-cols-2 lg:grid-cols-7`, same
+ * `col-span-full lg:col-span-4` / `lg:col-span-3`. That is the whole point: a
+ * skeleton whose boxes land anywhere other than where the real charts land
+ * causes the layout shift it was added to prevent. The previous version used
+ * bare `col-span-4` / `col-span-3`, which collapsed differently from the real
+ * layout at the `md` breakpoint.
+ */
 function AnalyticsSkeleton() {
     return (
-        <div className="space-y-6 animate-pulse">
-            <div className="h-10 w-1/3 bg-slate-200 rounded-md" />
+        <div className="space-y-6 animate-pulse" data-testid="analytics-skeleton" aria-hidden="true">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="space-y-2">
+                    <div className="h-9 w-72 bg-slate-200 rounded-md" />
+                    <div className="h-5 w-96 max-w-full bg-slate-100 rounded-md" />
+                </div>
+                <div className="flex items-center gap-3">
+                    <div className="h-10 w-32 bg-slate-100 rounded-lg border" />
+                    <div className="h-10 w-56 bg-slate-100 rounded-lg border" />
+                </div>
+            </div>
+
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 {[1, 2, 3, 4].map((i) => (
                     <div key={i} className="h-32 bg-slate-100 rounded-xl border" />
                 ))}
             </div>
+
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7">
-                <div className="col-span-4 h-[380px] bg-slate-100 rounded-xl border flex items-center justify-center">
+                <div className="col-span-full lg:col-span-4 h-[380px] bg-slate-100 rounded-xl border flex items-center justify-center">
                     <Loader2 className="h-8 w-8 animate-spin text-slate-300" />
                 </div>
-                <div className="col-span-3 h-[380px] bg-slate-100 rounded-xl border flex items-center justify-center">
+                <div className="col-span-full lg:col-span-3 h-[380px] bg-slate-100 rounded-xl border flex items-center justify-center">
                     <Loader2 className="h-8 w-8 animate-spin text-slate-300" />
                 </div>
             </div>
+
             <div className="h-[380px] bg-slate-100 rounded-xl border" />
         </div>
     );
@@ -63,6 +94,49 @@ function SummaryCard({ title, value, description, icon }: {
             <div className="text-2xl font-bold">{value}</div>
             <p className="text-xs text-muted-foreground mt-1">{description}</p>
         </div>
+    );
+}
+
+function ExportCsvButton({ data }: { data: { summary: ReturnType<typeof useDashboardAnalytics>['summary']; revenueTrends: ReturnType<typeof useDashboardAnalytics>['revenueTrends']; paymentDistribution: ReturnType<typeof useDashboardAnalytics>['paymentDistribution']; revenueByCountry: ReturnType<typeof useDashboardAnalytics>['revenueByCountry'] } }) {
+    const [exported, setExported] = useState(false);
+
+    const handleExport = useCallback(() => {
+        const rows: string[] = [];
+        rows.push('Date,Revenue,Target');
+        data.revenueTrends.forEach(r => {
+            rows.push(`${r.date},${r.revenue},${r.target ?? ''}`);
+        });
+        rows.push('');
+        rows.push('Method,Distribution %');
+        data.paymentDistribution.forEach(p => {
+            rows.push(`${p.method},${p.value}`);
+        });
+        rows.push('');
+        rows.push('Country,Revenue');
+        data.revenueByCountry.forEach(c => {
+            rows.push(`${c.country},${c.revenue}`);
+        });
+        const csv = rows.join('\n');
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `analytics-export-${new Date().toISOString().slice(0, 10)}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+        setExported(true);
+        setTimeout(() => setExported(false), 2000);
+    }, [data]);
+
+    return (
+        <button
+            onClick={handleExport}
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition-colors"
+            aria-label="Export analytics data as CSV"
+        >
+            {exported ? <Check className="h-4 w-4 text-green-600" /> : <Download className="h-4 w-4" />}
+            {exported ? 'Exported' : 'Export CSV'}
+        </button>
     );
 }
 
@@ -89,7 +163,10 @@ function AnalyticsContent() {
                     <h2 className="text-3xl font-bold tracking-tight">Analytics Dashboard</h2>
                     <p className="text-muted-foreground">Comprehensive insights into your business metrics and growth.</p>
                 </div>
-                <DateRangePicker />
+                <div className="flex items-center gap-3">
+                    <ExportCsvButton data={{ summary, revenueTrends, paymentDistribution, revenueByCountry }} />
+                    <DateRangePicker />
+                </div>
             </div>
 
             {/* KPI Cards */}

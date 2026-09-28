@@ -1,24 +1,22 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PaymentsTable } from "@/features/dashboard/payments/PaymentsTable";
 import { PaymentsFilters } from "@/features/dashboard/payments/PaymentsFilters";
 import { type Payment } from "@/features/dashboard/payments/types";
 import { PaymentDrawer } from "@/features/dashboard/payments/PaymentDrawer";
 import { usePaymentUpdates } from "@/hooks/usePaymentUpdates";
-import {
-  type RefundRecord,
-  type RefundReason,
-} from "@/features/dashboard/refunds/refunds-mock";
 import { Modal } from "@/components/Modal";
 import { Button } from "@/components/Button";
-import { Download, Plus, Wifi, WifiOff } from "lucide-react";
+import { Plus, Wifi, WifiOff } from "lucide-react";
 import { Suspense } from "react";
 import toast from "react-hot-toast";
-import { api } from "@/lib/api";
+import { api, type MerchantExportFormat } from "@/lib/api";
 import { QRCodeCanvas } from "qrcode.react";
 import { DataTableCard, TablePaginationBar } from "@/components/data-table";
+import { ExportActionButtons } from "@/components/data-table/ExportActionButtons";
+import { useMerchantDataExport } from "@/hooks/useMerchantDataExport";
 
 const PAGE_SIZE = 20;
 
@@ -42,20 +40,6 @@ interface BackendPayment {
   fiat_currency?: string;
 }
 
-interface BackendRefund {
-  id: string;
-  payment_id: string;
-  merchant_id: string;
-  amount: number;
-  currency: "USDC" | "XLM";
-  customer_address: string;
-  reason: RefundReason;
-  reason_note?: string;
-  status: RefundRecord["status"];
-  stellar_tx_hash?: string;
-  created_at: string;
-}
-
 function mapBackendPayment(p: BackendPayment): Payment {
   return {
     id: p.id,
@@ -76,22 +60,6 @@ function mapBackendPayment(p: BackendPayment): Payment {
     stellarExpertUrl: p.stellar_expert_url,
     fiatEquivalent: p.fiat_equivalent,
     fiatCurrency: p.fiat_currency,
-  };
-}
-
-function mapBackendRefund(refund: BackendRefund): RefundRecord {
-  return {
-    id: refund.id,
-    paymentId: refund.payment_id,
-    merchantId: refund.merchant_id,
-    amount: refund.amount,
-    currency: refund.currency,
-    customerAddress: refund.customer_address,
-    reason: refund.reason,
-    reasonNote: refund.reason_note,
-    status: refund.status,
-    stellarTxHash: refund.stellar_tx_hash,
-    createdAt: refund.created_at,
   };
 }
 
@@ -133,15 +101,11 @@ function PaymentsContent() {
   const [recentLinks, setRecentLinks] = useState<
     { id: string; url: string; amount: number; currency: string; description?: string; createdAt: string }[]
   >([]);
-
-  // Debounce search
-  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const { exportData, exportingFormat } = useMerchantDataExport();
+  const fetchAbortRef = useRef<AbortController | null>(null);
 
   const handleSearchChange = useCallback((value: string) => {
     setSearch(value);
-    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
-    searchDebounceRef.current = setTimeout(() => setDebouncedSearch(value), 400);
   }, []);
 
   // Real-time payment updates via SSE
@@ -170,6 +134,10 @@ function PaymentsContent() {
   });
 
   const fetchPayments = useCallback(async () => {
+    fetchAbortRef.current?.abort();
+    const controller = new AbortController();
+    fetchAbortRef.current = controller;
+
     setLoading(true);
     setLoadError(null);
     try {
@@ -178,28 +146,39 @@ function PaymentsContent() {
         limit: PAGE_SIZE,
         status: statusFilter,
         currency: currencyFilter,
-        search: debouncedSearch || undefined,
+        search: search || undefined,
         date_from: dateFrom || undefined,
         date_to: dateTo || undefined,
-      })) as { data: BackendPayment[]; meta: { total: number } };
+      }, { signal: controller.signal })) as { data: BackendPayment[]; meta: { total: number } };
       setPayments(result.data.map(mapBackendPayment));
       setTotal(result.meta.total);
-    } catch {
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        return;
+      }
       const msg = "Failed to load payments.";
       setLoadError(msg);
       toast.error(msg);
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted) {
+        setLoading(false);
+      }
     }
-  }, [page, statusFilter, currencyFilter, debouncedSearch, dateFrom, dateTo]);
+  }, [page, statusFilter, currencyFilter, search, dateFrom, dateTo]);
 
   useEffect(() => {
     setPage(1);
-  }, [statusFilter, currencyFilter, debouncedSearch, dateFrom, dateTo, amountMin, amountMax]);
+  }, [statusFilter, currencyFilter, search, dateFrom, dateTo, amountMin, amountMax]);
 
   useEffect(() => {
     fetchPayments();
   }, [fetchPayments]);
+
+  useEffect(() => {
+    return () => {
+      fetchAbortRef.current?.abort();
+    };
+  }, []);
 
   const handleRowClick = useCallback((payment: Payment) => {
     setDrawerPayment(payment);
@@ -211,24 +190,22 @@ function PaymentsContent() {
     setDrawerPayment(null);
   }, []);
 
-  const handleExportCSV = async () => {
-    try {
-      const blob = await api.payments.export({
+  const handleExport = (format: MerchantExportFormat) => {
+    exportData({
+      resource: "payments",
+      format,
+      filters: {
         status: statusFilter,
         currency: currencyFilter,
-        search: debouncedSearch || undefined,
+        search: search || undefined,
         date_from: dateFrom || undefined,
         date_to: dateTo || undefined,
-      });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `payments_export_${new Date().toISOString().split("T")[0]}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch {
-      toast.error("Export failed. Please try again.");
-    }
+        amount_min: amountMin || undefined,
+        amount_max: amountMax || undefined,
+      },
+      page,
+      limit: PAGE_SIZE,
+    });
   };
 
   const handleOpenCreateLink = () => {
@@ -328,10 +305,7 @@ function PaymentsContent() {
           <Button variant="secondary" className="gap-2" onClick={() => router.push("/dashboard/refunds")}>
             Refunds
           </Button>
-          <Button variant="secondary" className="gap-2" onClick={handleExportCSV}>
-            <Download className="h-4 w-4" />
-            Export CSV
-          </Button>
+          <ExportActionButtons onExport={handleExport} exportingFormat={exportingFormat} />
           <Button className="gap-2" onClick={handleOpenCreateLink}>
             <Plus className="h-4 w-4" />
             New Payment

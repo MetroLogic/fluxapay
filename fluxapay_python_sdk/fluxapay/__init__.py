@@ -6,7 +6,7 @@ import hashlib
 import hmac
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union, Literal
 
 import httpx
 
@@ -19,6 +19,14 @@ __all__ = [
     "PaymentStatus",
     "Invoice",
     "WebhookEvent",
+    "WebhookEvent",
+    "WebhookEventBase",
+    "PaymentCreatedEvent",
+    "PaymentPendingEvent",
+    "PaymentConfirmedEvent",
+    "PaymentFailedEvent",
+    "PaymentSettledEvent",
+    "RefundCompletedEvent",
     "verify_webhook_signature",
 ]
 
@@ -30,10 +38,21 @@ _API_VERSION = "v1"
 
 
 class FluxaPayError(Exception):
-    def __init__(self, status_code: int, message: str, raw: Any = None) -> None:
+    def __init__(
+        self,
+        status_code: int,
+        message: str,
+        raw: Any = None,
+        code: Optional[str] = None,
+        request_id: Optional[str] = None,
+    ) -> None:
         super().__init__(message)
         self.status_code = status_code
+        self.message = message
         self.raw = raw
+        self.code = code
+        self.request_id = request_id
+        self.retryable = status_code in (429, 502, 503, 504)
 
 
 # ── Models ────────────────────────────────────────────────────────────────────
@@ -78,12 +97,44 @@ class Invoice:
 
 
 @dataclass
-class WebhookEvent:
-    event: str
+class WebhookEventBase:
     payment_id: str
     merchant_id: str
     timestamp: str
     data: Dict[str, Any]
+
+@dataclass
+class PaymentCreatedEvent(WebhookEventBase):
+    event: Literal["payment_created"]
+
+@dataclass
+class PaymentPendingEvent(WebhookEventBase):
+    event: Literal["payment_pending"]
+
+@dataclass
+class PaymentConfirmedEvent(WebhookEventBase):
+    event: Literal["payment_confirmed"]
+
+@dataclass
+class PaymentFailedEvent(WebhookEventBase):
+    event: Literal["payment_failed"]
+
+@dataclass
+class PaymentSettledEvent(WebhookEventBase):
+    event: Literal["payment_settled"]
+
+@dataclass
+class RefundCompletedEvent(WebhookEventBase):
+    event: Literal["refund_completed"]
+
+WebhookEvent = Union[
+    PaymentCreatedEvent,
+    PaymentPendingEvent,
+    PaymentConfirmedEvent,
+    PaymentFailedEvent,
+    PaymentSettledEvent,
+    RefundCompletedEvent
+]
 
 
 # ── Webhook verification ──────────────────────────────────────────────────────
@@ -145,10 +196,19 @@ def _raise_for(response: httpx.Response) -> None:
         try:
             body = response.json()
             message = body.get("message", f"HTTP {response.status_code}")
+            code = body.get("code")
         except Exception:
             body = None
             message = f"HTTP {response.status_code}"
-        raise FluxaPayError(response.status_code, message, body)
+            code = None
+        request_id = response.headers.get("x-request-id") or response.headers.get("X-Request-ID")
+        raise FluxaPayError(
+            status_code=response.status_code,
+            message=message,
+            raw=body,
+            code=code,
+            request_id=request_id,
+        )
 
 
 # ── Resource mixins (shared logic) ────────────────────────────────────────────
@@ -195,13 +255,13 @@ class FluxaPay(_PaymentsMixin, _SettlementsMixin):
 
         from fluxapay import FluxaPay
 
-        client = FluxaPay(api_key="sk_live_...")
-        payment = client.payments.create(
-            amount=49.99,
-            currency="USD",
-            customer_email="buyer@example.com",
-        )
-        print(payment.checkout_url)
+        with FluxaPay(api_key="sk_live_...") as client:
+            payment = client.payments.create(
+                amount=49.99,
+                currency="USD",
+                customer_email="buyer@example.com",
+            )
+            print(payment.checkout_url)
     """
 
     def __init__(self, api_key: str, base_url: str = _DEFAULT_BASE_URL) -> None:
@@ -338,7 +398,19 @@ class FluxaPay(_PaymentsMixin, _SettlementsMixin):
         def parse(self, raw_body: str) -> WebhookEvent:
             import json
             d = json.loads(raw_body)
-            return WebhookEvent(**{k: d[k] for k in WebhookEvent.__dataclass_fields__ if k in d})
+            event_type = d.get("event")
+            classes = {
+                "payment_created": PaymentCreatedEvent,
+                "payment_pending": PaymentPendingEvent,
+                "payment_confirmed": PaymentConfirmedEvent,
+                "payment_failed": PaymentFailedEvent,
+                "payment_settled": PaymentSettledEvent,
+                "refund_completed": RefundCompletedEvent,
+            }
+            cls = classes.get(event_type)
+            if not cls:
+                raise ValueError(f"Unknown event type: {event_type}")
+            return cls(**{k: d[k] for k in cls.__dataclass_fields__ if k in d})
 
     @property
     def webhooks(self) -> "_Webhooks":

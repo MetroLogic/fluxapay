@@ -42,6 +42,8 @@ model Merchant {
   /** On-chain registry state — prevents duplicate Soroban registrations on retry */
   onchain_registered        Boolean   @default(false)
   onchain_registry_tx_hash  String?
+  /** Whether the merchant's phone number has been verified */
+  verified_phone       Boolean                @default(false)
   /** Compliance: set when merchant requests account deletion */
   deletion_requested_at DateTime?
   /** Compliance: set after PII anonymization is complete */
@@ -176,6 +178,8 @@ model Plan {
   overage_mode            String                 @default("hard_block")
   /** Feature flags, e.g. ["data_export_pii"] */
   features                Json                   @default("[]")
+  /** Max payment expiry window in seconds (also used as plan default expiry) */
+  max_payment_expiry_seconds Int?
   created_at              DateTime               @default(now())
   updated_at              DateTime               @updatedAt
   subscriptions           MerchantSubscription[]
@@ -205,11 +209,18 @@ model MerchantSubscription {
   merchantId           String
   plan                 Plan     @relation(fields: [planId], references: [id])
   planId               String
+  /// Status: 'active' or 'past_due' (grace period for failed renewal)
   status               String   @default("active")
   billing_cycle        String
   current_period_start DateTime
   current_period_end   DateTime
   next_billing_date    DateTime
+  /** Plan amount actually charged/applied for the current period, captured
+   *  fresh from Plan.amount at subscription creation and on every renewal. */
+  current_period_amount        Decimal?
+  /** Set once a price-increase notice email has been sent for the
+   *  upcoming renewal, so the 7-day-prior notice job doesn't resend it. */
+  price_change_notice_sent_at  DateTime?
   created_at           DateTime @default(now())
   updated_at           DateTime @updatedAt
 }
@@ -326,7 +337,7 @@ model WebhookLog {
   retryAttempts   WebhookRetryAttempt[]
 
   @@index([merchantId, created_at(sort: Desc)])
-  @@index([merchantId, status])
+  @@index([merchantId, status, created_at(sort: Desc)])
   @@index([status, failed_at])
 }
 
@@ -349,6 +360,7 @@ model Payment {
   currency           String
   usdc_amount        Decimal?
   fx_rate            Decimal?
+  fx_rate_stale      Boolean  @default(false)
   customer_email     String
   description        String?
   note               String?
@@ -375,6 +387,10 @@ model Payment {
   settled            Boolean  @default(false)
   swept_at           DateTime?
   sweep_tx_hash      String?
+  sweep_retry_count         Int      @default(0)
+  sweep_last_error          String?
+  sweep_failed_at           DateTime?
+  sweep_needs_manual_review Boolean  @default(false)
   confirmed_at       DateTime?
   settled_at         DateTime?
   settlement_ref     String?
@@ -404,7 +420,7 @@ model Payment {
   escrow_contract_address  String?
   escrow_status            String?
 
-  @@index([swept, status])
+  @@index([swept, status, sweep_needs_manual_review])
   @@index([customerId])
   @@index([merchantId, createdAt(sort: Desc)])
   @@index([merchantId, status, createdAt(sort: Desc)])
@@ -554,6 +570,8 @@ enum PaymentStatus {
   paid
   completed
   cancelled
+  refunded
+  partially_refunded
 }
 
 model CronLock {
@@ -576,6 +594,8 @@ model IdempotencyRecord {
 
 enum MerchantStatus {
   pending_verification
+  pending_chain_registration  /// Awaiting on-chain Soroban registration confirmation
+  chain_registration_failed   /// On-chain registration failed after max retries
   active
 }
 
@@ -736,6 +756,8 @@ model MerchantNotificationPreferences {
   merchantId                   String   @id
   /// Whether to send payment-expiry reminder emails/webhooks (default: true)
   payment_expiry_reminder      Boolean  @default(true)
+  /// Whether SMS notifications are enabled (requires verified phone)
+  sms_notifications_enabled    Boolean  @default(false)
   /// Minutes before expiry to send the reminder (default: 5, min: 1)
   reminder_minutes_before      Int      @default(5)
   created_at                   DateTime @default(now())
@@ -916,6 +938,7 @@ enum DepositAddressStatus {
   available
   assigned
   cooldown
+  retiring
 }
 
 model DepositAddress {
@@ -923,6 +946,7 @@ model DepositAddress {
   public_key         String               @unique
   secret_key         String               // encrypted
   derivation_path    String
+  seedVersion        Int                  @default(1)
   status             DepositAddressStatus @default(available)
   assigned_payment_id String?             @unique
   payment            Payment?             @relation(fields: [assigned_payment_id], references: [id])
@@ -931,6 +955,29 @@ model DepositAddress {
   updated_at         DateTime             @updatedAt
 
   @@index([status, cooldown_until])
+  @@index([seedVersion])
+}
+
+/// Persistent settlement retry queue – replaces in-memory setTimeout retries.
+/// Survives process restarts; picked up by cron job (settlement_retry).
+model SettlementRetry {
+  id           String   @id @default(cuid())
+  paymentId    String   @unique
+  retryCount   Int      @default(0)
+  nextRetryAt  DateTime
+  lastError    String?
+  status       SettlementRetryStatus @default(pending)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([status, nextRetryAt])
+}
+
+enum SettlementRetryStatus {
+  pending
+  processing
+  completed
+  exhausted
 }
 
 /// Suppressed email addresses (bounces, complaints, unsubscribes).

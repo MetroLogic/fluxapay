@@ -4,15 +4,18 @@ import { useState } from "react";
 import { DollarSign, TrendingUp, Clock, Calendar } from "lucide-react";
 
 import { DataTableCard } from "@/components/data-table";
+import { ExportActionButtons } from "@/components/data-table/ExportActionButtons";
 import { TablePaginationBar } from "@/components/data-table/TablePaginationBar";
 import { StatCard } from "./StatCard";
 import { SettlementFilters } from "./SettlementFilters";
 import { SettlementsTable } from "./SettlementsTable";
 import { SettlementDetailsModal } from "./SettlementDetailsModal";
+import { type MerchantExportFormat } from "@/lib/api";
 import {
   useSettlements,
   useSettlementSummary,
 } from "@/hooks/useSettlements";
+import { useMerchantDataExport } from "@/hooks/useMerchantDataExport";
 
 const PAGE_SIZE = 10;
 
@@ -22,6 +25,7 @@ export default function SettlementsPage() {
   const [currency, setCurrency] = useState("all");
   const [date, setDate] = useState({ from: "", to: "" });
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const { exportData, exportingFormat } = useMerchantDataExport();
 
   const { settlements, pagination, isLoading, error } = useSettlements({
     page,
@@ -46,14 +50,32 @@ export default function SettlementsPage() {
   const handleStatusChange = (v: string) => { setStatus(v); setPage(1); };
   const handleCurrencyChange = (v: string) => { setCurrency(v); setPage(1); };
   const handleDateChange = (v: { from: string; to: string }) => { setDate(v); setPage(1); };
+  const handleExport = (format: MerchantExportFormat) => {
+    exportData({
+      resource: "settlements",
+      format,
+      filters: {
+        status,
+        currency,
+        date_from: date.from || undefined,
+        date_to: date.to || undefined,
+      },
+      page,
+      limit: PAGE_SIZE,
+      fallbackRows: settlements.map((settlement) => ({ ...settlement })),
+    });
+  };
 
   return (
     <div className="space-y-6 p-6">
-      <header>
-        <h2 className="text-2xl font-bold">Settlements</h2>
-        <p className="text-muted-foreground">
-          View your settlement history and payouts.
-        </p>
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-bold">Settlements</h2>
+          <p className="text-muted-foreground">
+            View your settlement history and payouts.
+          </p>
+        </div>
+        <ExportActionButtons onExport={handleExport} exportingFormat={exportingFormat} />
       </header>
 
       {/* Stats */}

@@ -1,6 +1,7 @@
 import { apiError } from "../helpers/apiError.helper";
 import { ErrorCode } from "../types/errors";
 import { PrismaClient, Prisma } from "../generated/client/client";
+import { prisma } from "../config/prisma";
 import {
   normalizeCheckoutAccentHex,
   normalizeCheckoutLogoUrl,
@@ -22,7 +23,6 @@ import {
   logWebhookSecretRotation,
 } from "./audit.service";
 
-const prisma = new PrismaClient();
 
 export async function signupMerchantService(data: {
   business_name: string;
@@ -108,7 +108,7 @@ export async function signupMerchantService(data: {
 
   // Generate OTP (non-blocking — merchant record is already committed)
   try {
-    const otp = await createOtp(merchant.id, "email");
+    const otp = await createOtp(merchant.id, "email", email);
     await sendOtpEmail(email, otp);
   } catch (err) {
     console.error("OTP email delivery failed during signup:", err);
@@ -171,7 +171,7 @@ export async function resendOtpMerchantService(data: {
   if (!merchant) throw apiError(404, ErrorCode.MERCHANT_NOT_FOUND, "Merchant not found");
 
 
-  const otp = await createOtp(merchantId, channel);
+  const otp = await createOtp(merchantId, channel, channel === "email" ? merchant.email : undefined);
   if (channel === "email") {
     await sendOtpEmail(merchant.email, otp);
   } else {
@@ -341,17 +341,6 @@ export async function updateSettlementScheduleService(data: {
   }
 
   return { message: "Settlement schedule updated", settlement_schedule, settlement_day: finalSettlementDay };
-  const updateData: { settlement_schedule: string; settlement_day: number | null } = {
-    settlement_schedule,
-    // Clear settlement_day when switching to daily so batch logic stays consistent
-    settlement_day: settlement_schedule === "daily" ? null : (settlement_day ?? null),
-  };
-
-  await prisma.merchant.update({
-    where: { id: merchantId },
-    data: updateData,
-  });
-  return { message: "Settlement schedule updated", settlement_schedule, settlement_day: updateData.settlement_day };
 }
 
 export async function updateBankAccountService(data: {

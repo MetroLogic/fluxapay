@@ -2,11 +2,11 @@ jest.mock("../emailSuppression.service", () => ({
   isEmailSuppressed: jest.fn(),
 }));
 
-const mockSend = jest.fn().mockResolvedValue({ error: null });
+const mockSendEmail = jest.fn().mockResolvedValue(undefined);
 
-jest.mock("resend", () => ({
-  Resend: jest.fn().mockImplementation(() => ({
-    emails: { send: mockSend },
+jest.mock("../../email/emailProvider.factory", () => ({
+  getEmailProvider: jest.fn(() => ({
+    sendEmail: mockSendEmail,
   })),
 }));
 
@@ -15,7 +15,7 @@ jest.mock("../../utils/logger", () => ({
 }));
 
 import { isEmailSuppressed } from "../emailSuppression.service";
-import { sendPaymentConfirmationEmail } from "../email.service";
+import { sendPaymentConfirmationEmail, sendOtpEmail, sendSecurityAlertEmail, sendWelcomeEmail } from "../email.service";
 
 const mockIsSuppressed = isEmailSuppressed as jest.Mock;
 
@@ -26,7 +26,7 @@ describe("email.service suppression", () => {
     process.env.RESEND_API_KEY = "re_test";
   });
 
-  it("skips send for suppressed addresses", async () => {
+  it("skips send for suppressed marketing / notification addresses", async () => {
     mockIsSuppressed.mockResolvedValue(true);
 
     await sendPaymentConfirmationEmail("blocked@example.com", "Acme", {
@@ -37,7 +37,36 @@ describe("email.service suppression", () => {
       timestamp: new Date().toISOString(),
     });
 
-    expect(mockSend).not.toHaveBeenCalled();
+    expect(mockSendEmail).not.toHaveBeenCalled();
+
+    await sendWelcomeEmail("blocked@example.com", "Acme", "key_123", "http://localhost:3000");
+    expect(mockSendEmail).not.toHaveBeenCalled();
+  });
+
+  it("sends transactional/OTP and security emails even if suppressed, logging a warning", async () => {
+    mockIsSuppressed.mockResolvedValue(true);
+
+    await sendOtpEmail("suppressed-user@example.com", "123456");
+    expect(mockSendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: "suppressed-user@example.com",
+        subject: "Your Fluxapay OTP",
+      })
+    );
+
+    mockSendEmail.mockClear();
+
+    await sendSecurityAlertEmail({
+      to: "suppressed-user@example.com",
+      subject: "Security Alert Test",
+      message: "Unusual login activity detected",
+    });
+    expect(mockSendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: "suppressed-user@example.com",
+        subject: "Security Alert Test",
+      })
+    );
   });
 
   it("includes unsubscribe link in merchant notification emails", async () => {
@@ -51,7 +80,7 @@ describe("email.service suppression", () => {
       timestamp: new Date().toISOString(),
     });
 
-    expect(mockSend).toHaveBeenCalledWith(
+    expect(mockSendEmail).toHaveBeenCalledWith(
       expect.objectContaining({
         html: expect.stringContaining("/api/v1/email/unsubscribe?email="),
       }),

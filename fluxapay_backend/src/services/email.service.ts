@@ -1,18 +1,23 @@
 import dotenv from "dotenv";
-import { Resend } from "resend";
 import { isDevEnv } from "../helpers/env.helper";
 import { isEmailSuppressed } from "./emailSuppression.service";
 import { getLogger } from "../utils/logger";
+import { getEmailProvider } from "../email/emailProvider.factory";
 dotenv.config();
 
-let _resend: Resend | undefined;
 const logger = (getLogger("EmailService") ?? { warn: () => {} }) as { warn: (msg: string, meta?: unknown) => void };
 
-function getResend(): Resend {
-  if (!_resend) {
-    _resend = new Resend(process.env.RESEND_API_KEY);
-  }
-  return _resend;
+/**
+ * HTML-escape a string to prevent XSS in email templates.
+ * Escapes &, <, >, ", and ' characters.
+ */
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#x27;");
 }
 
 function buildUnsubscribeFooter(email: string): string {
@@ -36,6 +41,16 @@ async function sendIfNotSuppressed(
   await sendFn();
 }
 
+async function sendTransactionalWithSuppressionCheck(
+  to: string,
+  sendFn: () => Promise<void>,
+): Promise<void> {
+  if (await isEmailSuppressed(to)) {
+    logger.warn("Sending transactional/security email to suppressed address", { to });
+  }
+  await sendFn();
+}
+
 export async function sendWelcomeEmail(
   to: string,
   businessName: string,
@@ -44,25 +59,25 @@ export async function sendWelcomeEmail(
 ) {
   try {
     await sendIfNotSuppressed(to, async () => {
-    const response = await getResend().emails.send({
+    await getEmailProvider().sendEmail({
       from: process.env.MAIL_FROM || "noreply@fluxapay.com",
       to,
       subject: "Welcome to FluxaPay!",
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2>Welcome to FluxaPay, ${businessName}!</h2>
+          <h2>Welcome to FluxaPay, ${escapeHtml(businessName)}!</h2>
           <p>Your merchant account is now active. Here are your credentials to get started:</p>
 
           <h3>Your API Key</h3>
           <p style="background: #f4f4f4; padding: 12px; border-radius: 4px; font-family: monospace; word-break: break-all;">
-            ${apiKey}
+            ${escapeHtml(apiKey)}
           </p>
           <p><strong>Important:</strong> Store this key securely. It will not be shown again.</p>
 
           <h3>Get Started</h3>
           <ul>
-            <li><a href="${dashboardUrl}">Go to your Dashboard</a></li>
-            <li><a href="${dashboardUrl}/docs">Integration Documentation</a></li>
+            <li><a href="${escapeHtml(dashboardUrl)}">Go to your Dashboard</a></li>
+            <li><a href="${escapeHtml(dashboardUrl)}/docs">Integration Documentation</a></li>
           </ul>
 
           <p>If you have any questions, reply to this email or visit our support page.</p>
@@ -70,12 +85,6 @@ export async function sendWelcomeEmail(
         </div>
       `,
     });
-    if (response.error) {
-      if (isDevEnv()) {
-        console.error("Error sending welcome email:", response.error);
-      }
-      throw new Error("Failed to send welcome email");
-    }
     });
   } catch (err) {
     if (isDevEnv()) {
@@ -87,19 +96,13 @@ export async function sendWelcomeEmail(
 
 export async function sendOtpEmail(to: string, otp: string) {
   try {
-    await sendIfNotSuppressed(to, async () => {
-    const response = await getResend().emails.send({
+    await sendTransactionalWithSuppressionCheck(to, async () => {
+    await getEmailProvider().sendEmail({
       from: process.env.MAIL_FROM || "noreply@fluxapay.com",
       to,
       subject: "Your Fluxapay OTP",
-      html: `<p>Your OTP is <b>${otp}</b>. It expires in 10 minutes.</p>`,
+      html: `<p>Your OTP is <b>${escapeHtml(otp)}</b>. It expires in 10 minutes.</p>`,
     });
-    if (response.error) {
-      if (isDevEnv()) {
-        console.error("Error sending OTP:", response.error);
-      }
-      throw new Error("Failed to send OTP email");
-    }
     });
   } catch (err) {
     if (isDevEnv()) {
@@ -126,25 +129,25 @@ export async function sendCheckoutExpiryReminderEmail(
 ) {
   try {
     await sendIfNotSuppressed(to, async () => {
-    const response = await getResend().emails.send({
+    await getEmailProvider().sendEmail({
       from: process.env.MAIL_FROM || "noreply@fluxapay.com",
       to,
-      subject: `Checkout Expiring Soon — ${details.amount} ${details.currency} (${details.minutes_remaining} min left)`,
+      subject: `Checkout Expiring Soon — ${escapeHtml(details.amount)} ${escapeHtml(details.currency)} (${details.minutes_remaining} min left)`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <h2>Checkout Expiring Soon</h2>
-          <p>Hello ${businessName},</p>
+          <p>Hello ${escapeHtml(businessName)},</p>
           <p>A customer checkout is about to expire in <strong>${details.minutes_remaining} minutes</strong> without completing payment.</p>
           <div style="background: #fff8e1; border-left: 4px solid #f59e0b; padding: 16px; border-radius: 4px; margin: 16px 0;">
             <table style="width: 100%; border-collapse: collapse;">
-              <tr><td style="padding: 6px 0;"><strong>Payment ID:</strong></td><td style="font-family: monospace; font-size: 12px;">${details.payment_id}</td></tr>
-              <tr><td style="padding: 6px 0;"><strong>Amount:</strong></td><td>${details.amount} ${details.currency}</td></tr>
-              <tr><td style="padding: 6px 0;"><strong>Customer:</strong></td><td>${details.customer_email}</td></tr>
-              <tr><td style="padding: 6px 0;"><strong>Expires at:</strong></td><td>${new Date(details.expires_at).toLocaleString()}</td></tr>
+              <tr><td style="padding: 6px 0;"><strong>Payment ID:</strong></td><td style="font-family: monospace; font-size: 12px;">${escapeHtml(details.payment_id)}</td></tr>
+              <tr><td style="padding: 6px 0;"><strong>Amount:</strong></td><td>${escapeHtml(details.amount)} ${escapeHtml(details.currency)}</td></tr>
+              <tr><td style="padding: 6px 0;"><strong>Customer:</strong></td><td>${escapeHtml(details.customer_email)}</td></tr>
+              <tr><td style="padding: 6px 0;"><strong>Expires at:</strong></td><td>${escapeHtml(new Date(details.expires_at).toLocaleString())}</td></tr>
             </table>
           </div>
           <p>
-            <a href="${details.checkout_url}"
+            <a href="${escapeHtml(details.checkout_url)}"
                style="display: inline-block; padding: 10px 20px; background: #0066cc; color: white; text-decoration: none; border-radius: 4px;">
               View Checkout
             </a>
@@ -155,13 +158,56 @@ export async function sendCheckoutExpiryReminderEmail(
         </div>
       `,
     });
-    if (response.error) {
-      if (isDevEnv()) console.error("Error sending expiry reminder email:", response.error);
-      throw new Error("Failed to send expiry reminder email");
-    }
+
     });
   } catch (err) {
     if (isDevEnv()) console.error("Error sending expiry reminder email:", err);
+    throw err;
+  }
+}
+
+export interface PriceChangeNoticeDetails {
+  subscription_id: string;
+  plan_name: string;
+  old_amount: string;
+  new_amount: string;
+  currency: string;
+  renewal_date: string;
+}
+
+export async function sendSubscriptionPriceChangeNoticeEmail(
+  to: string,
+  businessName: string,
+  details: PriceChangeNoticeDetails,
+) {
+  try {
+    await sendIfNotSuppressed(to, async () => {
+    await getEmailProvider().sendEmail({
+      from: process.env.MAIL_FROM || "noreply@fluxapay.com",
+      to,
+      subject: `Your ${escapeHtml(details.plan_name)} plan price is changing`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2>Upcoming Price Change</h2>
+          <p>Hello ${escapeHtml(businessName)},</p>
+          <p>Your <strong>${escapeHtml(details.plan_name)}</strong> subscription will renew at a new price starting <strong>${escapeHtml(new Date(details.renewal_date).toLocaleDateString())}</strong>.</p>
+          <div style="background: #fff8e1; border-left: 4px solid #f59e0b; padding: 16px; border-radius: 4px; margin: 16px 0;">
+            <table style="width: 100%; border-collapse: collapse;">
+              <tr><td style="padding: 6px 0;"><strong>Current price:</strong></td><td>${escapeHtml(details.old_amount)} ${escapeHtml(details.currency)}</td></tr>
+              <tr><td style="padding: 6px 0;"><strong>New price:</strong></td><td>${escapeHtml(details.new_amount)} ${escapeHtml(details.currency)}</td></tr>
+              <tr><td style="padding: 6px 0;"><strong>Effective:</strong></td><td>${escapeHtml(new Date(details.renewal_date).toLocaleDateString())}</td></tr>
+              <tr><td style="padding: 6px 0;"><strong>Subscription ID:</strong></td><td style="font-family: monospace; font-size: 12px;">${escapeHtml(details.subscription_id)}</td></tr>
+            </table>
+          </div>
+          <p style="color: #666; font-size: 13px;">No action is needed if you'd like to continue at the new price. Contact support if you have questions.</p>
+          <p>— The FluxaPay Team</p>
+          ${buildUnsubscribeFooter(to)}
+        </div>
+      `,
+    });
+    });
+  } catch (err) {
+    if (isDevEnv()) console.error("Error sending price change notice email:", err);
     throw err;
   }
 }
@@ -182,14 +228,14 @@ export async function sendPaymentConfirmationEmail(
 ) {
   try {
     await sendIfNotSuppressed(to, async () => {
-    const response = await getResend().emails.send({
+    await getEmailProvider().sendEmail({
       from: process.env.MAIL_FROM || "noreply@fluxapay.com",
       to,
-      subject: `Payment Confirmed - ${details.amount} ${details.currency}`,
+      subject: `Payment Confirmed - ${escapeHtml(details.amount)} ${escapeHtml(details.currency)}`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <h2>Payment Confirmed</h2>
-          <p>Hello ${businessName},</p>
+          <p>Hello ${escapeHtml(businessName)},</p>
           <p>Your payment has been successfully confirmed on the Stellar network.</p>
 
           <div style="background: #f4f4f4; padding: 16px; border-radius: 4px; margin: 16px 0;">
@@ -197,27 +243,27 @@ export async function sendPaymentConfirmationEmail(
             <table style="width: 100%; border-collapse: collapse;">
               <tr>
                 <td style="padding: 8px 0;"><strong>Amount:</strong></td>
-                <td style="padding: 8px 0;">${details.amount} ${details.currency}</td>
+                <td style="padding: 8px 0;">${escapeHtml(details.amount)} ${escapeHtml(details.currency)}</td>
               </tr>
               <tr>
                 <td style="padding: 8px 0;"><strong>Payment ID:</strong></td>
-                <td style="padding: 8px 0; font-family: monospace; font-size: 12px;">${details.payment_id}</td>
+                <td style="padding: 8px 0; font-family: monospace; font-size: 12px;">${escapeHtml(details.payment_id)}</td>
               </tr>
               ${details.merchant_reference ? `
               <tr>
                 <td style="padding: 8px 0;"><strong>Reference:</strong></td>
-                <td style="padding: 8px 0;">${details.merchant_reference}</td>
+                <td style="padding: 8px 0;">${escapeHtml(details.merchant_reference)}</td>
               </tr>
               ` : ''}
               <tr>
                 <td style="padding: 8px 0;"><strong>Time:</strong></td>
-                <td style="padding: 8px 0;">${new Date(details.timestamp).toLocaleString()}</td>
+                <td style="padding: 8px 0;">${escapeHtml(new Date(details.timestamp).toLocaleString())}</td>
               </tr>
             </table>
           </div>
 
           <p>
-            <a href="${details.explorer_link}"
+            <a href="${escapeHtml(details.explorer_link)}"
                style="display: inline-block; padding: 10px 20px; background: #0066cc; color: white; text-decoration: none; border-radius: 4px;">
               View on Stellar Explorer
             </a>
@@ -231,12 +277,6 @@ export async function sendPaymentConfirmationEmail(
         </div>
       `,
     });
-    if (response.error) {
-      if (isDevEnv()) {
-        console.error("Error sending payment confirmation email:", response.error);
-      }
-      throw new Error("Failed to send payment confirmation email");
-    }
     });
   } catch (err) {
     if (isDevEnv()) {
@@ -256,31 +296,32 @@ export async function sendInvoiceEmail(
   merchantName?: string,
 ) {
   try {
-    const response = await getResend().emails.send({
+    await sendIfNotSuppressed(to, async () => {
+    await getEmailProvider().sendEmail({
       from: process.env.MAIL_FROM || "noreply@fluxapay.com",
       to,
-      subject: `Invoice #${invoiceNumber} from ${merchantName || "FluxaPay"}`,
+      subject: `Invoice #${escapeHtml(invoiceNumber)} from ${escapeHtml(merchantName || "FluxaPay")}`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2>Invoice #${invoiceNumber}</h2>
+          <h2>Invoice #${escapeHtml(invoiceNumber)}</h2>
           <p>Hello,</p>
-          <p>You have received a new invoice from ${merchantName || "FluxaPay"}.</p>
+          <p>You have received a new invoice from ${escapeHtml(merchantName || "FluxaPay")}.</p>
 
           <div style="background: #f4f4f4; padding: 16px; border-radius: 4px; margin: 16px 0;">
             <table style="width: 100%; border-collapse: collapse;">
               <tr>
                 <td style="padding: 8px 0;"><strong>Amount:</strong></td>
-                <td style="padding: 8px 0;">${amount} ${currency}</td>
+                <td style="padding: 8px 0;">${escapeHtml(amount)} ${escapeHtml(currency)}</td>
               </tr>
               <tr>
                 <td style="padding: 8px 0;"><strong>Due Date:</strong></td>
-                <td style="padding: 8px 0;">${dueDate ? new Date(dueDate).toLocaleDateString() : "On receipt"}</td>
+                <td style="padding: 8px 0;">${dueDate ? escapeHtml(new Date(dueDate).toLocaleDateString()) : "On receipt"}</td>
               </tr>
             </table>
           </div>
 
           <p>
-            <a href="${paymentLink}"
+            <a href="${escapeHtml(paymentLink)}"
                style="display: inline-block; padding: 12px 24px; background: #0066cc; color: white; text-decoration: none; border-radius: 4px;">
               Pay Invoice Now
             </a>
@@ -293,12 +334,7 @@ export async function sendInvoiceEmail(
         </div>
       `,
     });
-    if (response.error) {
-      if (isDevEnv()) {
-        console.error("Error sending invoice email:", response.error);
-      }
-      throw new Error("Failed to send invoice email");
-    }
+    });
   } catch (err) {
     if (isDevEnv()) {
       console.error("Error sending invoice email:", err);
@@ -313,15 +349,16 @@ export async function sendSecurityAlertEmail(data: {
   message: string;
 }) {
   try {
-    const response = await getResend().emails.send({
+    await sendTransactionalWithSuppressionCheck(data.to, async () => {
+    await getEmailProvider().sendEmail({
       from: process.env.MAIL_FROM || "noreply@fluxapay.com",
       to: data.to,
-      subject: data.subject,
+      subject: escapeHtml(data.subject),
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <h2 style="color: #dc2626;">⚠️ Security Alert</h2>
           <p>Hello,</p>
-          <p>${data.message}</p>
+          <p>${escapeHtml(data.message)}</p>
           <div style="background: #fef2f2; border-left: 4px solid #dc2626; padding: 16px; border-radius: 4px; margin: 16px 0;">
             <p style="margin: 0; color: #991b1b;"><strong>Recommended Actions:</strong></p>
             <ul style="margin: 8px 0; color: #991b1b;">
@@ -338,12 +375,7 @@ export async function sendSecurityAlertEmail(data: {
         </div>
       `,
     });
-    if (response.error) {
-      if (isDevEnv()) {
-        console.error("Error sending security alert email:", response.error);
-      }
-      throw new Error("Failed to send security alert email");
-    }
+    });
   } catch (err) {
     if (isDevEnv()) {
       console.error("Error sending security alert email:", err);
@@ -362,10 +394,11 @@ export async function sendBackupFailureAlertEmail(
   details: BackupFailureAlertDetails,
 ): Promise<void> {
   try {
-    const response = await getResend().emails.send({
+    await sendTransactionalWithSuppressionCheck(details.to, async () => {
+    await getEmailProvider().sendEmail({
       from: process.env.MAIL_FROM || "noreply@fluxapay.com",
       to: details.to,
-      subject: `🚨 [FluxaPay] Database Backup FAILED — ${details.backupId}`,
+      subject: `🚨 [FluxaPay] Database Backup FAILED — ${escapeHtml(details.backupId)}`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <h2 style="color: #dc2626;">🚨 Database Backup Failed</h2>
@@ -374,15 +407,15 @@ export async function sendBackupFailureAlertEmail(
             <table style="width: 100%; border-collapse: collapse;">
               <tr>
                 <td style="padding: 6px 0; font-weight: bold;">Backup ID:</td>
-                <td style="padding: 6px 0; font-family: monospace; font-size: 12px;">${details.backupId}</td>
+                <td style="padding: 6px 0; font-family: monospace; font-size: 12px;">${escapeHtml(details.backupId)}</td>
               </tr>
               <tr>
                 <td style="padding: 6px 0; font-weight: bold;">Failure Reason:</td>
-                <td style="padding: 6px 0; color: #991b1b;">${details.reason}</td>
+                <td style="padding: 6px 0; color: #991b1b;">${escapeHtml(details.reason)}</td>
               </tr>
               <tr>
                 <td style="padding: 6px 0; font-weight: bold;">Time:</td>
-                <td style="padding: 6px 0;">${new Date().toUTCString()}</td>
+                <td style="padding: 6px 0;">${escapeHtml(new Date().toUTCString())}</td>
               </tr>
             </table>
           </div>
@@ -402,16 +435,179 @@ export async function sendBackupFailureAlertEmail(
         </div>
       `,
     });
-    if (response.error) {
-      if (isDevEnv()) {
-        console.error("Error sending backup failure alert:", response.error);
-      }
-      throw new Error("Failed to send backup failure alert email");
-    }
+    });
   } catch (err) {
     if (isDevEnv()) {
       console.error("Error sending backup failure alert:", err);
     }
     // Don't throw — alert failures must not mask the underlying backup error
+  }
+}
+export async function sendBillingFailureEmail(data: {
+  to: string;
+  businessName: string;
+  planName: string;
+  gracePeriodDays: number;
+  retryDate: Date;
+  error?: string | null;
+  isDowngrade?: boolean;
+  isRecovery?: boolean;
+}): Promise<void> {
+  try {
+    await sendTransactionalWithSuppressionCheck(data.to, async () => {
+      if (data.isRecovery) {
+        // Payment recovery notification
+        await getEmailProvider().sendEmail({
+          from: process.env.MAIL_FROM || "noreply@fluxapay.com",
+          to: data.to,
+          subject: `✓ Subscription Payment Recovered — ${escapeHtml(data.planName)} Plan`,
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <h2 style="color: #059669;">✓ Payment Successful</h2>
+              <p>Hello ${escapeHtml(data.businessName)},</p>
+              <p>Great news! Your subscription payment has been successfully processed and your account is back in good standing.</p>
+              <div style="background: #ecfdf5; border-left: 4px solid #059669; padding: 16px; border-radius: 4px; margin: 16px 0;">
+                <table style="width: 100%; border-collapse: collapse;">
+                  <tr>
+                    <td style="padding: 6px 0;"><strong>Plan:</strong></td>
+                    <td style="padding: 6px 0;">${escapeHtml(data.planName)}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 6px 0;"><strong>Next Payment:</strong></td>
+                    <td style="padding: 6px 0;">${escapeHtml(data.retryDate.toLocaleDateString())}</td>
+                  </tr>
+                </table>
+              </div>
+              <p>Thank you for using FluxaPay!</p>
+              <p>— The FluxaPay Team</p>
+            </div>
+          `,
+        });
+      } else if (data.isDowngrade) {
+        // Downgrade notification
+        await getEmailProvider().sendEmail({
+          from: process.env.MAIL_FROM || "noreply@fluxapay.com",
+          to: data.to,
+          subject: `Subscription Downgraded — Grace Period Expired`,
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <h2 style="color: #d97706;">⚠️ Subscription Downgraded</h2>
+              <p>Hello ${escapeHtml(data.businessName)},</p>
+              <p>Your subscription payment could not be processed, and the grace period has expired. Your subscription has been automatically downgraded to the free plan.</p>
+              <div style="background: #fef3c7; border-left: 4px solid #d97706; padding: 16px; border-radius: 4px; margin: 16px 0;">
+                <p style="margin: 0; font-weight: bold;">What changed:</p>
+                <ul style="margin: 8px 0;">
+                  <li>You are now on the <strong>Free</strong> plan</li>
+                  <li>Plan limits have been reduced to free tier</li>
+                  <li>You can upgrade anytime by updating your billing information</li>
+                </ul>
+              </div>
+              <p>
+                <a href="${process.env.BASE_URL || 'https://dashboard.fluxapay.com'}/settings/billing"
+                   style="display: inline-block; padding: 10px 20px; background: #0066cc; color: white; text-decoration: none; border-radius: 4px;">
+                  Update Billing Information
+                </a>
+              </p>
+              <p style="color: #666; font-size: 13px;">If you have questions or need help, please contact our support team.</p>
+              <p>— The FluxaPay Team</p>
+            </div>
+          `,
+        });
+      } else {
+        // Billing failure notification
+        await getEmailProvider().sendEmail({
+          from: process.env.MAIL_FROM || "noreply@fluxapay.com",
+          to: data.to,
+          subject: `⚠️ Subscription Payment Failed — ${escapeHtml(data.planName)} Plan`,
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <h2 style="color: #dc2626;">⚠️ Subscription Payment Failed</h2>
+              <p>Hello ${escapeHtml(data.businessName)},</p>
+              <p>We were unable to process your subscription renewal payment for the <strong>${escapeHtml(data.planName)}</strong> plan.</p>
+              <div style="background: #fef2f2; border-left: 4px solid #dc2626; padding: 16px; border-radius: 4px; margin: 16px 0;">
+                <table style="width: 100%; border-collapse: collapse;">
+                  <tr>
+                    <td style="padding: 6px 0;"><strong>Issue:</strong></td>
+                    <td style="padding: 6px 0; color: #991b1b;">${data.error || 'Payment method declined'}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 6px 0;"><strong>Grace Period:</strong></td>
+                    <td style="padding: 6px 0;"><strong>${data.gracePeriodDays} days</strong> to update your billing information</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 6px 0;"><strong>Grace Period Expires:</strong></td>
+                    <td style="padding: 6px 0;">${escapeHtml(new Date(Date.now() + data.gracePeriodDays * 24 * 60 * 60 * 1000).toLocaleDateString())}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 6px 0;"><strong>Next Retry:</strong></td>
+                    <td style="padding: 6px 0;">${escapeHtml(data.retryDate.toLocaleDateString())}</td>
+                  </tr>
+                </table>
+              </div>
+              <p><strong>What happens if I don't update my payment method?</strong></p>
+              <p>After the grace period expires (in ${data.gracePeriodDays} days), your subscription will automatically downgrade to the free plan, and you will lose access to paid features.</p>
+              <p>
+                <a href="${process.env.BASE_URL || 'https://dashboard.fluxapay.com'}/settings/billing"
+                   style="display: inline-block; padding: 10px 20px; background: #0066cc; color: white; text-decoration: none; border-radius: 4px;">
+                  Update Billing Information
+                </a>
+              </p>
+              <p style="color: #666; font-size: 13px;">If you believe this is an error or need help, please reply to this email or contact our support team.</p>
+              <p>— The FluxaPay Team</p>
+            </div>
+          `,
+        });
+      }
+    });
+  } catch (err) {
+    if (isDevEnv()) {
+      console.error("Error sending billing failure email:", err);
+    }
+    // Don't throw — billing notification failures shouldn't block the main billing flow
+  }
+}
+
+export async function sendGracePeriodExpiryWarningEmail(data: {
+  to: string;
+  businessName: string;
+  planName: string;
+  daysRemaining: number;
+}): Promise<void> {
+  try {
+    await sendTransactionalWithSuppressionCheck(data.to, async () => {
+      await getEmailProvider().sendEmail({
+        from: process.env.MAIL_FROM || "noreply@fluxapay.com",
+        to: data.to,
+        subject: `⏰ Final Warning: Subscription Expires in ${data.daysRemaining} Days`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #d97706;">⏰ Time's Running Out!</h2>
+            <p>Hello ${escapeHtml(data.businessName)},</p>
+            <p>Your ${escapeHtml(data.planName)} subscription's grace period is ending in <strong>${data.daysRemaining} days</strong>.</p>
+            <div style="background: #fef3c7; border-left: 4px solid #d97706; padding: 16px; border-radius: 4px; margin: 16px 0;">
+              <p style="margin: 0; font-weight: bold; color: #92400e;">If you don't update your billing information by then:</p>
+              <ul style="margin: 8px 0; color: #92400e;">
+                <li>Your subscription will automatically downgrade to the free plan</li>
+                <li>You will lose access to all paid features</li>
+                <li>Your data will be retained, but feature access will be limited</li>
+              </ul>
+            </div>
+            <p>
+              <a href="${process.env.BASE_URL || 'https://dashboard.fluxapay.com'}/settings/billing"
+                 style="display: inline-block; padding: 10px 20px; background: #0066cc; color: white; text-decoration: none; border-radius: 4px;">
+                Update Billing Information Now
+              </a>
+            </p>
+            <p style="color: #666; font-size: 13px;">Need help? Contact our support team anytime.</p>
+            <p>— The FluxaPay Team</p>
+          </div>
+        `,
+      });
+    });
+  } catch (err) {
+    if (isDevEnv()) {
+      console.error("Error sending grace period warning email:", err);
+    }
+    // Don't throw — warnings shouldn't block other processes
   }
 }

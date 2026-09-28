@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import FluxapayLogo from "@/assets/fluxapaylogo.png";
+import { useDashboardNotifications } from "@/hooks/useDashboardNotifications";
 
 interface SidebarProps {
   className?: string;
@@ -42,6 +43,7 @@ const navItems = [
 
 export function Sidebar({ className, isOpen, onClose }: SidebarProps) {
   const pathname = usePathname();
+  const { unreadCount } = useDashboardNotifications({ webhookLimit: 5, payoutLimit: 5 });
   // On mobile (isOpen is defined), hide from AT when closed.
   // On desktop (md+), the sidebar is always visible via CSS, so never aria-hidden.
   const ariaHidden = isOpen === false ? true : undefined;
@@ -98,8 +100,8 @@ export function Sidebar({ className, isOpen, onClose }: SidebarProps) {
               className={cn(
                 "group flex items-center gap-3 rounded-md px-3 py-2 text-[16px] font-semibold transition-all border-l-4 min-h-[44px]",
                 isActive
-                  ? "bg-[#F1EFFF] text-[#5F44EC] border-[#5F44EC]"
-                  : "text-grey hover:text-black hover:bg-[#F1EFFF]/50 border-transparent"
+                  ? "bg-primary-100 text-primary-500 border-primary-500"
+                  : "text-grey hover:text-foreground hover:bg-primary-100/50 border-transparent"
               )}
             >
               <item.icon
@@ -109,6 +111,11 @@ export function Sidebar({ className, isOpen, onClose }: SidebarProps) {
                 )}
               />
               {item.name}
+              {item.name === "Notifications" && unreadCount > 0 && (
+                <span className="ml-auto rounded-full bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 min-w-[18px] text-center">
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </span>
+              )}
             </Link>
           );
         })}

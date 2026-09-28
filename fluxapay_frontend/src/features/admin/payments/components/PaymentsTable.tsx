@@ -158,35 +158,23 @@ export function PaymentsTable({
   if (shouldVirtualize) {
     return (
       <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
-        <div className="border-b border-border bg-secondary/50">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left">
-              <thead className="text-xs text-muted-foreground uppercase">
-                <tr>
-                  <th className="px-6 py-4 font-semibold">Payment ID</th>
-                  <th className="px-6 py-4 font-semibold">Merchant</th>
-                  <th className="px-6 py-4 font-semibold text-right">Amount</th>
-                  <th className="px-6 py-4 font-semibold text-center">Status</th>
-                  <th className="px-6 py-4 font-semibold">Date</th>
-                  <th className="px-6 py-4 text-right">Actions</th>
-                </tr>
-              </thead>
-            </table>
-          </div>
-        </div>
         <VirtualizedTable
           data={payments}
           rowHeight={72}
           containerHeight={600}
-          renderRow={(payment) => (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left">
-                <tbody className="divide-y divide-border">
-                  {renderPaymentRow(payment)}
-                </tbody>
-              </table>
-            </div>
+          colSpan={6}
+          ariaLabel="Admin payments"
+          renderHeader={() => (
+            <tr className="text-xs text-muted-foreground uppercase bg-secondary/50 border-b border-border">
+              <th className="px-6 py-4 font-semibold">Payment ID</th>
+              <th className="px-6 py-4 font-semibold">Merchant</th>
+              <th className="px-6 py-4 font-semibold text-right">Amount</th>
+              <th className="px-6 py-4 font-semibold text-center">Status</th>
+              <th className="px-6 py-4 font-semibold">Date</th>
+              <th className="px-6 py-4 text-right">Actions</th>
+            </tr>
           )}
+          renderRow={(payment) => renderPaymentRow(payment)}
         />
       </div>
     );

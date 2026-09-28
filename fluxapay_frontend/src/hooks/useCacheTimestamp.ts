@@ -6,6 +6,12 @@ export function useCacheTimestamp(key: string) {
   const [timestamp, setTimestamp] = useState<number | null>(null);
   const [minutesAgo, setMinutesAgo] = useState<number | null>(null);
 
+  const updateMinutesAgo = (ts: number) => {
+    const now = Date.now();
+    const minutes = Math.floor((now - ts) / 60000);
+    setMinutesAgo(minutes);
+  };
+
   useEffect(() => {
     const stored = localStorage.getItem(`cache_timestamp_${key}`);
     if (stored) {
@@ -24,12 +30,6 @@ export function useCacheTimestamp(key: string) {
 
     return () => clearInterval(interval);
   }, [timestamp]);
-
-  function updateMinutesAgo(ts: number) {
-    const now = Date.now();
-    const minutes = Math.floor((now - ts) / 60000);
-    setMinutesAgo(minutes);
-  }
 
   function recordTimestamp() {
     const now = Date.now();
