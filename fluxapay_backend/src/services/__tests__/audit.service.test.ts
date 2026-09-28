@@ -9,6 +9,7 @@ import {
   queryAuditLogs,
   getAuditLogById,
   createAuditLog,
+  logWebhookSecretRotation,
 } from '../audit.service';
 import { hashMerchantId } from '../../utils/piiRedactor';
 
@@ -147,6 +148,32 @@ describeWithDatabase('Audit Service', () => {
       expect(auditLog?.details.old_values.api_secret_key).toBe('***REDACTED***');
       expect(auditLog?.details.new_values.api_secret_key).toBe('***REDACTED***');
       expect(auditLog?.details.changed_fields).toContain('api_secret_key');
+    });
+  });
+
+  describe('logWebhookSecretRotation', () => {
+    it('should never log the raw previous secret value, only a last-4 fingerprint', async () => {
+      const rawPreviousSecret = 'whsec_super_secret_value_1234567890';
+
+      const auditLog = await logWebhookSecretRotation({
+        merchantId: 'merchant-456',
+        previousSecretLastFour: rawPreviousSecret.slice(-4),
+      });
+
+      expect(auditLog).toBeDefined();
+      expect(auditLog?.action_type).toBe(AuditActionType.webhook_secret_rotated);
+      expect(auditLog?.details.previous_last_four).toBe('7890');
+
+      // The full raw secret must never appear anywhere in the stored details.
+      const serialized = JSON.stringify(auditLog?.details);
+      expect(serialized).not.toContain(rawPreviousSecret);
+      expect(serialized).not.toContain('whsec_super_secret_value');
+    });
+
+    it('should record null when no previous secret is available', async () => {
+      const auditLog = await logWebhookSecretRotation({ merchantId: 'merchant-456' });
+
+      expect(auditLog?.details.previous_last_four).toBeNull();
     });
   });
 

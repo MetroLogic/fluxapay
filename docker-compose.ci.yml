@@ -48,6 +48,7 @@ services:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/fluxapay_test?schema=public
       REDIS_URL: redis://redis:6379
       JWT_SECRET: ci-test-jwt-secret-key-for-integration-testing-only
+      ADMIN_JWT_SECRET: ci-test-admin-jwt-secret-key-for-integration-testing-only
       WEBHOOK_SECRET: ci-test-webhook-secret
       CLOUDINARY_CLOUD_NAME: test
       CLOUDINARY_API_KEY: test

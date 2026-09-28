@@ -44,6 +44,7 @@ jobs:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/fluxapay_test?schema=public
       REDIS_URL: redis://localhost:6379
       JWT_SECRET: ci-test-jwt-secret
+      ADMIN_JWT_SECRET: ci-test-admin-jwt-secret
       WEBHOOK_SECRET: ci-test-webhook-secret
       STELLAR_HORIZON_URL: https://horizon-testnet.stellar.org
       STELLAR_NETWORK_PASSPHRASE: "Test SDF Network ; September 2015"

@@ -98,12 +98,30 @@ function getUrlOrigin(urlStr: string): string | null {
  * Check if origin is a merchant-registered webhook origin
  */
 async function isMerchantWebhookOrigin(origin: string): Promise<boolean> {
+  // Normalize the caller-supplied Origin header through the URL parser so
+  // matching is always exact scheme+host+port equality, never a raw
+  // string/substring comparison. A value that doesn't parse as a valid URL
+  // is never trusted. This also guards against case/port-formatting
+  // differences (e.g. "HTTPS://Evil.com:443" vs "https://evil.com") that a
+  // literal string comparison would treat as distinct.
+  const normalizedOrigin = getUrlOrigin(origin);
+  if (!normalizedOrigin) {
+    return false;
+  }
+
   try {
     const db = prisma;
+    // Fetch all registered webhook URLs and compare normalized origins in
+    // application code — a DB-level `startsWith` prefix filter here would
+    // itself be a substring-style comparison, which is exactly the class of
+    // bug this check needs to avoid (e.g. it could both miss legitimate
+    // matches due to case differences, and — more importantly — must never
+    // be the sole gate for access, since prefix/substring matches are not
+    // equivalent to exact origin matches).
     const merchants = await db.merchant.findMany({
       where: {
         webhook_url: {
-          startsWith: origin,
+          not: null,
         },
       },
       select: {
@@ -112,7 +130,7 @@ async function isMerchantWebhookOrigin(origin: string): Promise<boolean> {
     });
 
     for (const merchant of merchants) {
-      if (merchant.webhook_url && getUrlOrigin(merchant.webhook_url) === origin) {
+      if (merchant.webhook_url && getUrlOrigin(merchant.webhook_url) === normalizedOrigin) {
         return true;
       }
     }
