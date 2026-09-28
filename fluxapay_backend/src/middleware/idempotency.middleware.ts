@@ -88,8 +88,9 @@ export const idempotencyMiddleware = async (
         return next();
       }
 
-      // Return cached response
+      // Return cached response with replay header so callers can detect replays
       res
+        .set("X-Idempotent-Replayed", "true")
         .status(existingRecord.response_code)
         .json(existingRecord.response_body);
       return;
