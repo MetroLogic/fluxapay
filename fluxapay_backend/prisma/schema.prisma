@@ -351,6 +351,7 @@ model Payment {
   fx_rate            Decimal?
   customer_email     String
   description        String?
+  note               String?
   metadata           Json
   expiration         DateTime
   status             PaymentStatus   @default(pending)

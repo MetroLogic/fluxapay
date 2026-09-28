@@ -6,13 +6,14 @@ import {
   getPayments,
   exportPayments,
   getPaymentById,
+  updatePayment,
   getPaymentStatus,
   streamPaymentStatus,
   getPublicCheckoutPayment,
   getPublicCheckoutPaymentStatus,
   getPaymentSettlement,
 } from '../controllers/payment.controller';
-import { validatePayment } from '../validators/payment.validator';
+import { validatePayment, validateUpdatePayment } from '../validators/payment.validator';
 import { authenticateApiKey } from '../middleware/apiKeyAuth.middleware';
 import { merchantApiKeyRateLimit } from '../middleware/rateLimit.middleware';
 import { idempotencyMiddleware } from '../middleware/idempotency.middleware';
@@ -289,6 +290,44 @@ router.get('/export', authenticateApiKey, merchantApiKeyRateLimit(), exportPayme
  *         description: Payment not found
  */
 router.get('/:id', authenticateApiKey, merchantApiKeyRateLimit(), getPaymentById);
+
+/**
+ * @swagger
+ * /api/v1/payments/{id}:
+ *   patch:
+ *     summary: Update payment internal note or metadata
+ *     tags: [Payments]
+ *     security:
+ *       - apiKeyAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Payment ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               note:
+ *                 type: string
+ *                 maxLength: 500
+ *                 description: Optional internal note for merchant reference (not exposed to customer)
+ *     responses:
+ *       200:
+ *         description: Updated payment details
+ *       400:
+ *         description: Validation error
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Payment not found
+ */
+router.patch('/:id', authenticateApiKey, merchantApiKeyRateLimit(), validateUpdatePayment, updatePayment);
 
 /**
  * @swagger

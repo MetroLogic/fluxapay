@@ -9,6 +9,8 @@ import { PaymentStatus } from "../types/payment";
 import { trackPaymentCreated } from "../middleware/metrics.middleware";
 import { FxService } from "./fx.service";
 import { DepositAddressService } from "./depositAddress.service";
+import { apiError } from "../helpers/apiError.helper";
+import { ErrorCode } from "../types/errors";
 
 const prisma = new PrismaClient();
 
@@ -51,6 +53,7 @@ export class PaymentService {
     customer_email,
     merchantId,
     description,
+    note,
     metadata,
     success_url,
     cancel_url,
@@ -61,6 +64,7 @@ export class PaymentService {
     customer_email: string;
     merchantId: string;
     description?: string;
+    note?: string;
     metadata?: Record<string, unknown>;
     success_url?: string;
     cancel_url?: string;
@@ -110,6 +114,7 @@ export class PaymentService {
         fx_rate: fxRate,
         customer_email,
         description: description ?? null,
+        note: note ?? null,
         merchantId,
         metadata: sanitizedMetadata as any,
         expiration,
@@ -176,5 +181,29 @@ export class PaymentService {
     eventBus.emit(AppEvents.PAYMENT_UPDATED, payment);
 
     return payment;
+  }
+
+  static async updatePayment(
+    paymentId: string,
+    merchantId: string,
+    data: { note?: string | null }
+  ) {
+    const existing = await prisma.payment.findFirst({
+      where: { id: paymentId, merchantId },
+    });
+
+    if (!existing) {
+      throw apiError(404, ErrorCode.PAYMENT_NOT_FOUND, "Payment not found");
+    }
+
+    const updated = await prisma.payment.update({
+      where: { id: paymentId },
+      data: {
+        ...(data.note !== undefined && { note: data.note }),
+      },
+    });
+
+    eventBus.emit(AppEvents.PAYMENT_UPDATED, updated);
+    return updated;
   }
 }

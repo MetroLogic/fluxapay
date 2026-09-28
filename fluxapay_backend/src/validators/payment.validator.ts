@@ -71,6 +71,12 @@ export const validatePayment = [
     .trim()
     .isLength({ max: 500 })
     .withMessage('description must be a string with a maximum of 500 characters'),
+  body('note')
+    .optional()
+    .isString()
+    .trim()
+    .isLength({ max: 500 })
+    .withMessage('note must be a string with a maximum of 500 characters'),
   body('metadata')
     .optional()
     .isObject()
@@ -110,5 +116,15 @@ export const validatePayment = [
     .withMessage('cancel_url must not exceed 2048 characters')
     .custom(isHttpsUrl)
     .withMessage('cancel_url must be a valid https URL'),
+  validate,
+];
+
+export const validateUpdatePayment = [
+  body('note')
+    .optional({ nullable: true })
+    .isString()
+    .trim()
+    .isLength({ max: 500 })
+    .withMessage('note must be a string with a maximum of 500 characters'),
   validate,
 ];
