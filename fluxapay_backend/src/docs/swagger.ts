@@ -8,6 +8,7 @@ const options: swaggerJsdoc.Options = {
             version: '1.0.0',
             description:
                 'API documentation for Fluxapay Backend.\n\n' +
+                'Every response includes the `X-FluxaPay-Request-ID` header for request tracing.\n\n' +
                 '**Request size limits:** JSON request bodies are limited to **1MB** (`REQUEST_BODY_SIZE_LIMIT`). ' +
                 'Multipart file uploads are limited to **10MB** per file.',
         },
@@ -22,6 +23,13 @@ const options: swaggerJsdoc.Options = {
             },
         ],
         components: {
+            headers: {
+                FluxaPayRequestId: {
+                    description: 'Unique identifier for correlating this response with backend logs.',
+                    schema: { type: 'string' },
+                    example: '6f6d9d8e-3f77-4d19-9f22-92d4f49fb640',
+                },
+            },
             securitySchemes: {
                 bearerAuth: {
                     type: 'http',
