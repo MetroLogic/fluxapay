@@ -5,6 +5,7 @@ import fs from "fs";
 import { validateUserId } from "../helpers/request.helper";
 import { AuthRequest } from "../types/express";
 import { getInvoicePdfJob } from "../services/invoicePdf.service";
+import { IdempotentRequest, storeIdempotentResponse } from "../middleware/idempotency.middleware";
 import {
   createInvoiceService,
   getInvoiceByIdService,
@@ -30,6 +31,13 @@ export async function createInvoice(req: AuthRequest, res: Response) {
       metadata: req.body.metadata,
       due_date: req.body.due_date,
     });
+
+    // Persist the response for future idempotent replays (if an Idempotency-Key was provided)
+    const idempotencyKey = (req as IdempotentRequest).idempotencyKey;
+    if (idempotencyKey) {
+      await storeIdempotentResponse(idempotencyKey, req.body, 201, result, merchantId);
+    }
+
     res.status(201).json(result);
   } catch (err: any) {
     sendApiError(res, err);

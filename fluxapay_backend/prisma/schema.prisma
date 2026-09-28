@@ -23,6 +23,8 @@ model Merchant {
   settlement_currency   String
   webhook_url           String?
   webhook_secret        String
+  /** Optional list of event types this merchant wants delivered. Empty = all events (backward-compatible). */
+  webhook_subscribed_events String[]           @default([])
   password              String
   status                MerchantStatus         @default(pending_verification)
   api_key_hashed        String?

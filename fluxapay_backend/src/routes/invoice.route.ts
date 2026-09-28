@@ -2,6 +2,7 @@ import { Router } from "express";
 import { authenticateApiKey } from "../middleware/apiKeyAuth.middleware";
 import { merchantApiKeyRateLimit } from "../middleware/rateLimit.middleware";
 import { validate, validateQuery } from "../middleware/validation.middleware";
+import { idempotencyMiddleware } from "../middleware/idempotency.middleware";
 import { createInvoice, listInvoices, getInvoiceById, updateInvoiceStatus, exportInvoice, getInvoiceExportStatus, downloadInvoiceExport, sendInvoice, voidInvoice } from "../controllers/invoice.controller";
 import {
   createInvoiceSchema,
@@ -21,6 +22,17 @@ const router = Router();
  *     tags: [Invoices]
  *     security:
  *       - apiKeyAuth: []
+ *     parameters:
+ *       - in: header
+ *         name: Idempotency-Key
+ *         required: false
+ *         schema:
+ *           type: string
+ *           maxLength: 255
+ *         description: >
+ *           Optional unique key for idempotent request handling. If provided,
+ *           duplicate requests within 24 hours return the original response with
+ *           an X-Idempotent-Replayed: true header instead of creating a second invoice.
  *     requestBody:
  *       required: true
  *       content:
@@ -50,6 +62,12 @@ const router = Router();
  *     responses:
  *       201:
  *         description: Invoice and payment intent created
+ *         headers:
+ *           X-Idempotent-Replayed:
+ *             schema:
+ *               type: string
+ *               enum: ["true"]
+ *             description: Present when this response was served from the idempotency cache (duplicate request).
  *       400:
  *         description: Validation error
  *       401:
@@ -85,7 +103,7 @@ const router = Router();
  *       200:
  *         description: Paginated list of invoices
  */
-router.post("/", authenticateApiKey, merchantApiKeyRateLimit(), validate(createInvoiceSchema), createInvoice);
+router.post("/", authenticateApiKey, merchantApiKeyRateLimit(), idempotencyMiddleware, validate(createInvoiceSchema), createInvoice);
 router.get("/", authenticateApiKey, merchantApiKeyRateLimit(), validateQuery(listInvoicesQuerySchema), listInvoices);
 
 /**
