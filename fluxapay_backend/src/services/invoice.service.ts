@@ -5,6 +5,7 @@ import crypto from "crypto";
 import { createAndDeliverWebhook } from "./webhook.service";
 import { startInvoicePdfGeneration } from "./invoicePdf.service";
 import { sendInvoiceEmail } from "./email.service";
+import { isEmailSuppressed } from "./emailSuppression.service";
 import { Readable } from "stream";
 import { assertValidPositiveAmount, assertValidLineItems, AmountValidationError } from "../utils/amount.util";
 
@@ -396,20 +397,43 @@ export async function sendInvoiceService(merchantId: string, invoiceId: string) 
     },
   });
 
-  // Send email
-  try {
-    await sendInvoiceEmail(
-      invoice.customer_email,
-      invoice.invoice_number,
-      (Number(invoice.amount) / 100).toFixed(2),
-      invoice.currency,
-      invoice.due_date?.toISOString() || null,
-      `${process.env.BASE_URL || "http://localhost:3000"}${paymentLink}`,
-      invoice.merchant.business_name,
+  // Send email — unless the recipient is on the suppression list (bounced,
+  // complained, or unsubscribed), in which case sending would violate
+  // CAN-SPAM/GDPR and hurt deliverability (closes #1087).
+  const suppressed = await isEmailSuppressed(invoice.customer_email);
+  if (suppressed) {
+    console.warn(
+      `[InvoiceService] Skipping invoice email for suppressed recipient on invoice ${invoiceId}`,
     );
-  } catch (err: any) {
-    console.error(`[InvoiceService] Failed to send invoice email:`, err);
-    // Don't fail the request if email fails
+    const existingMetadata =
+      invoice.metadata && typeof invoice.metadata === "object" && !Array.isArray(invoice.metadata)
+        ? (invoice.metadata as Record<string, unknown>)
+        : {};
+    await prisma.invoice.update({
+      where: { id: invoiceId },
+      data: {
+        metadata: {
+          ...existingMetadata,
+          email_suppressed: true,
+          email_suppressed_at: new Date().toISOString(),
+        } as Prisma.InputJsonValue,
+      },
+    });
+  } else {
+    try {
+      await sendInvoiceEmail(
+        invoice.customer_email,
+        invoice.invoice_number,
+        (Number(invoice.amount) / 100).toFixed(2),
+        invoice.currency,
+        invoice.due_date?.toISOString() || null,
+        `${process.env.BASE_URL || "http://localhost:3000"}${paymentLink}`,
+        invoice.merchant.business_name,
+      );
+    } catch (err: any) {
+      console.error(`[InvoiceService] Failed to send invoice email:`, err);
+      // Don't fail the request if email fails
+    }
   }
 
   return {

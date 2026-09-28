@@ -1,7 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import React from "react";
+import { axe, toHaveNoViolations } from "jest-axe";
 import { VirtualizedTable } from "@/components/VirtualizedTable";
+
+expect.extend(toHaveNoViolations);
 
 interface Row {
   id: string;
@@ -206,6 +209,72 @@ describe("VirtualizedTable", () => {
 
       expect(screen.getByText("0:Row 0")).toBeInTheDocument();
       expect(screen.getByText("2:Row 2")).toBeInTheDocument();
+    });
+  });
+
+  describe("accessibility (screen-reader row count)", () => {
+    const renderTr = (item: Row, index: number) => (
+      <tr key={item.id}>
+        <td>{`${index}:${item.label}`}</td>
+      </tr>
+    );
+
+    it("sets role=grid and aria-rowcount to the full dataset size", () => {
+      const { container } = render(
+        <VirtualizedTable
+          data={rows}
+          rowHeight={40}
+          containerHeight={400}
+          renderRow={renderTr}
+          renderHeader={() => (
+            <tr>
+              <th>Label</th>
+            </tr>
+          )}
+        />,
+      );
+
+      const grid = container.querySelector('[role="grid"]');
+      expect(grid).not.toBeNull();
+      expect(grid?.getAttribute("aria-rowcount")).toBe(String(rows.length));
+    });
+
+    it("sets aria-rowindex on each rendered row to its 1-based absolute position", () => {
+      const { container } = render(
+        <VirtualizedTable
+          data={rows.slice(0, 3)}
+          rowHeight={40}
+          containerHeight={400}
+          renderRow={renderTr}
+        />,
+      );
+
+      const trs = Array.from(container.querySelectorAll("tbody tr"));
+      expect(trs.map((tr) => tr.getAttribute("aria-rowindex"))).toEqual([
+        "1",
+        "2",
+        "3",
+      ]);
+    });
+
+    it("has no axe-core ARIA violations", async () => {
+      const { container } = render(
+        <VirtualizedTable
+          data={rows.slice(0, 5)}
+          rowHeight={40}
+          containerHeight={400}
+          renderRow={renderTr}
+          renderHeader={() => (
+            <tr>
+              <th>Label</th>
+            </tr>
+          )}
+          ariaLabel="Payments"
+        />,
+      );
+
+      const violations = await axe(container);
+      expect(violations).toHaveNoViolations();
     });
   });
 });

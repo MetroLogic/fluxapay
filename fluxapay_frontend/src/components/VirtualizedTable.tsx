@@ -8,7 +8,7 @@
  * only the visible <tr> elements are in the DOM.
  */
 
-import { useRef, useState, useEffect, memo } from 'react';
+import { useRef, useState, useEffect, memo, isValidElement, cloneElement } from 'react';
 import EmptyState from './EmptyState';
 
 interface VirtualizedTableProps<T> {
@@ -65,6 +65,19 @@ function VirtualizedTableInner<T>({
 
   const visibleData = rows.slice(startIndex, endIndex + 1);
 
+  // Screen readers have no other way to know how many rows exist in the full
+  // (virtualized) dataset, since only a slice of rows is ever in the DOM —
+  // aria-rowcount on the grid plus aria-rowindex per rendered row fills that
+  // gap (closes #1086).
+  const renderRowWithIndex = (item: T, absoluteIndex: number) => {
+    const node = renderRow(item, absoluteIndex);
+    // 1-based per the ARIA rowindex spec.
+    const rowIndex = absoluteIndex + 1;
+    return isValidElement(node)
+      ? cloneElement(node, { 'aria-rowindex': rowIndex, key: node.key ?? absoluteIndex })
+      : node;
+  };
+
   // Padding used on <tbody> to push rows into the right visual position
   // while keeping a single <table>.
   const paddingTop = startIndex * rowHeight;
@@ -109,7 +122,8 @@ function VirtualizedTableInner<T>({
     >
       <table
         className="w-full text-sm text-left"
-        role="table"
+        role="grid"
+        aria-rowcount={rows.length}
         {...(ariaLabel ? { 'aria-label': ariaLabel } : {})}
       >
         {renderHeader && (
@@ -131,7 +145,7 @@ function VirtualizedTableInner<T>({
               </td>
             </tr>
           ) : (
-            visibleData.map((item, idx) => renderRow(item, startIndex + idx))
+            visibleData.map((item, idx) => renderRowWithIndex(item, startIndex + idx))
           )}
         </tbody>
       </table>
