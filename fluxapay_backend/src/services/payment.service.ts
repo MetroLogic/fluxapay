@@ -193,7 +193,7 @@ export class PaymentService {
     });
 
     // Try to allocate an address from the pool; fall back to HD derivation
-    let stellarAddress = await DepositAddressService.allocateAddress(paymentId);
+    let stellarAddress = await DepositAddressService.allocateAddress(paymentId, merchantId);
     let paymentIndex: number | null = null;
     let derivationPath: string | null = null;
     let encryptedKeyData: string | null = null;

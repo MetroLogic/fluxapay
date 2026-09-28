@@ -66,15 +66,26 @@ export class DepositAddressService {
    * Allocates an available address from the pool for a payment.
    * @param paymentId The payment ID
    */
-  static async allocateAddress(paymentId: string): Promise<string | null> {
+  static async allocateAddress(paymentId: string, merchantId?: string): Promise<string | null> {
     const stats = await this.getPoolStats();
+
+    // Fires the ops alert with current pool size, merchant ID, and timestamp.
+    // Awaited (not fire-and-forget) so it is guaranteed to have been sent
+    // before any PoolExhaustedError is thrown below.
+    const fireExhaustionAlert = async () => {
+      await sendDepositPoolAlert({
+        ...stats,
+        merchantId,
+        timestamp: new Date().toISOString(),
+      }).catch((err) => {
+        console.error("Failed to send deposit pool alert:", err);
+      });
+    };
 
     if (stats.totalCount > 0) {
       // Alert when utilization >= 80% (0.8)
       if (stats.utilizationPct >= 0.8) {
-        await sendDepositPoolAlert(stats).catch((err) => {
-          console.error("Failed to send deposit pool alert:", err);
-        });
+        await fireExhaustionAlert();
       }
 
       // Graceful 503 typed error when utilization >= 95% (0.95)
@@ -94,6 +105,13 @@ export class DepositAddressService {
 
       if (!address || address.length === 0) {
         if (stats.totalCount > 0) {
+          // The stats snapshot above indicated capacity, but a concurrent
+          // allocation exhausted the pool before this query ran. Ensure an
+          // ops alert is always fired immediately before surfacing the 503,
+          // even if the pre-check above didn't already send one.
+          if (stats.utilizationPct < 0.8) {
+            await fireExhaustionAlert();
+          }
           throw new PoolExhaustedError();
         }
         return null; // Pool is empty

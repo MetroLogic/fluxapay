@@ -63,6 +63,19 @@ export async function createInvoiceService(params: {
     throw validationError;
   }
 
+  // Reject a due_date in the past — otherwise the overdue job fires
+  // immediately and a misleading "overdue" email goes out to the customer
+  // before the invoice was ever actually due.
+  if (due_date) {
+    const dueDateObj = new Date(due_date);
+    if (Number.isNaN(dueDateObj.getTime())) {
+      throw apiError(400, ErrorCode.VALIDATION_ERROR, "due_date must be a valid date");
+    }
+    if (dueDateObj.getTime() < Date.now()) {
+      throw apiError(400, ErrorCode.VALIDATION_ERROR, "due_date must be in the future");
+    }
+  }
+
   // Calculate subtotal from line items
   let subtotal = 0;
   if (line_items && line_items.length > 0) {

@@ -108,9 +108,18 @@ export async function sendDepositPoolAlert(stats: {
   availableCount: number;
   totalCount: number;
   allocatedCount?: number;
+  merchantId?: string;
+  timestamp?: string;
 }): Promise<void> {
   const pctStr = (stats.utilizationPct * 100).toFixed(1);
-  const message = `🚨 Deposit Address Pool Alert: High utilization at ${pctStr}% (${stats.availableCount}/${stats.totalCount} available)`;
-  await sendOpsAlert("DepositAddressPool", message);
+  const timestamp = stats.timestamp || new Date().toISOString();
+  const lines = [
+    `🚨 Deposit Address Pool Alert: High utilization at ${pctStr}% (${stats.availableCount}/${stats.totalCount} available)`,
+    `Pool Size: ${stats.totalCount}`,
+  ];
+  if (stats.merchantId) lines.push(`Merchant ID: ${stats.merchantId}`);
+  lines.push(`Timestamp: ${timestamp}`);
+
+  await sendOpsAlert("DepositAddressPool", lines.join(" | "));
 }
 

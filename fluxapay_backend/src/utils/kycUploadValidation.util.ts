@@ -8,7 +8,21 @@ export const KYC_ALLOWED_MIME_TYPES = [
   "application/pdf",
 ] as const;
 
-export const KYC_MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
+const DEFAULT_KYC_MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
+
+function resolveMaxKycFileSizeBytes(): number {
+  const raw = process.env.MAX_KYC_FILE_SIZE_BYTES;
+  if (raw) {
+    const parsed = Number(raw);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+  return DEFAULT_KYC_MAX_FILE_SIZE_BYTES;
+}
+
+// Configurable via the MAX_KYC_FILE_SIZE_BYTES env var; falls back to 10MB.
+export const KYC_MAX_FILE_SIZE_BYTES = resolveMaxKycFileSizeBytes();
 
 /**
  * Validates a KYC upload. In addition to the declared `mimetype`/`size`,

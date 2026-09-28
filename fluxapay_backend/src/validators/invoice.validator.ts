@@ -29,7 +29,12 @@ export const validateInvoice = [
     .isFloat({ gt: 0 })
     .withMessage("Unit price must be greater than 0"),
   body("currency").trim().notEmpty().withMessage("currency is required"),
-  body("due_date").isISO8601().withMessage("due_date must be a valid date (YYYY-MM-DD)"),
+  body("due_date")
+    .isISO8601()
+    .withMessage("due_date must be a valid date (YYYY-MM-DD)")
+    .bail()
+    .custom((value) => new Date(value).getTime() >= Date.now())
+    .withMessage("due_date must be in the future"),
   body("notes").optional().isString(),
   validate,
 ];
