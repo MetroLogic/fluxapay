@@ -156,4 +156,11 @@ docker compose up --build
 
 ## Contributing
 
-https://t.me/+m23gN14007w0ZmQ0
+We welcome contributions! Please read our [Contributing Guide](CONTRIBUTING.md) for details on:
+- Branch naming conventions
+- Commit message format
+- Pull request process
+- Running tests locally
+- Setting up your development environment
+
+Join our community: https://t.me/+m23gN14007w0ZmQ0

@@ -2,8 +2,16 @@ FROM node:18-alpine
 
 WORKDIR /usr/src/app
 
+# Create a non-root user and group with UID 1001 for development
+RUN addgroup -g 1001 -S nodegroup && adduser -u 1001 -S nodeuser -G nodegroup
+
+# Copy package files and install as root (needed for npm install)
 COPY package*.json ./
-RUN npm install
+RUN npm install && \
+    chown -R nodeuser:nodegroup /usr/src/app
+
+# Switch to non-root user
+USER nodeuser
 
 # We need wait-for script or similar for depending on postgres, but Docker compose healthchecks handle the wait.
 # We will use command from docker-compose, but we can set a default.
