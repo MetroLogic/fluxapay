@@ -112,6 +112,32 @@ export async function sendOtpEmail(to: string, otp: string) {
   }
 }
 
+export async function sendPasswordResetEmail(to: string, resetUrl: string) {
+  try {
+    await sendTransactionalWithSuppressionCheck(to, async () => {
+      await getEmailProvider().sendEmail({
+        from: process.env.MAIL_FROM || "noreply@fluxapay.com",
+        to,
+        subject: "Reset your FluxaPay password",
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2>Reset your password</h2>
+            <p>We received a request to reset your FluxaPay account password. This link is valid for 30 minutes and can only be used once.</p>
+            <p><a href="${escapeHtml(resetUrl)}">Reset your password</a></p>
+            <p>If you did not request this, you can safely ignore this email — your password will not be changed.</p>
+            <p>— The FluxaPay Team</p>
+          </div>
+        `,
+      });
+    });
+  } catch (err) {
+    if (isDevEnv()) {
+      console.error("Error sending password reset email:", err);
+    }
+    throw err;
+  }
+}
+
 export interface CheckoutExpiryReminderDetails {
   payment_id: string;
   amount: string;

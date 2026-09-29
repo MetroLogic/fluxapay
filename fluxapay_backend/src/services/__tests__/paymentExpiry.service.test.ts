@@ -204,4 +204,17 @@ describe("runPaymentExpiryJob — webhook emission (issue #655)", () => {
     expect(result.expired).toBe(0);
     expect(mockCreateAndDeliverWebhook).not.toHaveBeenCalled();
   });
+
+  it("releases the distributed lock even when an unhandled exception occurs mid-job (#1071)", async () => {
+    setupLock();
+    // Simulate an unexpected failure partway through the job — e.g. a DB
+    // error while fetching expired payments.
+    mockPaymentFindMany.mockRejectedValue(new Error("DB connection lost"));
+
+    await expect(runPaymentExpiryJob()).rejects.toThrow("DB connection lost");
+
+    // The lock must still be released (via the `finally` block) so the job
+    // isn't stuck until the lock's TTL expires.
+    expect(mockCronLockDelete).toHaveBeenCalledWith({ where: { job_name: "payment_expiry" } });
+  });
 });
