@@ -55,7 +55,11 @@ async function validatePaymentForRefund(
   }
 
   // Check if payment has expired
-  if (payment.expiration && new Date(payment.expiration) < new Date()) {
+  if (
+    payment.status === PaymentStatus.PENDING &&
+    payment.expiration &&
+    new Date(payment.expiration) < new Date()
+  ) {
     throw apiError(400, ErrorCode.PAYMENT_EXPIRED, "Payment has expired and cannot be refunded");
   }
 
@@ -167,7 +171,11 @@ export async function createRefundService(params: {
       }
 
       // Check if payment has expired
-      if (paymentRecord.expiration && new Date(paymentRecord.expiration) < new Date()) {
+      if (
+        paymentRecord.status === PaymentStatus.PENDING &&
+        paymentRecord.expiration &&
+        new Date(paymentRecord.expiration) < new Date()
+      ) {
         throw apiError(400, ErrorCode.PAYMENT_EXPIRED, "Payment has expired and cannot be refunded");
       }
 
