@@ -103,7 +103,7 @@ const client = new FluxaPay({
       order_id: `test_order_${Date.now()}`,
       success_url: 'https://example.com/success',
       cancel_url: 'https://example.com/cancel',
-      expires_in_minutes: 30,
+      expires_in_seconds: 1800,
     });
     
     createdPaymentId = payment.id;
