@@ -361,6 +361,13 @@ describe("SweepService", () => {
       expect(calculateFee(2, 50)).toBe("200");
     });
 
+    it("should scale fees by the transaction operation count", () => {
+      const calculateFee = (sweepService as any).calculateFeeForAttempt.bind(sweepService);
+
+      expect(calculateFee(1, 150, 3)).toBe("450");
+      expect(calculateFee(2, 150, 3)).toBe("900");
+    });
+
     it("should cap fees at SWEEP_MAX_FEE_STROOPS and emit metric when capped fee is reached", () => {
       process.env.SWEEP_MAX_FEE_STROOPS = "1500";
       const metricsMock = (sweepService as any).metrics;
@@ -625,7 +632,9 @@ describe("SweepService", () => {
       });
 
       expect(result.addressesSwept).toBe(1);
-      // Transaction should include both payment and account merge operations
+      const transaction = mockServer.submitTransaction.mock.calls[0][0];
+      expect(transaction.operations).toHaveLength(3);
+      expect(Number(transaction.fee)).toBeGreaterThanOrEqual(450);
     });
 
     it("should skip account merge when FUNDER_PUBLIC_KEY is not set", async () => {

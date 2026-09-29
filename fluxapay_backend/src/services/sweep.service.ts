@@ -192,6 +192,7 @@ export class SweepService {
     mergeDestination?: string;
   }): Promise<string> {
     let lastError: unknown;
+    const operationCount = params.mergeDestination ? 3 : 1;
 
     const sourceKeypair = Keypair.fromSecret(params.sourceSecret);
 
@@ -241,7 +242,11 @@ export class SweepService {
         });
       }
 
-      const attemptFee = this.calculateFeeForAttempt(attempt, p90Fee);
+      const attemptFee = this.calculateFeeForAttempt(
+        attempt,
+        p90Fee,
+        operationCount,
+      );
 
       try {
         const sourceAccount = await this.server.loadAccount(
@@ -318,10 +323,14 @@ export class SweepService {
       : new Error("Failed to submit sweep transaction");
   }
 
-  public calculateFeeForAttempt(attempt: number, p90BaseFee?: number): string {
+  public calculateFeeForAttempt(
+    attempt: number,
+    p90BaseFee?: number,
+    operationCount = 1,
+  ): string {
     const base = Math.max(this.baseFee, p90BaseFee ?? this.baseFee);
     const bump = Math.pow(this.feeBumpMultiplier, Math.max(0, attempt - 1));
-    const candidateFee = Math.floor(base * bump);
+    const candidateFee = Math.floor(base * bump * operationCount);
     const maxFee = this.getMaxFee();
 
     if (candidateFee >= maxFee) {
