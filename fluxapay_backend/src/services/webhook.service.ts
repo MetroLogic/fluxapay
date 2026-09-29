@@ -1,6 +1,6 @@
 import { apiError } from "../helpers/apiError.helper";
 import { ErrorCode } from "../types/errors";
-import { PrismaClient, WebhookEventType, WebhookStatus, Payment, Merchant } from "../generated/client/client";
+import { PrismaClient, WebhookEventType, WebhookStatus, WebhookLog, Payment, Merchant } from "../generated/client/client";
 import { prisma } from "../config/prisma";
 import crypto from "crypto";
 import { webhookEventTypes } from "../schemas/webhook.schema";
@@ -11,6 +11,42 @@ import { trackWebhookDelivery } from "../middleware/metrics.middleware";
 function getWebhookTimestampToleranceSeconds(): number {
   const raw = parseInt(process.env.WEBHOOK_TIMESTAMP_TOLERANCE_SECONDS ?? "", 10);
   return Number.isFinite(raw) && raw > 0 ? raw : 300; // 300 seconds = 5 minutes
+}
+
+/** Prisma error code for a unique-constraint violation. */
+function isUniqueConstraintViolation(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    (error as { code?: unknown }).code === "P2002"
+  );
+}
+
+/**
+ * In-flight deliveries keyed by `event_id`. Without this, two concurrent
+ * producers (e.g. the oracle tick and a manual verify) can both read "not
+ * delivered", both insert, and only one survives the unique index — but both
+ * already hold a reference to a row and would deliver. Tracking the promise
+ * here lets the loser await the winner's result instead of sending again.
+ */
+const inFlightDeliveries = new Map<string, Promise<unknown>>();
+
+/**
+ * Run `fn` at most once per `key` while an identical delivery is in flight.
+ * Duplicate callers share the winner's result; they never re-send.
+ */
+async function withInFlightDelivery<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  const existing = inFlightDeliveries.get(key) as Promise<T> | undefined;
+  if (existing) {
+    return existing;
+  }
+
+  const promise = fn().finally(() => {
+    inFlightDeliveries.delete(key);
+  });
+
+  inFlightDeliveries.set(key, promise);
+  return promise;
 }
 
 export class WebhookDispatcher {
@@ -1027,6 +1063,35 @@ export async function createAndDeliverWebhook(
   /** Stable event_id for deduplication. If omitted a new UUID is generated. */
   eventId?: string,
 ) {
+  const deliveryKey = eventId
+    ? `${merchantId}:${eventType}:${eventId}`
+    : null;
+
+  const deliver = async (): Promise<WebhookLog> => {
+    return deliverWebhookEvent(
+      merchantId,
+      eventType,
+      payload,
+      paymentId,
+      endpointOverride,
+      eventId,
+    );
+  };
+
+  if (!deliveryKey) {
+    return deliver();
+  }
+  return withInFlightDelivery(deliveryKey, deliver);
+}
+
+async function deliverWebhookEvent(
+  merchantId: string,
+  eventType: WebhookEventType,
+  payload: Record<string, any>,
+  paymentId?: string,
+  endpointOverride?: string,
+  eventId?: string,
+): Promise<WebhookLog> {
   const merchant = await prisma.merchant.findUnique({ where: { id: merchantId } });
 
   if (!merchant?.webhook_secret) {
@@ -1041,6 +1106,7 @@ export async function createAndDeliverWebhook(
   const resolvedEventId = eventId ?? crypto.randomUUID();
 
   // Deduplication: if a log with this event_id was already delivered, skip re-delivery.
+  // Fast path avoids an INSERT for the common duplicate case.
   const existing = await prisma.webhookLog.findUnique({
     where: { event_id: resolvedEventId },
   });
@@ -1057,17 +1123,34 @@ export async function createAndDeliverWebhook(
     ...payload,
   };
 
-  const webhookLog = await prisma.webhookLog.create({
-    data: {
-      merchantId,
-      event_type: eventType,
-      endpoint_url: endpointUrl,
-      event_id: resolvedEventId,
-      request_payload: enrichedPayload,
-      payment_id: paymentId,
-      status: "pending",
-    },
-  });
+  // Atomic claim: the unique index on event_id is the source of truth for
+  // deduplication. A concurrent worker may have inserted the same event between
+  // the read above and this write; P2002 means "someone else owns this event",
+  // so we drop this attempt instead of double-sending it.
+  let webhookLog: WebhookLog;
+  try {
+    webhookLog = await prisma.webhookLog.create({
+      data: {
+        merchantId,
+        event_type: eventType,
+        endpoint_url: endpointUrl,
+        event_id: resolvedEventId,
+        request_payload: enrichedPayload,
+        payment_id: paymentId,
+        status: "pending",
+      },
+    });
+  } catch (error) {
+    if (isUniqueConstraintViolation(error)) {
+      const claimed = await prisma.webhookLog.findUnique({
+        where: { event_id: resolvedEventId },
+      });
+      if (claimed) {
+        return claimed;
+      }
+    }
+    throw error;
+  }
 
   const result = await deliverWebhook(endpointUrl, enrichedPayload, merchant.webhook_secret);
   const status: WebhookStatus = result.success ? "delivered" : "retrying";

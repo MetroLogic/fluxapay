@@ -430,6 +430,18 @@ model Payment {
   @@index([merchantId, createdAt(sort: Desc)])
   @@index([merchantId, status, createdAt(sort: Desc)])
   @@index([merchantId, is_test_mode, createdAt(sort: Desc)])
+  // Covers GET /payments?currency=... — the currency filter had no supporting
+  // index, so currency-scoped lists fell back to scanning every row for the
+  // merchant (#1208).
+  @@index([merchantId, currency, createdAt(sort: Desc)])
+  // Covers GET /payments?status=...&currency=... — the status index cannot
+  // return rows already ordered by createdAt once currency is also filtered.
+  @@index([merchantId, status, currency, createdAt(sort: Desc)])
+  // Supports the date_from/date_to range filter used by the dashboard reports
+  // when it is combined with a status filter (#1208).
+  @@index([merchantId, is_test_mode, status, createdAt(sort: Desc)])
+  // Backs the `search` filter on customer_email.
+  @@index([merchantId, customer_email])
 }
 
 /// On-chain USDC receipts matched to a payment/charge (supports duplicate detection).

@@ -2,6 +2,23 @@
 
 Webhooks allow FluxaPay to notify your application when events occur, such as payments being confirmed or settlements completing.
 
+## Delivery Guarantees
+
+Every event carries a stable `event_id` in the payload. FluxaPay guarantees that a
+given `event_id` is **delivered at most once** for a given event, even when several
+producers race (for example the oracle tick and a manual verify running at the same
+time, or a settlement retry re-running a batch).
+
+- Concurrent deliveries of the same `event_id` are coalesced into a single request.
+- The `event_id` column is uniquely indexed, so a second worker that races past the
+  in-process guard loses the insert and drops its attempt instead of sending.
+- If an event's previous delivery is still `pending`/`retrying`, an explicit re-send
+  is allowed (that is a retry, not a duplicate).
+
+You should still treat `event_id` as your idempotency key: store it and ignore any
+event you have already processed. This protects you if a delivery is lost at the
+network layer and later retried.
+
 ## Webhook Events
 
 ### Payment Events

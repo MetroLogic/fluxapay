@@ -235,10 +235,49 @@ ON "Payment"("merchantId", "createdAt" DESC)
 WHERE status = 'pending';
 ```
 
+### Payment List Endpoint Indexes
+
+**Issue Reference**: Issue #1208 - Fix slow response time on transaction list endpoint
+
+`GET /api/v1/payments` filters on `merchantId` plus any combination of
+`is_test_mode`, `status`, `currency`, a `createdAt` range, and a `customer_email`
+search, then sorts by a client-supplied column. The indexes above covered
+`merchantId`, `merchantId + status` and `merchantId + is_test_mode`, but the
+`currency` filter and the `status + currency` combination had no supporting index,
+so those requests degraded to a scan of every payment the merchant owns followed by
+an explicit sort. Four indexes were added in
+`prisma/migrations/20260929120000_add_payment_list_query_indexes/migration.sql`:
+
+| Index | Columns | Covers |
+|-------|---------|--------|
+| `Payment_merchantId_currency_createdAt_idx` | `(merchantId, currency, createdAt DESC)` | `?currency=` |
+| `Payment_merchantId_status_currency_createdAt_idx` | `(merchantId, status, currency, createdAt DESC)` | `?status=&currency=` |
+| `Payment_merchantId_is_test_mode_status_createdAt_idx` | `(merchantId, is_test_mode, status, createdAt DESC)` | API-key requests with `?status=` and a date range |
+| `Payment_merchantId_customer_email_idx` | `(merchantId, customer_email)` | the `customer_email` arm of `?search=` |
+
+Two query-level changes accompany the indexes, because indexes alone do not bound
+the work a request can ask for:
+
+- **`limit` is clamped to 100 rows.** Previously `?limit=1000000` was passed
+  straight through to `take`, so one request could materialise the merchant's entire
+  payment history.
+- **`sort_by` is checked against an allow-list** of indexable columns. An
+  arbitrary column name forced Postgres to sort the merchant's full payment set.
+
+`?search=` additionally filtered on `order_id`, which is not a column on the
+`Payment` model. Every `?search=` request therefore failed with a Prisma validation
+error instead of returning results; the clause has been removed from
+`getPayments`, `exportPayments` and `getAdminPayments`.
+
+Guarded by `src/__tests__/paymentSchemaIndexes.test.ts`, which asserts both the
+`@@index` declaration and the corresponding `CREATE INDEX` migration.
+
 ## Related Files
 
 - **Schema**: `prisma/schema.prisma` - Prisma model definitions with index annotations
-- **Migration**: `prisma/migrations/20260325182803_add_high_cardinality_indexes/migration.sql`
+- **Migrations**:
+  - `prisma/migrations/20260325182803_add_high_cardinality_indexes/migration.sql`
+  - `prisma/migrations/20260929120000_add_payment_list_query_indexes/migration.sql`
 - **Controllers**: 
   - `src/controllers/payment.controller.ts` - Payment list endpoint
   - `src/controllers/invoice.controller.ts` - Invoice list endpoint

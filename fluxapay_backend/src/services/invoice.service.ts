@@ -289,6 +289,11 @@ export async function updateInvoiceStatusService(
         `invoice_${newStatus}` as any,
         payload,
         newStatus === "paid" ? updatedInvoice.payment_id ?? undefined : undefined,
+        undefined,
+        // Stable id per invoice+status transition. `markInvoicePaidForPaymentService`
+        // emits the same "paid" transition, so both emitters now share one id and
+        // the second delivery is deduplicated (#1205).
+        `${updatedInvoice.id}:${newStatus}`,
       );
     } catch (err: any) {
       if (!err.message?.includes("has no webhook")) {
@@ -344,7 +349,7 @@ export async function markInvoicePaidForPaymentService(
       currency: invoice.currency,
       paid_at: invoice.updated_at.toISOString(),
       payment_tx_hash: invoice.payment?.transaction_hash ?? null,
-    }, paymentId);
+    }, paymentId, undefined, `${invoice.id}:paid`);
   } catch (err: any) {
     if (!err.message?.includes("has no webhook")) {
       console.error(`[InvoiceService] Webhook delivery failed for invoice ${invoice.id}:`, err);

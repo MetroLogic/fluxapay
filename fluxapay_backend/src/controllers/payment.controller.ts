@@ -14,6 +14,47 @@ import { IdempotentRequest, storeIdempotentResponse } from "../middleware/idempo
 import { isTerminalStatus, PaymentStatus } from "../types/payment";
 import { assertValidPositiveAmount, AmountValidationError } from "../utils/amount.util";
 
+/**
+ * Columns the payments list endpoint is allowed to sort by. Anything else forces
+ * Postgres to sort the merchant's entire payment set in memory, which is the
+ * other half of the slow-list problem alongside missing indexes (#1208).
+ */
+const PAYMENT_LIST_SORT_COLUMNS = new Set([
+  "createdAt",
+  "amount",
+  "status",
+  "currency",
+  "confirmed_at",
+  "settled_at",
+]);
+
+/** Upper bound on rows returned per page for the payments list endpoint. */
+const PAYMENT_LIST_MAX_LIMIT = 100;
+
+/**
+ * Clamp `?limit` so a single request cannot ask the database to materialise an
+ * unbounded number of rows for a merchant with a large payment history (#1208).
+ */
+function resolvePageSize(rawLimit: unknown): number {
+  const requested = Number(rawLimit);
+  if (!Number.isFinite(requested) || requested <= 0) return 10;
+  return Math.min(Math.floor(requested), PAYMENT_LIST_MAX_LIMIT);
+}
+
+/** Resolve `?page` to a non-negative integer offset multiplier. */
+function resolvePage(rawPage: unknown): number {
+  const requested = Number(rawPage);
+  if (!Number.isFinite(requested) || requested <= 0) return 1;
+  return Math.floor(requested);
+}
+
+/** Resolve `?sort_by` against the allow-list, falling back to createdAt. */
+function resolveSortColumn(rawSortBy: unknown): string {
+  return typeof rawSortBy === "string" && PAYMENT_LIST_SORT_COLUMNS.has(rawSortBy)
+    ? rawSortBy
+    : "createdAt";
+}
+
 
 
 export const createPayment = async (req: Request, res: Response) => {
@@ -153,15 +194,14 @@ export const getPayments = async (req: Request, res: Response) => {
     const isTestMode = (req as AuthRequest).isTestMode;
 
     const query = req.query as Record<string, unknown>;
-    const page = Number(query.page) || 1;
-    const limit = Number(query.limit) || 10;
+    const page = resolvePage(query.page);
+    const limit = resolvePageSize(query.limit);
     const status = query.status ? String(query.status) : undefined;
     const currency = query.currency ? String(query.currency) : undefined;
     const search = query.search ? String(query.search) : undefined;
     const date_from = query.date_from ? String(query.date_from) : undefined;
     const date_to = query.date_to ? String(query.date_to) : undefined;
-    const sortBy =
-      typeof query.sort_by === "string" ? query.sort_by : "createdAt";
+    const sortBy = resolveSortColumn(query.sort_by);
     const sortOrder: "asc" | "desc" = query.order === "asc" ? "asc" : "desc";
 
     const where: Record<string, unknown> = {
@@ -179,7 +219,6 @@ export const getPayments = async (req: Request, res: Response) => {
       ...(search && {
         OR: [
           { id: { contains: search } },
-          { order_id: { contains: search } },
           { customer_email: { contains: search, mode: "insensitive" } },
         ],
       }),
@@ -219,8 +258,9 @@ export const exportPayments = async (req: Request, res: Response) => {
         const date_from = query.date_from ? String(query.date_from) : undefined;
         const date_to = query.date_to ? String(query.date_to) : undefined;
 
-        // 2. We use a constant for Sort/Order to satisfy the Prisma type engine
-        const sortBy = typeof query.sort_by === 'string' ? query.sort_by : 'createdAt';
+        // 2. We use an allow-listed constant for Sort/Order so an arbitrary
+        // column name can never force a full sort of the merchant's payments.
+        const sortBy = resolveSortColumn(query.sort_by);
         const sortOrder: 'asc' | 'desc' = query.order === 'asc' ? 'asc' : 'desc';
 
         const where: Record<string, unknown> = {
@@ -238,7 +278,6 @@ export const exportPayments = async (req: Request, res: Response) => {
             ...(search && {
                 OR: [
                     { id: { contains: search } },
-                    { order_id: { contains: search } },
                     { customer_email: { contains: search, mode: 'insensitive' } }
                 ]
             })
@@ -575,15 +614,14 @@ export const getPaymentSettlement = async (req: Request, res: Response) => {
 export const getAdminPayments = async (req: Request, res: Response) => {
   try {
     const query = req.query as Record<string, unknown>;
-    const page = Number(query.page) || 1;
-    const limit = Number(query.limit) || 10;
+    const page = resolvePage(query.page);
+    const limit = resolvePageSize(query.limit);
     const status = query.status ? String(query.status) : undefined;
     const currency = query.currency ? String(query.currency) : undefined;
     const search = query.search ? String(query.search) : undefined;
     const date_from = query.date_from ? String(query.date_from) : undefined;
     const date_to = query.date_to ? String(query.date_to) : undefined;
-    const sortBy =
-      typeof query.sort_by === "string" ? query.sort_by : "createdAt";
+    const sortBy = resolveSortColumn(query.sort_by);
     const sortOrder: "asc" | "desc" = query.order === "asc" ? "asc" : "desc";
 
     const where: Record<string, unknown> = {
@@ -598,7 +636,6 @@ export const getAdminPayments = async (req: Request, res: Response) => {
       ...(search && {
         OR: [
           { id: { contains: search } },
-          { order_id: { contains: search } },
           { customer_email: { contains: search, mode: "insensitive" } },
           { merchant: { business_name: { contains: search, mode: "insensitive" } } },
         ],

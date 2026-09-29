@@ -5,8 +5,10 @@ import Input from "@/components/Input";
 import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
 import { api } from "@/lib/api";
-import { CheckCircle2, Copy, Key } from "lucide-react";
+import { CheckCircle2, Key } from "lucide-react";
 import { Spinner } from "./Spinner";
+import { CopyButton } from "@/components/CopyButton";
+import toast from "react-hot-toast";
 
 interface Props {
   initialApiKey: string;
@@ -17,13 +19,6 @@ export function ApiKeysTab({ initialApiKey }: Props) {
   const [showRegenerateModal, setShowRegenerateModal] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [keyRegenerated, setKeyRegenerated] = useState(false);
-  const [copied, setCopied] = useState(false);
-
-  const handleCopyApiKey = () => {
-    navigator.clipboard.writeText(apiKey);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
 
   const handleRegenerateApiKey = async () => {
     setIsRegenerating(true);
@@ -35,7 +30,7 @@ export function ApiKeysTab({ initialApiKey }: Props) {
       setTimeout(() => setKeyRegenerated(false), 5000);
     } catch (error) {
       console.error("Failed to regenerate API key:", error);
-      alert("Failed to regenerate API key. Please try again.");
+      toast.error("Failed to regenerate API key. Please try again.");
     } finally {
       setIsRegenerating(false);
     }
@@ -52,24 +47,18 @@ export function ApiKeysTab({ initialApiKey }: Props) {
           <label className="block text-sm font-medium mb-2">Live API Key</label>
           <div className="flex gap-2">
             <Input
-              type="text"
+              type="password"
               value={apiKey}
               readOnly
+              aria-label="Live API key"
               className="font-mono text-sm bg-muted/50"
             />
-            <Button variant="outline" onClick={handleCopyApiKey} className="gap-2 shrink-0">
-              {copied ? (
-                <>
-                  <CheckCircle2 className="h-4 w-4 text-green-600" />
-                  Copied
-                </>
-              ) : (
-                <>
-                  <Copy className="h-4 w-4" />
-                  Copy
-                </>
-              )}
-            </Button>
+            <CopyButton
+              value={apiKey}
+              label="API key"
+              text="Copy"
+              className="inline-flex items-center gap-2 shrink-0 rounded-lg border border-input bg-background px-4 py-2 text-sm font-medium hover:bg-accent"
+            />
           </div>
           <p className="text-xs text-muted-foreground mt-2">
             Keep your API key secure. Do not share it publicly.
