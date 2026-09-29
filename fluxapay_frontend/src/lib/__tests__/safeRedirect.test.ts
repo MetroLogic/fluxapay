@@ -32,6 +32,11 @@ describe("safeRedirectPath", () => {
       ["backslash anywhere", "/dashboard\\..\\evil"],
       ["javascript scheme", "javascript:alert(1)"],
       ["data scheme", "data:text/html,<script>alert(1)</script>"],
+      ["vbscript scheme", "vbscript:msgbox(1)"],
+      ["javascript scheme, upper-case", "JAVASCRIPT:alert(1)"],
+      ["javascript scheme, mixed-case", "JavaScript:alert(1)"],
+      ["data scheme, upper-case", "DATA:text/html,<script>alert(1)</script>"],
+      ["javascript scheme with leading whitespace", "  javascript:alert(1)"],
       ["scheme without leading slash", "evil.com"],
       ["tab-smuggled authority", "/\t/evil.com"],
       ["newline-smuggled authority", "/\n//evil.com"],
@@ -60,5 +65,13 @@ describe("safeRedirectPath", () => {
   it("treats a same-origin-looking path with a scheme in it as a path", () => {
     // Not a redirect off-origin: it resolves under our own host.
     expect(safeRedirectPath("/https://evil.com", ORIGIN)).toBe("/https://evil.com");
+  });
+
+  it("treats a leading-slash-prefixed dangerous scheme as a harmless literal path", () => {
+    // A leading "/" makes this an unambiguous same-origin path reference in
+    // every standards-compliant URL parser/browser — it can never be
+    // interpreted as a `javascript:` navigation, unlike the bare
+    // `javascript:alert(1)` (no leading slash) rejected above.
+    expect(safeRedirectPath("/javascript:alert(1)", ORIGIN)).toBe("/javascript:alert(1)");
   });
 });
