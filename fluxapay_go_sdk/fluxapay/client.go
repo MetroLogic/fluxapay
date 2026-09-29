@@ -122,6 +122,32 @@ type ListSettlementsParams struct {
 	DateTo   string
 }
 
+// Customer represents a FluxaPay customer record.
+type Customer struct {
+	ID             string                 `json:"id"`
+	Email          string                 `json:"email"`
+	Name           string                 `json:"name,omitempty"`
+	Phone          string                 `json:"phone,omitempty"`
+	StellarAddress string                 `json:"stellar_address,omitempty"`
+	Metadata       map[string]interface{} `json:"metadata,omitempty"`
+	CreatedAt      string                 `json:"created_at"`
+}
+
+// CustomerList is the response from listing customers.
+type CustomerList struct {
+	Customers []Customer `json:"customers"`
+	Total     int        `json:"total"`
+}
+
+// ListCustomersParams holds optional filters for listing customers.
+type ListCustomersParams struct {
+	Page          int
+	Limit         int
+	Search        string
+	CreatedAfter  string
+	CreatedBefore string
+}
+
 // WebhookEventBase contains the common fields for all webhook events.
 type WebhookEventBase struct {
 	Event      string                 `json:"event"`
@@ -162,6 +188,7 @@ type Client struct {
 
 	Payments    *PaymentsResource
 	Settlements *SettlementsResource
+	Customers   *CustomersResource
 	Webhooks    *WebhooksResource
 }
 
@@ -177,6 +204,7 @@ func New(apiKey string, opts ...Option) *Client {
 	}
 	c.Payments = &PaymentsResource{client: c}
 	c.Settlements = &SettlementsResource{client: c}
+	c.Customers = &CustomersResource{client: c}
 	c.Webhooks = &WebhooksResource{}
 	return c
 }
@@ -371,6 +399,49 @@ func (r *SettlementsResource) Summary(ctx context.Context) (map[string]interface
 		return nil, err
 	}
 	return out, nil
+}
+
+// ── Customers resource ─────────────────────────────────────────────────────────
+
+// CustomersResource groups customer-related API calls.
+type CustomersResource struct{ client *Client }
+
+// List returns a paginated list of customers matching the given filters.
+func (r *CustomersResource) List(ctx context.Context, params ListCustomersParams) (*CustomerList, error) {
+	q := url.Values{}
+	if params.Page > 0 {
+		q.Set("page", strconv.Itoa(params.Page))
+	}
+	if params.Limit > 0 {
+		q.Set("limit", strconv.Itoa(params.Limit))
+	}
+	if params.Search != "" {
+		q.Set("search", params.Search)
+	}
+	if params.CreatedAfter != "" {
+		q.Set("created_after", params.CreatedAfter)
+	}
+	if params.CreatedBefore != "" {
+		q.Set("created_before", params.CreatedBefore)
+	}
+	path := "/api/customers"
+	if len(q) > 0 {
+		path += "?" + q.Encode()
+	}
+	var out CustomerList
+	if err := r.client.do(ctx, http.MethodGet, path, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// Get retrieves a customer by ID.
+func (r *CustomersResource) Get(ctx context.Context, customerID string) (*Customer, error) {
+	var out Customer
+	if err := r.client.do(ctx, http.MethodGet, "/api/customers/"+customerID, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
 }
 
 // ── Webhooks resource ─────────────────────────────────────────────────────────
