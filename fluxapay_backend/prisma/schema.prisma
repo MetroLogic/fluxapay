@@ -422,10 +422,14 @@ model Payment {
   escrow_contract_address  String?
   escrow_status            String?
 
+  // test mode (Stripe-style sk_test_ keys use an isolated data partition)
+  is_test_mode             Boolean  @default(false)
+
   @@index([swept, status, sweep_needs_manual_review])
   @@index([customerId])
   @@index([merchantId, createdAt(sort: Desc)])
   @@index([merchantId, status, createdAt(sort: Desc)])
+  @@index([merchantId, is_test_mode, createdAt(sort: Desc)])
 }
 
 /// On-chain USDC receipts matched to a payment/charge (supports duplicate detection).

@@ -13,6 +13,11 @@ describe("crypto.helper", () => {
       expect(key).toMatch(/^sk_live_[a-f0-9]{32}$/);
     });
 
+    it("should generate a test-mode key with sk_test_ prefix", () => {
+      const key = generateApiKey("test");
+      expect(key).toMatch(/^sk_test_[a-f0-9]{32}$/);
+    });
+
     it("should generate unique keys", () => {
       const key1 = generateApiKey();
       const key2 = generateApiKey();

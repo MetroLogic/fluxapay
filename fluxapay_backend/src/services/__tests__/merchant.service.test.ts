@@ -139,5 +139,17 @@ describe("merchant.service API key handling", () => {
       expect(updateData.api_key_last_four).toHaveLength(4);
       expect(result.apiKey).toMatch(/^sk_live_[a-f0-9]{32}$/);
     });
+
+    it("regenerate supports test-mode keys (sk_test_)", async () => {
+      mockMerchant.update.mockResolvedValue({ id: "m1" });
+
+      const result = await regenerateApiKeyService({ merchantId: "m1", mode: "test" });
+
+      expect(mockMerchant.update).toHaveBeenCalled();
+      const updateData = mockMerchant.update.mock.calls[0][0].data;
+      expect(updateData.api_key_hashed).toBeDefined();
+      expect(updateData.api_key_last_four).toHaveLength(4);
+      expect(result.apiKey).toMatch(/^sk_test_[a-f0-9]{32}$/);
+    });
   });
 });

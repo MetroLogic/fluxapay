@@ -99,6 +99,7 @@ export const createPayment = async (req: Request, res: Response) => {
       customerId: linkedCustomerId,
       expires_in_seconds:
         expires_in_seconds !== undefined ? Number(expires_in_seconds) : undefined,
+      isTestMode: authReq.isTestMode,
     });
 
     const responseBody = {
@@ -149,6 +150,7 @@ export const getPayments = async (req: Request, res: Response) => {
     if (!merchantId) {
       return sendApiError(res, apiError(401, ErrorCode.UNAUTHORIZED, "Unauthorized"));
     }
+    const isTestMode = (req as AuthRequest).isTestMode;
 
     const query = req.query as Record<string, unknown>;
     const page = Number(query.page) || 1;
@@ -164,6 +166,8 @@ export const getPayments = async (req: Request, res: Response) => {
 
     const where: Record<string, unknown> = {
       merchantId,
+      // Partition live vs test-mode payments. JWT (dashboard) requests see both.
+      ...(typeof isTestMode === "boolean" && { is_test_mode: isTestMode }),
       ...(status && { status }),
       ...(currency && { currency }),
       ...((date_from || date_to) && {
@@ -203,6 +207,7 @@ export const exportPayments = async (req: Request, res: Response) => {
         if (!merchantId) {
             return sendApiError(res, apiError(401, ErrorCode.UNAUTHORIZED, "Unauthorized"));
         }
+        const isTestMode = (req as AuthRequest).isTestMode;
 
         // 1. Destructure with explicit type casting immediately
         const query = req.query as Record<string, unknown>;
@@ -220,6 +225,8 @@ export const exportPayments = async (req: Request, res: Response) => {
 
         const where: Record<string, unknown> = {
             merchantId: merchantId,
+            // Partition live vs test-mode payments (test payments never appear in live exports).
+            ...(typeof isTestMode === "boolean" && { is_test_mode: isTestMode }),
             ...(status && { status }),
             ...(currency && { currency }),
             ...((date_from || date_to) && {
@@ -272,11 +279,14 @@ export const getPaymentById = async (req: Request, res: Response) => {
     // Endpoint: GET /api/payments/v1/payments/:id
     // Support both 'id' and 'payment_id' parameters
     const payment_id = String(req.params.id || req.params.payment_id);
+    const isTestMode = (req as AuthRequest).isTestMode;
 
     const payment = await prisma.payment.findFirst({
       where: {
         id: payment_id,
         merchantId: merchantId,
+        // Test keys can only read test payments; live keys can only read live payments.
+        ...(typeof isTestMode === "boolean" && { is_test_mode: isTestMode }),
       },
       include: { merchant: true },
     });

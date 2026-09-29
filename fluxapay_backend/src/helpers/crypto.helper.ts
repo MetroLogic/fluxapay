@@ -2,12 +2,19 @@ import { randomBytes, createHash } from "crypto";
 import bcrypt from "bcrypt";
 
 /**
- * Generates a cryptographically secure random API key.
- * Format: sk_live_[32 random hex characters]
+ * API key environments for merchant API keys.
+ * - "live": sk_live_... (production)
+ * - "test": sk_test_... (Stripe-style test mode, isolated data partition)
  */
-export function generateApiKey(): string {
+export type ApiKeyMode = "live" | "test";
+
+/**
+ * Generates a cryptographically secure random API key.
+ * Format: sk_live_[32 random hex characters] (live) or sk_test_[32 random hex characters] (test mode).
+ */
+export function generateApiKey(mode: ApiKeyMode = "live"): string {
   const randomPart = randomBytes(16).toString("hex");
-  return `sk_live_${randomPart}`;
+  return mode === "test" ? `sk_test_${randomPart}` : `sk_live_${randomPart}`;
 }
 
 /**

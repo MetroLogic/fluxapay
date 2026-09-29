@@ -14,7 +14,7 @@ import { sendMerchantOtpSms } from "./smsOtp.service";
 import { isDevEnv } from "../helpers/env.helper";
 import { generateToken } from "../helpers/jwt.helper";
 import { merchantRegistryService } from "./merchantRegistry.service";
-import { generateApiKey, generateWebhookSecret, hashKey, getLastFour } from "../helpers/crypto.helper";
+import { generateApiKey, generateWebhookSecret, hashKey, getLastFour, ApiKeyMode } from "../helpers/crypto.helper";
 import * as crypto from "crypto";
 import {
   logMerchantProfileUpdate,
@@ -207,10 +207,11 @@ export async function getMerchantUserService(data: {
 
 export async function regenerateApiKeyService(data: {
   merchantId: string;
+  mode?: ApiKeyMode;
 }) {
-  const { merchantId } = data;
+  const { merchantId, mode = "live" } = data;
 
-  const apiKey = generateApiKey();
+  const apiKey = generateApiKey(mode);
   const apiKeyHashed = await hashKey(apiKey);
   const apiKeyLastFour = getLastFour(apiKey);
 
