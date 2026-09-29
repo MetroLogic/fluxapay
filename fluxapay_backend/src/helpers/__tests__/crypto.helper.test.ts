@@ -4,6 +4,7 @@ import {
   hashKey,
   compareKeys,
   getLastFour,
+  timingSafeStringEqual,
 } from "../crypto.helper";
 
 describe("crypto.helper", () => {
@@ -43,6 +44,22 @@ describe("crypto.helper", () => {
 
       const isNotMatch = await compareKeys("wrong_key", hashed);
       expect(isNotMatch).toBe(false);
+    });
+  });
+
+  describe("timingSafeStringEqual", () => {
+    it("returns true for equal-length equal strings", () => {
+      expect(timingSafeStringEqual("abcd1234", "abcd1234")).toBe(true);
+    });
+
+    it("returns false for equal-length unequal strings", () => {
+      expect(timingSafeStringEqual("abcd1234", "abcd9999")).toBe(false);
+    });
+
+    it("throws when buffer lengths differ", () => {
+      expect(() => timingSafeStringEqual("short", "muchlongerstring")).toThrow(
+        "differing length",
+      );
     });
   });
 
