@@ -138,6 +138,153 @@ func TestSettlementsGet(t *testing.T) {
 	}
 }
 
+// ── Invoices ──────────────────────────────────────────────────────────────────
+
+func TestInvoicesCreate(t *testing.T) {
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/v1/invoices" {
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		var body fluxapay.CreateInvoiceParams
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		if body.CustomerEmail != "buyer@example.com" || body.Amount != 75 {
+			t.Errorf("unexpected create params: %+v", body)
+		}
+		writeJSON(w, 201, map[string]interface{}{"data": map[string]interface{}{
+			"id": "inv_123", "invoice_number": "INV-123", "amount": 75.0,
+			"currency": "USDC", "customer_email": "buyer@example.com", "status": "draft",
+		}})
+	})
+
+	invoice, err := client.Invoices.Create(context.Background(), fluxapay.CreateInvoiceParams{
+		Amount: 75, Currency: "USDC", CustomerEmail: "buyer@example.com",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if invoice.ID != "inv_123" || invoice.InvoiceNumber != "INV-123" {
+		t.Errorf("unexpected invoice: %+v", invoice)
+	}
+}
+
+func TestInvoicesGet(t *testing.T) {
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/api/v1/invoices/inv_123" {
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		writeJSON(w, 200, map[string]interface{}{"data": map[string]interface{}{
+			"id": "inv_123", "customer_email": "buyer@example.com", "status": "paid",
+		}})
+	})
+
+	invoice, err := client.Invoices.Get(context.Background(), "inv_123")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if invoice.ID != "inv_123" || invoice.Status != "paid" {
+		t.Errorf("unexpected invoice: %+v", invoice)
+	}
+}
+
+func TestInvoicesList(t *testing.T) {
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/invoices" || r.URL.Query().Get("search") != "buyer@example.com" {
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.String())
+		}
+		writeJSON(w, 200, map[string]interface{}{
+			"data": map[string]interface{}{"invoices": []interface{}{
+				map[string]interface{}{"id": "inv_123", "status": "draft"},
+			}},
+			"meta": map[string]interface{}{"page": 2, "limit": 5, "total": 1, "total_pages": 1},
+		})
+	})
+
+	list, err := client.Invoices.List(context.Background(), fluxapay.ListInvoicesParams{
+		Page: 2, Limit: 5, Status: "draft", Search: "buyer@example.com",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if list.Total != 1 || list.Page != 2 || len(list.Invoices) != 1 || list.Invoices[0].ID != "inv_123" {
+		t.Errorf("unexpected invoice list: %+v", list)
+	}
+}
+
+// ── Refunds ───────────────────────────────────────────────────────────────────
+
+func TestRefundsCreate(t *testing.T) {
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/v1/refunds" {
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		var body fluxapay.CreateRefundParams
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		if body.PaymentID != "pay_123" || body.Amount != 25 {
+			t.Errorf("unexpected create params: %+v", body)
+		}
+		writeJSON(w, 201, map[string]interface{}{"data": map[string]interface{}{
+			"id": "ref_123", "paymentId": "pay_123", "amount": 25.0, "status": "pending",
+		}})
+	})
+
+	refund, err := client.Refunds.Create(context.Background(), fluxapay.CreateRefundParams{
+		PaymentID: "pay_123", Amount: 25, Reason: "duplicate",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if refund.ID != "ref_123" || refund.PaymentID != "pay_123" {
+		t.Errorf("unexpected refund: %+v", refund)
+	}
+}
+
+func TestRefundsGet(t *testing.T) {
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/api/v1/refunds/ref_123" {
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		writeJSON(w, 200, map[string]interface{}{"data": map[string]interface{}{
+			"id": "ref_123", "paymentId": "pay_123", "amount": 25.0, "status": "completed",
+		}})
+	})
+
+	refund, err := client.Refunds.Get(context.Background(), "ref_123")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if refund.ID != "ref_123" || refund.Status != "completed" {
+		t.Errorf("unexpected refund: %+v", refund)
+	}
+}
+
+func TestRefundsList(t *testing.T) {
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/refunds" || r.URL.Query().Get("payment_id") != "pay_123" {
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.String())
+		}
+		writeJSON(w, 200, map[string]interface{}{"data": map[string]interface{}{
+			"refunds": []interface{}{
+				map[string]interface{}{"id": "ref_123", "paymentId": "pay_123", "status": "pending"},
+			},
+			"pagination": map[string]interface{}{"page": 1, "limit": 10, "total": 1, "total_pages": 1},
+		}})
+	})
+
+	list, err := client.Refunds.List(context.Background(), fluxapay.ListRefundsParams{
+		Page: 1, Limit: 10, Status: "pending", PaymentID: "pay_123",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if list.Total != 1 || len(list.Refunds) != 1 || list.Refunds[0].ID != "ref_123" {
+		t.Errorf("unexpected refund list: %+v", list)
+	}
+}
+
 // ── Error handling ────────────────────────────────────────────────────────────
 
 func TestAPIErrorPropagation(t *testing.T) {

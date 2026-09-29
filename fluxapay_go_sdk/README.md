@@ -52,6 +52,8 @@ event, _ := client.Webhooks.Parse(rawBody)
 
 - `client.Payments` — Create, Get, GetStatus, List
 - `client.Settlements` — List, Get, Summary
+- `client.Invoices` — Create, Get, List
+- `client.Refunds` — Create, Get, List
 - `client.Webhooks` — Verify, Parse
 
 ## License

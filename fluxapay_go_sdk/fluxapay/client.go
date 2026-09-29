@@ -122,6 +122,96 @@ type ListSettlementsParams struct {
 	DateTo   string
 }
 
+// Invoice represents a FluxaPay invoice object.
+type Invoice struct {
+	ID            string                   `json:"id"`
+	InvoiceNumber string                   `json:"invoice_number"`
+	Amount        float64                  `json:"amount"`
+	Subtotal      float64                  `json:"subtotal"`
+	TaxAmount     float64                  `json:"tax_amount"`
+	TaxRate       float64                  `json:"tax_rate"`
+	Currency      string                   `json:"currency"`
+	CustomerEmail string                   `json:"customer_email"`
+	CustomerName  string                   `json:"customer_name"`
+	LineItems     []map[string]interface{} `json:"line_items"`
+	Notes         string                   `json:"notes"`
+	Status        string                   `json:"status"`
+	DueDate       string                   `json:"due_date"`
+	CreatedAt     string                   `json:"created_at"`
+	UpdatedAt     string                   `json:"updated_at"`
+	PaymentID     string                   `json:"payment_id"`
+	PaymentLink   string                   `json:"payment_link"`
+	Metadata      map[string]interface{}   `json:"metadata"`
+}
+
+// CreateInvoiceParams holds parameters for creating an invoice.
+type CreateInvoiceParams struct {
+	Amount        float64                  `json:"amount,omitempty"`
+	Currency      string                   `json:"currency"`
+	CustomerEmail string                   `json:"customer_email"`
+	CustomerName  string                   `json:"customer_name,omitempty"`
+	LineItems     []map[string]interface{} `json:"line_items,omitempty"`
+	Notes         string                   `json:"notes,omitempty"`
+	Metadata      map[string]interface{}   `json:"metadata,omitempty"`
+	DueDate       string                   `json:"due_date,omitempty"`
+	TaxRate       float64                  `json:"tax_rate,omitempty"`
+}
+
+// InvoiceList is the response from listing invoices.
+type InvoiceList struct {
+	Invoices   []Invoice `json:"invoices"`
+	Page       int       `json:"page"`
+	Limit      int       `json:"limit"`
+	Total      int       `json:"total"`
+	TotalPages int       `json:"total_pages"`
+}
+
+// ListInvoicesParams holds optional filters for listing invoices.
+type ListInvoicesParams struct {
+	Page   int
+	Limit  int
+	Status string
+	Search string
+}
+
+// Refund represents a FluxaPay refund object.
+type Refund struct {
+	ID           string  `json:"id"`
+	PaymentID    string  `json:"paymentId"`
+	Amount       float64 `json:"amount"`
+	Currency     string  `json:"currency"`
+	Reason       string  `json:"reason"`
+	Status       string  `json:"status"`
+	FailedReason string  `json:"failed_reason"`
+	CreatedAt    string  `json:"created_at"`
+	UpdatedAt    string  `json:"updated_at"`
+}
+
+// CreateRefundParams holds parameters for creating a refund.
+type CreateRefundParams struct {
+	PaymentID      string  `json:"payment_id"`
+	Amount         float64 `json:"amount"`
+	Reason         string  `json:"reason,omitempty"`
+	IdempotencyKey string  `json:"idempotency_key,omitempty"`
+}
+
+// RefundList is the response from listing refunds.
+type RefundList struct {
+	Refunds    []Refund `json:"refunds"`
+	Page       int      `json:"page"`
+	Limit      int      `json:"limit"`
+	Total      int      `json:"total"`
+	TotalPages int      `json:"total_pages"`
+}
+
+// ListRefundsParams holds optional filters for listing refunds.
+type ListRefundsParams struct {
+	Page      int
+	Limit     int
+	Status    string
+	PaymentID string
+}
+
 // WebhookEventBase contains the common fields for all webhook events.
 type WebhookEventBase struct {
 	Event      string                 `json:"event"`
@@ -162,6 +252,8 @@ type Client struct {
 
 	Payments    *PaymentsResource
 	Settlements *SettlementsResource
+	Invoices    *InvoicesResource
+	Refunds     *RefundsResource
 	Webhooks    *WebhooksResource
 }
 
@@ -177,6 +269,8 @@ func New(apiKey string, opts ...Option) *Client {
 	}
 	c.Payments = &PaymentsResource{client: c}
 	c.Settlements = &SettlementsResource{client: c}
+	c.Invoices = &InvoicesResource{client: c}
+	c.Refunds = &RefundsResource{client: c}
 	c.Webhooks = &WebhooksResource{}
 	return c
 }
@@ -371,6 +465,144 @@ func (r *SettlementsResource) Summary(ctx context.Context) (map[string]interface
 		return nil, err
 	}
 	return out, nil
+}
+
+// ── Invoices resource ────────────────────────────────────────────────────────
+
+// InvoicesResource groups invoice-related API calls.
+type InvoicesResource struct{ client *Client }
+
+// Create creates a new invoice.
+func (r *InvoicesResource) Create(ctx context.Context, params CreateInvoiceParams) (*Invoice, error) {
+	var out struct {
+		Data Invoice `json:"data"`
+	}
+	if err := r.client.do(ctx, http.MethodPost, "/api/v1/invoices", params, &out); err != nil {
+		return nil, err
+	}
+	return &out.Data, nil
+}
+
+// Get retrieves an invoice by ID.
+func (r *InvoicesResource) Get(ctx context.Context, invoiceID string) (*Invoice, error) {
+	var out struct {
+		Data Invoice `json:"data"`
+	}
+	if err := r.client.do(ctx, http.MethodGet, "/api/v1/invoices/"+invoiceID, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out.Data, nil
+}
+
+// List returns a paginated list of invoices.
+func (r *InvoicesResource) List(ctx context.Context, params ListInvoicesParams) (*InvoiceList, error) {
+	q := url.Values{}
+	if params.Page > 0 {
+		q.Set("page", strconv.Itoa(params.Page))
+	}
+	if params.Limit > 0 {
+		q.Set("limit", strconv.Itoa(params.Limit))
+	}
+	if params.Status != "" {
+		q.Set("status", params.Status)
+	}
+	if params.Search != "" {
+		q.Set("search", params.Search)
+	}
+	path := "/api/v1/invoices"
+	if len(q) > 0 {
+		path += "?" + q.Encode()
+	}
+	var out struct {
+		Data struct {
+			Invoices []Invoice `json:"invoices"`
+		} `json:"data"`
+		Meta struct {
+			Page       int `json:"page"`
+			Limit      int `json:"limit"`
+			Total      int `json:"total"`
+			TotalPages int `json:"total_pages"`
+		} `json:"meta"`
+	}
+	if err := r.client.do(ctx, http.MethodGet, path, nil, &out); err != nil {
+		return nil, err
+	}
+	return &InvoiceList{
+		Invoices:   out.Data.Invoices,
+		Page:       out.Meta.Page,
+		Limit:      out.Meta.Limit,
+		Total:      out.Meta.Total,
+		TotalPages: out.Meta.TotalPages,
+	}, nil
+}
+
+// ── Refunds resource ─────────────────────────────────────────────────────────
+
+// RefundsResource groups refund-related API calls.
+type RefundsResource struct{ client *Client }
+
+// Create creates a refund for a payment.
+func (r *RefundsResource) Create(ctx context.Context, params CreateRefundParams) (*Refund, error) {
+	var out struct {
+		Data Refund `json:"data"`
+	}
+	if err := r.client.do(ctx, http.MethodPost, "/api/v1/refunds", params, &out); err != nil {
+		return nil, err
+	}
+	return &out.Data, nil
+}
+
+// Get retrieves a refund by ID.
+func (r *RefundsResource) Get(ctx context.Context, refundID string) (*Refund, error) {
+	var out struct {
+		Data Refund `json:"data"`
+	}
+	if err := r.client.do(ctx, http.MethodGet, "/api/v1/refunds/"+refundID, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out.Data, nil
+}
+
+// List returns a paginated list of refunds.
+func (r *RefundsResource) List(ctx context.Context, params ListRefundsParams) (*RefundList, error) {
+	q := url.Values{}
+	if params.Page > 0 {
+		q.Set("page", strconv.Itoa(params.Page))
+	}
+	if params.Limit > 0 {
+		q.Set("limit", strconv.Itoa(params.Limit))
+	}
+	if params.Status != "" {
+		q.Set("status", params.Status)
+	}
+	if params.PaymentID != "" {
+		q.Set("payment_id", params.PaymentID)
+	}
+	path := "/api/v1/refunds"
+	if len(q) > 0 {
+		path += "?" + q.Encode()
+	}
+	var out struct {
+		Data struct {
+			Refunds    []Refund `json:"refunds"`
+			Pagination struct {
+				Page       int `json:"page"`
+				Limit      int `json:"limit"`
+				Total      int `json:"total"`
+				TotalPages int `json:"total_pages"`
+			} `json:"pagination"`
+		} `json:"data"`
+	}
+	if err := r.client.do(ctx, http.MethodGet, path, nil, &out); err != nil {
+		return nil, err
+	}
+	return &RefundList{
+		Refunds:    out.Data.Refunds,
+		Page:       out.Data.Pagination.Page,
+		Limit:      out.Data.Pagination.Limit,
+		Total:      out.Data.Pagination.Total,
+		TotalPages: out.Data.Pagination.TotalPages,
+	}, nil
 }
 
 // ── Webhooks resource ─────────────────────────────────────────────────────────

@@ -49,7 +49,7 @@ export function createHealthRouter(prisma: PrismaClient): Router {
    * /health/ready:
    *   get:
    *     summary: Deep readiness check
-   *     description: Verifies database, Redis, and Stellar Horizon connectivity. No authentication required.
+    *     description: Verifies database, Redis, Stellar Horizon, and enabled Soroban RPC connectivity. No authentication required.
    *     responses:
    *       200:
    *         description: All dependencies are available

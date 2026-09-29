@@ -1,11 +1,13 @@
 import request from "supertest";
 import express from "express";
+import { rpc } from "@stellar/stellar-sdk";
 import { PrismaClient } from "../generated/client/client";
 import { createHealthRouter } from "../routes/health.route";
 import {
   checkDatabase,
   checkHorizon,
   checkRedis,
+  checkSorobanRpc,
   DEPENDENCY_TIMEOUT_MS,
   getReadiness,
   getUptimeSeconds,
@@ -16,6 +18,16 @@ import {
   setRedisClientForTests,
 } from "../sms/otpSmsRateLimiter";
 import { resetFxCircuitBreakerForTests } from "../services/fx.service";
+
+const originalSorobanVerification = process.env.ENABLE_SOROBAN_VERIFICATION;
+
+function restoreSorobanVerificationSetting(): void {
+  if (originalSorobanVerification === undefined) {
+    delete process.env.ENABLE_SOROBAN_VERIFICATION;
+  } else {
+    process.env.ENABLE_SOROBAN_VERIFICATION = originalSorobanVerification;
+  }
+}
 
 jest.mock("../generated/client/client", () => ({
   PrismaClient: jest.fn().mockImplementation(() => ({
@@ -34,12 +46,14 @@ describe("health.service", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    process.env.ENABLE_SOROBAN_VERIFICATION = "false";
     resetRedisClientForTests();
     resetFxCircuitBreakerForTests();
     global.fetch = jest.fn();
   });
 
   afterEach(() => {
+    restoreSorobanVerificationSetting();
     resetRedisClientForTests();
     resetFxCircuitBreakerForTests();
     jest.restoreAllMocks();
@@ -126,13 +140,45 @@ describe("health.service", () => {
     });
   });
 
+  describe("checkSorobanRpc", () => {
+    beforeEach(() => {
+      process.env.ENABLE_SOROBAN_VERIFICATION = "true";
+    });
+
+    it("reports down when the RPC health check rejects", async () => {
+      jest
+        .spyOn((rpc.Server as any).prototype, "getHealth")
+        .mockRejectedValue(new Error("Soroban RPC unavailable"));
+
+      const result = await checkSorobanRpc();
+
+      expect(result.status).toBe("down");
+      expect(result.latencyMs).toBeGreaterThanOrEqual(0);
+    });
+
+    it("reports down when the RPC health check times out", async () => {
+      jest
+        .spyOn((rpc.Server as any).prototype, "getHealth")
+        .mockImplementation(() => new Promise(() => {}));
+
+      const result = await checkSorobanRpc();
+
+      expect(result.status).toBe("down");
+      expect(result.latencyMs).toBeGreaterThanOrEqual(DEPENDENCY_TIMEOUT_MS);
+    });
+  });
+
   describe("getReadiness", () => {
     it("returns ok when all dependencies are up", async () => {
+      process.env.ENABLE_SOROBAN_VERIFICATION = "true";
       (prisma.$queryRaw as jest.Mock).mockResolvedValue([{ "?column?": 1 }]);
       setRedisClientForTests({
         ping: jest.fn().mockResolvedValue("PONG"),
       } as unknown as ReturnType<typeof getRedisClient>);
       (global.fetch as jest.Mock).mockResolvedValue({ ok: true, status: 200 });
+      jest
+        .spyOn((rpc.Server as any).prototype, "getHealth")
+        .mockResolvedValue({ status: "healthy" });
 
       const result = await getReadiness(prisma);
 
@@ -140,6 +186,7 @@ describe("health.service", () => {
       expect(result.dependencies.database.status).toBe("up");
       expect(result.dependencies.redis.status).toBe("up");
       expect(result.dependencies.horizon.status).toBe("up");
+      expect(result.dependencies.soroban.status).toBe("up");
     });
 
     it("returns degraded when any dependency is down", async () => {
@@ -155,6 +202,7 @@ describe("health.service", () => {
       expect(result.dependencies.database.status).toBe("down");
       expect(result.dependencies.redis.status).toBe("up");
       expect(result.dependencies.horizon.status).toBe("up");
+      expect(result.dependencies.soroban.status).toBe("disabled");
     });
   });
 });
@@ -164,12 +212,14 @@ describe("health routes", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    process.env.ENABLE_SOROBAN_VERIFICATION = "false";
     resetRedisClientForTests();
     resetFxCircuitBreakerForTests();
     global.fetch = jest.fn();
   });
 
   afterEach(() => {
+    restoreSorobanVerificationSetting();
     resetRedisClientForTests();
     resetFxCircuitBreakerForTests();
     jest.restoreAllMocks();
@@ -209,6 +259,7 @@ describe("health routes", () => {
       database: { status: "up", latencyMs: expect.any(Number) },
       redis: { status: "up", latencyMs: expect.any(Number) },
       horizon: { status: "up", latencyMs: expect.any(Number) },
+      soroban: { status: "disabled", latencyMs: 0 },
     });
   });
 
@@ -225,5 +276,26 @@ describe("health routes", () => {
     expect(response.status).toBe(503);
     expect(response.body.status).toBe("degraded");
     expect(response.body.dependencies.database.status).toBe("down");
+  });
+
+  it("GET /health/ready returns 503 when enabled Soroban RPC is down", async () => {
+    process.env.ENABLE_SOROBAN_VERIFICATION = "true";
+    (prisma.$queryRaw as jest.Mock).mockResolvedValue([{ "?column?": 1 }]);
+    setRedisClientForTests({
+      ping: jest.fn().mockResolvedValue("PONG"),
+    } as unknown as ReturnType<typeof getRedisClient>);
+    (global.fetch as jest.Mock).mockResolvedValue({ ok: true, status: 200 });
+    jest
+      .spyOn((rpc.Server as any).prototype, "getHealth")
+      .mockRejectedValue(new Error("Soroban RPC unavailable"));
+
+    const app = buildHealthApp(prisma);
+    const response = await request(app).get("/health/ready");
+
+    expect(response.status).toBe(503);
+    expect(response.body.dependencies.soroban).toMatchObject({
+      status: "down",
+      latencyMs: expect.any(Number),
+    });
   });
 });
