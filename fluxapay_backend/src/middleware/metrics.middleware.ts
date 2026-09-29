@@ -1,83 +1,142 @@
 import { Request, Response, NextFunction } from 'express';
 import { getMetricsCollector } from '../utils/logger';
 import { getLogger } from '../utils/logger';
+import { adminAuth } from './adminAuth.middleware';
+import { MetricEvent, MetricsTags } from '../types/logging.types';
 
 /**
- * Metrics Endpoint Middleware
- * 
- * Exposes a /metrics endpoint for scraping metrics.
- * In production, this should be protected and only accessible
- * from monitoring systems.
+ * Prometheus counter families exposed by the `/metrics` endpoint.
+ *
+ * The in-memory collector records business events under internal names; the
+ * endpoint re-exposes the counters the platform owns with a `fluxapay_` prefix
+ * and the `_total` suffix Prometheus expects for counters.
  */
-export function metricsMiddleware(req: Request, res: Response, next: NextFunction): void {
-  if (req.path === '/metrics' && req.method === 'GET') {
-    if (process.env.NODE_ENV === 'production') {
-      const authHeader = req.headers.authorization;
-      if (!authHeader || authHeader !== `Bearer ${process.env.METRICS_SECRET}`) {
-        res.status(401).send('Unauthorized');
-        return;
-      }
-    }
-    
-    const metricsCollector = getMetricsCollector();
-    const logger = getLogger();
-    
-    const metrics = metricsCollector.getMetrics();
-    const summary = metricsCollector.getSummary();
-    
-    // Log metrics scrape
-    logger.debug('Metrics scraped', {
-      metricCount: metrics.length,
-      summaryKeys: Object.keys(summary),
-    });
-    
-    // Return metrics in Prometheus-like format
-    res.set('Content-Type', 'text/plain');
-    res.send(formatMetrics(summary));
-    return;
-  }
-  
-  next();
+const PROMETHEUS_COUNTERS: Record<string, { promName: string; help: string }> = {
+  payments_created_total: {
+    promName: 'fluxapay_payments_created_total',
+    help: 'Total number of payments created.',
+  },
+  payments_confirmed_total: {
+    promName: 'fluxapay_payments_confirmed_total',
+    help: 'Total number of payments confirmed.',
+  },
+  webhook_deliveries_total: {
+    promName: 'fluxapay_webhook_delivery_total',
+    help: 'Total number of webhook deliveries, labelled by status.',
+  },
+  settlement_batches_total: {
+    promName: 'fluxapay_settlement_batch_total',
+    help: 'Total number of settlement batches initiated, labelled by currency.',
+  },
+};
+
+/**
+ * Escape a label value for the Prometheus text exposition format.
+ */
+function escapeLabelValue(value: string): string {
+  return value
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, '\\n');
 }
 
 /**
- * Format metrics for Prometheus-style output
+ * Normalize the collector's tags into a deterministic, string-valued label set.
  */
-function formatMetrics(summary: Record<string, any>): string {
+function normalizeLabels(tags: MetricsTags | undefined): Record<string, string> {
+  const labels: Record<string, string> = {};
+  if (!tags) return labels;
+  for (const [key, value] of Object.entries(tags)) {
+    labels[key] = String(value);
+  }
+  return labels;
+}
+
+function serializeLabels(labels: Record<string, string>): string {
+  const keys = Object.keys(labels).sort();
+  if (keys.length === 0) return '';
+  const body = keys.map((key) => `${key}="${escapeLabelValue(labels[key])}"`).join(',');
+  return `{${body}}`;
+}
+
+/**
+ * Render the collector's counter events in Prometheus text exposition format.
+ *
+ * Events of the same family and label set are summed into a single sample.
+ * Families without any recorded sample are omitted so the output stays stable
+ * as counters spin up.
+ */
+export function renderPrometheusMetrics(events: MetricEvent[]): string {
+  // family name -> help
+  const helpByName: Record<string, string> = {};
+  for (const mapping of Object.values(PROMETHEUS_COUNTERS)) {
+    helpByName[mapping.promName] = mapping.help;
+  }
+
+  // promName + serialized labels -> accumulated value
+  const samples = new Map<string, { name: string; value: number; labels: string }>();
+
+  for (const event of events) {
+    if (event.type !== 'counter') continue;
+    const mapping = PROMETHEUS_COUNTERS[event.name];
+    if (!mapping) continue;
+
+    const labels = serializeLabels(normalizeLabels(event.tags));
+    const key = `${mapping.promName}\u0000${labels}`;
+    const existing = samples.get(key);
+    if (existing) {
+      existing.value += event.value;
+    } else {
+      samples.set(key, { name: mapping.promName, value: event.value, labels });
+    }
+  }
+
   const lines: string[] = [];
-  
-  Object.entries(summary).forEach(([name, data]: [string, any]) => {
-    const safeName = name.replace(/[^a-zA-Z0-9_]/g, '_');
-    
-    lines.push(`# HELP ${safeName} Application metric`);
-    lines.push(`# TYPE ${safeName} gauge`);
-    
-    if (data.count !== undefined) {
-      lines.push(`${safeName}_count ${data.count}`);
+  const emittedFamilies = new Set<string>();
+
+  for (const sample of samples.values()) {
+    if (!emittedFamilies.has(sample.name)) {
+      emittedFamilies.add(sample.name);
+      lines.push(`# HELP ${sample.name} ${helpByName[sample.name] ?? 'Application metric.'}`);
+      lines.push(`# TYPE ${sample.name} counter`);
     }
-    if (data.sum !== undefined) {
-      lines.push(`${safeName}_sum ${data.sum}`);
-    }
-    if (data.avg !== undefined) {
-      lines.push(`${safeName}_avg ${data.avg.toFixed(2)}`);
-    }
-    if (data.min !== undefined) {
-      lines.push(`${safeName}_min ${data.min}`);
-    }
-    if (data.max !== undefined) {
-      lines.push(`${safeName}_max ${data.max}`);
-    }
-    if (data.lastValue !== undefined) {
-      lines.push(`${safeName}_last ${data.lastValue}`);
-    }
+    lines.push(`${sample.name}${sample.labels} ${sample.value}`);
+  }
+
+  return `${lines.join('\n')}\n`;
+}
+
+/**
+ * Metrics Endpoint Middleware
+ *
+ * Exposes a `/metrics` endpoint (admin-auth protected) that returns the
+ * business counters in Prometheus text exposition format for scraping.
+ */
+export function metricsMiddleware(req: Request, res: Response, next: NextFunction): void {
+  const isMetricsRequest = req.path === '/metrics' && req.method === 'GET';
+  if (!isMetricsRequest) {
+    next();
+    return;
+  }
+
+  adminAuth(req, res, () => {
+    const collector = getMetricsCollector();
+    const logger = getLogger();
+    const events = collector.getMetrics();
+
+    logger.debug('Metrics scraped', {
+      eventCount: events.length,
+      families: Object.keys(PROMETHEUS_COUNTERS),
+    });
+
+    res.set('Content-Type', 'text/plain; version=0.0.4; charset=utf-8');
+    res.send(renderPrometheusMetrics(events));
   });
-  
-  return lines.join('\n');
 }
 
 /**
  * Business Metrics Helper Functions
- * 
+ *
  * These can be imported and used throughout the application
  * to track business-specific metrics.
  */
@@ -139,7 +198,7 @@ export function trackSettlementBatchInitiated(merchantCount: number, currency: s
 export function trackDatabaseQuery(duration: number, table: string, operation: string): void {
   const metrics = getMetricsCollector();
   metrics.histogram('database_query_duration_ms', duration, { table, operation });
-  
+
   // Track slow queries
   if (duration > 100) {
     metrics.increment('database_slow_queries_total', { table, operation });
