@@ -9,6 +9,8 @@
  */
 
 import { runPaymentExpiryJob } from "../paymentExpiry.service";
+import { DepositAddressService } from "../depositAddress.service";
+import { AppEvents, eventBus } from "../EventService";
 
 // ─── Mock Prisma ──────────────────────────────────────────────────────────────
 // Functions must be defined inside the factory to avoid jest-hoisting TDZ issues
@@ -50,10 +52,28 @@ jest.mock("../webhook.service", () => ({
 }));
 
 // ─── Mock EventService ────────────────────────────────────────────────────────
-jest.mock("../EventService", () => ({
-  eventBus: { emit: jest.fn() },
-  AppEvents: { PAYMENT_EXPIRED: "PAYMENT_EXPIRED" },
-}));
+jest.mock("../EventService", () => {
+  const listeners = new Map<string, ((payload: any) => unknown)[]>();
+  return {
+    eventBus: {
+      on: jest.fn((event: string, listener: (payload: any) => unknown) => {
+        const eventListeners = listeners.get(event) ?? [];
+        eventListeners.push(listener);
+        listeners.set(event, eventListeners);
+      }),
+      emit: jest.fn((event: string, payload: any) => {
+        for (const listener of listeners.get(event) ?? []) {
+          listener(payload);
+        }
+        return true;
+      }),
+    },
+    AppEvents: {
+      PAYMENT_CONFIRMED: "PAYMENT_CONFIRMED",
+      PAYMENT_EXPIRED: "PAYMENT_EXPIRED",
+    },
+  };
+});
 
 // ─── Mock metrics middleware ───────────────────────────────────────────────────
 jest.mock("../../middleware/metrics.middleware", () => ({
@@ -151,16 +171,53 @@ describe("runPaymentExpiryJob — webhook emission (issue #655)", () => {
     );
   });
 
-  it("does not emit webhook when payment was already transitioned (idempotency guard)", async () => {
+  it("does not expire a payment confirmed between selection and update", async () => {
+    let currentStatus = "pending";
     setupLock();
-    mockPaymentFindMany.mockResolvedValue([PENDING_PAYMENT]);
-    // Simulate concurrent update already handled the row
-    mockPaymentUpdateMany.mockResolvedValue({ count: 0 });
+    mockPaymentFindMany.mockImplementation(async () => {
+      currentStatus = "confirmed";
+      return [PENDING_PAYMENT];
+    });
+    mockPaymentUpdateMany.mockImplementation(async ({ where, data }) => {
+      if (currentStatus !== where.status) {
+        return { count: 0 };
+      }
+      currentStatus = data.status;
+      return { count: 1 };
+    });
 
     const result = await runPaymentExpiryJob();
 
     expect(result.expired).toBe(0);
+    expect(currentStatus).toBe("confirmed");
     expect(mockCreateAndDeliverWebhook).not.toHaveBeenCalled();
+    expect(eventBus.emit).not.toHaveBeenCalledWith(
+      AppEvents.PAYMENT_EXPIRED,
+      expect.anything(),
+    );
+  });
+
+  it("processes batches of 100+ payments and emits an expiry event for each", async () => {
+    const payments = Array.from({ length: 105 }, (_, index) => ({
+      ...PENDING_PAYMENT,
+      id: `pay_expiry_${index + 1}`,
+    }));
+
+    setupLock();
+    mockPaymentFindMany.mockResolvedValue(payments);
+    mockPaymentUpdateMany.mockResolvedValue({ count: 1 });
+    mockCreateAndDeliverWebhook.mockResolvedValue({ id: "wh_log_batch" });
+
+    const result = await runPaymentExpiryJob();
+
+    expect(result).toMatchObject({ processed: 105, expired: 105, webhookErrors: [] });
+    expect(eventBus.emit).toHaveBeenCalledTimes(105);
+    payments.forEach((payment, index) => {
+      expect(eventBus.emit).toHaveBeenNthCalledWith(index + 1, AppEvents.PAYMENT_EXPIRED, {
+        ...payment,
+        status: "expired",
+      });
+    });
   });
 
   it("tracks webhook errors and continues processing remaining payments", async () => {
@@ -205,6 +262,27 @@ describe("runPaymentExpiryJob — webhook emission (issue #655)", () => {
     expect(mockCreateAndDeliverWebhook).not.toHaveBeenCalled();
   });
 
+  it("releases the deposit address when an expired payment event is emitted", async () => {
+    const releaseAddress = jest
+      .spyOn(DepositAddressService, "releaseAddress")
+      .mockResolvedValue();
+    DepositAddressService.initializeListeners();
+
+    setupLock();
+    mockPaymentFindMany.mockResolvedValue([PENDING_PAYMENT]);
+    mockPaymentUpdateMany.mockResolvedValue({ count: 1 });
+    mockCreateAndDeliverWebhook.mockResolvedValue({ id: "wh_log_001" });
+
+    await runPaymentExpiryJob();
+
+    expect(eventBus.emit).toHaveBeenCalledWith(
+      AppEvents.PAYMENT_EXPIRED,
+      expect.objectContaining({
+        id: PENDING_PAYMENT.id,
+        status: "expired",
+      }),
+    );
+    expect(releaseAddress).toHaveBeenCalledWith(PENDING_PAYMENT.id);
   it("releases the distributed lock even when an unhandled exception occurs mid-job (#1071)", async () => {
     setupLock();
     // Simulate an unexpected failure partway through the job — e.g. a DB
