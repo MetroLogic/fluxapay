@@ -1,4 +1,4 @@
-import { Keypair } from '@stellar/stellar-sdk';
+import { Keypair, StrKey } from '@stellar/stellar-sdk';
 import * as crypto from 'crypto';
 import { derivePath } from "ed25519-hd-key";
 import { PrismaClient } from "../generated/client/client";
@@ -303,6 +303,16 @@ export class HDWalletService {
       paymentIndex,
       seedVersion,
     );
+
+    // Guard against a corrupted derivation producing an address that looks
+    // well-formed but is not a valid, spendable Stellar Ed25519 public key
+    // (closes #1074).
+    if (!StrKey.isValidEd25519PublicKey(publicKey)) {
+      throw new Error(
+        `HD wallet derived an invalid Stellar address for merchant ${merchantId}, payment ${paymentId} ` +
+          `(index ${merchantIndex}/${paymentIndex}, path ${derivationPath})`,
+      );
+    }
 
     // Log the derived address with indices for audit trail
     console.log(
