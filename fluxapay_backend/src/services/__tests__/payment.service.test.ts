@@ -3,6 +3,10 @@ import { PrismaClient } from "../../generated/client/client";
 import { HDWalletService } from "../HDWalletService";
 import { StellarService } from "../StellarService";
 import { FxService } from "../fx.service";
+import { DepositAddressService } from "../depositAddress.service";
+import { eventBus, AppEvents } from "../EventService";
+import { sorobanQueue } from "../sorobanQueue.service";
+import { PaymentStatus } from "../../types/payment";
 
 // Mock Prisma
 jest.mock("../../generated/client/client", () => {
@@ -10,6 +14,7 @@ jest.mock("../../generated/client/client", () => {
     payment: {
       count: jest.fn(),
       create: jest.fn(),
+      findFirst: jest.fn(),
       update: jest.fn(),
     },
     merchantSubscription: {
@@ -31,6 +36,10 @@ jest.mock("../depositAddress.service", () => ({
   DepositAddressService: {
     allocateAddress: jest.fn().mockResolvedValue(null),
   },
+}));
+
+jest.mock("../sorobanQueue.service", () => ({
+  sorobanQueue: { enqueue: jest.fn() },
 }));
 
 jest.mock("../fx.service", () => ({
@@ -60,6 +69,7 @@ describe("PaymentService", () => {
   });
 
   afterEach(() => {
+    jest.restoreAllMocks();
     process.env = originalEnv;
   });
 
@@ -109,6 +119,43 @@ describe("PaymentService", () => {
   });
 
   describe('createPayment', () => {
+    it("uses an allocated deposit address without deriving an HD address", async () => {
+      const pooledAddress = "GPOOL123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ123456789ABC";
+      (DepositAddressService.allocateAddress as jest.Mock).mockResolvedValueOnce(
+        pooledAddress,
+      );
+      (
+        StellarService as jest.MockedClass<typeof StellarService>
+      ).mockImplementation(
+        () => ({ prepareAccount: jest.fn().mockResolvedValue(undefined) }) as any,
+      );
+
+      await PaymentService.createPayment({
+        amount: 25,
+        currency: "USD",
+        customer_email: "customer@example.com",
+        merchantId: "merchant_1",
+      });
+
+      expect(mockPrisma.payment.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          stellar_address: null,
+          payment_index: null,
+          derivation_path: null,
+        }),
+      });
+      expect(mockPrisma.payment.update).toHaveBeenCalledWith({
+        where: { id: expect.any(String) },
+        data: {
+          stellar_address: pooledAddress,
+          payment_index: null,
+          derivation_path: null,
+          encrypted_key_data: null,
+        },
+      });
+      expect(HDWalletService).not.toHaveBeenCalled();
+    });
+
     it('should create payment with derived Stellar address', async () => {
       const mockStellarAddress = 'GTEST123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ123456789ABC';
       const mockDerivedAddress = {
@@ -610,6 +657,105 @@ describe("PaymentService", () => {
         });
         expect(mockPrisma.payment.create).not.toHaveBeenCalled();
       });
+    });
+  });
+
+  describe("verifyPayment", () => {
+    it("confirms the payment, queues on-chain verification, and emits update events", async () => {
+      const payment = { id: "payment_123", status: PaymentStatus.CONFIRMED };
+      mockPrisma.payment.update.mockResolvedValue(payment);
+      const emitSpy = jest.spyOn(eventBus, "emit").mockReturnValue(true);
+
+      const result = await PaymentService.verifyPayment(
+        "payment_123",
+        "tx_hash_123",
+        "GTEST123",
+        12.5,
+      );
+
+      expect(result).toBe(payment);
+      expect(mockPrisma.payment.update).toHaveBeenCalledWith({
+        where: { id: "payment_123" },
+        data: {
+          status: PaymentStatus.CONFIRMED,
+          transaction_hash: "tx_hash_123",
+          payer_address: "GTEST123",
+          confirmed_at: expect.any(Date),
+        },
+      });
+      expect(sorobanQueue.enqueue).toHaveBeenCalledWith(
+        "payment_123",
+        "tx_hash_123",
+        "12.5",
+      );
+      expect(emitSpy).toHaveBeenNthCalledWith(
+        1,
+        AppEvents.PAYMENT_CONFIRMED,
+        payment,
+      );
+      expect(emitSpy).toHaveBeenNthCalledWith(
+        2,
+        AppEvents.PAYMENT_UPDATED,
+        payment,
+      );
+    });
+
+    it("does not enqueue or emit events when the confirmation update fails", async () => {
+      const error = new Error("database unavailable");
+      mockPrisma.payment.update.mockRejectedValue(error);
+      const emitSpy = jest.spyOn(eventBus, "emit").mockReturnValue(true);
+
+      await expect(
+        PaymentService.verifyPayment(
+          "payment_123",
+          "tx_hash_123",
+          "GTEST123",
+          12.5,
+        ),
+      ).rejects.toBe(error);
+
+      expect(sorobanQueue.enqueue).not.toHaveBeenCalled();
+      expect(emitSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("updatePayment", () => {
+    it("updates a payment note only after matching the merchant", async () => {
+      const existingPayment = { id: "payment_123", merchantId: "merchant_1" };
+      const updatedPayment = { ...existingPayment, note: "Order 42" };
+      mockPrisma.payment.findFirst.mockResolvedValue(existingPayment);
+      mockPrisma.payment.update.mockResolvedValue(updatedPayment);
+      const emitSpy = jest.spyOn(eventBus, "emit").mockReturnValue(true);
+
+      const result = await PaymentService.updatePayment(
+        "payment_123",
+        "merchant_1",
+        { note: "Order 42" },
+      );
+
+      expect(result).toBe(updatedPayment);
+      expect(mockPrisma.payment.findFirst).toHaveBeenCalledWith({
+        where: { id: "payment_123", merchantId: "merchant_1" },
+      });
+      expect(mockPrisma.payment.update).toHaveBeenCalledWith({
+        where: { id: "payment_123" },
+        data: { note: "Order 42" },
+      });
+      expect(emitSpy).toHaveBeenCalledWith(AppEvents.PAYMENT_UPDATED, updatedPayment);
+    });
+
+    it("rejects when the payment is not owned by the merchant", async () => {
+      mockPrisma.payment.findFirst.mockResolvedValue(null);
+      const emitSpy = jest.spyOn(eventBus, "emit").mockReturnValue(true);
+
+      await expect(
+        PaymentService.updatePayment("payment_123", "merchant_1", {
+          note: "Order 42",
+        }),
+      ).rejects.toMatchObject({ status: 404, code: "PAYMENT_NOT_FOUND" });
+
+      expect(mockPrisma.payment.update).not.toHaveBeenCalled();
+      expect(emitSpy).not.toHaveBeenCalled();
     });
   });
 });

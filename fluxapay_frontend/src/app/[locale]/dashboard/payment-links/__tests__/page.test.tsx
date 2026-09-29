@@ -51,8 +51,10 @@ describe("payment links page smoke", () => {
     render(<PaymentLinksPage />);
 
     await waitFor(() => {
-      expect(screen.getByText("Product A")).toBeInTheDocument();
+      expect(screen.getAllByText("Product A")).toHaveLength(2);
     });
+    expect(screen.getByTestId("payment-links-mobile-list")).toBeInTheDocument();
+    expect(screen.getByRole("row")).toBeInTheDocument();
 
     vi.unstubAllGlobals();
   });
