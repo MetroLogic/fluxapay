@@ -71,6 +71,7 @@ class HorizonPollerService extends EventEmitter {
 
   /** Addresses currently being watched. Populated by consumers calling watchAddress(). */
   private watchedAddresses = new Set<string>();
+  private lastPagingTokenByAddress = new Map<string, string>();
 
   constructor() {
     super();
@@ -92,6 +93,7 @@ class HorizonPollerService extends EventEmitter {
   /** Remove an address from the watch list (e.g. payment confirmed/expired). */
   public unwatchAddress(address: string): void {
     this.watchedAddresses.delete(address);
+    this.lastPagingTokenByAddress.delete(address);
   }
 
   /** Acknowledge that a consumer processed an emitted event (for metrics). */
@@ -169,12 +171,24 @@ class HorizonPollerService extends EventEmitter {
     await Promise.allSettled(
       addresses.map(async (address) => {
         try {
-          const records = await this.server
+          let paymentsQuery = this.server
             .payments()
             .forAccount(address)
             .order("desc")
-            .limit(10)
-            .call();
+            .limit(10);
+
+          const lastPagingToken = this.lastPagingTokenByAddress.get(address);
+          if (lastPagingToken) {
+            paymentsQuery = paymentsQuery.cursor(lastPagingToken);
+          }
+
+          const records = await paymentsQuery.call();
+
+          // Results are descending, so the first record carries the newest token.
+          const newestPagingToken = records.records[0]?.paging_token;
+          if (newestPagingToken) {
+            this.lastPagingTokenByAddress.set(address, newestPagingToken);
+          }
 
           for (const record of records.records) {
             if (record.type !== "payment") continue;

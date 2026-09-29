@@ -80,7 +80,8 @@ fmt.Println(customer.Name, customer.StellarAddress)
 
 - `client.Payments` — Create, Get, GetStatus, List
 - `client.Settlements` — List, Get, Summary
-- `client.Customers` — List, Get
+- `client.Invoices` — Create, Get, List
+- `client.Refunds` — Create, Get, List
 - `client.Webhooks` — Verify, Parse
 
 ## License

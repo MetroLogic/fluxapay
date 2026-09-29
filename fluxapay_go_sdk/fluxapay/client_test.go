@@ -138,99 +138,150 @@ func TestSettlementsGet(t *testing.T) {
 	}
 }
 
-// ── Customers ─────────────────────────────────────────────────────────────────
+// ── Invoices ──────────────────────────────────────────────────────────────────
 
-var customerFixture = fluxapay.Customer{
-	ID:             "cus_123",
-	Email:          "buyer@example.com",
-	Name:           "Ada Lovelace",
-	Phone:          "+15550123",
-	StellarAddress: "GABC123",
-	CreatedAt:      "2024-01-01T00:00:00Z",
-}
-
-func TestCustomersList(t *testing.T) {
+func TestInvoicesCreate(t *testing.T) {
 	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet || r.URL.Path != "/api/customers" {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/v1/invoices" {
 			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
 		}
-		q := r.URL.Query()
-		if q.Get("search") != "ada" || q.Get("page") != "1" || q.Get("limit") != "10" {
-			t.Errorf("unexpected query: %v", q)
+		var body fluxapay.CreateInvoiceParams
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode request: %v", err)
 		}
-		writeJSON(w, 200, fluxapay.CustomerList{
-			Customers: []fluxapay.Customer{customerFixture},
-			Total:     1,
+		if body.CustomerEmail != "buyer@example.com" || body.Amount != 75 {
+			t.Errorf("unexpected create params: %+v", body)
+		}
+		writeJSON(w, 201, map[string]interface{}{"data": map[string]interface{}{
+			"id": "inv_123", "invoice_number": "INV-123", "amount": 75.0,
+			"currency": "USDC", "customer_email": "buyer@example.com", "status": "draft",
+		}})
+	})
+
+	invoice, err := client.Invoices.Create(context.Background(), fluxapay.CreateInvoiceParams{
+		Amount: 75, Currency: "USDC", CustomerEmail: "buyer@example.com",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if invoice.ID != "inv_123" || invoice.InvoiceNumber != "INV-123" {
+		t.Errorf("unexpected invoice: %+v", invoice)
+	}
+}
+
+func TestInvoicesGet(t *testing.T) {
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/api/v1/invoices/inv_123" {
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		writeJSON(w, 200, map[string]interface{}{"data": map[string]interface{}{
+			"id": "inv_123", "customer_email": "buyer@example.com", "status": "paid",
+		}})
+	})
+
+	invoice, err := client.Invoices.Get(context.Background(), "inv_123")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if invoice.ID != "inv_123" || invoice.Status != "paid" {
+		t.Errorf("unexpected invoice: %+v", invoice)
+	}
+}
+
+func TestInvoicesList(t *testing.T) {
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/invoices" || r.URL.Query().Get("search") != "buyer@example.com" {
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.String())
+		}
+		writeJSON(w, 200, map[string]interface{}{
+			"data": map[string]interface{}{"invoices": []interface{}{
+				map[string]interface{}{"id": "inv_123", "status": "draft"},
+			}},
+			"meta": map[string]interface{}{"page": 2, "limit": 5, "total": 1, "total_pages": 1},
 		})
 	})
 
-	list, err := client.Customers.List(context.Background(), fluxapay.ListCustomersParams{Page: 1, Limit: 10, Search: "ada"})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if list.Total != 1 {
-		t.Errorf("expected total 1, got %d", list.Total)
-	}
-	if len(list.Customers) != 1 || list.Customers[0].ID != "cus_123" {
-		t.Errorf("unexpected customers: %+v", list.Customers)
-	}
-}
-
-func TestCustomersListEmptyParams(t *testing.T) {
-	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		if q := r.URL.RawQuery; q != "" {
-			t.Errorf("expected no query string when params are empty, got %q", q)
-		}
-		writeJSON(w, 200, fluxapay.CustomerList{Customers: []fluxapay.Customer{}, Total: 0})
+	list, err := client.Invoices.List(context.Background(), fluxapay.ListInvoicesParams{
+		Page: 2, Limit: 5, Status: "draft", Search: "buyer@example.com",
 	})
-
-	list, err := client.Customers.List(context.Background(), fluxapay.ListCustomersParams{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if list.Total != 0 {
-		t.Errorf("expected total 0, got %d", list.Total)
+	if list.Total != 1 || list.Page != 2 || len(list.Invoices) != 1 || list.Invoices[0].ID != "inv_123" {
+		t.Errorf("unexpected invoice list: %+v", list)
 	}
 }
 
-func TestCustomersGet(t *testing.T) {
+// ── Refunds ───────────────────────────────────────────────────────────────────
+
+func TestRefundsCreate(t *testing.T) {
 	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet || r.URL.Path != "/api/customers/cus_123" {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/v1/refunds" {
 			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
 		}
-		writeJSON(w, 200, customerFixture)
+		var body fluxapay.CreateRefundParams
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		if body.PaymentID != "pay_123" || body.Amount != 25 {
+			t.Errorf("unexpected create params: %+v", body)
+		}
+		writeJSON(w, 201, map[string]interface{}{"data": map[string]interface{}{
+			"id": "ref_123", "paymentId": "pay_123", "amount": 25.0, "status": "pending",
+		}})
 	})
 
-	customer, err := client.Customers.Get(context.Background(), "cus_123")
+	refund, err := client.Refunds.Create(context.Background(), fluxapay.CreateRefundParams{
+		PaymentID: "pay_123", Amount: 25, Reason: "duplicate",
+	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if customer.ID != "cus_123" {
-		t.Errorf("expected cus_123, got %s", customer.ID)
-	}
-	if customer.Email != "buyer@example.com" {
-		t.Errorf("email mismatch")
-	}
-	if customer.Name != "Ada Lovelace" {
-		t.Errorf("name mismatch")
+	if refund.ID != "ref_123" || refund.PaymentID != "pay_123" {
+		t.Errorf("unexpected refund: %+v", refund)
 	}
 }
 
-func TestCustomersGetNotFound(t *testing.T) {
+func TestRefundsGet(t *testing.T) {
 	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 404, map[string]string{"message": "Customer not found", "code": "CUSTOMER_NOT_FOUND"})
+		if r.Method != http.MethodGet || r.URL.Path != "/api/v1/refunds/ref_123" {
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		writeJSON(w, 200, map[string]interface{}{"data": map[string]interface{}{
+			"id": "ref_123", "paymentId": "pay_123", "amount": 25.0, "status": "completed",
+		}})
 	})
 
-	_, err := client.Customers.Get(context.Background(), "cus_missing")
-	if err == nil {
-		t.Fatal("expected error, got nil")
+	refund, err := client.Refunds.Get(context.Background(), "ref_123")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
-	apiErr, ok := err.(*fluxapay.Error)
-	if !ok {
-		t.Fatalf("expected *fluxapay.Error, got %T", err)
+	if refund.ID != "ref_123" || refund.Status != "completed" {
+		t.Errorf("unexpected refund: %+v", refund)
 	}
-	if apiErr.StatusCode != 404 || apiErr.Code != "CUSTOMER_NOT_FOUND" {
-		t.Errorf("unexpected error: %+v", apiErr)
+}
+
+func TestRefundsList(t *testing.T) {
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/refunds" || r.URL.Query().Get("payment_id") != "pay_123" {
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.String())
+		}
+		writeJSON(w, 200, map[string]interface{}{"data": map[string]interface{}{
+			"refunds": []interface{}{
+				map[string]interface{}{"id": "ref_123", "paymentId": "pay_123", "status": "pending"},
+			},
+			"pagination": map[string]interface{}{"page": 1, "limit": 10, "total": 1, "total_pages": 1},
+		}})
+	})
+
+	list, err := client.Refunds.List(context.Background(), fluxapay.ListRefundsParams{
+		Page: 1, Limit: 10, Status: "pending", PaymentID: "pay_123",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if list.Total != 1 || len(list.Refunds) != 1 || list.Refunds[0].ID != "ref_123" {
+		t.Errorf("unexpected refund list: %+v", list)
 	}
 }
 
