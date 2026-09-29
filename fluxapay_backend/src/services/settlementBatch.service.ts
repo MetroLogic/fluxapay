@@ -535,6 +535,19 @@ async function settleMerchant(
     }
 
     if (totalUsdc <= 0) {
+        // Previously skipped silently with no trace, making it impossible to
+        // audit why a merchant was excluded from a batch run (closes #1073).
+        console.debug(
+            JSON.stringify({
+                level: "debug",
+                event: "settlement_merchant_skipped",
+                message: "Merchant skipped in settlement batch: zero unsettled balance",
+                merchantId,
+                businessName: merchant.business_name,
+                reason: "zero_balance",
+                timestamp: new Date().toISOString(),
+            }),
+        );
         return {
             merchantId,
             businessName: merchant.business_name,
