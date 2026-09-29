@@ -36,6 +36,11 @@ import { DepositAddressService } from "./depositAddress.service";
 import { getSweepCronInterval, logSweepConfigAtStartup } from "../config/sweep.config";
 import { acquireCronLock, releaseCronLock } from "../utils/redisLock.util";
 import { paymentSettlementService } from "./paymentSettlement.service";
+import { sendOpsAlert } from "./settlementAlert.service";
+import {
+  trackAddressPoolDepleted,
+  trackFunderBalanceLow,
+} from "../middleware/metrics.middleware";
 
 const SETTLEMENT_CRON_EXPR = process.env.SETTLEMENT_CRON ?? "0 0 * * *";
 const BILLING_CRON_EXPR = process.env.BILLING_CRON ?? "0 1 * * *";
@@ -62,6 +67,57 @@ let invoiceOverdueTask: ScheduledTask | null = null;
 let idempotencyCleanupTask: ScheduledTask | null = null;
 let addressPoolTask: ScheduledTask | null = null;
 let settlementRetryTask: ScheduledTask | null = null;
+
+const FUNDER_MONITOR_LOCK = "funder_monitor";
+const ADDRESS_POOL_ALERT_THRESHOLD = 0.85;
+
+export async function runFunderMonitorTask(): Promise<void> {
+  const acquired = await acquireCronLock(FUNDER_MONITOR_LOCK);
+  if (!acquired) {
+    console.warn("[Cron] Funder monitor lock held by another instance – skipping tick.");
+    return;
+  }
+
+  try {
+    const [balanceResult, poolResult] = await Promise.allSettled([
+      Promise.resolve().then(() => funderMonitorService.getBalanceStatus()),
+      Promise.resolve().then(() => funderMonitorService.getPoolDepthStatus()),
+    ]);
+
+    if (balanceResult.status === "rejected") {
+      console.error(`[Cron] ❌ Funder balance check failed: ${String(balanceResult.reason)}`);
+    } else if (!balanceResult.value.ok) {
+      const balance = balanceResult.value;
+      trackFunderBalanceLow();
+      console.warn(
+        `[Cron] ⚠️ FUNDER low balance: ${balance.xlmBalance} XLM. pub=${balance.publicKey}`,
+      );
+      await sendOpsAlert(
+        "FunderMonitor",
+        `Funder balance is low: ${balance.xlmBalance} XLM is below the ${balance.thresholdXlm} XLM threshold. Account: ${balance.publicKey}`,
+      );
+    }
+
+    if (poolResult.status === "rejected") {
+      console.error(`[Cron] ❌ Deposit address pool check failed: ${String(poolResult.reason)}`);
+    } else if (poolResult.value.utilizationPct > ADDRESS_POOL_ALERT_THRESHOLD) {
+      const pool = poolResult.value;
+      trackAddressPoolDepleted();
+      console.warn(
+        `[Cron] ⚠️ Deposit address pool utilization is high: ${(pool.utilizationPct * 100).toFixed(1)}% (${pool.availableCount}/${pool.totalCount} available).`,
+      );
+      await sendOpsAlert(
+        "FunderMonitor",
+        `Deposit address pool utilization is ${(pool.utilizationPct * 100).toFixed(1)}%, above the 85% threshold. ${pool.availableCount} of ${pool.totalCount} addresses remain available.`,
+      );
+    }
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`[Cron] ❌ Funder monitor failed: ${message}`);
+  } finally {
+    await releaseCronLock(FUNDER_MONITOR_LOCK);
+  }
+}
 
 /**
  * Starts all scheduled cron jobs.
@@ -138,14 +194,7 @@ export function startCronJobs(): void {
 
   // ── Funder Monitor ─────────────────────────────────────────────────────────
   funderMonitorTask = schedule(FUNDER_MONITOR_CRON_EXPR, async () => {
-    try {
-      const status = await funderMonitorService.getBalanceStatus();
-      if (!status.ok) {
-        console.warn(`[Cron] ⚠️ FUNDER low balance: ${status.xlmBalance} XLM. pub=${status.publicKey}`);
-      }
-    } catch (err: any) {
-      console.error(`[Cron] ❌ Funder monitor failed: ${err.message}`);
-    }
+    await runFunderMonitorTask();
   }, { timezone: "UTC" });
 
   // ── Checkout Expiry Reminder ───────────────────────────────────────────────

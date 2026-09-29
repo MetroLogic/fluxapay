@@ -136,6 +136,14 @@ export function trackSettlementBatchInitiated(merchantCount: number, currency: s
   metrics.histogram('settlement_batch_merchant_count', merchantCount);
 }
 
+export function trackFunderBalanceLow(): void {
+  getMetricsCollector().increment('funder_balance_low');
+}
+
+export function trackAddressPoolDepleted(): void {
+  getMetricsCollector().increment('address_pool_depleted');
+}
+
 export function trackDatabaseQuery(duration: number, table: string, operation: string): void {
   const metrics = getMetricsCollector();
   metrics.histogram('database_query_duration_ms', duration, { table, operation });
