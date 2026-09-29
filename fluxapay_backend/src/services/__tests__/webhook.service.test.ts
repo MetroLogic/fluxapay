@@ -220,6 +220,117 @@ describe("webhook.service", () => {
 
     expect(global.fetch).toHaveBeenCalledTimes(1);
   });
+
+  // Regression coverage for #1205 — duplicate webhook deliveries.
+  it("should not send the same event twice when two producers race concurrently", async () => {
+    const merchantId = "m-race";
+    const stableEventId = "evt_concurrent-race";
+
+    mockMerchant.findUnique.mockResolvedValue({
+      id: merchantId,
+      webhook_url: "https://example.com/hook",
+      webhook_secret: "secret-race",
+    });
+    mockMerchant.webhookLog.findUnique.mockResolvedValue(null);
+    mockMerchant.webhookLog.create.mockResolvedValue({ id: "log-race" });
+    mockMerchant.webhookLog.update.mockResolvedValue({});
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: () => Promise.resolve("OK"),
+    });
+
+    await Promise.all([
+      createAndDeliverWebhook(merchantId, "payment_completed", { amount: 50 }, undefined, undefined, stableEventId),
+      createAndDeliverWebhook(merchantId, "payment_completed", { amount: 50 }, undefined, undefined, stableEventId),
+    ]);
+
+    // Exactly one HTTP delivery, and exactly one log row created.
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(mockMerchant.webhookLog.create).toHaveBeenCalledTimes(1);
+  });
+
+  it("should not send when another worker already claimed the event_id (P2002)", async () => {
+    const merchantId = "m-p2002";
+    const stableEventId = "evt_unique_collision";
+
+    mockMerchant.findUnique.mockResolvedValue({
+      id: merchantId,
+      webhook_url: "https://example.com/hook",
+      webhook_secret: "secret-p2002",
+    });
+    // First read says "nothing here"; the INSERT then loses the race.
+    mockMerchant.webhookLog.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce({
+      id: "log-winner",
+      status: "pending",
+      event_id: stableEventId,
+    });
+    mockMerchant.webhookLog.create.mockRejectedValue({ code: "P2002" });
+
+    global.fetch = jest.fn();
+
+    const result = await createAndDeliverWebhook(
+      merchantId,
+      "payment_completed",
+      { amount: 50 },
+      undefined,
+      undefined,
+      stableEventId,
+    );
+
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(result).toEqual({ id: "log-winner", status: "pending", event_id: stableEventId });
+  });
+
+  it("should rethrow non-unique-constraint errors from the log insert", async () => {
+    const merchantId = "m-db-error";
+    const stableEventId = "evt_db_error";
+
+    mockMerchant.findUnique.mockResolvedValue({
+      id: merchantId,
+      webhook_url: "https://example.com/hook",
+      webhook_secret: "secret-db",
+    });
+    mockMerchant.webhookLog.findUnique.mockResolvedValue(null);
+    mockMerchant.webhookLog.create.mockRejectedValue({ code: "P2003", message: "fk violation" });
+
+    global.fetch = jest.fn();
+
+    await expect(
+      createAndDeliverWebhook(merchantId, "payment_completed", { amount: 50 }, undefined, undefined, stableEventId),
+    ).rejects.toEqual({ code: "P2003", message: "fk violation" });
+
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it("should allow independent deliveries when no stable event id is supplied", async () => {
+    const merchantId = "m-no-event-id";
+
+    mockMerchant.findUnique.mockResolvedValue({
+      id: merchantId,
+      webhook_url: "https://example.com/hook",
+      webhook_secret: "secret-anon",
+    });
+    mockMerchant.webhookLog.findUnique.mockResolvedValue(null);
+    mockMerchant.webhookLog.create.mockResolvedValue({ id: "log-anon" });
+    mockMerchant.webhookLog.update.mockResolvedValue({});
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: () => Promise.resolve("OK"),
+    });
+
+    // No eventId => random UUID per call => these are genuinely distinct events
+    // and must not be coalesced by the in-flight guard.
+    await Promise.all([
+      createAndDeliverWebhook(merchantId, "payment_completed", { amount: 50 }),
+      createAndDeliverWebhook(merchantId, "payment_completed", { amount: 50 }),
+    ]);
+
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe("WebhookDispatcher.sendPaymentWebhook", () => {

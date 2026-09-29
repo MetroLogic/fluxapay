@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { DOCS_URLS } from "@/lib/docs";
+import { CopyButton } from "@/components/CopyButton";
 
 type Lang = "curl" | "js" | "python";
 type Endpoint = "create" | "fetch" | "list" | "webhook";
@@ -427,7 +428,6 @@ function CreateApiKeyModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [createdSecret, setCreatedSecret] = useState<string | null>(null);
-  const [copied, setCopied] = useState<string | null>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
@@ -604,12 +604,10 @@ function CreateApiKeyModal({
                   outline: "none",
                 }}
               />
-              <button
-                onClick={() => {
-                  navigator.clipboard.writeText(createdSecret);
-                  setCopied("new-key-secret");
-                  setTimeout(() => setCopied(null), 2000);
-                }}
+              <CopyButton
+                value={createdSecret}
+                label="API key"
+                ariaLabel="Copy new API key"
                 style={{
                   padding: "0.625rem",
                   backgroundColor: "#16a34a",
@@ -618,9 +616,7 @@ function CreateApiKeyModal({
                   cursor: "pointer",
                   color: "#fff",
                 }}
-              >
-                {copied === "new-key-secret" ? <Check size={14} /> : <Copy size={14} />}
-              </button>
+              />
             </div>
 
             <button
@@ -746,9 +742,22 @@ export default function DevelopersPage() {
   const [activeTab, setActiveTab] = useState<Lang>("curl");
   const [activeEndpoint, setActiveEndpoint] = useState<Endpoint>("create");
   const [apiKey, setApiKey] = useState("Loading...");
+  /**
+   * The API secret is only ever returned in plaintext at creation/rotation time —
+   * every later read returns a masked value like `sk_live_****1234`. Copying a
+   * masked value is useless, so the last plaintext we were handed is kept so the
+   * copy button always puts a working key on the clipboard (#1206).
+   */
+  const [apiKeySecret, setApiKeySecret] = useState<string | null>(null);
   const [showCreateKeyModal, setShowCreateKeyModal] = useState(false);
   type ApiKeyEntry = { id: string; name: string; masked: string; createdAt: string };
   const [apiKeys, setApiKeys] = useState<ApiKeyEntry[]>([]);
+  /**
+   * Plaintext secrets keyed by API key id, populated when a key is created.
+   * Only the creating response ever contains the secret, so entries are absent
+   * for keys generated in an earlier session (#1206).
+   */
+  const [apiKeySecrets, setApiKeySecrets] = useState<Record<string, string>>({});
 
   // Rotation state
   const [rotatingApiKey, setRotatingApiKey] = useState(false);
@@ -788,10 +797,12 @@ export default function DevelopersPage() {
         return;
       }
       const res = result.data as Record<string, unknown>;
-      setNewApiKey(res.apiKey as string);
+      const rotated = res.apiKey as string;
+      setNewApiKey(rotated);
+      setApiKeySecret(rotated);
       setShowNewApiKey(false);
       // Update masked display with last four from new key
-      const lastFour = (res.apiKey as string).slice(-4);
+      const lastFour = rotated.slice(-4);
       setApiKey(`sk_live_****${lastFour}`);
     } catch (e: unknown) {
       setRotateError(e instanceof Error ? e.message : "Failed to rotate API key");
@@ -918,8 +929,9 @@ export default function DevelopersPage() {
             <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", marginBottom: "1rem" }}>
               <input
                 type={showApiKey ? "text" : "password"}
-                value={apiKey}
+                value={apiKeySecret ?? apiKey}
                 readOnly
+                aria-label="API key"
                 style={{
                   flex: 1,
                   backgroundColor: "#f3f4f6",
@@ -939,14 +951,28 @@ export default function DevelopersPage() {
               >
                 {showApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
-              <button
-                onClick={() => copyToClipboard(apiKey, "apikey")}
-                aria-label="Copy API key"
-                style={{ padding: "0.75rem", backgroundColor: "#fbbf24", border: "none", borderRadius: "0.5rem", cursor: "pointer" }}
-              >
-                {copied === "apikey" ? <Check size={16} /> : <Copy size={16} />}
-              </button>
+              <CopyButton
+                value={apiKeySecret ?? ""}
+                label="API key"
+                disabled={!apiKeySecret}
+                disabledMessage="Rotate your API key to get a new secret you can copy."
+                style={{
+                  padding: "0.75rem",
+                  backgroundColor: apiKeySecret ? "#fbbf24" : "#e5e7eb",
+                  border: "none",
+                  borderRadius: "0.5rem",
+                  cursor: apiKeySecret ? "pointer" : "not-allowed",
+                  color: apiKeySecret ? undefined : "#9ca3af",
+                }}
+              />
             </div>
+
+            {!apiKeySecret && (
+              <p style={{ fontSize: "0.75rem", color: "#6b7280", margin: "0 0 1rem" }}>
+                For your security we only show the last four characters. Rotate the key
+                below to reveal a full secret you can copy.
+              </p>
+            )}
 
             <div style={{ backgroundColor: "#fef3c7", border: "1px solid #fcd34d", borderRadius: "0.5rem", padding: "0.875rem", marginBottom: "1rem" }}>
               <p style={{ fontSize: "0.875rem", color: "#92400e", lineHeight: 1.5 }}>
@@ -1033,13 +1059,12 @@ export default function DevelopersPage() {
                   >
                     {showNewApiKey ? <EyeOff size={14} /> : <Eye size={14} />}
                   </button>
-                  <button
-                    onClick={() => copyToClipboard(newApiKey, "new-apikey")}
-                    aria-label="Copy new API key"
+                  <CopyButton
+                    value={newApiKey}
+                    label="API key"
+                    ariaLabel="Copy new API key"
                     style={{ padding: "0.625rem", backgroundColor: "#16a34a", border: "none", borderRadius: "0.375rem", cursor: "pointer", color: "#fff" }}
-                  >
-                    {copied === "new-apikey" ? <Check size={14} /> : <Copy size={14} />}
-                  </button>
+                  />
                 </div>
               </div>
             )}
@@ -1213,13 +1238,12 @@ export default function DevelopersPage() {
                   >
                     {showNewWebhookSecret ? <EyeOff size={14} /> : <Eye size={14} />}
                   </button>
-                  <button
-                    onClick={() => copyToClipboard(newWebhookSecret, "new-webhook")}
-                    aria-label="Copy new webhook secret"
+                  <CopyButton
+                    value={newWebhookSecret}
+                    label="webhook secret"
+                    ariaLabel="Copy new webhook secret"
                     style={{ padding: "0.625rem", backgroundColor: "#16a34a", border: "none", borderRadius: "0.375rem", cursor: "pointer", color: "#fff" }}
-                  >
-                    {copied === "new-webhook" ? <Check size={14} /> : <Copy size={14} />}
-                  </button>
+                  />
                 </div>
               </div>
             )}
@@ -1399,7 +1423,27 @@ export default function DevelopersPage() {
                   {apiKeys.map((key) => (
                     <tr key={key.id} style={{ borderBottom: "1px solid #e5e7eb" }}>
                       <td style={{ padding: "0.75rem", fontSize: "0.875rem", color: "#1a1a3e" }}>{key.name}</td>
-                      <td style={{ padding: "0.75rem", fontSize: "0.875rem", color: "#1a1a3e", fontFamily: "monospace" }}>{key.masked}</td>
+                      <td style={{ padding: "0.75rem", fontSize: "0.875rem", color: "#1a1a3e", fontFamily: "monospace" }}>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem" }}>
+                          {key.masked}
+                          <CopyButton
+                            value={apiKeySecrets[key.id] ?? ""}
+                            label={`${key.name} API key`}
+                            ariaLabel={`Copy ${key.name} API key`}
+                            disabled={!apiKeySecrets[key.id]}
+                            disabledMessage="This key's secret was never revealed in this session. Create or rotate it to copy a working key."
+                            style={{
+                              padding: "0.25rem",
+                              backgroundColor: apiKeySecrets[key.id] ? "#fbbf24" : "#e5e7eb",
+                              border: "none",
+                              borderRadius: "0.25rem",
+                              cursor: apiKeySecrets[key.id] ? "pointer" : "not-allowed",
+                              display: "inline-flex",
+                              alignItems: "center",
+                            }}
+                          />
+                        </span>
+                      </td>
                       <td style={{ padding: "0.75rem", fontSize: "0.875rem", color: "#6b7280" }}>{key.createdAt}</td>
                       <td style={{ padding: "0.75rem", textAlign: "center" }}>
                         <button
@@ -1458,6 +1502,10 @@ export default function DevelopersPage() {
         existingNames={new Set(apiKeys.map((k) => k.name.toLowerCase()))}
         onCreateSuccess={(key) => {
           setApiKeys([...apiKeys, { ...key, createdAt: new Date().toLocaleDateString() }]);
+          // Hold on to the only plaintext copy of the secret so the row's copy
+          // button can hand the developer a working key (#1206).
+          setApiKeySecrets((prev) => ({ ...prev, [key.id]: key.secret }));
+          setApiKeySecret(key.secret);
           setShowCreateKeyModal(false);
         }}
       />

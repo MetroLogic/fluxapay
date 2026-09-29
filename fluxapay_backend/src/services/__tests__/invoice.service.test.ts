@@ -62,6 +62,10 @@ describe("markInvoicePaidForPaymentService", () => {
         payment_tx_hash: "tx_123",
       },
       "pay_123",
+      undefined,
+      // Stable id shared with updateInvoiceStatusService so the two emitters
+      // for the same "paid" transition cannot double-notify (#1205).
+      "inv_123:paid",
     );
   });
 

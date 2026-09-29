@@ -165,6 +165,11 @@ export async function createSubscription(params: {
         current_period_end: periodEnd.toISOString(),
         next_billing_date: nextBilling.toISOString(),
       },
+      undefined,
+      undefined,
+      // Stable id per subscription: re-subscribing the same subscription must
+      // not emit a second subscription.created (#1205).
+      `${sub.id}:created`,
     ).catch((err) =>
       console.error("[Plan] subscription_created webhook failed:", err),
     );
@@ -307,6 +312,11 @@ export async function processBillingCycle(): Promise<ProcessBillingCycleResult> 
             next_billing_date: nextBilling.toISOString(),
             billing_cycle: subscription.billing_cycle,
           },
+          undefined,
+          undefined,
+          // Stable id per subscription per billing period, so re-running the
+          // billing cron for the same period does not re-notify (#1205).
+          `${subscription.id}:renewed:${periodStart.toISOString()}`,
         );
       }
       renewed++;

@@ -445,6 +445,12 @@ async function settleSinglePayment(
                             retry_count: newRetryCount,
                             failed_at: now.toISOString(),
                         },
+                        paymentId,
+                        undefined,
+                        // Stable id: a permanently failed payment can be re-settled
+                        // by the retry cron before the alert is drained, which used
+                        // to emit a fresh settlement.failed each time (#1205).
+                        `${paymentId}:settlement-failed`,
                     ).catch(() => { });
                 }
 
@@ -604,6 +610,12 @@ async function settleMerchant(
                 net_amount: totalNet,
                 settled_at: now.toISOString(),
             },
+            undefined,
+            undefined,
+            // Stable id per merchant per settlement day. Re-running the batch
+            // (cron restart, manual replay, retry pickup) must not re-notify
+            // about the same day's settlement (#1205).
+            `${merchantId}:settlement-completed:${now.toISOString().slice(0, 10)}`,
         ).catch((err: unknown) => {
             console.error(
                 `[SettlementBatch] Webhook delivery failed for merchant ${merchantId}:`,

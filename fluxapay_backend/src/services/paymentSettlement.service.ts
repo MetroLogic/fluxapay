@@ -286,7 +286,17 @@ export class PaymentSettlementService {
           settled_at: new Date().toISOString(),
         };
 
-        createAndDeliverWebhook(merchantId, "payment_settled" as any, webhookPayload).catch((err) => {
+        // Stable id: `settlePayment` is re-driven by the settlement retry cron
+        // and on boot, so without a deterministic id every retry re-sent
+        // payment.settled to the merchant (#1205).
+        createAndDeliverWebhook(
+          merchantId,
+          "payment_settled" as any,
+          webhookPayload,
+          paymentId,
+          undefined,
+          `${paymentId}:settled`,
+        ).catch((err) => {
           console.error(`[PaymentSettlement] Webhook delivery failed for payment ${paymentId}:`, err);
         });
       }

@@ -344,7 +344,11 @@ export async function updateRefundStatusService(params: {
         failed_reason: updated.failed_reason,
         occurred_at: new Date().toISOString(),
       },
-      updated.paymentId
+      updated.paymentId,
+      undefined,
+      // Stable id per refund+outcome, so a retried status update cannot notify
+      // the merchant twice for the same terminal state (#1205).
+      `${updated.id}:${eventType}`,
     );
   }
 

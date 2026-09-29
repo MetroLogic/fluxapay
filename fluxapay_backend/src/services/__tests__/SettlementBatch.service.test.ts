@@ -528,6 +528,10 @@ describe("settlementBatch.service", () => {
         "merchant_1",
         "settlement_failed",
         expect.objectContaining({ payment_ids: ["payment_1"] }),
+        "payment_1",
+        undefined,
+        // Stable id so a re-settled payment does not alert again (#1205).
+        "payment_1:settlement-failed",
       );
     });
 

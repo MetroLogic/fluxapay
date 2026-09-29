@@ -469,7 +469,12 @@ async function updatePaymentStatus(verification: PaymentVerification): Promise<v
           status: verification.status,
           transaction_hash: verification.transactionHash,
           payer_address: verification.payer,
-        }
+        },
+        undefined,
+        // Stable id: the oracle re-verifies the same payment on every tick and on
+        // manual verify, so an event id derived from the payment guarantees the
+        // confirmation is delivered exactly once (#1205).
+        `${updatedPayment.id}:confirmed`,
       );
     } catch (webhookError: any) {
       logger.error("Webhook delivery failed", {
@@ -498,6 +503,10 @@ async function updatePaymentStatus(verification: PaymentVerification): Promise<v
           transaction_hashes: verification.matchedPayments.map((tx) => tx.transactionHash),
           currency: updatedPayment.currency,
         },
+        undefined,
+        // Stable id: keyed on the payment so repeated ticks that rediscover the
+        // same on-chain duplicates do not re-notify the merchant (#1205).
+        `${updatedPayment.id}:duplicate`,
       );
     } catch (webhookError: any) {
       logger.error("Duplicate payment webhook delivery failed", {
