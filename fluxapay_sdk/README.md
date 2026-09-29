@@ -89,6 +89,69 @@ const result = await client.payments.list({
 
 **Canonical Route:** `GET /api/payments`
 
+### Customers
+
+#### Create Customer
+
+```typescript
+const customer = await client.customers.create({
+  email: 'customer@example.com',
+  name: 'Customer Name',
+  phone: '+15555550123',
+  stellar_address: 'G...',
+  metadata: { source: 'checkout' },
+});
+```
+
+**Canonical Route:** `POST /api/v1/customers`
+
+#### Get, Update, Delete, and List Customers
+
+```typescript
+const customer = await client.customers.get(customerId);
+await client.customers.update(customerId, { phone: '+15555550123' });
+await client.customers.delete(customerId);
+
+const result = await client.customers.list({
+  page: 1,
+  limit: 20,
+  search: 'customer@example.com',
+  created_after: '2026-01-01T00:00:00.000Z',
+  created_before: '2026-12-31T23:59:59.000Z',
+});
+```
+
+**Canonical Routes:** `GET`, `PATCH`, and `DELETE /api/v1/customers/:id`; `GET /api/v1/customers`
+
+### Refunds
+
+#### Create Refund
+
+```typescript
+const refund = await client.refunds.create({
+  payment_id: 'pay_123',
+  amount: 25.00,
+  reason: 'Duplicate payment',
+  idempotency_key: 'refund-order-123',
+});
+```
+
+**Canonical Route:** `POST /api/v1/refunds`
+
+#### Get and List Refunds
+
+```typescript
+const refund = await client.refunds.get(refundId);
+const result = await client.refunds.list({
+  page: 1,
+  limit: 10,
+  status: 'completed',
+  payment_id: 'pay_123',
+});
+```
+
+**Canonical Routes:** `GET /api/v1/refunds/:refund_id`; `GET /api/v1/refunds`
+
 ### Settlements
 
 #### List Settlements

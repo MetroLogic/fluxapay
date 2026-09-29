@@ -329,6 +329,161 @@ describe("Auth Service", () => {
         else process.env.AUTH_IP_LOCKOUT_WINDOW_MINUTES = originalWindow;
       }
     });
+
+    it("should enforce IP lockout independently of account lockout (different IP, same account)", async () => {
+      // This test verifies that IP lockout and account lockout are independent:
+      // An IP that hasn't exceeded the threshold should still be able to attempt
+      // login even if the account itself is locked.
+      const targetEmail = "test-auth-account-locked@example.com";
+      const lockedIp = "203.0.113.14";
+      const cleanIp = "203.0.113.15";
+
+      const hashedPassword = await bcrypt.hash("TestPassword123!", 12);
+      await prisma.merchant.create({
+        data: {
+          business_name: "Test Auth Merchant",
+          email: targetEmail,
+          phone_number: uniquePhone(),
+          country: "US",
+          settlement_currency: "USD",
+          password: hashedPassword,
+          webhook_secret: "test-secret",
+          status: "active",
+        },
+      });
+
+      // Lock the account by creating 10 failed attempts (exceeds per-account threshold)
+      for (let i = 0; i < 10; i++) {
+        await prisma.loginAttempt.create({
+          data: {
+            merchantId: "unknown",
+            email: targetEmail,
+            ip_address: lockedIp,
+            success: false,
+          },
+        });
+      }
+
+      // Attempt from the SAME account but DIFFERENT IP should still result in
+      // account lockout (not IP lockout), proving they're independent
+      await expect(
+        loginWithEmailPassword({
+          email: targetEmail,
+          password: "TestPassword123!",
+          ipAddress: cleanIp,
+        })
+      ).rejects.toMatchObject({
+        status: 429,
+        message: expect.stringContaining("Account locked"),
+      });
+
+      // Verify no IP lockout was logged for the clean IP
+      const rateLimitLogs = await prisma.rateLimitLog.findMany({
+        where: { ip_address: cleanIp, limit_type: "login_ip_lockout" },
+      });
+      expect(rateLimitLogs.length).toBe(0);
+    });
+
+    it("should enforce IP lockout independently of account lockout (different account, same IP)", async () => {
+      // This test verifies the opposite direction: an IP that's locked should
+      // block login attempts even for accounts that haven't been locked.
+      const lockedIp = "203.0.113.16";
+      const targetEmail = "test-auth-clean-account@example.com";
+
+      const hashedPassword = await bcrypt.hash("TestPassword123!", 12);
+      await prisma.merchant.create({
+        data: {
+          business_name: "Test Auth Merchant",
+          email: targetEmail,
+          phone_number: uniquePhone(),
+          country: "US",
+          settlement_currency: "USD",
+          password: hashedPassword,
+          webhook_secret: "test-secret",
+          status: "active",
+        },
+      });
+
+      // Lock the IP by creating 20 failed attempts across different emails
+      for (let i = 0; i < 20; i++) {
+        await prisma.loginAttempt.create({
+          data: {
+            merchantId: "unknown",
+            email: `ip-lock-target-${i}@example.com`,
+            ip_address: lockedIp,
+            success: false,
+          },
+        });
+      }
+
+      // Attempt from a DIFFERENT account (not locked) but SAME IP should
+      // result in IP lockout, proving IP lockout is independent
+      await expect(
+        loginWithEmailPassword({
+          email: targetEmail,
+          password: "TestPassword123!",
+          ipAddress: lockedIp,
+        })
+      ).rejects.toMatchObject({
+        status: 429,
+        code: ErrorCode.RATE_LIMIT_EXCEEDED,
+        message: expect.stringContaining("Too many failed login attempts from this IP"),
+      });
+
+      // Verify IP lockout event was logged
+      const rateLimitLogs = await prisma.rateLimitLog.findMany({
+        where: { ip_address: lockedIp, limit_type: "login_ip_lockout" },
+      });
+      expect(rateLimitLogs.length).toBeGreaterThan(0);
+      expect(rateLimitLogs[0].retry_after_seconds).toBeGreaterThan(0);
+    });
+
+    it("should call logIpLockoutEvent when IP lockout is triggered", async () => {
+      const attackerIp = "203.0.113.17";
+
+      // Create 20 failed attempts to trigger IP lockout
+      for (let i = 0; i < 20; i++) {
+        await prisma.loginAttempt.create({
+          data: {
+            merchantId: "unknown",
+            email: `log-event-target-${i}@example.com`,
+            ip_address: attackerIp,
+            success: false,
+          },
+        });
+      }
+
+      // Clear any existing rate limit logs for this IP
+      await prisma.rateLimitLog.deleteMany({
+        where: { ip_address: attackerIp, limit_type: "login_ip_lockout" },
+      });
+
+      // Trigger IP lockout
+      await expect(
+        loginWithEmailPassword({
+          email: "log-event-trigger@example.com",
+          password: "whatever",
+          ipAddress: attackerIp,
+        })
+      ).rejects.toMatchObject({
+        status: 429,
+        code: ErrorCode.RATE_LIMIT_EXCEEDED,
+      });
+
+      // Verify logIpLockoutEvent was called by checking the database
+      const rateLimitLogs = await prisma.rateLimitLog.findMany({
+        where: { ip_address: attackerIp, limit_type: "login_ip_lockout" },
+      });
+
+      expect(rateLimitLogs.length).toBeGreaterThan(0);
+      expect(rateLimitLogs[0]).toMatchObject({
+        ip_address: attackerIp,
+        endpoint: "auth.loginWithEmailPassword",
+        limit_type: "login_ip_lockout",
+        retry_after_seconds: expect.any(Number),
+      });
+      expect(rateLimitLogs[0].timestamp).toBeInstanceOf(Date);
+    });
   });
 
   describe("refreshAccessToken", () => {

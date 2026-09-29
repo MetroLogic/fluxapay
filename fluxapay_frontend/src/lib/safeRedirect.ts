@@ -11,6 +11,19 @@ function hasControlChars(value: string): boolean {
 }
 
 /**
+ * Script-executing / data URI schemes that must never be treated as a
+ * redirect target, regardless of the leading-slash requirement below —
+ * some older/non-standard URL parsers normalize a scheme even when it's
+ * preceded by characters a strict parser wouldn't expect.
+ */
+const DANGEROUS_URI_SCHEMES = ["javascript:", "data:", "vbscript:"];
+
+function hasDangerousScheme(value: string): boolean {
+  const lower = value.toLowerCase();
+  return DANGEROUS_URI_SCHEMES.some((scheme) => lower.startsWith(scheme));
+}
+
+/**
  * Resolve a post-login `?redirect=` value to a safe same-origin path.
  *
  * The value reaches us straight from the query string, so an attacker controls
@@ -31,6 +44,7 @@ export function safeRedirectPath(
   if (!raw) return DEFAULT_REDIRECT;
 
   const candidate = raw.trim();
+  if (hasDangerousScheme(candidate)) return DEFAULT_REDIRECT;
   if (!candidate.startsWith("/")) return DEFAULT_REDIRECT;
   if (candidate.startsWith("//")) return DEFAULT_REDIRECT;
   if (candidate.includes("\\")) return DEFAULT_REDIRECT;

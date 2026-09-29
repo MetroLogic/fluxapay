@@ -8,6 +8,11 @@ describe('Environment Configuration Validation', () => {
         jest.resetModules();
         process.env = { ...originalEnv };
         resetEnvConfig();
+        // ADMIN_JWT_SECRET is required (see 'Required Variables' below for the
+        // dedicated missing-value test); default it here so the many
+        // unrelated tests in this file that don't care about it don't all
+        // need updating individually.
+        process.env.ADMIN_JWT_SECRET = 'test-admin-secret';
     });
 
     afterAll(() => {
@@ -65,6 +70,18 @@ describe('Environment Configuration Validation', () => {
             process.env.JWT_SECRET = 'test-secret';
             process.env.FUNDER_SECRET_KEY = 'test-key';
             process.env.USDC_ISSUER_PUBLIC_KEY = 'test-issuer';
+            process.env.KMS_ENCRYPTED_MASTER_SEED = 'encrypted-seed';
+
+            expect(() => validateEnv()).toThrow(EnvValidationError);
+        });
+
+        it('should fail when ADMIN_JWT_SECRET is missing (no insecure fallback allowed)', () => {
+            delete process.env.ADMIN_JWT_SECRET;
+            process.env.DATABASE_URL = 'postgresql://localhost/test';
+            process.env.JWT_SECRET = 'test-secret';
+            process.env.FUNDER_SECRET_KEY = 'test-key';
+            process.env.USDC_ISSUER_PUBLIC_KEY = 'test-issuer';
+            process.env.MASTER_VAULT_SECRET_KEY = 'test-vault';
             process.env.KMS_ENCRYPTED_MASTER_SEED = 'encrypted-seed';
 
             expect(() => validateEnv()).toThrow(EnvValidationError);

@@ -29,6 +29,7 @@ services:
       PORT: 3000
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-fluxapay_staging}?schema=public
       JWT_SECRET: ${JWT_SECRET}
+      ADMIN_JWT_SECRET: ${ADMIN_JWT_SECRET}
       WEBHOOK_SECRET: ${WEBHOOK_SECRET}
       KMS_PROVIDER: ${KMS_PROVIDER:-local}
       KMS_ENCRYPTION_PASSPHRASE: ${KMS_ENCRYPTION_PASSPHRASE}

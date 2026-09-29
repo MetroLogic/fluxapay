@@ -26,6 +26,10 @@ const envSchema = z.object({
 
     // JWT (CRITICAL)
     JWT_SECRET: z.string().min(1, 'JWT_SECRET is required'),
+    // Admin JWT (CRITICAL) — deliberately separate from JWT_SECRET so a leak
+    // of one token type's signing secret can't be used to forge the other.
+    // Must never silently fall back to JWT_SECRET or any hardcoded default.
+    ADMIN_JWT_SECRET: z.string().min(1, 'ADMIN_JWT_SECRET is required'),
 
     // Cloudinary (optional but recommended for KYC)
     CLOUDINARY_CLOUD_NAME: z.string().optional(),

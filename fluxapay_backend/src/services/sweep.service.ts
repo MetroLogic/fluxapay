@@ -16,6 +16,7 @@ import {
   updateSweepCompletion,
 } from "./audit.service";
 import { getLogger, getMetricsCollector } from "../utils/logger";
+import { sendOpsAlert } from "./settlementAlert.service";
 import { sweepQueue } from "./sweepQueue.service";
 import {
   getMaxSweepRetryAttempts,
@@ -166,6 +167,24 @@ export class SweepService {
     }));
   }
 
+  /**
+   * Checks whether an account has an established trustline for the sweep's
+   * USDC asset. Mirrors StellarService.checkTrustline, but implemented
+   * locally so SweepService doesn't take on StellarService's hard
+   * `FUNDER_SECRET_KEY` / HD-wallet initialization requirements just to
+   * check a balance line with the Horizon client it already has.
+   */
+  private async checkUsdcTrustline(publicKey: string): Promise<boolean> {
+    const account = await this.server.loadAccount(publicKey);
+    return account.balances.some(
+      (balance) =>
+        "asset_code" in balance &&
+        balance.asset_code === this.usdcAsset.code &&
+        "asset_issuer" in balance &&
+        balance.asset_issuer === this.usdcAsset.issuer,
+    );
+  }
+
   private async submitUsdcSweepTx(params: {
     sourceSecret: string;
     destination: string;
@@ -173,6 +192,36 @@ export class SweepService {
     mergeDestination?: string;
   }): Promise<string> {
     let lastError: unknown;
+    const operationCount = params.mergeDestination ? 3 : 1;
+
+    const sourceKeypair = Keypair.fromSecret(params.sourceSecret);
+
+    // Fail fast on a missing trustline rather than burning retry attempts on
+    // a condition that submission retries can never fix (closes #1072).
+    let hasTrustline: boolean;
+    try {
+      hasTrustline = await this.checkUsdcTrustline(sourceKeypair.publicKey());
+    } catch (checkErr) {
+      this.logger.warn(
+        "Failed to check USDC trustline before sweep submission; proceeding to submit and letting Horizon validate",
+        {
+          publicKey: sourceKeypair.publicKey(),
+          error: checkErr instanceof Error ? checkErr.message : String(checkErr),
+        },
+      );
+      hasTrustline = true;
+    }
+
+    if (!hasTrustline) {
+      const message = `NO_USDC_TRUSTLINE: source account ${sourceKeypair.publicKey()} has no USDC trustline established`;
+      this.logger.error(message, { publicKey: sourceKeypair.publicKey() });
+      sendOpsAlert("SweepMissingTrustline", message).catch((alertErr) => {
+        this.logger.error("Failed to send ops alert for missing USDC trustline", {
+          error: alertErr instanceof Error ? alertErr.message : String(alertErr),
+        });
+      });
+      throw new Error(message);
+    }
 
     for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
       let p90Fee = this.baseFee;
@@ -193,10 +242,13 @@ export class SweepService {
         });
       }
 
-      const attemptFee = this.calculateFeeForAttempt(attempt, p90Fee);
+      const attemptFee = this.calculateFeeForAttempt(
+        attempt,
+        p90Fee,
+        operationCount,
+      );
 
       try {
-        const sourceKeypair = Keypair.fromSecret(params.sourceSecret);
         const sourceAccount = await this.server.loadAccount(
           sourceKeypair.publicKey(),
         );
@@ -271,10 +323,14 @@ export class SweepService {
       : new Error("Failed to submit sweep transaction");
   }
 
-  public calculateFeeForAttempt(attempt: number, p90BaseFee?: number): string {
+  public calculateFeeForAttempt(
+    attempt: number,
+    p90BaseFee?: number,
+    operationCount = 1,
+  ): string {
     const base = Math.max(this.baseFee, p90BaseFee ?? this.baseFee);
     const bump = Math.pow(this.feeBumpMultiplier, Math.max(0, attempt - 1));
-    const candidateFee = Math.floor(base * bump);
+    const candidateFee = Math.floor(base * bump * operationCount);
     const maxFee = this.getMaxFee();
 
     if (candidateFee >= maxFee) {

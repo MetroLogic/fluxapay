@@ -20,6 +20,7 @@ import {
   logWebhooksDeactivated,
   logChargesCancelled,
 } from "./audit.service";
+import { invalidateAllMerchantTokens } from "./auth.service";
 import { deleteFromCloudinary } from "./cloudinary.service";
 import { getLogger } from "../utils/logger";
 
@@ -108,6 +109,18 @@ export async function executeDeletion(
       );
     }
   }
+
+  // Revoke every outstanding refresh token *before* committing the
+  // deletion, so a merchant whose account is being deleted can't obtain a
+  // new access token via /auth/refresh once this call returns (#1063).
+  // Note: an access token (JWT) already issued and still within its short
+  // validity window (15 minutes) is not retroactively invalidated by this —
+  // authenticateToken verifies JWTs statelessly (signature + expiry only)
+  // and does not re-check merchant status against the DB per request. That
+  // is a separate, broader change (would affect every authenticated
+  // request) and is out of scope for this fix; this closes the session
+  // (refresh-token) persistence gap the issue describes.
+  await invalidateAllMerchantTokens(merchantId);
 
   await prisma.$transaction(async (tx) => {
     // 1. Revoke all active API keys

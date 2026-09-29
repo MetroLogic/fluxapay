@@ -138,6 +138,102 @@ func TestSettlementsGet(t *testing.T) {
 	}
 }
 
+// ── Customers ─────────────────────────────────────────────────────────────────
+
+var customerFixture = fluxapay.Customer{
+	ID:             "cus_123",
+	Email:          "buyer@example.com",
+	Name:           "Ada Lovelace",
+	Phone:          "+15550123",
+	StellarAddress: "GABC123",
+	CreatedAt:      "2024-01-01T00:00:00Z",
+}
+
+func TestCustomersList(t *testing.T) {
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/api/customers" {
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		q := r.URL.Query()
+		if q.Get("search") != "ada" || q.Get("page") != "1" || q.Get("limit") != "10" {
+			t.Errorf("unexpected query: %v", q)
+		}
+		writeJSON(w, 200, fluxapay.CustomerList{
+			Customers: []fluxapay.Customer{customerFixture},
+			Total:     1,
+		})
+	})
+
+	list, err := client.Customers.List(context.Background(), fluxapay.ListCustomersParams{Page: 1, Limit: 10, Search: "ada"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if list.Total != 1 {
+		t.Errorf("expected total 1, got %d", list.Total)
+	}
+	if len(list.Customers) != 1 || list.Customers[0].ID != "cus_123" {
+		t.Errorf("unexpected customers: %+v", list.Customers)
+	}
+}
+
+func TestCustomersListEmptyParams(t *testing.T) {
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if q := r.URL.RawQuery; q != "" {
+			t.Errorf("expected no query string when params are empty, got %q", q)
+		}
+		writeJSON(w, 200, fluxapay.CustomerList{Customers: []fluxapay.Customer{}, Total: 0})
+	})
+
+	list, err := client.Customers.List(context.Background(), fluxapay.ListCustomersParams{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if list.Total != 0 {
+		t.Errorf("expected total 0, got %d", list.Total)
+	}
+}
+
+func TestCustomersGet(t *testing.T) {
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/api/customers/cus_123" {
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		writeJSON(w, 200, customerFixture)
+	})
+
+	customer, err := client.Customers.Get(context.Background(), "cus_123")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if customer.ID != "cus_123" {
+		t.Errorf("expected cus_123, got %s", customer.ID)
+	}
+	if customer.Email != "buyer@example.com" {
+		t.Errorf("email mismatch")
+	}
+	if customer.Name != "Ada Lovelace" {
+		t.Errorf("name mismatch")
+	}
+}
+
+func TestCustomersGetNotFound(t *testing.T) {
+	_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 404, map[string]string{"message": "Customer not found", "code": "CUSTOMER_NOT_FOUND"})
+	})
+
+	_, err := client.Customers.Get(context.Background(), "cus_missing")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	apiErr, ok := err.(*fluxapay.Error)
+	if !ok {
+		t.Fatalf("expected *fluxapay.Error, got %T", err)
+	}
+	if apiErr.StatusCode != 404 || apiErr.Code != "CUSTOMER_NOT_FOUND" {
+		t.Errorf("unexpected error: %+v", apiErr)
+	}
+}
+
 // ── Error handling ────────────────────────────────────────────────────────────
 
 func TestAPIErrorPropagation(t *testing.T) {

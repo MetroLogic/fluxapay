@@ -19,7 +19,17 @@ export interface MerchantRegistryJob {
   maxAttempts: number;
 }
 
-const MAX_REGISTRY_ATTEMPTS = 30; // ~5 minutes with exponential backoff
+function positiveInteger(value: string | undefined, fallback: number): number {
+  const parsed = Number.parseInt(value ?? "", 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+// Caps how many times a Soroban registration job is polled/retried before it
+// is moved to the manual-intervention (dead-letter) queue (closes #1081).
+const MAX_REGISTRY_ATTEMPTS = positiveInteger(
+  process.env.MAX_REGISTRY_RETRY_ATTEMPTS,
+  5,
+);
 const BASE_DELAY_MS = 1000;
 
 
