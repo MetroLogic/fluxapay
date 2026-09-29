@@ -4,6 +4,9 @@ import {
   loginMerchant,
   verifyOtp,
   resendOtp,
+  forgotPassword,
+  validateResetToken,
+  resetPassword,
   getLoggedInMerchant,
   updateMerchantProfile,
   updateMerchantWebhook,
@@ -20,7 +23,7 @@ import {
   getNotificationPreferencesController,
   updateNotificationPreferencesController,
 } from "../controllers/merchant.controller";
-import { validate } from "../middleware/validation.middleware";
+import { validate, validateQuery } from "../middleware/validation.middleware";
 import * as merchantSchema from "../schemas/merchant.schema";
 import { authenticateApiKey } from "../middleware/apiKeyAuth.middleware";
 import { idempotencyMiddleware } from "../middleware/idempotency.middleware";
@@ -158,6 +161,99 @@ router.post("/verify-otp", idempotencyMiddleware, authRateLimit(), validate(merc
  *         description: Merchant not found
  */
 router.post("/resend-otp", idempotencyMiddleware, authRateLimit(), validate(merchantSchema.resendOtpSchema), resendOtp);
+
+/**
+ * @swagger
+ * /api/v1/merchants/forgot-password:
+ *   post:
+ *     summary: Request a password reset link
+ *     tags: [Merchants]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *     responses:
+ *       200:
+ *         description: Generic acknowledgement (never reveals whether the email is registered)
+ */
+router.post(
+  "/forgot-password",
+  authRateLimit(),
+  validate(merchantSchema.forgotPasswordSchema),
+  forgotPassword,
+);
+
+/**
+ * @swagger
+ * /api/v1/merchants/validate-reset-token:
+ *   get:
+ *     summary: Check whether a password reset token is currently valid (does not consume it)
+ *     tags: [Merchants]
+ *     parameters:
+ *       - in: query
+ *         name: token
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Token validity
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 valid:
+ *                   type: boolean
+ */
+router.get(
+  "/validate-reset-token",
+  authRateLimit(),
+  validateQuery(merchantSchema.validateResetTokenQuerySchema),
+  validateResetToken,
+);
+
+/**
+ * @swagger
+ * /api/v1/merchants/reset-password:
+ *   post:
+ *     summary: Reset password using a single-use reset token
+ *     tags: [Merchants]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - token
+ *               - password
+ *             properties:
+ *               token:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Password reset successful
+ *       400:
+ *         description: Invalid, expired, or already-used token
+ */
+router.post(
+  "/reset-password",
+  idempotencyMiddleware,
+  authRateLimit(),
+  validate(merchantSchema.resetPasswordSchema),
+  resetPassword,
+);
 
 /**
  * @swagger

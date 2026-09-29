@@ -643,13 +643,25 @@ export async function logApiKeyRotation(params: {
 }
 
 /**
- * Log webhook secret rotation
+ * Log webhook secret rotation.
+ *
+ * The raw secret value (previous or new) must never be written to any log
+ * sink. Only a redacted fingerprint of the *previous* secret — its last 4
+ * characters — is recorded, for forensic/audit purposes (e.g. confirming
+ * whether a known-compromised value was the one just rotated out).
+ *
+ * Note: the field is deliberately named `previous_last_four` rather than
+ * something containing "secret" — sanitizeObject() below redacts *any*
+ * field whose name contains a sensitive substring (including "secret"),
+ * which would blank out this already-redacted, safe-to-store fingerprint.
  */
 export async function logWebhookSecretRotation(params: {
   merchantId: string;
+  previousSecretLastFour?: string;
 }): Promise<any | null> {
   const details = {
     merchant_id: params.merchantId,
+    previous_last_four: params.previousSecretLastFour ?? null,
     rotated_at: new Date().toISOString(),
   };
 

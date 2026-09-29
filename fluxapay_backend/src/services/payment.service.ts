@@ -126,6 +126,7 @@ export class PaymentService {
     cancel_url,
     customerId,
     expires_in_seconds,
+    isTestMode,
   }: {
     amount: number;
     currency: string;
@@ -138,6 +139,7 @@ export class PaymentService {
     cancel_url?: string;
     customerId?: string;
     expires_in_seconds?: number;
+    isTestMode?: boolean;
   }) {
     const paymentId = crypto.randomUUID();
     const planMax = await this.getMerchantPlanMaxExpirySeconds(merchantId);
@@ -185,6 +187,7 @@ export class PaymentService {
         success_url: success_url ?? null,
         cancel_url: cancel_url ?? null,
         ...(customerId ? { customerId } : {}),
+        is_test_mode: isTestMode ?? false,
         stellar_address: null,
         payment_index: null,
         derivation_path: null,

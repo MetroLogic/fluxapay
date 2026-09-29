@@ -48,6 +48,34 @@ if !valid {
 event, _ := client.Webhooks.Parse(rawBody)
 ```
 
+## Customers
+
+List and retrieve customer records for the authenticated merchant.
+
+```go
+// List customers, filtering by email search.
+page := 1
+list, err := client.Customers.List(context.Background(), fluxapay.ListCustomersParams{
+    Page:   page,
+    Limit:  20,
+    Search: "ada",
+})
+if err != nil {
+    panic(err)
+}
+fmt.Printf("found %d customers\n", list.Total)
+for _, c := range list.Customers {
+    fmt.Println(c.ID, c.Email)
+}
+
+// Retrieve a single customer by ID.
+customer, err := client.Customers.Get(context.Background(), "cus_123")
+if err != nil {
+    panic(err)
+}
+fmt.Println(customer.Name, customer.StellarAddress)
+```
+
 ## Resources
 
 - `client.Payments` — Create, Get, GetStatus, List

@@ -19,6 +19,11 @@ import {
   updateBankAccountService,
 } from "../services/merchant.service";
 import {
+  requestPasswordResetService,
+  validatePasswordResetTokenService,
+  resetPasswordService,
+} from "../services/passwordReset.service";
+import {
   getNotificationPreferences,
   updateNotificationPreferences,
 } from "../services/notificationPreferences.service";
@@ -29,6 +34,8 @@ type SignupRequest = z.infer<typeof merchantSchema.signupSchema>;
 type LoginRequest = z.infer<typeof merchantSchema.loginSchema>;
 type VerifyOtpRequest = z.infer<typeof merchantSchema.verifyOtpSchema>;
 type ResendOtpRequest = z.infer<typeof merchantSchema.resendOtpSchema>;
+type ForgotPasswordRequest = z.infer<typeof merchantSchema.forgotPasswordSchema>;
+type ResetPasswordRequest = z.infer<typeof merchantSchema.resetPasswordSchema>;
 
 export const signupMerchant = createController<SignupRequest>(
   signupMerchantService,
@@ -54,6 +61,18 @@ export const resendOtp = createController<ResendOtpRequest>(
       ip,
     });
   },
+);
+
+export const forgotPassword = createController<ForgotPasswordRequest>(
+  requestPasswordResetService,
+);
+
+export const validateResetToken = createController(
+  validatePasswordResetTokenService,
+);
+
+export const resetPassword = createController<ResetPasswordRequest>(
+  resetPasswordService,
 );
 
 export const getLoggedInMerchant = createController(

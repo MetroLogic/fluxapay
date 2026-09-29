@@ -1,16 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo } from "react";
-import Link from "next/link";
-import toast from "react-hot-toast";
-import Input from "@/components/Input";
-import { Button } from "@/components/Button";
-import { Modal } from "@/components/Modal";
-import { api, ApiError } from "@/lib/api";
-import { logout, getToken } from "@/lib/auth";
-import { DOCS_URLS } from "@/lib/docs";
-import { isValidHttpsWebhookUrl } from "@/lib/webhookUrl";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import { getSessionNote } from "@/lib/sessionNote";
 import { SettingsTabs, type TabId } from "./SettingsTabs";
@@ -21,6 +12,15 @@ import { WebhooksTab } from "./WebhooksTab";
 import { ApiKeysTab } from "./ApiKeysTab";
 import { KycTab } from "./KycTab";
 import type { MerchantSettingsData } from "./types";
+
+const VALID_TABS: TabId[] = [
+  "profile",
+  "security",
+  "notifications",
+  "webhooks",
+  "api-keys",
+  "kyc",
+];
 
 const DEFAULT_DATA: MerchantSettingsData = {
   businessName: "",
@@ -60,10 +60,14 @@ function LoadingState() {
   );
 }
 
-export default function SettingsPage() {
+function SettingsContent() {
+  const searchParams = useSearchParams();
   const [isLoading, setIsLoading] = useState(true);
   const [data, setData] = useState<MerchantSettingsData>(DEFAULT_DATA);
-  const [activeTab, setActiveTab] = useState<TabId>("profile");
+  const [activeTab, setActiveTab] = useState<TabId>(() => {
+    const tabParam = searchParams.get("tab") as TabId | null;
+    return tabParam && VALID_TABS.includes(tabParam) ? tabParam : "profile";
+  });
   const [dirtyTabs, setDirtyTabs] = useState<Partial<Record<TabId, boolean>>>({});
   const [sessionNote, setSessionNote] = useState("Current session active");
 
@@ -71,6 +75,22 @@ export default function SettingsPage() {
 
   useEffect(() => {
     setSessionNote(getSessionNote());
+  }, []);
+
+  useEffect(() => {
+    const tabParam = searchParams.get("tab") as TabId | null;
+    if (tabParam && VALID_TABS.includes(tabParam)) {
+      setActiveTab(tabParam);
+    }
+  }, [searchParams]);
+
+  const handleTabChange = useCallback((tab: TabId) => {
+    setActiveTab(tab);
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.set("tab", tab);
+      window.history.replaceState(null, "", url.toString());
+    }
   }, []);
 
   useEffect(() => {
@@ -93,121 +113,6 @@ export default function SettingsPage() {
           country = (merchant.country as string) || "";
         }
 
-  const handleBankSave = async () => {
-    setIsSavingBank(true);
-    setBankError("");
-    try {
-      await api.merchant.addBankAccount({
-        account_name: accountName,
-        account_number: accountNumber,
-        bank_name: bankName,
-        bank_code: bankCode,
-        currency,
-        country,
-      });
-      setBankSaved(true);
-      setTimeout(() => setBankSaved(false), 3000);
-      setInitialSnapshot(currentSnapshot);
-    } catch (error) {
-      const message =
-        error instanceof ApiError ? error.message : "Failed to save bank details";
-      setBankError(message);
-    } finally {
-      setIsSavingBank(false);
-    }
-  };
-
-  const handleCheckoutLogoChange = (value: string) => {
-    setCheckoutLogoUrl(value);
-    const v = value.trim();
-    if (v && !v.startsWith("https://")) {
-      setCheckoutLogoError("Logo URL must start with https://");
-    } else {
-      setCheckoutLogoError("");
-    }
-  };
-
-  const handleCheckoutBrandingSave = async () => {
-    if (checkoutLogoError) return;
-    setIsSavingCheckoutBranding(true);
-    try {
-      await api.merchant.updateProfile({
-        checkout_logo_url:
-          checkoutLogoUrl.trim() === "" ? null : checkoutLogoUrl.trim(),
-        checkout_accent_color: checkoutAccentColor || null,
-      });
-      setCheckoutBrandingSaved(true);
-      setTimeout(() => setCheckoutBrandingSaved(false), 3000);
-      setInitialSnapshot(currentSnapshot);
-    } catch (error) {
-      const message =
-        error instanceof ApiError ? error.message : "Failed to save branding";
-      setCheckoutLogoError(message);
-    } finally {
-      setIsSavingCheckoutBranding(false);
-    }
-  };
-
-  const handleCopyApiKey = () => {
-    navigator.clipboard.writeText(apiKey);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const handleRegenerateApiKey = async () => {
-    setIsRegenerating(true);
-    try {
-      const response = await api.keys.regenerate();
-      setApiKey(response.api_key);
-      setShowRegenerateModal(false);
-      setKeyRegenerated(true);
-      setTimeout(() => setKeyRegenerated(false), 5000);
-    } catch (error) {
-      console.error("Failed to regenerate API key:", error);
-      toast.error(
-        error instanceof ApiError
-          ? error.message
-          : "Failed to regenerate API key. Please try again.",
-      );
-    } finally {
-      setIsRegenerating(false);
-    }
-  };
-
-  const handleWebhookUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setWebhookUrl(value);
-    if (!value.trim()) {
-      setWebhookError("");
-      return;
-    }
-    const v = isValidHttpsWebhookUrl(value);
-    setWebhookError(v.ok ? "" : v.message);
-  };
-
-  const handleWebhookSave = async () => {
-    if (webhookError) return;
-    setIsSavingWebhook(true);
-    try {
-      await api.merchant.updateWebhook(webhookUrl);
-      setWebhookSaved(true);
-      setTimeout(() => setWebhookSaved(false), 3000);
-      setInitialSnapshot(currentSnapshot);
-    } catch (error) {
-      const message =
-        error instanceof ApiError
-          ? error.message
-          : "Failed to save webhook URL";
-      setWebhookError(message);
-    } finally {
-      setIsSavingWebhook(false);
-    }
-  };
-
-  const handleSignOutCurrentSession = () => {
-    setIsSigningOut(true);
-    logout();
-  };
         const nextData: MerchantSettingsData = {
           ...DEFAULT_DATA,
           businessName: (merchant.business_name as string) || "",
@@ -268,7 +173,7 @@ export default function SettingsPage() {
   return (
     <SettingsTabs
       activeTab={activeTab}
-      onTabChange={setActiveTab}
+      onTabChange={handleTabChange}
       hasUnsavedChanges={hasUnsavedChanges}
     >
       {activeTab === "profile" && (
@@ -285,5 +190,13 @@ export default function SettingsPage() {
       {activeTab === "api-keys" && <ApiKeysTab initialApiKey={data.apiKey} />}
       {activeTab === "kyc" && <KycTab />}
     </SettingsTabs>
+  );
+}
+
+export default function SettingsPage() {
+  return (
+    <Suspense fallback={<LoadingState />}>
+      <SettingsContent />
+    </Suspense>
   );
 }

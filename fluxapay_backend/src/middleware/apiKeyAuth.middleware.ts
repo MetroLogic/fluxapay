@@ -11,11 +11,21 @@ import jwt, { JwtPayload } from "jsonwebtoken";
 /**
  * Middleware to authenticate requests using an API key or JWT.
  * Supports:
- * - Authorization: Bearer <sk_live_...>   (production API key)
- * - Authorization: Bearer <fpk_test_...>  (local dev / seed API key)
- * - x-api-key: <sk_live_...> or <fpk_test_...>
- * - Authorization: Bearer <jwt_token>     (dashboard / internal)
+ * - Authorization: Bearer <sk_live_...>    (production API key)
+ * - Authorization: Bearer <sk_test_...>     (Stripe-style test mode key, isolated data)
+ * - Authorization: Bearer <fpk_test_...>    (local dev / seed API key)
+ * - x-api-key: <sk_live_...>, <sk_test_...> or <fpk_test_...>
+ * - Authorization: Bearer <jwt_token>       (dashboard / internal)
  */
+
+/**
+ * True when a raw API key is a test-mode key (sk_test_ / fpk_test_).
+ * Stripe-style test keys map to the isolated test-mode data partition.
+ */
+export function isTestApiKey(key: string): boolean {
+  return key.startsWith("sk_test_") || key.startsWith("fpk_test_");
+}
+
 export async function authenticateApiKey(
     req: AuthRequest,
     res: Response,
@@ -42,10 +52,11 @@ export async function authenticateApiKey(
 
     // 3. Try interpreting as API Key first.
     //    FluxaPay keys use the format <prefix>_<32 hex chars>.
-    //    Supported prefixes: sk_live_ (production), fpk_test_ (local dev/seed).
+    //    Supported prefixes: sk_live_ (production), sk_test_ (test mode), fpk_test_ (local dev/seed).
     //    The real validation is the bcrypt hash comparison — the prefix is only
-    //    used to distinguish API keys from JWT tokens.
-    const isApiKey = key.startsWith("sk_live_") || key.startsWith("fpk_test_");
+    //    used to distinguish API keys from JWT tokens and to select the data partition.
+    const isApiKey =
+        key.startsWith("sk_live_") || key.startsWith("sk_test_") || key.startsWith("fpk_test_");
     if (isApiKey) {
         try {
             const lastFour = key.slice(-4);
@@ -59,6 +70,7 @@ export async function authenticateApiKey(
             for (const merchant of merchants) {
                 if (merchant.api_key_hashed && await compareKeys(key, merchant.api_key_hashed)) {
                     authReq.merchantId = merchant.id;
+                    authReq.isTestMode = isTestApiKey(key);
                     return next();
                 }
             }

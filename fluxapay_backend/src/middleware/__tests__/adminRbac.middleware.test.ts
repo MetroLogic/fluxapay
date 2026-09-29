@@ -7,8 +7,11 @@ import {
 } from "../adminRbac.middleware";
 import { signAdminToken } from "../../helpers/adminJwt.helper";
 
-// Ensure JWT_SECRET is set for tests
+// Ensure JWT_SECRET / ADMIN_JWT_SECRET are set for tests. ADMIN_JWT_SECRET is
+// required — signAdminToken/verifyAdminToken no longer fall back to
+// JWT_SECRET or any default.
 process.env.JWT_SECRET = "test-secret-key";
+process.env.ADMIN_JWT_SECRET = "test-admin-secret-key";
 
 const mockRes = () => {
   const res: any = {

@@ -26,7 +26,7 @@ const oTP = { deleteMany: jest.fn() };
 const bankAccount = { deleteMany: jest.fn() };
 const merchantSubscription = { deleteMany: jest.fn() };
 const customer = { deleteMany: jest.fn() };
-const refreshToken = { deleteMany: jest.fn() };
+const refreshToken = { deleteMany: jest.fn(), updateMany: jest.fn() };
 const apiKey = { updateMany: jest.fn() };
 const payment = { updateMany: jest.fn() };
 
@@ -119,6 +119,7 @@ describe("executeDeletion", () => {
     merchantSubscription.deleteMany.mockResolvedValue({});
     customer.deleteMany.mockResolvedValue({});
     refreshToken.deleteMany.mockResolvedValue({});
+    refreshToken.updateMany.mockResolvedValue({ count: 1 });
     merchantDeletionRequest.update.mockResolvedValue({});
     apiKey.updateMany.mockResolvedValue({ count: 3 });
     payment.updateMany.mockResolvedValue({ count: 1 });
@@ -158,6 +159,17 @@ describe("executeDeletion", () => {
     expect(logApiKeysRevoked).toHaveBeenCalled();
     expect(logWebhooksDeactivated).toHaveBeenCalled();
     expect(logChargesCancelled).toHaveBeenCalled();
+  });
+
+  it("revokes all outstanding refresh tokens before committing the deletion (#1063)", async () => {
+    await executeDeletion(MERCHANT_ID, ADMIN_ID);
+
+    expect(refreshToken.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { merchantId: MERCHANT_ID, is_revoked: false },
+        data: expect.objectContaining({ is_revoked: true }),
+      }),
+    );
   });
 
   it("throws 404 when merchant not found", async () => {
@@ -209,6 +221,7 @@ describe("executeDeletion — Cloudinary KYC purge (#720)", () => {
     merchantSubscription.deleteMany.mockResolvedValue({});
     customer.deleteMany.mockResolvedValue({});
     refreshToken.deleteMany.mockResolvedValue({});
+    refreshToken.updateMany.mockResolvedValue({ count: 1 });
     merchantDeletionRequest.update.mockResolvedValue({});
     apiKey.updateMany.mockResolvedValue({ count: 0 });
     payment.updateMany.mockResolvedValue({ count: 0 });
@@ -304,6 +317,7 @@ describe("executeDeletion — in-flight settlement guard (#812)", () => {
     merchantSubscription.deleteMany.mockResolvedValue({});
     customer.deleteMany.mockResolvedValue({});
     refreshToken.deleteMany.mockResolvedValue({});
+    refreshToken.updateMany.mockResolvedValue({ count: 1 });
     merchantDeletionRequest.update.mockResolvedValue({});
     apiKey.updateMany.mockResolvedValue({ count: 0 });
     payment.updateMany.mockResolvedValue({ count: 0 });

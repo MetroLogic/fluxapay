@@ -58,7 +58,7 @@ export class FunderMonitorService {
     };
   }
 
-  public async getPoolStatus(): Promise<PoolDepthStatus> {
+  public async getPoolDepthStatus(): Promise<PoolDepthStatus> {
     const stats = await DepositAddressService.getPoolStats();
     return {
       availableCount: stats.availableCount,
@@ -69,10 +69,14 @@ export class FunderMonitorService {
     };
   }
 
+  public getPoolStatus(): Promise<PoolDepthStatus> {
+    return this.getPoolDepthStatus();
+  }
+
   public async getCompleteStatus(): Promise<FunderMonitorStatus> {
     const [funder, pool] = await Promise.all([
       this.getBalanceStatus(),
-      this.getPoolStatus(),
+      this.getPoolDepthStatus(),
     ]);
 
     return {

@@ -1,4 +1,5 @@
 process.env.USDC_ISSUER_PUBLIC_KEY = process.env.USDC_ISSUER_PUBLIC_KEY || "GBBD47IF6LWK7P7MDEVSCWT73IQIGCEZHR7OMXMBZQ3ZONN2T4U6W23Y";
+process.env.ADMIN_JWT_SECRET = process.env.ADMIN_JWT_SECRET || "test-admin-jwt-secret";
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
 import { app } from '../app';

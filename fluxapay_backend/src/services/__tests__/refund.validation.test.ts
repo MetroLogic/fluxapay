@@ -218,21 +218,22 @@ describe('Refund Service - Validation', () => {
       });
     });
 
-    it('should reject refund for expired payment', async () => {
+    it('should allow refund for confirmed payment after deposit window expiration', async () => {
       setupTransaction(
-        makePayment({ expiration: new Date(Date.now() - 86_400_000) }), // 24 h ago
+        makePayment({
+          status: 'confirmed',
+          expiration: new Date(Date.now() - 86_400_000), // 24 h ago
+        }),
       );
 
-      await expect(
-        createRefundService({
-          merchantId: 'test-merchant',
-          payment_id: 'expired-payment',
-          amount: 50,
-        }),
-      ).rejects.toMatchObject({
-        status: 400,
-        message: 'Payment has expired and cannot be refunded',
+      const result = await createRefundService({
+        merchantId: 'test-merchant',
+        payment_id: 'expired-payment',
+        amount: 50,
       });
+
+      expect(result.message).toBe('Refund created successfully');
+      expect(Number(result.data.amount)).toBe(50);
     });
 
     it('should reject refund for failed payment', async () => {

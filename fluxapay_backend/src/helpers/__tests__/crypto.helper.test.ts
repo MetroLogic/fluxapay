@@ -4,6 +4,7 @@ import {
   hashKey,
   compareKeys,
   getLastFour,
+  timingSafeStringEqual,
 } from "../crypto.helper";
 
 describe("crypto.helper", () => {
@@ -11,6 +12,11 @@ describe("crypto.helper", () => {
     it("should generate a key with sk_live_ prefix", () => {
       const key = generateApiKey();
       expect(key).toMatch(/^sk_live_[a-f0-9]{32}$/);
+    });
+
+    it("should generate a test-mode key with sk_test_ prefix", () => {
+      const key = generateApiKey("test");
+      expect(key).toMatch(/^sk_test_[a-f0-9]{32}$/);
     });
 
     it("should generate unique keys", () => {
@@ -38,6 +44,22 @@ describe("crypto.helper", () => {
 
       const isNotMatch = await compareKeys("wrong_key", hashed);
       expect(isNotMatch).toBe(false);
+    });
+  });
+
+  describe("timingSafeStringEqual", () => {
+    it("returns true for equal-length equal strings", () => {
+      expect(timingSafeStringEqual("abcd1234", "abcd1234")).toBe(true);
+    });
+
+    it("returns false for equal-length unequal strings", () => {
+      expect(timingSafeStringEqual("abcd1234", "abcd9999")).toBe(false);
+    });
+
+    it("throws when buffer lengths differ", () => {
+      expect(() => timingSafeStringEqual("short", "muchlongerstring")).toThrow(
+        "differing length",
+      );
     });
   });
 

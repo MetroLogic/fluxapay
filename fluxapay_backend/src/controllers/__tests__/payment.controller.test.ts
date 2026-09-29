@@ -23,8 +23,21 @@ jest.mock("../../services/payment.service", () => ({
   },
 }));
 
-import { createPayment, getPaymentById } from "../payment.controller";
+jest.mock("../../helpers/request.helper", () => ({
+  // Mirrors the real validateUserId: resolves req.merchantId (or req.user.id),
+  // throws a 401 API error when the request is unauthenticated.
+  validateUserId: jest.fn(async (req: { merchantId?: string; user?: { id?: string } }) => {
+    const merchantId = req?.merchantId || req?.user?.id;
+    if (!merchantId) {
+      throw { status: 401, code: "UNAUTHORIZED", message: "Unauthorized" };
+    }
+    return merchantId;
+  }),
+}));
+
+import { createPayment, getPaymentById, getPayments } from "../payment.controller";
 import { PaymentService } from "../../services/payment.service";
+import { validateUserId } from "../../helpers/request.helper";
 
 describe("createPayment controller", () => {
   beforeEach(() => {
@@ -65,6 +78,48 @@ describe("createPayment controller", () => {
       }),
     );
     expect(PaymentService.createPayment).not.toHaveBeenCalled();
+  });
+});
+
+describe("getPayments controller — test-mode partition", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    // validateUserId mock derives merchant from req.merchantId and throws 401
+    // when absent (mirrors the real helper) — no override needed here.
+    prismaMock.payment.findMany.mockResolvedValue([]);
+    prismaMock.payment.count.mockResolvedValue(0);
+  });
+
+  const buildReq = (isTestMode?: boolean) =>
+    ({ merchantId: "merchant_1", isTestMode, query: {} }) as any;
+
+  const buildRes = () => {
+    const res: any = { json: jest.fn(), status: jest.fn().mockReturnThis() };
+    return res;
+  };
+
+  it("live key lists only live payments (is_test_mode: false)", async () => {
+    await getPayments(buildReq(false), buildRes());
+
+    const where = prismaMock.payment.findMany.mock.calls[0][0].where;
+    expect(where.is_test_mode).toBe(false);
+    expect(prismaMock.payment.count).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ is_test_mode: false }) }),
+    );
+  });
+
+  it("test key lists only test payments (is_test_mode: true)", async () => {
+    await getPayments(buildReq(true), buildRes());
+
+    const where = prismaMock.payment.findMany.mock.calls[0][0].where;
+    expect(where.is_test_mode).toBe(true);
+  });
+
+  it("JWT dashboard requests are not mode-filtered", async () => {
+    await getPayments(buildReq(undefined), buildRes());
+
+    const where = prismaMock.payment.findMany.mock.calls[0][0].where;
+    expect(where).not.toHaveProperty("is_test_mode");
   });
 });
 

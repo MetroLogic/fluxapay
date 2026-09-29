@@ -133,6 +133,89 @@ export interface Invoice {
   updated_at: string;
 }
 
+export interface CreateCustomerParams {
+  email: string;
+  name?: string;
+  phone?: string;
+  stellar_address?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export type UpdateCustomerParams = Partial<CreateCustomerParams>;
+
+export interface Customer {
+  id: string;
+  merchantId: string;
+  email: string;
+  name: string | null;
+  phone: string | null;
+  stellar_address: string | null;
+  metadata: Record<string, unknown>;
+  deleted_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CustomerDetails extends Customer {
+  payment_count: number;
+  total_volume: number;
+}
+
+export interface CustomerListParams {
+  page?: number;
+  limit?: number;
+  search?: string;
+  created_after?: string;
+  created_before?: string;
+}
+
+export interface CustomerListResponse {
+  data: Customer[];
+  meta: { total: number; page: number; limit: number };
+}
+
+export type RefundStatus = 'pending' | 'processing' | 'completed' | 'failed';
+
+export interface CreateRefundParams {
+  payment_id: string;
+  amount: number;
+  reason?: string;
+  idempotency_key?: string;
+}
+
+export interface Refund {
+  id: string;
+  merchantId: string;
+  paymentId: string;
+  amount: number | string;
+  currency: string;
+  reason: string | null;
+  status: RefundStatus;
+  failed_reason: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RefundResponse {
+  message: string;
+  data: Refund;
+}
+
+export interface RefundListParams {
+  page?: number;
+  limit?: number;
+  status?: RefundStatus;
+  payment_id?: string;
+}
+
+export interface RefundListResponse {
+  message: string;
+  data: {
+    refunds: Refund[];
+    pagination: { page: number; limit: number; total: number; total_pages: number };
+  };
+}
+
 // ── Webhook Verification Helper ──────────────────────────────────────────────
 
 export interface VerifyWebhookSignatureOptions {
@@ -247,6 +330,24 @@ export class FluxaPayError extends Error {
 
 const DEFAULT_BASE_URL = 'https://api.fluxapay.com';
 const API_VERSION = 'v1';
+const RETRYABLE_METHODS = new Set(['DELETE', 'GET', 'HEAD', 'OPTIONS', 'PUT']);
+const INITIAL_RETRY_DELAY_MS = 100;
+const MAX_RETRY_DELAY_MS = 30_000;
+
+function retryDelay(retryIndex: number): number {
+  const maxDelay = Math.min(MAX_RETRY_DELAY_MS, INITIAL_RETRY_DELAY_MS * 2 ** retryIndex);
+  return Math.floor(Math.random() * maxDelay);
+}
+
+function retryAfterDelay(header: string | null): number | undefined {
+  if (header === null || header.trim() === '') return undefined;
+
+  const seconds = Number(header);
+  if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000);
+
+  const retryAt = Date.parse(header);
+  return Number.isNaN(retryAt) ? undefined : Math.max(0, retryAt - Date.now());
+}
 
 async function request<T>(
   baseUrl: string,
@@ -254,9 +355,10 @@ async function request<T>(
   method: string,
   path: string,
   body?: unknown,
+  retries = 3,
 ): Promise<T> {
   const url = `${baseUrl}${path}`;
-  const res = await fetch(url, {
+  const options: RequestInit = {
     method,
     headers: {
       'Content-Type': 'application/json',
@@ -264,26 +366,49 @@ async function request<T>(
       'X-API-Version': API_VERSION,
     },
     body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
+  };
+  const retryLimit = Number.isFinite(retries) ? Math.max(0, Math.floor(retries)) : 0;
+  const canRetry = RETRYABLE_METHODS.has(method.toUpperCase());
+  let retriesMade = 0;
 
-  const json = await res.json().catch(() => null);
+  while (true) {
+    let res: Response;
+    try {
+      res = await fetch(url, options);
+    } catch (error) {
+      if (!canRetry || retriesMade >= retryLimit) throw error;
+      await new Promise((resolve) => setTimeout(resolve, retryDelay(retriesMade)));
+      retriesMade++;
+      continue;
+    }
 
-  if (!res.ok) {
-    const body = json as { message?: string; code?: string } | null;
-    const requestId =
-      res.headers.get('x-request-id') ??
-      res.headers.get('X-Request-ID') ??
-      undefined;
-    throw new FluxaPayError(
-      res.status,
-      body?.message ?? `HTTP ${res.status}`,
-      body?.code,
-      json,
-      requestId,
-    );
+    const json = await res.json().catch(() => null);
+
+    if (!res.ok) {
+      const responseBody = json as { message?: string; code?: string } | null;
+      const requestId =
+        res.headers.get('x-request-id') ??
+        res.headers.get('X-Request-ID') ??
+        undefined;
+      const error = new FluxaPayError(
+        res.status,
+        responseBody?.message ?? `HTTP ${res.status}`,
+        responseBody?.code,
+        json,
+        requestId,
+      );
+
+      if (!canRetry || !error.retryable || retriesMade >= retryLimit) throw error;
+
+      const backoff = retryDelay(retriesMade);
+      const serverDelay = res.status === 429 ? retryAfterDelay(res.headers.get('retry-after')) : undefined;
+      await new Promise((resolve) => setTimeout(resolve, Math.max(backoff, serverDelay ?? 0)));
+      retriesMade++;
+      continue;
+    }
+
+    return json as T;
   }
-
-  return json as T;
 }
 
 /**
@@ -358,6 +483,61 @@ export class FluxaPay {
       if (params?.status) qs.set('status', params.status);
       const query = qs.toString();
       return request(this.baseUrl, this.apiKey, 'GET', `/api/payments${query ? `?${query}` : ''}`, undefined, this.retries);
+    },
+  };
+
+  // ── customers ──────────────────────────────────────────────────────────────
+
+  readonly customers = {
+    /** Create a customer for the authenticated merchant. */
+    create: (params: CreateCustomerParams): Promise<Customer> =>
+      request<Customer>(this.baseUrl, this.apiKey, 'POST', '/api/v1/customers', params, this.retries),
+
+    /** Retrieve a customer and its payment summary. */
+    get: (customerId: string): Promise<CustomerDetails> =>
+      request<CustomerDetails>(this.baseUrl, this.apiKey, 'GET', `/api/v1/customers/${encodeURIComponent(customerId)}`, undefined, this.retries),
+
+    /** List customers with optional search and creation-date filters. */
+    list: (params?: CustomerListParams): Promise<CustomerListResponse> => {
+      const qs = new URLSearchParams();
+      if (params?.page !== undefined) qs.set('page', String(params.page));
+      if (params?.limit !== undefined) qs.set('limit', String(params.limit));
+      if (params?.search !== undefined) qs.set('search', params.search);
+      if (params?.created_after !== undefined) qs.set('created_after', params.created_after);
+      if (params?.created_before !== undefined) qs.set('created_before', params.created_before);
+      const query = qs.toString();
+      return request(this.baseUrl, this.apiKey, 'GET', `/api/v1/customers${query ? `?${query}` : ''}`, undefined, this.retries);
+    },
+
+    /** Update a customer's profile. */
+    update: (customerId: string, params: UpdateCustomerParams): Promise<Customer> =>
+      request<Customer>(this.baseUrl, this.apiKey, 'PATCH', `/api/v1/customers/${encodeURIComponent(customerId)}`, params, this.retries),
+
+    /** Soft-delete and anonymize a customer. */
+    delete: (customerId: string): Promise<void> =>
+      request<void>(this.baseUrl, this.apiKey, 'DELETE', `/api/v1/customers/${encodeURIComponent(customerId)}`, undefined, this.retries),
+  };
+
+  // ── refunds ────────────────────────────────────────────────────────────────
+
+  readonly refunds = {
+    /** Create a refund for a payment. */
+    create: (params: CreateRefundParams): Promise<RefundResponse> =>
+      request<RefundResponse>(this.baseUrl, this.apiKey, 'POST', '/api/v1/refunds', params, this.retries),
+
+    /** Retrieve a refund by ID. */
+    get: (refundId: string): Promise<RefundResponse> =>
+      request<RefundResponse>(this.baseUrl, this.apiKey, 'GET', `/api/v1/refunds/${encodeURIComponent(refundId)}`, undefined, this.retries),
+
+    /** List refunds with optional status or payment filters. */
+    list: (params?: RefundListParams): Promise<RefundListResponse> => {
+      const qs = new URLSearchParams();
+      if (params?.page !== undefined) qs.set('page', String(params.page));
+      if (params?.limit !== undefined) qs.set('limit', String(params.limit));
+      if (params?.status !== undefined) qs.set('status', params.status);
+      if (params?.payment_id !== undefined) qs.set('payment_id', params.payment_id);
+      const query = qs.toString();
+      return request(this.baseUrl, this.apiKey, 'GET', `/api/v1/refunds${query ? `?${query}` : ''}`, undefined, this.retries);
     },
   };
 

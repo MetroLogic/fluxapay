@@ -17,6 +17,10 @@ import { QRCodeCanvas } from "qrcode.react";
 import { DataTableCard, TablePaginationBar } from "@/components/data-table";
 import { ExportActionButtons } from "@/components/data-table/ExportActionButtons";
 import { useMerchantDataExport } from "@/hooks/useMerchantDataExport";
+import {
+  exportDataToCsv,
+  ExportCancelledError,
+} from "@/services/dataExport.service";
 
 const PAGE_SIZE = 20;
 
@@ -102,6 +106,7 @@ function PaymentsContent() {
     { id: string; url: string; amount: number; currency: string; description?: string; createdAt: string }[]
   >([]);
   const { exportData, exportingFormat } = useMerchantDataExport();
+  const [isBulkExporting, setIsBulkExporting] = useState(false);
   const fetchAbortRef = useRef<AbortController | null>(null);
 
   const handleSearchChange = useCallback((value: string) => {
@@ -208,6 +213,65 @@ function PaymentsContent() {
     });
   };
 
+  const handleBulkExportCsv = useCallback(async () => {
+    // Export the current filtered view rather than just the visible page: the
+    // service omits page/limit so the job covers every matching record.
+    const filters = {
+      status: statusFilter !== "all" ? statusFilter : undefined,
+      currency: currencyFilter !== "all" ? currencyFilter : undefined,
+      search: search || undefined,
+      date_from: dateFrom || undefined,
+      date_to: dateTo || undefined,
+      amount_min: amountMin || undefined,
+      amount_max: amountMax || undefined,
+    };
+
+    setIsBulkExporting(true);
+    const toastId = toast.loading("Preparing payments CSV export...");
+
+    try {
+      const result = await exportDataToCsv(
+        { resource: "payments", format: "csv", filters },
+        {
+          onProgress: (elapsedMs) => {
+            const seconds = Math.floor(elapsedMs / 1000);
+            toast.loading(`Preparing payments CSV export... (${seconds}s)`, {
+              id: toastId,
+            });
+          },
+        },
+      );
+
+      toast.success(
+        `Export ready — ${result.rowCount.toLocaleString()} payment${
+          result.rowCount === 1 ? "" : "s"
+        } downloaded.`,
+        { id: toastId },
+      );
+    } catch (error) {
+      if (error instanceof ExportCancelledError) {
+        toast.dismiss(toastId);
+        return;
+      }
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Export failed. Please try again.",
+        { id: toastId },
+      );
+    } finally {
+      setIsBulkExporting(false);
+    }
+  }, [
+    statusFilter,
+    currencyFilter,
+    search,
+    dateFrom,
+    dateTo,
+    amountMin,
+    amountMax,
+  ]);
+
   const handleOpenCreateLink = () => {
     setShowCreateLinkModal(true);
     if (searchParams.get("action")) router.replace("/dashboard/payments");
@@ -305,7 +369,11 @@ function PaymentsContent() {
           <Button variant="secondary" className="gap-2" onClick={() => router.push("/dashboard/refunds")}>
             Refunds
           </Button>
-          <ExportActionButtons onExport={handleExport} exportingFormat={exportingFormat} />
+          <ExportActionButtons
+            onExport={handleExport}
+            exportingFormat={exportingFormat}
+            formats={["pdf"]}
+          />
           <Button className="gap-2" onClick={handleOpenCreateLink}>
             <Plus className="h-4 w-4" />
             New Payment
@@ -367,6 +435,8 @@ function PaymentsContent() {
             onDateToChange={(v) => setDateTo(v)}
             onAmountMinChange={(v) => setAmountMin(v)}
             onAmountMaxChange={(v) => setAmountMax(v)}
+            onExportCsv={handleBulkExportCsv}
+            isExportingCsv={isBulkExporting}
           />
         }
         footer={

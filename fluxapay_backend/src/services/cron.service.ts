@@ -34,8 +34,13 @@ import { runInvoiceOverdueJob } from "./invoiceOverdue.service";
 import { cleanupExpiredIdempotencyRecords } from "../middleware/idempotency.middleware";
 import { DepositAddressService } from "./depositAddress.service";
 import { getSweepCronInterval, logSweepConfigAtStartup } from "../config/sweep.config";
-import { acquireCronLock, releaseCronLock } from "../utils/redisLock.util";
+import { acquireCronLock, releaseCronLock, getLockOwner } from "../utils/redisLock.util";
 import { paymentSettlementService } from "./paymentSettlement.service";
+import { sendOpsAlert } from "./settlementAlert.service";
+import {
+  trackAddressPoolDepleted,
+  trackFunderBalanceLow,
+} from "../middleware/metrics.middleware";
 
 const SETTLEMENT_CRON_EXPR = process.env.SETTLEMENT_CRON ?? "0 0 * * *";
 const BILLING_CRON_EXPR = process.env.BILLING_CRON ?? "0 1 * * *";
@@ -63,6 +68,57 @@ let idempotencyCleanupTask: ScheduledTask | null = null;
 let addressPoolTask: ScheduledTask | null = null;
 let settlementRetryTask: ScheduledTask | null = null;
 
+const FUNDER_MONITOR_LOCK = "funder_monitor";
+const ADDRESS_POOL_ALERT_THRESHOLD = 0.85;
+
+export async function runFunderMonitorTask(): Promise<void> {
+  const acquired = await acquireCronLock(FUNDER_MONITOR_LOCK);
+  if (!acquired) {
+    console.warn("[Cron] Funder monitor lock held by another instance – skipping tick.");
+    return;
+  }
+
+  try {
+    const [balanceResult, poolResult] = await Promise.allSettled([
+      Promise.resolve().then(() => funderMonitorService.getBalanceStatus()),
+      Promise.resolve().then(() => funderMonitorService.getPoolDepthStatus()),
+    ]);
+
+    if (balanceResult.status === "rejected") {
+      console.error(`[Cron] ❌ Funder balance check failed: ${String(balanceResult.reason)}`);
+    } else if (!balanceResult.value.ok) {
+      const balance = balanceResult.value;
+      trackFunderBalanceLow();
+      console.warn(
+        `[Cron] ⚠️ FUNDER low balance: ${balance.xlmBalance} XLM. pub=${balance.publicKey}`,
+      );
+      await sendOpsAlert(
+        "FunderMonitor",
+        `Funder balance is low: ${balance.xlmBalance} XLM is below the ${balance.thresholdXlm} XLM threshold. Account: ${balance.publicKey}`,
+      );
+    }
+
+    if (poolResult.status === "rejected") {
+      console.error(`[Cron] ❌ Deposit address pool check failed: ${String(poolResult.reason)}`);
+    } else if (poolResult.value.utilizationPct > ADDRESS_POOL_ALERT_THRESHOLD) {
+      const pool = poolResult.value;
+      trackAddressPoolDepleted();
+      console.warn(
+        `[Cron] ⚠️ Deposit address pool utilization is high: ${(pool.utilizationPct * 100).toFixed(1)}% (${pool.availableCount}/${pool.totalCount} available).`,
+      );
+      await sendOpsAlert(
+        "FunderMonitor",
+        `Deposit address pool utilization is ${(pool.utilizationPct * 100).toFixed(1)}%, above the 85% threshold. ${pool.availableCount} of ${pool.totalCount} addresses remain available.`,
+      );
+    }
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`[Cron] ❌ Funder monitor failed: ${message}`);
+  } finally {
+    await releaseCronLock(FUNDER_MONITOR_LOCK);
+  }
+}
+
 /**
  * Starts all scheduled cron jobs.
  */
@@ -75,7 +131,8 @@ export function startCronJobs(): void {
   // ── Daily Settlement Batch ─────────────────────────────────────────────────
   settlementTask = schedule(SETTLEMENT_CRON_EXPR, async () => {
     console.log(`[Cron] ⏰ Settlement batch triggered at ${new Date().toISOString()}`);
-    const acquired = await acquireCronLock("settlement");
+    const lockOwner = getLockOwner();
+    const acquired = await acquireCronLock("settlement", { lockOwner });
     if (!acquired) {
       console.warn(`[Cron] ⚠️ Settlement batch lock held by another instance – skipping tick.`);
       return;
@@ -86,14 +143,15 @@ export function startCronJobs(): void {
     } catch (err: any) {
       console.error(`[Cron] ❌ Settlement batch failed: ${err.message}`);
     } finally {
-      await releaseCronLock("settlement");
+      await releaseCronLock("settlement", { lockOwner });
     }
   }, { timezone: "UTC" });
 
   // ── Billing cycle ──────────────────────────────────────────────────────────
   billingTask = schedule(BILLING_CRON_EXPR, async () => {
     console.log(`[Cron] ⏰ Billing cycle triggered at ${new Date().toISOString()}`);
-    const acquired = await acquireCronLock("billing");
+    const lockOwner = getLockOwner();
+    const acquired = await acquireCronLock("billing", { lockOwner });
     if (!acquired) {
       console.warn(`[Cron] ⚠️ Billing cycle lock held by another instance – skipping tick.`);
       return;
@@ -104,14 +162,15 @@ export function startCronJobs(): void {
     } catch (err: any) {
       console.error(`[Cron] ❌ Billing cycle failed: ${err.message}`);
     } finally {
-      await releaseCronLock("billing");
+      await releaseCronLock("billing", { lockOwner });
     }
   }, { timezone: "UTC" });
 
   // ── Subscription price-change notice ──────────────────────────────────────
   priceChangeNoticeTask = schedule(PRICE_CHANGE_NOTICE_CRON_EXPR, async () => {
     console.log(`[Cron] ⏰ Price-change notice triggered at ${new Date().toISOString()}`);
-    const acquired = await acquireCronLock("price_change_notice");
+    const lockOwner = getLockOwner();
+    const acquired = await acquireCronLock("price_change_notice", { lockOwner });
     if (!acquired) {
       console.warn(`[Cron] ⚠️ Price-change notice lock held by another instance – skipping tick.`);
       return;
@@ -124,7 +183,7 @@ export function startCronJobs(): void {
     } catch (err: any) {
       console.error(`[Cron] ❌ Price-change notice job failed: ${err.message}`);
     } finally {
-      await releaseCronLock("price_change_notice");
+      await releaseCronLock("price_change_notice", { lockOwner });
     }
   }, { timezone: "UTC" });
 
@@ -138,19 +197,13 @@ export function startCronJobs(): void {
 
   // ── Funder Monitor ─────────────────────────────────────────────────────────
   funderMonitorTask = schedule(FUNDER_MONITOR_CRON_EXPR, async () => {
-    try {
-      const status = await funderMonitorService.getBalanceStatus();
-      if (!status.ok) {
-        console.warn(`[Cron] ⚠️ FUNDER low balance: ${status.xlmBalance} XLM. pub=${status.publicKey}`);
-      }
-    } catch (err: any) {
-      console.error(`[Cron] ❌ Funder monitor failed: ${err.message}`);
-    }
+    await runFunderMonitorTask();
   }, { timezone: "UTC" });
 
   // ── Checkout Expiry Reminder ───────────────────────────────────────────────
   checkoutReminderTask = schedule(CHECKOUT_REMINDER_CRON_EXPR, async () => {
-    const acquired = await acquireCronLock("checkout_reminder");
+    const lockOwner = getLockOwner();
+    const acquired = await acquireCronLock("checkout_reminder", { lockOwner });
     if (!acquired) {
       console.warn(`[Cron] ⚠️ Checkout reminder lock held by another instance – skipping tick.`);
       return;
@@ -163,7 +216,7 @@ export function startCronJobs(): void {
     } catch (err: any) {
       console.error(`[Cron] ❌ Checkout reminder job failed: ${err.message}`);
     } finally {
-      await releaseCronLock("checkout_reminder");
+      await releaseCronLock("checkout_reminder", { lockOwner });
     }
   }, { timezone: "UTC" });
 
@@ -173,7 +226,8 @@ export function startCronJobs(): void {
       paymentExpiryTask = schedule(
         PAYMENT_EXPIRY_CRON_EXPR,
         async () => {
-          const acquired = await acquireCronLock("payment_expiry");
+          const lockOwner = getLockOwner();
+          const acquired = await acquireCronLock("payment_expiry", { lockOwner });
           if (!acquired) {
             console.warn(`[Cron] ⚠️ Payment expiry lock held by another instance – skipping tick.`);
             return;
@@ -190,7 +244,7 @@ export function startCronJobs(): void {
             const msg = err instanceof Error ? err.message : String(err);
             console.error(`[Cron] ❌ Payment expiry job failed: ${msg}`);
           } finally {
-            await releaseCronLock("payment_expiry");
+            await releaseCronLock("payment_expiry", { lockOwner });
           }
         },
         { timezone: "UTC" },
@@ -206,7 +260,8 @@ export function startCronJobs(): void {
   // ── Database Daily Backup ──────────────────────────────────────────────────
   dbBackupTask = schedule(DB_BACKUP_CRON_EXPR, async () => {
     console.log(`[Cron] ⏰ Database backup triggered at ${new Date().toISOString()}`);
-    const acquired = await acquireCronLock("db_backup");
+    const lockOwner = getLockOwner();
+    const acquired = await acquireCronLock("db_backup", { lockOwner });
     if (!acquired) {
       console.warn(`[Cron] ⚠️ Database backup lock held by another instance – skipping tick.`);
       return;
@@ -214,13 +269,14 @@ export function startCronJobs(): void {
     try {
       await performDatabaseBackup();
     } finally {
-      await releaseCronLock("db_backup");
+      await releaseCronLock("db_backup", { lockOwner });
     }
   }, { timezone: "UTC" });
 
   // ── Invoice Overdue Check ──────────────────────────────────────────────────
   invoiceOverdueTask = schedule(INVOICE_OVERDUE_CRON_EXPR, async () => {
-    const acquired = await acquireCronLock("invoice_overdue");
+    const lockOwner = getLockOwner();
+    const acquired = await acquireCronLock("invoice_overdue", { lockOwner });
     if (!acquired) {
       console.warn(`[Cron] ⚠️ Invoice overdue lock held by another instance – skipping tick.`);
       return;
@@ -233,14 +289,15 @@ export function startCronJobs(): void {
     } catch (err: any) {
       console.error(`[Cron] ❌ Invoice overdue job failed: ${err.message}`);
     } finally {
-      await releaseCronLock("invoice_overdue");
+      await releaseCronLock("invoice_overdue", { lockOwner });
     }
   }, { timezone: "UTC" });
 
   // ── Idempotency Cleanup ────────────────────────────────────────────────────
   idempotencyCleanupTask = schedule(IDEMPOTENCY_CLEANUP_CRON_EXPR, async () => {
     console.log(`[Cron] ⏰ Idempotency cleanup triggered at ${new Date().toISOString()}`);
-    const acquired = await acquireCronLock("idempotency_cleanup");
+    const lockOwner = getLockOwner();
+    const acquired = await acquireCronLock("idempotency_cleanup", { lockOwner });
     if (!acquired) {
       console.warn(`[Cron] ⚠️ Idempotency cleanup lock held by another instance – skipping tick.`);
       return;
@@ -251,13 +308,14 @@ export function startCronJobs(): void {
     } catch (err: any) {
       console.error(`[Cron] ❌ Idempotency cleanup failed: ${err.message}`);
     } finally {
-      await releaseCronLock("idempotency_cleanup");
+      await releaseCronLock("idempotency_cleanup", { lockOwner });
     }
   }, { timezone: "UTC" });
 
   // ── Address Pool ───────────────────────────────────────────────────────────
   addressPoolTask = schedule(ADDRESS_POOL_CRON_EXPR, async () => {
-    const acquired = await acquireCronLock("address_pool");
+    const lockOwner = getLockOwner();
+    const acquired = await acquireCronLock("address_pool", { lockOwner });
     if (!acquired) {
       console.warn(`[Cron] ⚠️ Address pool lock held by another instance – skipping tick.`);
       return;
@@ -276,13 +334,14 @@ export function startCronJobs(): void {
     } catch (err: any) {
       console.error(`[Cron] ❌ Address pool job failed: ${err.message}`);
     } finally {
-      await releaseCronLock("address_pool");
+      await releaseCronLock("address_pool", { lockOwner });
     }
   }, { timezone: "UTC" });
 
   // ── Settlement Retry Pickup ───────────────────────────────────────────────
   settlementRetryTask = schedule(SETTLEMENT_RETRY_CRON_EXPR, async () => {
-    const acquired = await acquireCronLock("settlement_retry");
+    const lockOwner = getLockOwner();
+    const acquired = await acquireCronLock("settlement_retry", { lockOwner });
     if (!acquired) {
       return;
     }
@@ -295,7 +354,7 @@ export function startCronJobs(): void {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`[Cron] ❌ Settlement retry job failed: ${msg}`);
     } finally {
-      await releaseCronLock("settlement_retry");
+      await releaseCronLock("settlement_retry", { lockOwner });
     }
   }, { timezone: "UTC" });
 

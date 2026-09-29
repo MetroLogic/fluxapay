@@ -1,4 +1,5 @@
 import { HDWalletService } from "../HDWalletService";
+import { StrKey } from "@stellar/stellar-sdk";
 
 // Mock Prisma for all tests in this file
 jest.mock("../../generated/client/client", () => {
@@ -130,6 +131,18 @@ describe("HDWalletService", () => {
       const r1 = await service.derivePaymentAddress("merchant_X", "payment_A");
       const r2 = await service.derivePaymentAddress("merchant_Y", "payment_A");
       expect(r1.publicKey).not.toBe(r2.publicKey);
+    });
+
+    it("should throw if the derived address fails StrKey checksum validation", async () => {
+      const spy = jest
+        .spyOn(StrKey, "isValidEd25519PublicKey")
+        .mockReturnValueOnce(false);
+
+      await expect(
+        service.derivePaymentAddress("merchant_invalid", "payment_invalid"),
+      ).rejects.toThrow(/invalid Stellar address/);
+
+      spy.mockRestore();
     });
   });
 

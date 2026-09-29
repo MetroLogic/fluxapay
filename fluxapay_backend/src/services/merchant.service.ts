@@ -14,7 +14,7 @@ import { sendMerchantOtpSms } from "./smsOtp.service";
 import { isDevEnv } from "../helpers/env.helper";
 import { generateToken } from "../helpers/jwt.helper";
 import { merchantRegistryService } from "./merchantRegistry.service";
-import { generateApiKey, generateWebhookSecret, hashKey, getLastFour } from "../helpers/crypto.helper";
+import { generateApiKey, generateWebhookSecret, hashKey, getLastFour, ApiKeyMode } from "../helpers/crypto.helper";
 import * as crypto from "crypto";
 import {
   logMerchantProfileUpdate,
@@ -207,10 +207,11 @@ export async function getMerchantUserService(data: {
 
 export async function regenerateApiKeyService(data: {
   merchantId: string;
+  mode?: ApiKeyMode;
 }) {
-  const { merchantId } = data;
+  const { merchantId, mode = "live" } = data;
 
-  const apiKey = generateApiKey();
+  const apiKey = generateApiKey(mode);
   const apiKeyHashed = await hashKey(apiKey);
   const apiKeyLastFour = getLastFour(apiKey);
 
@@ -288,13 +289,24 @@ export async function rotateWebhookSecretService(data: {
 }) {
   const { merchantId } = data;
   const newSecret = crypto.randomBytes(32).toString("hex");
+
+  const existing = await prisma.merchant.findUnique({
+    where: { id: merchantId },
+    select: { webhook_secret: true },
+  });
+
   await prisma.merchant.update({
     where: { id: merchantId },
     data: { webhook_secret: newSecret },
   });
 
-  // Audit log: webhook secret rotation (value is never logged)
-  logWebhookSecretRotation({ merchantId }).catch(() => {});
+  // Audit log: webhook secret rotation. The raw secret values (old or new)
+  // are never logged — only the last 4 characters of the previous secret
+  // are recorded, as a fingerprint for forensic/audit purposes.
+  logWebhookSecretRotation({
+    merchantId,
+    previousSecretLastFour: existing?.webhook_secret ? getLastFour(existing.webhook_secret) : undefined,
+  }).catch(() => {});
 
   return { message: "Webhook secret rotated", webhook_secret: newSecret };
 }

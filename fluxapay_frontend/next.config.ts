@@ -40,7 +40,7 @@ const nextConfig: NextConfig = {
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: https:",
       "font-src 'self' data:",
-      "connect-src 'self'",
+      "connect-src 'self' https://api.web3modal.org https://rpc.walletconnect.org https://pulse.walletconnect.org https://secure.walletconnect.org https://secure-mobile.walletconnect.com https://secure-mobile.walletconnect.org wss://relay.walletconnect.org",
       "frame-ancestors 'none'",
       process.env.NEXT_PUBLIC_CSP_REPORT_URI ? `report-uri ${process.env.NEXT_PUBLIC_CSP_REPORT_URI}` : "",
     ]
