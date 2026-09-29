@@ -2,7 +2,7 @@ import { ListPageFilterBar } from "@/components/data-table";
 import { Input } from "@/components/Input";
 import { Select } from "@/components/Select";
 import { Button } from "@/components/Button";
-import { Download, Search, Save, XCircle } from "lucide-react";
+import { Search, Save, XCircle } from "lucide-react";
 import { memo, useCallback, useEffect, useState, type ChangeEvent } from "react";
 import toast from "react-hot-toast";
 import { useDebounce } from "@/hooks/useDebounce";
@@ -22,9 +22,6 @@ interface PaymentsFiltersProps {
     onDateToChange: (value: string) => void;
     onAmountMinChange: (value: string) => void;
     onAmountMaxChange: (value: string) => void;
-    /** Bulk-export every payment matching the active filters. */
-    onExportCsv?: () => void;
-    isExportingCsv?: boolean;
 }
 
 interface SavedPreset {
@@ -52,8 +49,6 @@ export const PaymentsFilters = memo(({
     onDateToChange,
     onAmountMinChange,
     onAmountMaxChange,
-    onExportCsv,
-    isExportingCsv = false,
 }: PaymentsFiltersProps) => {
     const [presets, setPresets] = useState<SavedPreset[]>([]);
     const [selectedPresetId, setSelectedPresetId] = useState<string>("default");
@@ -187,20 +182,6 @@ export const PaymentsFilters = memo(({
                 </div>
                 
                 <div className="flex items-center gap-2 w-full md:w-auto">
-                    {onExportCsv && (
-                        <Button
-                            variant="secondary"
-                            size="sm"
-                            className="gap-2 flex-1 md:flex-none"
-                            onClick={onExportCsv}
-                            disabled={isExportingCsv}
-                            data-testid="payments-bulk-export-csv"
-                            title="Export all payments matching the current filters as CSV"
-                        >
-                            <Download className="w-4 h-4" />
-                            {isExportingCsv ? "Exporting..." : "Export CSV"}
-                        </Button>
-                    )}
                     <Button 
                         variant="secondary" 
                         size="sm" 

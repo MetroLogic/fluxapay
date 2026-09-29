@@ -1,14 +1,10 @@
 "use client";
 
 import useSWR from "swr";
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { api } from "@/lib/api";
-import {
-  readLocalDashboardNotifications,
-  subscribeToLocalDashboardNotifications,
-} from "@/lib/dashboardNotifications";
 
-type NotificationCategory = "webhook_failure" | "payout" | "export";
+type NotificationCategory = "webhook_failure" | "payout";
 type NotificationSeverity = "critical" | "warning" | "info";
 
 export interface DashboardNotification {
@@ -86,19 +82,6 @@ export function useDashboardNotifications(
   const categoryFilter = options.categoryFilter ?? "all";
 
   const [readVersion, setReadVersion] = useState(0);
-  const [localNotifications, setLocalNotifications] = useState<
-    DashboardNotification[]
-  >([]);
-
-  // Notifications the browser itself published (e.g. a finished export). They
-  // are persisted in the store, so re-sync whenever one is added.
-  useEffect(() => {
-    const syncLocal = () => {
-      setLocalNotifications(readLocalDashboardNotifications());
-    };
-    syncLocal();
-    return subscribeToLocalDashboardNotifications(syncLocal);
-  }, []);
 
   const key = ["dashboard-notifications", webhookLimit, payoutLimit, readVersion];
 
@@ -179,13 +162,7 @@ export function useDashboardNotifications(
     },
   );
 
-  const notifications = useMemo(() => {
-    const remote = data ?? [];
-    return [...remote, ...localNotifications].sort(
-      (a, b) =>
-        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
-    );
-  }, [data, localNotifications]);
+  const notifications = data ?? [];
 
   const filteredNotifications = useMemo(() => {
     if (categoryFilter === "all") return notifications;

@@ -30,12 +30,10 @@ function CategoryBadge({ category }: { category: DashboardNotification["category
   const styles = {
     webhook_failure: "bg-red-100 text-red-700",
     payout: "bg-blue-100 text-blue-700",
-    export: "bg-emerald-100 text-emerald-700",
   };
   const labels = {
     webhook_failure: "Webhook",
     payout: "Payout",
-    export: "Export",
   };
   return (
     <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded-full", styles[category])}>
@@ -45,7 +43,7 @@ function CategoryBadge({ category }: { category: DashboardNotification["category
 }
 
 export function NotificationsCenter({ compact = false }: NotificationsCenterProps) {
-  const [categoryFilter, setCategoryFilter] = useState<"all" | "webhook_failure" | "payout" | "export">("all");
+  const [categoryFilter, setCategoryFilter] = useState<"all" | "webhook_failure" | "payout">("all");
   const {
     notifications,
     unreadCount,
@@ -77,7 +75,7 @@ export function NotificationsCenter({ compact = false }: NotificationsCenterProp
             Notifications Center
           </h3>
           <p className="mt-1 text-sm text-muted-foreground">
-            Webhook failures, payout updates, and exports in one feed.
+            Webhook failures and payout updates in one feed.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -107,7 +105,7 @@ export function NotificationsCenter({ compact = false }: NotificationsCenterProp
           <div className="flex items-center gap-2">
             <Filter className="h-3.5 w-3.5 text-muted-foreground" />
             <div className="flex gap-1">
-              {(["all", "webhook_failure", "payout", "export"] as const).map((filter) => (
+              {(["all", "webhook_failure", "payout"] as const).map((filter) => (
                 <button
                   key={filter}
                   onClick={() => setCategoryFilter(filter)}
@@ -118,13 +116,7 @@ export function NotificationsCenter({ compact = false }: NotificationsCenterProp
                       : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                   )}
                 >
-                  {filter === "all"
-                    ? "All"
-                    : filter === "webhook_failure"
-                      ? "Webhooks"
-                      : filter === "payout"
-                        ? "Payouts"
-                        : "Exports"}
+                  {filter === "all" ? "All" : filter === "webhook_failure" ? "Webhooks" : "Payouts"}
                 </button>
               ))}
             </div>
@@ -159,13 +151,7 @@ export function NotificationsCenter({ compact = false }: NotificationsCenterProp
             <p className="text-xs text-muted-foreground mt-1">
               {categoryFilter === "all"
                 ? "You're all caught up! No webhook failures or payout updates."
-                : `No ${
-                    categoryFilter === "webhook_failure"
-                      ? "webhook"
-                      : categoryFilter === "payout"
-                        ? "payout"
-                        : "export"
-                  } notifications found.`}
+                : `No ${categoryFilter === "webhook_failure" ? "webhook" : "payout"} notifications found.`}
             </p>
           </div>
         )}
