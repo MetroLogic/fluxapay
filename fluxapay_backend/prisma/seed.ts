@@ -532,7 +532,7 @@ async function seedWebhookLogs(
                 event_id: def.event_id,
                 payment_id: def.payment_id,
                 retry_count: def.retry_count,
-                max_retries: 5,
+                max_retries: 3,
                 next_retry_at: def.next_retry_at ?? null,
                 failure_reason: def.failure_reason ?? null,
                 failed_at: def.failed_at ?? null,
