@@ -10,6 +10,7 @@ import {
   updateRefundStatusService,
 } from "../services/refund.service";
 import { RefundStatus } from "../generated/client/client";
+import { publishRefundStatusUpdate } from "../services/refund.events";
 
 export async function createRefund(req: AuthRequest, res: Response) {
   try {
@@ -80,16 +81,7 @@ export async function updateRefundStatus(req: AuthRequest, res: Response) {
       failed_reason: req.body.failed_reason,
     });
 
-    // Emit real-time update to the merchant's dashboard socket room.
-    const io = req.app.get("io");
-    if (io) {
-      io.to(`merchant:${merchantId}`).emit("refund:updated", {
-        refund_id: String(refund_id),
-        status: result?.status ?? req.body.status,
-        failed_reason: result?.failed_reason ?? req.body.failed_reason ?? null,
-        updated_at: new Date().toISOString(),
-      });
-    }
+    publishRefundStatusUpdate(result);
 
     res.status(200).json(result);
   } catch (err: any) {
