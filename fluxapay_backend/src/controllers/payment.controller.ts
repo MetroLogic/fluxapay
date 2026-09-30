@@ -57,7 +57,6 @@ function resolveSortColumn(rawSortBy: unknown): string {
 }
 
 
-
 export const createPayment = async (req: Request, res: Response) => {
   try {
     const {
@@ -346,386 +345,73 @@ export const getPaymentById = async (req: Request, res: Response) => {
       return sendApiError(res, apiError(404, ErrorCode.PAYMENT_NOT_FOUND, "Payment not found"));
     }
 
-    // Surface a human-readable Stellar failure alongside the raw code so the
-    // dashboard can render a helpful message and support can debug (#stellar-errors).
-    let stellarError: StellarErrorMapping | null = null;
-    if (payment.status === PaymentStatus.FAILED || payment.status === "failed") {
-      const rawCode =
-        (payment as { stellar_error_code?: string | null }).stellar_error_code ??
-        (payment as { error_code?: string | null }).error_code ??
-        null;
-      stellarError = mapStellarError(rawCode);
-    }
-
-    const responsePayload = {
-      ...payment,
-      ...(stellarError && {
-        error: {
-          message: stellarError.friendlyMessage,
-          code: stellarError.code,
-        },
-      }),
-    };
-
-    // Add explorer link if transaction_hash exists (not present in current Payment model).
-    const explorerBase = (process.env.STELLAR_HORIZON_URL || "").includes(
-      "testnet",
-    )
-      ? "https://stellar.expert/explorer/testnet/tx/"
-      : "https://stellar.expert/explorer/public/tx/";
-
-    const responseData = {
-      ...payment,
-      stellar_expert_url: null,
-    };
-
-    res.json(responseData);
+ main
   } catch (error: unknown) {
     return sendApiError(res, error);
   }
 };
 
-/**
- * GET /api/payments/:id/status
- * Publicly accessible view of a payment's status.
- *
- * Safe payer DTO — only the fields a payer needs to complete or verify a
- * checkout.  Intentionally excludes: merchantId, internal DB ids beyond the
- * payment id, merchant API keys, customer PII, and any internal metadata.
- */
-export const getPaymentStatus = async (req: Request, res: Response) => {
+export const getCheckoutSession = async (req: Request, res: Response) => {
   try {
-    const payment_id = String(req.params.id);
+    const payment_id = String(req.params.id || req.params.payment_id);
 
-    const payment = await prisma.payment.findUnique({
+    const payment = await prisma.payment.findFirst({
       where: { id: payment_id },
-      select: {
-        id: true,
-        status: true,
-        amount: true,
-        currency: true,
-        stellar_address: true,
-        expiration: true,
-      },
+      include: { merchant: true },
     });
 
     if (!payment) {
       return sendApiError(res, apiError(404, ErrorCode.PAYMENT_NOT_FOUND, "Payment not found"));
     }
 
-    // Return a minimal, PII-free DTO safe for unauthenticated callers.
-    res.json({
-      id: payment.id,
-      status: payment.status,
-      amount: Number(payment.amount),
-      currency: payment.currency,
-      address: payment.stellar_address,
-      expiresAt: payment.expiration.toISOString(),
-    });
-  } catch (error: unknown) {
-    console.error("Error fetching payment status:", error);
-    return sendApiError(res, apiError(500, ErrorCode.INTERNAL_ERROR, "Internal Server Error"));
-  }
-};
+    const accentHex = normalizeCheckoutAccentHex(payment.merchant?.checkout_accent_hex);
 
-/**
- * GET /api/payments/:id/stream
- * SSE stream for real-time payment updates.
- */
-export const streamPaymentStatus = async (req: Request, res: Response) => {
-  const payment_id = String(req.params.id);
-
-  // Set headers for SSE
-  res.setHeader("Content-Type", "text/event-stream");
-  res.setHeader("Cache-Control", "no-cache");
-  res.setHeader("Connection", "keep-alive");
-  res.flushHeaders();
-
-  // Send initial status
-  const payment = await prisma.payment.findUnique({
-    where: { id: payment_id },
-    select: { status: true },
-  });
-
-  if (payment) {
-    res.write(`data: ${JSON.stringify({ status: payment.status })}\n\n`);
-  }
-
-  // Listener for payment updates
-  const onPaymentUpdate = (updatedPayment: any) => {
-    if (updatedPayment.id === payment_id) {
-      res.write(
-        `data: ${JSON.stringify({ status: updatedPayment.status })}\n\n`,
-      );
-
-      if (isTerminalStatus(updatedPayment.status as PaymentStatus)) {
-        res.write(`data: ${JSON.stringify({ event: "done" })}\n\n`);
-        eventBus.off(AppEvents.PAYMENT_UPDATED, onPaymentUpdate);
-        res.end();
-      }
-    }
-  };
-
-  eventBus.on(AppEvents.PAYMENT_UPDATED, onPaymentUpdate);
-
-  // Clean up on client disconnect
-  req.on("close", () => {
-    eventBus.off(AppEvents.PAYMENT_UPDATED, onPaymentUpdate);
-    res.end();
-  });
-};
-
-function memoFromMetadata(metadata: unknown): {
-  memo?: string;
-  memoType?: "text" | "id" | "hash" | "return";
-  memoRequired?: boolean;
-} {
-  if (!metadata || typeof metadata !== "object") return {};
-  const m = metadata as Record<string, unknown>;
-  const memo = typeof m.memo === "string" ? m.memo : undefined;
-  const mt = m.memo_type ?? m.memoType;
-  const memoType =
-    mt === "text" || mt === "id" || mt === "hash" || mt === "return"
-      ? mt
-      : undefined;
-  const memoRequired = Boolean(m.memoRequired ?? m.memo_required);
-  return { memo, memoType, memoRequired };
-}
-
-/**
- * Public Checkout DTO
- *
- * Strict whitelist of fields safe to expose to unauthenticated payers.
- * Fields intentionally absent: merchantId, customerId, customer_email,
- * merchant API keys, internal DB indices, encrypted_key_data, metadata (raw),
- * payment_index, derivation_path, order_id.
- */
-export interface PublicCheckoutDto {
-  id: string;
-  amount: number;
-  currency: string;
-  address: string;
-  expiresAt: string;
-  status: string;
-  successUrl?: string;
-  cancelUrl?: string;
-  merchantName: string;
-  description?: string;
-  checkoutLogoUrl?: string;
-  checkoutAccentColor?: string;
-  memo?: string;
-  memoType?: "text" | "id" | "hash" | "return";
-  memoRequired?: boolean;
-}
-
-/**
- * Build the public checkout DTO from a hydrated payment + merchant record.
- * Centralising DTO construction here ensures the whitelist is enforced in a
- * single place and is easily testable.
- */
-export function buildPublicCheckoutDto(payment: {
-  id: string;
-  amount: { toString(): string } | number;
-  currency: string;
-  stellar_address: string;
-  expiration: Date;
-  status: string;
-  success_url: string | null;
-  cancel_url: string | null;
-  description: string | null;
-  metadata: unknown;
-  merchant: {
-    business_name: string;
-    checkout_logo_url: string | null;
-    checkout_accent_color: string | null;
-  };
-}): PublicCheckoutDto {
-  const accent = normalizeCheckoutAccentHex(
-    payment.merchant.checkout_accent_color,
-  );
-  const meta = memoFromMetadata(payment.metadata);
-
-  const dto: PublicCheckoutDto = {
-    id: payment.id,
-    amount: Number(payment.amount),
-    currency: payment.currency,
-    address: payment.stellar_address,
-    expiresAt: payment.expiration.toISOString(),
-    status: payment.status,
-    merchantName: payment.merchant.business_name,
-  };
-
-  if (payment.success_url != null) dto.successUrl = payment.success_url;
-  if (payment.cancel_url != null) dto.cancelUrl = payment.cancel_url;
-  if (payment.description != null) dto.description = payment.description;
-  if (payment.merchant.checkout_logo_url != null)
-    dto.checkoutLogoUrl = payment.merchant.checkout_logo_url;
-  if (accent != null) dto.checkoutAccentColor = accent;
-  if (meta.memo !== undefined) dto.memo = meta.memo;
-  if (meta.memoType !== undefined) dto.memoType = meta.memoType;
-  if (meta.memoRequired !== undefined) dto.memoRequired = meta.memoRequired;
-
-  return dto;
-}
-
-/** Public hosted checkout — no auth. */
-export const getPublicCheckoutPayment = async (req: Request, res: Response) => {
-  try {
-    const id = String(req.params.id);
-    const payment = await prisma.payment.findUnique({
-      where: { id },
-      include: {
-        merchant: {
-          select: {
-            business_name: true,
-            checkout_logo_url: true,
-            checkout_accent_color: true,
-          },
-        },
-      },
-    });
-
-    if (!payment?.stellar_address) {
-      return sendApiError(res, apiError(404, ErrorCode.PAYMENT_NOT_FOUND, "Payment not found"));
-    }
-
-    res.json(buildPublicCheckoutDto(payment as any));
-  } catch (error: unknown) {
-    console.error("getPublicCheckoutPayment", error);
-    return sendApiError(res, apiError(500, ErrorCode.PAYMENT_FETCH_FAILED, "Failed to load payment"));
-  }
-};
-
-export const getPublicCheckoutPaymentStatus = async (
-  req: Request,
-  res: Response,
-) => {
-  try {
-    const id = String(req.params.id);
-    const payment = await prisma.payment.findUnique({
-      where: { id },
-      select: { status: true },
-    });
-    if (!payment) {
-      return sendApiError(res, apiError(404, ErrorCode.PAYMENT_NOT_FOUND, "Payment not found"));
-    }
-    res.json({ status: payment.status });
-  } catch (error: unknown) {
-    console.error("getPublicCheckoutPaymentStatus", error);
-    return sendApiError(res, apiError(500, ErrorCode.PAYMENT_FETCH_FAILED, "Failed to load status"));
-  }
-};
-
-/**
- * GET /api/v1/charges/{id}/settlement
- * Get settlement details for a specific payment.
- */
-export const getPaymentSettlement = async (req: Request, res: Response) => {
-  try {
-    const merchantId = await validateUserId(req as AuthRequest);
-    const paymentId = String(req.params.id);
-
-    const settlement = await paymentSettlementService.getPaymentSettlement(
-      paymentId,
-      merchantId,
-    );
-
-    res.json(settlement);
-  } catch (error: unknown) {
-    if (error instanceof Error && error.message === "Payment not found") {
-      return sendApiError(res, apiError(404, ErrorCode.PAYMENT_NOT_FOUND, "Payment not found"));
-    }
-    console.error("Error fetching payment settlement:", error);
-    return sendApiError(res, apiError(500, ErrorCode.INTERNAL_ERROR, "Internal Server Error"));
-  }
-};
-
-/**
- * GET /api/v1/admin/payments
- * Query payments across all merchants (Admin only).
- */
-export const getAdminPayments = async (req: Request, res: Response) => {
-  try {
-    const query = req.query as Record<string, unknown>;
-    const page = resolvePage(query.page);
-    const limit = resolvePageSize(query.limit);
-    const status = query.status ? String(query.status) : undefined;
-    const currency = query.currency ? String(query.currency) : undefined;
-    const search = query.search ? String(query.search) : undefined;
-    const date_from = query.date_from ? String(query.date_from) : undefined;
-    const date_to = query.date_to ? String(query.date_to) : undefined;
-    const sortBy = resolveSortColumn(query.sort_by);
-    const sortOrder: "asc" | "desc" = query.order === "asc" ? "asc" : "desc";
-
-    const where: Record<string, unknown> = {
-      ...(status && status !== "all" && { status }),
-      ...(currency && { currency }),
-      ...((date_from || date_to) && {
-        createdAt: {
-          ...(date_from && { gte: new Date(date_from) }),
-          ...(date_to && { lte: new Date(date_to) }),
-        },
-      }),
-      ...(search && {
-        OR: [
-          { id: { contains: search } },
-          { customer_email: { contains: search, mode: "insensitive" } },
-          { merchant: { business_name: { contains: search, mode: "insensitive" } } },
-        ],
-      }),
-    };
-
-    const [data, total] = await Promise.all([
-      prisma.payment.findMany({
-        where: where as any,
-        skip: (page - 1) * limit,
-        take: limit,
-        orderBy: { [sortBy]: sortOrder },
-        include: {
-          merchant: {
-            select: {
-              id: true,
-              business_name: true,
-              email: true,
-            },
-          },
-        },
-      }),
-      prisma.payment.count({ where: where as any }),
-    ]);
-
-    const totalPages = Math.max(1, Math.ceil(total / limit));
     return res.json({
-      data,
-      meta: {
-        total,
-        page,
-        limit,
-        totalPages,
-        hasNextPage: page < totalPages,
-        hasPreviousPage: page > 1,
-      },
+      id: payment.id,
+      amount: payment.amount,
+      currency: payment.currency,
+      status: payment.status,
+      description: payment.description,
+      customer_email: payment.customer_email,
+      success_url: payment.success_url,
+      cancel_url: payment.cancel_url,
+      expires_at: payment.expires_at,
+      merchant_name: payment.merchant?.name,
+      accent_hex: accentHex,
+      // The checkout page uses this to decide whether to show the
+      // "processing" loading spinner while the payment is being confirmed.
+      is_processing: payment.status === PaymentStatus.PROCESSING,
+      is_terminal: isTerminalStatus(payment.status),
     });
-  } catch (error: unknown) {
-    console.error("Error in getAdminPayments:", error);
-    return res.status(500).json({ error: "Internal Server Error" });
-  }
-};
-
-export const updatePayment = async (req: Request, res: Response) => {
-  try {
-    const merchantId = await validateUserId(req as AuthRequest);
-    if (!merchantId) {
-      return sendApiError(res, apiError(401, ErrorCode.UNAUTHORIZED, "Unauthorized"));
-    }
-
-    const paymentId = String(req.params.id);
-    const { note } = req.body;
-
-    const updated = await PaymentService.updatePayment(paymentId, merchantId, { note });
-    return res.json(updated);
   } catch (error: unknown) {
     return sendApiError(res, error);
   }
 };
 
+export const confirmPayment = async (req: Request, res: Response) => {
+  try {
+    const payment_id = String(req.params.id || req.params.payment_id);
+    const { tx_hash } = req.body;
+
+    const payment = await prisma.payment.findFirst({
+      where: { id: payment_id },
+    });
+
+    if (!payment) {
+      return sendApiError(res, apiError(404, ErrorCode.PAYMENT_NOT_FOUND, "Payment not found"));
+    }
+
+    if (isTerminalStatus(payment.status)) {
+      return res.json({ status: payment.status });
+    }
+
+ main
+    }
+
+    eventBus.emit(AppEvents.PAYMENT_CONFIRMED, { paymentId: payment_id });
+
+    return res.json({ status: PaymentStatus.CONFIRMED });
+  } catch (error: unknown) {
+    return sendApiError(res, error);
+  }
+};
