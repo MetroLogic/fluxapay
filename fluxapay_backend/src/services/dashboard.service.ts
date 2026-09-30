@@ -177,3 +177,104 @@ export async function getDashboardActivity(options: { merchantId?: string } = {}
     data: sampleActivity,
   };
 }
+
+export interface TransactionReportRow {
+  id: string;
+  amount: number;
+  currency: string;
+  status: string;
+  customerEmail: string | null;
+  createdAt: string;
+}
+
+export interface TransactionReportFilters {
+  merchantId?: string;
+  startDate?: string;
+  endDate?: string;
+  status?: string;
+}
+
+function escapeCsvValue(value: unknown): string {
+  if (value === null || value === undefined) {
+    return "";
+  }
+  const str = String(value);
+  if (/[",\r\n\n]/.test(str)) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
+
+export async function getTransactionReportRows(
+  options: TransactionReportFilters = {}
+): Promise<TransactionReportRow[]> {
+  const where: Record<string, unknown> = {};
+
+  if (options.merchantId) {
+    where.merchantId = options.merchantId;
+  }
+
+  if (options.status) {
+    where.status = options.status;
+  }
+
+  if (options.startDate || options.endDate) {
+    const createdAt: Record<string, unknown> = {};
+    if (options.startDate) {
+      createdAt.gte = new Date(options.startDate);
+    }
+    if (options.endDate) {
+      createdAt.lte = new Date(options.endDate);
+    }
+    where.createdAt = createdAt;
+  }
+
+  const payments = await prisma.payment.findMany({
+    where,
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      amount: true,
+      currency: true,
+      status: true,
+      customerEmail: true,
+      createdAt: true,
+    },
+  });
+
+  return payments.map((p) => ({
+    id: p.id,
+    amount: Number(p.amount),
+    currency: p.currency,
+    status: p.status,
+    customerEmail: p.customerEmail,
+    createdAt: p.createdAt.toISOString(),
+  }));
+}
+
+export function transactionReportToCsv(rows: TransactionReportRow[]): string {
+  const headers = ["id", "amount", "currency", "status", "customer_email", "created_at"];
+  const lines = [headers.join(",")];
+
+  for (const row of rows) {
+    lines.push(
+      [
+        escapeCsvValue(row.id),
+        escapeCsvValue(row.amount),
+        escapeCsvValue(row.currency),
+        escapeCsvValue(row.status),
+        escapeCsvValue(row.customerEmail),
+        escapeCsvValue(row.createdAt),
+      ].join(",")
+    );
+  }
+
+  return lines.join("\n");
+}
+
+export async function exportTransactionReportToCsv(
+  options: TransactionReportFilters = {}
+): Promise<string> {
+  const rows = await getTransactionReportRows(options);
+  return transactionReportToCsv(rows);
+}

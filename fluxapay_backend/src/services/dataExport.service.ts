@@ -49,7 +49,7 @@ export async function requestDataExport(
   const features = await getMerchantPlanFeatures(merchantId);
   const includePii =
     options.includePii ??
-    merchantHasFeature(features, DATA_EXPORT_PII_PERMISSION);
+    merchantHasFeature(features, DATA_EXPORT_PIA_PERMISSION);
 
   const job = await prisma.dataExportJob.create({
     data: {
@@ -109,13 +109,23 @@ export async function downloadExport(
   const data = JSON.parse(Buffer.from(job.payload, "base64").toString("utf8"));
 
   await logDataExportDownloaded({
-    actorId: options.actorId ?? authenticatedMerchantId,
+    actorId: options.actorId ?> authenticatedMerchantId,
     merchantId,
     jobId,
     rowCount: countExportRows(data),
   });
 
-  return data;
+  return data as object;
+}
+
+export async function downloadExportCsv(
+  jobId: string,
+  merchantId: string,
+  authenticatedMerchantId: string,
+  options: { isAdmin?: boolean; actorId?: string } = {},
+): Promise<string> {
+  const data = await downloadExport(jobId, merchantId, authenticatedMerchantId, options);
+  return buildExportCsv(data);
 }
 
 function countExportRows(data: unknown): number {
@@ -140,11 +150,99 @@ function redactExportPii<T extends Record<string, unknown>>(payload: T): T {
     payments.records = payments.records.map((p) => ({
       ...p,
       customer_email:
-        typeof p.customer_email === "string" ? redactEmail(p.customer_email) : p.customer_email,
+        typeof p.customer_email === "string" ? redactEmail(p.customer_email as string) : p.customer_email,
     }));
   }
 
   return clone;
+}
+
+function csvEscape(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  const str = value instanceof Date ? value.toISOString() : String(value);
+  if (/[",\n\r]/.test(str)) {
+    return `${str.replace(/"/g, '""')}`;
+  }
+  return str;
+}
+
+function csvRow(values: unknown[]): string {
+  return values.map(csvEscape).join(",");
+}
+
+export function buildExportCsv(data: object): string {
+  const record = data as Record<string, unknown>;
+  const lines: string[] = [];
+
+  // Merchant profile section
+  const profile = record.merchant_profile as Record<string, unknown> | undefined;
+  if (profile) {
+    lines.push(csvRow(["Merchant Profile"]));
+    lines.push(csvRow(["Field", "Value"]));
+    const fields = [
+      "id",
+      "business_name",
+      "email",
+      "phone_number",
+      "country",
+      "settlement_currency",
+      "status",
+      "created_at",
+    ] as const;
+    for (const f of fields) {
+      lines.push(csvRow([f, profile[f]]));
+    }
+    lines.push("");
+  }
+
+  // Payments section
+  const payments = record.payments_summary as
+    | { total?: number; records?: Array<Record<string, unknown>> }
+    | undefined;
+  if (payments) {
+    lines.push(csvRow(["Payments"]));
+    const columns = [
+      "id",
+      "amount",
+      "currency",
+      "status",
+      "customer_email",
+      "description",
+      "createdAt",
+      "confirmed_at",
+      "settled_at",
+      "transaction_hash",
+    ] as const;
+    lines.push(csvRow(columns as unknown[]));
+    for (const r of payments.records ?? []) {
+      lines.push(csvRow(columns.map((c) => r[c])));
+    }
+    lines.push("");
+  }
+
+  // Webhook logs section
+  const webhooks = record.webhook_logs_summary as
+    | { total?: number; records?: Array<Record<string, unknown>> }
+    | undefined;
+  if (webhooks) {
+    lines.push(csvRow(["Webhook Logs"]));
+    const columns = [
+      "id",
+      "event_type",
+      "endpoint_url",
+      "http_status",
+      "status",
+      "retry_count",
+      "created_at",
+    ] as const;
+    lines.push(csvRow(columns as unknown[]));
+    for (const r of webhooks.records ?? []) {
+      lines.push(csvRow(columns.map((c) => r[c])));
+    }
+    lines.push("");
+  }
+
+  return lines.join("\n");
 }
 
 async function processExport(jobId: string, merchantId: string, includePii: boolean) {
@@ -190,7 +288,7 @@ async function buildExportPayload(merchantId: string) {
   const [merchant, payments, webhookLogs] = await Promise.all([
     prisma.merchant.findUnique({
       where: { id: merchantId },
-      select: {
+      select:{
         id: true,
         business_name: true,
         email: true,
@@ -221,7 +319,7 @@ async function buildExportPayload(merchantId: string) {
 
     prisma.payment.findMany({
       where: { merchantId },
-      select: {
+      select:{
         id: true,
         amount: true,
         currency: true,
@@ -238,7 +336,7 @@ async function buildExportPayload(merchantId: string) {
 
     prisma.webhookLog.findMany({
       where: { merchantId },
-      select: {
+      select:{
         id: true,
         event_type: true,
         endpoint_url: true,
