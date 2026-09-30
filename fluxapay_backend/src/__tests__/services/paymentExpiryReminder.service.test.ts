@@ -9,6 +9,7 @@
  *  3. Per-merchant reminder_minutes_before is respected — payments outside
  *     the merchant's window are not processed on that tick.
  *  4. The global CHECKOUT_REMINDER_ENABLED guard still applies.
+ *  5. Stellar error codes are mapped to user-friendly messages.
  */
 
 
@@ -53,6 +54,7 @@ import { runPaymentExpiryReminderJob } from "../../services/paymentExpiryReminde
 import { createAndDeliverWebhook } from "../../services/webhook.service";
 import { sendCheckoutExpiryReminderEmail } from "../../services/email.service";
 import { getNotificationPreferences } from "../../services/notificationPreferences.service";
+import { mapStellarError } from "../../services/stellarErrorMapper.service";
 
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -522,6 +524,64 @@ describe("runPaymentExpiryReminderJob – notification preference checks", () =>
       
       // Second webhook should still be sent
       expect(createAndDeliverWebhook).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe("Stellar error code mapping", () => {
+    it("maps insufficient funds error to a friendly message", async () => {
+      (mapStellarError as jest.Mock).mockReturnValue({
+        code: "tx_insufficient_funds",
+        message: "The account does not have enough funds to complete this transaction.",
+      });
+
+      const result = mapStellarError("tx_insufficient_funds");
+
+      expect(result).toEqual({
+        code: "tx_insufficient_funds",
+        message: "The account does not have enough funds to complete this transaction.",
+      });
+    });
+
+    it("maps bad auth error to a friendly message", async () => {
+      (mapStellarError as jest.Mock).mockReturnValue({
+        code: "tx_bad_auth",
+        message: "Transaction authorization failed. Please check your signing credentials.",
+      });
+
+      const result = mapStellarError("tx_bad_auth");
+
+      expect(result).toEqual({
+        code: "tx_bad_auth",
+        message: "Transaction authorization failed. Please check your signing credentials.",
+      });
+    });
+
+    it("maps tx_failed error to a friendly message", async () => {
+      (mapStellarError as jest.Mock).mockReturnValue({
+        code: "tx_failed",
+        message: "The transaction failed to process. Please try again.",
+      });
+
+      const result = mapStellarError("tx_failed");
+
+      expect(result).toEqual({
+        code: "tx_failed",
+        message: "The transaction failed to process. Please try again.",
+      });
+    });
+
+    it("falls back to a generic message for unknown error codes", async () => {
+      (mapStellarError as jest.Mock).mockReturnValue({
+        code: "tx_unknown_error",
+        message: "An unexpected Stellar error occurred. Please contact support.",
+      });
+
+      const result = mapStellarError("tx_unknown_error");
+
+      expect(result).toEqual({
+        code: "tx_unknown_error",
+        message: "An unexpected Stellar error occurred. Please contact support.",
+      });
     });
   });
 });
