@@ -35,7 +35,7 @@ export function PaymentLinksPage() {
   const [editMaxUses, setEditMaxUses] = useState("");
 
   const load = useCallback(async () => {
-    const res = await fetch("/api/links");
+    const res = await fetch("/api/v1/payment-links");
     setLinks(await res.json());
   }, []);
 
@@ -47,7 +47,7 @@ export function PaymentLinksPage() {
     e.preventDefault();
     if (!label || !amount) return;
     setCreating(true);
-    const res = await fetch("/api/links", {
+    const res = await fetch("/api/v1/payment-links", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -73,12 +73,12 @@ export function PaymentLinksPage() {
 
   async function handleDelete(id: string) {
     if (!confirm("Delete this payment link?")) return;
-    await fetch(`/api/links/${id}`, { method: "DELETE" });
+    await fetch(`/api/v1/payment-links/${id}`, { method: "DELETE" });
     void load();
   }
 
   async function handleToggle(id: string) {
-    await fetch(`/api/links/${id}`, { method: "PATCH" });
+    await fetch(`/api/v1/payment-links/${id}`, { method: "PATCH" });
     void load();
   }
 
@@ -113,7 +113,7 @@ export function PaymentLinksPage() {
 
   async function handleSaveEdit() {
     if (!editingLink) return;
-    await fetch(`/api/links/${editingLink.id}`, {
+    await fetch(`/api/v1/payment-links/${editingLink.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
