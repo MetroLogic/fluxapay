@@ -1,4 +1,4 @@
-/**
+/*
  * Guards the Payment indexes that back hot query paths against accidental
  * removal. PaymentService.checkRateLimit() counts payments by merchantId with
  * createdAt >= windowStart; without a composite index this is a table scan.
@@ -15,7 +15,7 @@ const prismaDir = path.join(__dirname, "../../prisma");
 
 function getPaymentModel(): string {
   const schema = fs.readFileSync(path.join(prismaDir, "schema.prisma"), "utf8");
-  const match = schema.match(/^model Payment \{[\s\S]*?^\}/m);
+  const match = schema.match(/^model Payment \{[\\s\S]*?^\}/m);
   if (!match) throw new Error("Payment model not found in schema.prisma");
   return match[0];
 }
@@ -84,7 +84,7 @@ describe("Payment list endpoint indexes (#1208)", () => {
       // Accept the bare form and the DESC-sorted form Prisma emits for a
       // trailing timestamp column.
       const declarations = [
-        `@@index([${columns.join(", ")}])`,
+        `@@index([{columns.join(", ")}])`,
         `@@index([${columns.join(", ")}`,
       ];
       expect(
