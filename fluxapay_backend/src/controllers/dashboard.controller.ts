@@ -1,6 +1,7 @@
 import { createController } from "../helpers/controller.helper";
 import { apiError, sendApiError } from "../helpers/apiError.helper";
 import { ErrorCode } from "../types/errors";
+import { subscribeToRefundUpdates } from "../services/refund.service";
 
 import * as dashboardService from "../services/dashboard.service";
 import { AuthRequest } from "../types/express";
@@ -22,6 +23,43 @@ export const activity = createController(
   dashboardService.getDashboardActivity,
   200,
 );
+
+/**
+ * GET /api/v1/dashboard/refunds/stream
+ * Server-Sent Events stream that pushes refund status updates to the
+ * dashboard in real time so the UI no longer shows a stale 'pending' state.
+ */
+export async function streamRefundUpdates(req: AuthRequest, res: Response) {
+  const merchantId = req.merchantId;
+  if (!merchantId) {
+    return sendApiError(res, apiError(401, ErrorCode.UNAUTHORIZED, "Authentication required"));
+  }
+
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Connection", "keep-alive");
+  res.flushHeaders?.();
+
+  const send = (payload: unknown) => {
+    res.write(`data: ${JSON.stringify(payload)}\n\n`);
+  };
+
+  send({ type: "connected", merchantId });
+
+  const unsubscribe = subscribeToRefundUpdates(merchantId, (update) => {
+    send({ type: "refund.updated", ...update });
+  });
+
+  const heartbeat = setInterval(() => {
+    res.write(": keep-alive\n\n");
+  }, 15000);
+
+  req.on("close", () => {
+    clearInterval(heartbeat);
+    unsubscribe();
+    res.end();
+  });
+}
 
 /**
  * GET /api/v1/dashboard/audit-logs

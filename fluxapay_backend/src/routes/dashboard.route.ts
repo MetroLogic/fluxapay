@@ -2,6 +2,7 @@ import { Router } from "express";
 import * as dashboardController from "../controllers/dashboard.controller";
 import { authenticateApiKey } from "../middleware/apiKeyAuth.middleware";
 import { authenticate } from "../middleware/auth.middleware";
+import { requireAuth } from "../middleware/auth.middleware";
 const router = Router();
 
 router.use(authenticateApiKey);
@@ -263,5 +264,21 @@ router.get("/audit-logs", dashboardController.getMerchantAuditLogs);
  *         description: Unauthorized
  */
 router.get("/events", authenticate, dashboardController.streamEvents);
+
+/**
+ * @swagger
+ * /api/v1/dashboard/refunds/stream:
+ *   get:
+ *     summary: Subscribe to real-time refund status updates (Server-Sent Events)
+ *     tags: [Dashboard]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Event stream opened; emits refund status changes as they occur
+ *       401:
+ *         description: Unauthorized
+ */
+router.get("/refunds/stream", authenticate, dashboardController.streamRefundEvents);
 
 export default router;

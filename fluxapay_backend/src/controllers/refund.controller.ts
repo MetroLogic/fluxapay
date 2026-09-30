@@ -80,13 +80,14 @@ export async function updateRefundStatus(req: AuthRequest, res: Response) {
       failed_reason: req.body.failed_reason,
     });
 
-    const io = req.app.get("so");
+    // Emit real-time update to the merchant's dashboard socket room.
+    const io = req.app.get("io");
     if (io) {
-      io.to(`room:merchant:${merchantId}`).emit("refund.status_updated", {
+      io.to(`merchant:${merchantId}`).emit("refund:updated", {
         refund_id: String(refund_id),
-        status: result.status,
-        failed_reason: result.failed_reason,
-        updated_at: result.updated_at,
+        status: result?.status ?? req.body.status,
+        failed_reason: result?.failed_reason ?? req.body.failed_reason ?? null,
+        updated_at: new Date().toISOString(),
       });
     }
 
