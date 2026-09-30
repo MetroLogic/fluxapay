@@ -402,7 +402,11 @@ export const getNotificationPreferencesController = createController(
 
 export const updateNotificationPreferencesController = createController(
   async (
-    body: { payment_expiry_reminder?: boolean; reminder_minutes_before?: number },
+    body: {
+      payment_expiry_reminder?: boolean;
+      reminder_minutes_before?: number;
+      notify_on_payment?: boolean;
+    },
     req: AuthRequest,
   ) => {
     const merchantId = await validateUserId(req);
@@ -410,6 +414,7 @@ export const updateNotificationPreferencesController = createController(
       merchantId,
       payment_expiry_reminder: body.payment_expiry_reminder,
       reminder_minutes_before: body.reminder_minutes_before,
+      notify_on_payment: body.notify_on_payment,
     });
     return { message: "Notification preferences updated", preferences };
   },

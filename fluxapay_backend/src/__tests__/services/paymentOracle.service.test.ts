@@ -78,7 +78,51 @@ import {
   getOracleHealth,
   manualVerifyPayment,
   fetchPendingPaymentsPage,
+  isNewlyConfirmedTransition,
 } from "../../services/paymentOracle.service";
+
+describe("isNewlyConfirmedTransition (#1190)", () => {
+  // The oracle writes payment status with a bare `where: { id }`, so an already
+  // confirmed payment gets re-verified on later ticks and on manual admin
+  // re-verify. PAYMENT_CONFIRMED must fire on the real transition only, or the
+  // merchant is emailed repeatedly.
+
+  it.each([
+    ["pending", "confirmed"],
+    ["partially_paid", "confirmed"],
+    ["partially_paid", "overpaid"],
+    ["pending", "overpaid"],
+    ["expired", "confirmed"],
+  ])("emits when moving from %s to %s", (previous, next) => {
+    expect(isNewlyConfirmedTransition(previous, next)).toBe(true);
+  });
+
+  it.each([
+    ["confirmed", "confirmed"],
+    ["overpaid", "overpaid"],
+  ])("does not re-emit for an unchanged %s payment", (previous, next) => {
+    expect(isNewlyConfirmedTransition(previous, next)).toBe(false);
+  });
+
+  it.each([
+    ["confirmed", "refunded"],
+    ["completed", "refunded"],
+    ["overpaid", "failed"],
+  ])("does not emit when moving backwards from %s to %s", (previous, next) => {
+    // Only transitions *into* a success state notify; a refund or failure is
+    // not a new confirmation.
+    expect(isNewlyConfirmedTransition(previous, next)).toBe(false);
+  });
+
+  it.each([
+    ["pending", "pending"],
+    ["pending", "partially_paid"],
+    ["pending", "expired"],
+    ["pending", "failed"],
+  ])("does not emit for a non-success target %s -> %s", (previous, next) => {
+    expect(isNewlyConfirmedTransition(previous, next)).toBe(false);
+  });
+});
 
 describe("PaymentOracleService", () => {
   beforeEach(() => {
