@@ -31,7 +31,7 @@ const router = Router();
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/CreateRefundRequest'
+ *             $ref: '#components/schemas/CreateRefundRequest'
  *     responses:
  *       201:
  *         description: Refund created
@@ -41,20 +41,20 @@ const router = Router();
  *     security:
  *       - apiKeyAuth: []
  *     parameters:
- *       - in: query
+ *       - in query
  *         name: page
  *         schema:
  *           type: integer
- *       - in: query
+ *       - in query
  *         name: limit
  *         schema:
  *           type: integer
- *       - in: query
+ *       - in query
  *         name: status
  *         schema:
  *           type: string
- *           enum: [pending, processing, completed, failed]
- *       - in: query
+ *            enum: [pending, processing, completed, failed]
+ *       - in query
  *         name: payment_id
  *         schema:
  *           type: string
@@ -128,7 +128,7 @@ router.get(
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/UpdateRefundStatusRequest'
+ *             $ref: '#components/schemas/UpdateRefundStatusRequest'
  *     responses:
  *       200:
  *         description: Refund status updated

@@ -10,6 +10,7 @@ import {
   updateRefundStatusService,
 } from "../services/refund.service";
 import { RefundStatus } from "../generated/client/client";
+import { publishRefundStatusUpdate } from "../services/refund.events";
 
 export async function createRefund(req: AuthRequest, res: Response) {
   try {
@@ -79,6 +80,8 @@ export async function updateRefundStatus(req: AuthRequest, res: Response) {
       status: req.body.status,
       failed_reason: req.body.failed_reason,
     });
+
+    publishRefundStatusUpdate(result);
 
     res.status(200).json(result);
   } catch (err: any) {
