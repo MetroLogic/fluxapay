@@ -39,6 +39,7 @@ jest.mock("../../services/webhook.service", () => ({
   createAndDeliverWebhook: jest.fn().mockResolvedValue(undefined),
 }));
 
+
 jest.mock("../../services/email.service", () => ({
   sendCheckoutExpiryReminderEmail: jest.fn().mockResolvedValue(undefined),
 }));
@@ -103,6 +104,7 @@ beforeEach(() => {
   process.env.CHECKOUT_REMINDER_SEND_EMAIL = "true";
 
   mockLockAcquired();
+  mockPrismaClient.payment.updateMany.mockResolvedValue({ count: 1 });
 });
 
 afterEach(() => {
@@ -127,6 +129,7 @@ describe("runPaymentExpiryReminderJob – notification preference checks", () =>
       expect(result.notified).toBe(0);
       expect(mockPrismaClient.payment.findMany).not.toHaveBeenCalled();
     });
+
   });
 
 
@@ -154,6 +157,7 @@ describe("runPaymentExpiryReminderJob – notification preference checks", () =>
       // The payment must NOT be marked as reminded when opted out
       expect(mockPrismaClient.payment.updateMany).not.toHaveBeenCalled();
     });
+
 
     it("skips ALL payments for the opted-out merchant across a batch", async () => {
       const payments = [
@@ -207,6 +211,7 @@ describe("runPaymentExpiryReminderJob – notification preference checks", () =>
       expect(createAndDeliverWebhook).toHaveBeenCalledTimes(1);
       expect(sendCheckoutExpiryReminderEmail).toHaveBeenCalledTimes(1);
     });
+
 
     it("marks the payment as reminded in the DB", async () => {
       const payment = makePayment("pay-005", MERCHANT_A);
@@ -299,6 +304,7 @@ describe("runPaymentExpiryReminderJob – notification preference checks", () =>
       expect(createAndDeliverWebhook).not.toHaveBeenCalled();
     });
 
+
     it("sends a reminder when the payment is within the merchant's personal window", async () => {
       // Payment expires in 1 minute; merchant wants reminders 2 min before → within window
       const payment = makePayment("pay-009", MERCHANT_A, 1);
@@ -387,6 +393,7 @@ describe("runPaymentExpiryReminderJob – notification preference checks", () =>
       );
     });
 
+
     it("includes all required fields in webhook payload", async () => {
       const payment = makePayment("pay-webhook-002", MERCHANT_A, 3);
       mockPrismaClient.payment.findMany.mockResolvedValue([payment]);
@@ -425,6 +432,7 @@ describe("runPaymentExpiryReminderJob – notification preference checks", () =>
       expect(new Date(payload.expires_at).toISOString()).toBe(payload.expires_at);
     });
 
+
     it("calculates minutes_remaining correctly", async () => {
       const payment = makePayment("pay-webhook-003", MERCHANT_A, 2);
       mockPrismaClient.payment.findMany.mockResolvedValue([payment]);
@@ -449,6 +457,7 @@ describe("runPaymentExpiryReminderJob – notification preference checks", () =>
       const payload = (createAndDeliverWebhook as jest.Mock).mock.calls[0][2];
       expect(payload.minutes_remaining).toBe(2);
     });
+
 
     it("uses stable event_id for idempotency", async () => {
       const payment = makePayment("pay-webhook-004", MERCHANT_A);
@@ -476,6 +485,7 @@ describe("runPaymentExpiryReminderJob – notification preference checks", () =>
       
       expect(eventId).toBe("pay-webhook-004:reminder");
     });
+
 
     it("continues processing other payments if webhook fails for one", async () => {
       const payments = [
