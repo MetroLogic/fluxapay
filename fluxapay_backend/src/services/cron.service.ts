@@ -36,6 +36,7 @@ import { DepositAddressService } from "./depositAddress.service";
 import { getSweepCronInterval, logSweepConfigAtStartup } from "../config/sweep.config";
 import { acquireCronLock, releaseCronLock, getLockOwner } from "../utils/redisLock.util";
 import { paymentSettlementService } from "./paymentSettlement.service";
+import { processDueWebhookRetries } from "./webhook.service";
 import { sendOpsAlert } from "./settlementAlert.service";
 import {
   trackAddressPoolDepleted,
@@ -54,6 +55,7 @@ const INVOICE_OVERDUE_CRON_EXPR = process.env.INVOICE_OVERDUE_CRON ?? "0 * * * *
 const IDEMPOTENCY_CLEANUP_CRON_EXPR = process.env.IDEMPOTENCY_CLEANUP_CRON ?? "0 3 * * *";
 const ADDRESS_POOL_CRON_EXPR = process.env.ADDRESS_POOL_CRON ?? "*/10 * * * *";
 const SETTLEMENT_RETRY_CRON_EXPR = process.env.SETTLEMENT_RETRY_CRON ?? "*/1 * * * *";
+const WEBHOOK_RETRY_CRON_EXPR = process.env.WEBHOOK_RETRY_CRON ?? "*/1 * * * *";
 
 let settlementTask: ScheduledTask | null = null;
 let billingTask: ScheduledTask | null = null;
@@ -67,6 +69,7 @@ let invoiceOverdueTask: ScheduledTask | null = null;
 let idempotencyCleanupTask: ScheduledTask | null = null;
 let addressPoolTask: ScheduledTask | null = null;
 let settlementRetryTask: ScheduledTask | null = null;
+let webhookRetryTask: ScheduledTask | null = null;
 
 const FUNDER_MONITOR_LOCK = "funder_monitor";
 const ADDRESS_POOL_ALERT_THRESHOLD = 0.85;
@@ -358,6 +361,24 @@ export function startCronJobs(): void {
     }
   }, { timezone: "UTC" });
 
+  // ── Webhook Retry Pickup ──────────────────────────────────────────────────
+  webhookRetryTask = schedule(WEBHOOK_RETRY_CRON_EXPR, async () => {
+    const lockOwner = getLockOwner();
+    const acquired = await acquireCronLock("webhook_retry", { lockOwner });
+    if (!acquired) return;
+    try {
+      const result = await processDueWebhookRetries();
+      if (result.due > 0) {
+        console.log(`[Cron] ✅ Webhook retries — processed ${result.processed}/${result.due} due delivery(s).`);
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[Cron] ❌ Webhook retry job failed: ${msg}`);
+    } finally {
+      await releaseCronLock("webhook_retry", { lockOwner });
+    }
+  }, { timezone: "UTC" });
+
   console.log("[Cron] All jobs scheduled successfully.");
 }
 
@@ -378,6 +399,7 @@ export function stopCronJobs(): void {
     [idempotencyCleanupTask, "Idempotency cleanup"],
     [addressPoolTask, "Address pool"],
     [settlementRetryTask, "Settlement retry"],
+    [webhookRetryTask, "Webhook retry"],
   ];
   for (const [task, name] of tasks) {
     if (task) {
@@ -397,4 +419,5 @@ export function stopCronJobs(): void {
   idempotencyCleanupTask = null;
   addressPoolTask = null;
   settlementRetryTask = null;
+  webhookRetryTask = null;
 }
