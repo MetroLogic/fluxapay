@@ -17,12 +17,41 @@ export async function getDashboardOverview() {
     success_rate: 96.3,
     average_transaction_value: 3193.55,
   };
+
+  const pendingRefunds = await prisma.refund.count({
+    where: { status: "PENDING" },
+  });
+
+  const refunds = await prisma.refund.findMany({
+    orderBy: { createdAt: "desc" },
+    take: 10,
+    select: {
+      id: true,
+      amount: true,
+      status: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  });
+
+  const recentRefunds = refunds.map((r) => ({
+    id: r.id,
+    amount: Number(r.amount),
+    status: r.status,
+    created_at: r.createdAt.toISOString(),
+    updated_at: r.updatedAt.toISOString(),
+  }));
+
   /* 
    * temporarily return sample data until we have a module to pull data for metrics from 
   */
   return {
     message: "Dashboard overview recovered",
-    data: sampleMetrics,
+    data: {
+      ...sampleMetrics,
+      pending_refunds: pendingRefunds,
+      recent_refunds: recentRefunds,
+    },
   };
 }
 
@@ -118,14 +147,6 @@ export async function getDashboardActivity(options: { merchantId?: string } = {}
     created_at: string;
   }>;
 
-  let recentRefunds = [] as Array<{
-    id: string;
-    paymentId: string;
-    amount: number;
-    status: string;
-    created_at: string;
-  }>;
-
   if (options.merchantId) {
     const payments = await prisma.payment.findMany({
       where: { merchantId: options.merchantId },
@@ -161,32 +182,8 @@ export async function getDashboardActivity(options: { merchantId?: string } = {}
     ];
   }
 
-  if (options.merchantId) {
-    const refunds = await prisma.refund.findMany({
-      where: { payment: { merchantId: options.merchantId } },
-      orderBy: { createdAt: "desc" },
-      take: 10,
-      select: {
-        id: true,
-        paymentId: true,
-        amount: true,
-        status: true,
-        createdAt: true,
-      },
-    });
-
-    recentRefunds = refunds.map((r) => ({
-      id: r.id,
-      paymentId: r.paymentId,
-      amount: Number(r.amount),
-      status: r.status,
-      created_at: r.createdAt.toISOString(),
-    }));
-  }
-
   const sampleActivity = {
     recent_payments: recentPayments,
-    recent_refunds: recentRefunds,
     recent_settlements: [
       {
         id: "set_456",
