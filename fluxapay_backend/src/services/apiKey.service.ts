@@ -5,6 +5,7 @@
  *
  * Features:
  *  - Create API keys (live/test) with SHA-256 hashing
+ *  - Rotate API keys (generate new key, revoke old)
  *  - Return plaintext key only once at creation
  *  - List keys (masked, with last 4 chars)
  *  - Revoke keys
@@ -34,6 +35,9 @@ const TEST_PREFIX = "fpk_test_";
 
 /** Random key length (excluding prefix) */
 const KEY_LENGTH = 32;
+
+/** Grace period (ms) during which a rotated key remains valid */
+const ROTATION_GRACE_PERIOD_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Create audit log entry for API key operations
@@ -90,6 +94,17 @@ export interface ApiKeyDto {
   last_used_at: Date | null;
   created_at: Date;
   expires_at: Date | null;
+}
+
+export interface RotateApiKeyResult {
+  id: string;
+  name: string;
+  key: string; // New plaintext key (only returned once)
+  environment: "live" | "test";
+  last_four: string;
+  created_at: Date;
+  rotated_from_id: string;
+  previous_key_expires_at: Date;
 }
 
 // ─── Service ─────────────────────────────────────────────────────────────────
@@ -241,6 +256,101 @@ export class ApiKeyService {
       created_at: key.created_at,
       expires_at: key.expires_at,
     }));
+  }
+
+  /**
+   * Rotate an API key.
+   *
+   * Generates a new key with the same name and environment, revokes the old key
+   * after a grace period, and returns the new plaintext key only once.
+   */
+  async rotateApiKey(
+    merchantId: string,
+    keyId: string,
+    actor: string,
+  ): Promise<RotateApiKeyResult> {
+    const existingKey = await (prisma as any).apiKey.findFirst({
+      where: {
+        id: keyId,
+        merchantId,
+      },
+    });
+
+    if (!existingKey) {
+      throw new Error("API key not found");
+    }
+
+    if (existingKey.status === "revoked") {
+      throw new Error("Cannot rotate a revoked API key");
+    }
+
+    // Rate limit check
+    const withinRateLimit = await this.checkRateLimit(merchantId);
+    if (!withinRateLimit) {
+      throw new Error(`Rate limit exceeded: maximum ${KEYS_PER_HOUR_LIMIT} keys per hour`);
+    }
+
+    // Max active keys check (rotation temporarily adds one key)
+    const withinMaxKeys = await this.checkMaxActiveKeys(merchantId);
+    if (!withinMaxKeys) {
+      throw new Error(`Maximum active keys limit reached: ${MAX_ACTIVE_KEYS}`);
+    }
+
+    const environment = existingKey.environment as "live" | "test";
+    const plaintextKey = this.generateKey(environment);
+    const keyHash = this.hashKey(plaintextKey);
+    const lastFour = this.getLastFour(plaintextKey);
+    const previousKeyExpiresAt = new Date(Date.now() + ROTATION_GRACE_PERIOD_MS);
+
+    const newKey = await (prisma as any).$transaction(async (tx: Prisma.TransactionClient) => {
+      const created = await (tx as any).apiKey.create({
+        data: {
+          merchantId,
+          name: existingKey.name,
+          key_hash: keyHash,
+          key_last_four: lastFour,
+          environment,
+          status: "active",
+        },
+      });
+
+      await (tx as any).apiKey.update({
+        where: { id: keyId },
+        data: {
+          status: "revoked",
+          expires_at: previousKeyExpiresAt,
+        },
+      });
+
+      return created;
+    });
+
+    // Log audit event
+    await createAuditLog({
+      admin_id: actor,
+      action_type: "api_key_rotated" as AuditActionType,
+      entity_type: "api_key" as AuditEntityType,
+      entity_id: newKey.id,
+      details: {
+        merchantId,
+        keyName: existingKey.name,
+        environment,
+        lastFour,
+        rotatedFromId: keyId,
+        previousKeyExpiresAt,
+      },
+    });
+
+    return {
+      id: newKey.id,
+      name: newKey.name,
+      key: plaintextKey,
+      environment: newKey.environment as "live" | "test",
+      last_four: newKey.key_last_four,
+      created_at: newKey.created_at,
+      rotated_from_id: keyId,
+      previous_key_expires_at: previousKeyExpiresAt,
+    };
   }
 
   /**
