@@ -33,6 +33,28 @@ try {
 const client = new FluxaPay({ apiKey: 'sk_test_123', baseUrl: 'http://localhost:3001' });
 assert(client instanceof FluxaPay, 'creates client instance');
 
+const originalFetch = globalThis.fetch;
+let createPaymentRequestBody: unknown;
+globalThis.fetch = async (_input, init) => {
+  createPaymentRequestBody = init?.body;
+  return {
+    ok: true,
+    json: async () => ({ id: 'pay_1' }),
+    headers: new Headers(),
+  } as Response;
+};
+await client.payments.create({
+  amount: 10,
+  currency: 'USD',
+  customer_email: 'buyer@example.com',
+  expires_in_seconds: 1800,
+});
+assert(
+  JSON.parse(createPaymentRequestBody as string).expires_in_seconds === 1800,
+  'sends expires_in_seconds when creating a payment',
+);
+globalThis.fetch = originalFetch;
+
 // FluxaPayError
 const err = new FluxaPayError(400, 'bad request', 'VALIDATION_ERROR', null, 'req_abc123');
 assert(err.statusCode === 400, 'FluxaPayError.statusCode is 400');
