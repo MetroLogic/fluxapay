@@ -18,6 +18,11 @@ export const analytics = createController(
   201,
 );
 
+export const dailyTransactionVolume = createController(
+  dashboardService.getDailyTransactionVolume,
+  201,
+);
+
 export const activity = createController(
   dashboardService.getDashboardActivity,
   201,
