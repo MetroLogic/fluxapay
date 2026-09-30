@@ -32,8 +32,8 @@ export interface CreatePaymentParams {
   cancel_url?: string;
   /** Arbitrary metadata attached to the payment. */
   metadata?: Record<string, unknown>;
-  /** Minutes until payment link expires. Default: 30. */
-  expires_in_minutes?: number;
+  /** Seconds until payment link expires. Defaults to the merchant plan setting. */
+  expires_in_seconds?: number;
 }
 
 export interface Payment {

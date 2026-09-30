@@ -660,11 +660,14 @@ export const api = {
         method: "POST",
         body: JSON.stringify(data),
       }),
-    rotateApiKey: () =>
+    listApiKeys: () =>
+      fetchWithAuth<Record<string, unknown>>("/api/v1/api-keys"),
+    rotateApiKey: (gracePeriodHours = 24) =>
       fetchWithAuth<Record<string, unknown>>(
         "/api/v1/merchants/keys/rotate-api-key",
         {
           method: "POST",
+          body: JSON.stringify({ gracePeriodHours }),
         },
       ),
     rotateWebhookSecret: () =>
