@@ -35,6 +35,7 @@ jest.mock("../../services/webhook.service", () => ({
   createAndDeliverWebhook: jest.fn().mockResolvedValue(undefined),
 }));
 
+
 jest.mock("../../services/email.service", () => ({
   sendCheckoutExpiryReminderEmail: jest.fn().mockResolvedValue(undefined),
 }));
@@ -70,6 +71,7 @@ function makePayment(id: string, merchantId: string, minsFromNow = 4) {
   };
 }
 
+
 /** Stub the CronLock so the lock is always acquired by the current process. */
 function mockLockAcquired() {
   const lockedBy = `${process.env.HOSTNAME ?? "app"}:${process.pid}`;
@@ -93,6 +95,7 @@ beforeEach(() => {
   process.env.CHECKOUT_REMINDER_SEND_EMAIL = "true";
 
   mockLockAcquired();
+  mockPrismaClient.payment.updateMany.mockResolvedValue({ count: 1 });
 });
 
 afterEach(() => {
@@ -116,6 +119,7 @@ describe("runPaymentExpiryReminderJob – notification preference checks", () =>
       expect(result.notified).toBe(0);
       expect(mockPrismaClient.payment.findMany).not.toHaveBeenCalled();
     });
+
   });
 
   describe("when merchant has opted OUT (payment_expiry_reminder = false)", () => {
@@ -143,6 +147,7 @@ describe("runPaymentExpiryReminderJob – notification preference checks", () =>
       expect(mockPrismaClient.payment.updateMany).not.toHaveBeenCalled();
     });
 
+
     it("skips ALL payments for the opted-out merchant across a batch", async () => {
       const payments = [
         makePayment("pay-002", MERCHANT_A),
@@ -164,6 +169,7 @@ describe("runPaymentExpiryReminderJob – notification preference checks", () =>
       expect(createAndDeliverWebhook).not.toHaveBeenCalled();
     });
   });
+
 
   describe("when merchant is opted IN (default)", () => {
     it("sends webhook and email for the payment", async () => {
@@ -195,6 +201,7 @@ describe("runPaymentExpiryReminderJob – notification preference checks", () =>
       expect(sendCheckoutExpiryReminderEmail).toHaveBeenCalledTimes(1);
     });
 
+
     it("marks the payment as reminded in the DB", async () => {
       const payment = makePayment("pay-005", MERCHANT_A);
       mockPrismaClient.payment.findMany.mockResolvedValue([payment]);
@@ -224,6 +231,7 @@ describe("runPaymentExpiryReminderJob – notification preference checks", () =>
       );
     });
   });
+
 
   describe("mixed batch — some merchants opted in, some opted out", () => {
     it("only notifies opted-in merchants", async () => {
@@ -262,6 +270,7 @@ describe("runPaymentExpiryReminderJob – notification preference checks", () =>
     });
   });
 
+
   describe("per-merchant reminder_minutes_before", () => {
     it("skips a payment that is outside the merchant's personal window", async () => {
       // Payment expires in 4 minutes; merchant wants reminders only 2 min before
@@ -283,6 +292,7 @@ describe("runPaymentExpiryReminderJob – notification preference checks", () =>
       expect(result.skippedOptOut).toBe(0);
       expect(createAndDeliverWebhook).not.toHaveBeenCalled();
     });
+
 
     it("sends a reminder when the payment is within the merchant's personal window", async () => {
       // Payment expires in 1 minute; merchant wants reminders 2 min before → within window
@@ -311,6 +321,7 @@ describe("runPaymentExpiryReminderJob – notification preference checks", () =>
     });
   });
 
+
   describe("email preferences respected inside opted-in merchants", () => {
     it("skips email if merchant has email_notifications_enabled = false", async () => {
       const payment = makePayment("pay-010", MERCHANT_A);
@@ -337,6 +348,7 @@ describe("runPaymentExpiryReminderJob – notification preference checks", () =>
       expect(sendCheckoutExpiryReminderEmail).not.toHaveBeenCalled();
     });
   });
+
 
   describe("payment.expiring_soon webhook event", () => {
     it("fires webhook with payment_expiring_soon event type", async () => {
@@ -369,6 +381,7 @@ describe("runPaymentExpiryReminderJob – notification preference checks", () =>
         "pay-webhook-001:reminder"
       );
     });
+
 
     it("includes all required fields in webhook payload", async () => {
       const payment = makePayment("pay-webhook-002", MERCHANT_A, 3);
@@ -408,6 +421,7 @@ describe("runPaymentExpiryReminderJob – notification preference checks", () =>
       expect(new Date(payload.expires_at).toISOString()).toBe(payload.expires_at);
     });
 
+
     it("calculates minutes_remaining correctly", async () => {
       const payment = makePayment("pay-webhook-003", MERCHANT_A, 2);
       mockPrismaClient.payment.findMany.mockResolvedValue([payment]);
@@ -432,6 +446,7 @@ describe("runPaymentExpiryReminderJob – notification preference checks", () =>
       const payload = (createAndDeliverWebhook as jest.Mock).mock.calls[0][2];
       expect(payload.minutes_remaining).toBe(2);
     });
+
 
     it("uses stable event_id for idempotency", async () => {
       const payment = makePayment("pay-webhook-004", MERCHANT_A);
@@ -459,6 +474,7 @@ describe("runPaymentExpiryReminderJob – notification preference checks", () =>
       
       expect(eventId).toBe("pay-webhook-004:reminder");
     });
+
 
     it("continues processing other payments if webhook fails for one", async () => {
       const payments = [
@@ -510,3 +526,4 @@ describe("runPaymentExpiryReminderJob – notification preference checks", () =>
     });
   });
 });
+

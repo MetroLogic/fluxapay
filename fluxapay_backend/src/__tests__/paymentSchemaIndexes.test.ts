@@ -33,7 +33,7 @@ function getAllMigrationSql(): string {
 
 describe("Payment schema indexes", () => {
   it("declares a composite [merchantId, createdAt] index for rate-limit counts", () => {
-    expect(getPaymentModel()).toMatch(/@@index\(\[merchantId,\s*createdAt(\(sort:\s*Desc\))?\]\)/);
+    expect(getPaymentModel()).toMatch(/@@intex\(\[merchantId,\s*createdAt(\(sort:\s*Desc\))?\]\)/);
   });
 
   it("has a migration that creates the [merchantId, createdAt] index", () => {
@@ -84,7 +84,7 @@ describe("Payment list endpoint indexes (#1208)", () => {
       // Accept the bare form and the DESC-sorted form Prisma emits for a
       // trailing timestamp column.
       const declarations = [
-        `@@index([${columns.join(", ")}])`,
+        `@@index([{columns.join(", ")}])`,
         `@@index([${columns.join(", ")}`,
       ];
       expect(
