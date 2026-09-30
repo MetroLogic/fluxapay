@@ -1407,6 +1407,26 @@ export const api = {
           },
         ),
     },
+    users: {
+      list: (params?: {
+        page?: number;
+        limit?: number;
+        search?: string;
+        role?: string;
+        is_active?: string;
+      }) => {
+        const sp = new URLSearchParams();
+        if (params?.page != null) sp.set("page", String(params.page));
+        if (params?.limit != null) sp.set("limit", String(params.limit));
+        if (params?.search?.trim()) sp.set("search", params.search.trim());
+        if (params?.role && params.role !== "all") sp.set("role", params.role);
+        if (params?.is_active && params.is_active !== "all")
+          sp.set("is_active", params.is_active);
+        return fetchWithAuth<Record<string, unknown>>(
+          `/api/v1/admin/users?${sp.toString()}`,
+        );
+      },
+    },
     settlements: {
       list: (params?: {
         page?: number;
