@@ -1,5 +1,6 @@
 import jwt, { SignOptions, JwtPayload } from "jsonwebtoken";
 import crypto from "crypto";
+import { getEnvConfig } from "../config/env.config";
 
 export interface AccessTokenPayload extends JwtPayload {
   id: string;
@@ -19,7 +20,7 @@ export const generateAccessToken = (merchantId: string, email: string, role: str
     email,
     role,
   };
-  return jwt.sign(payload, process.env.JWT_SECRET!, options);
+  return jwt.sign(payload, getEnvConfig().JWT_SECRET, options);
 };
 
 /**
@@ -36,7 +37,7 @@ export const generateRefreshTokenPair = (): { token: string; hash: string } => {
  * Verify and decode an access token
  */
 export const verifyAccessToken = (token: string): AccessTokenPayload => {
-  return jwt.verify(token, process.env.JWT_SECRET!) as AccessTokenPayload;
+  return jwt.verify(token, getEnvConfig().JWT_SECRET) as AccessTokenPayload;
 };
 
 /**

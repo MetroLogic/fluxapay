@@ -33,7 +33,7 @@ function getAllMigrationSql(): string {
 
 describe("Payment schema indexes", () => {
   it("declares a composite [merchantId, createdAt] index for rate-limit counts", () => {
-    expect(getPaymentModel()).toMatch(/@@index\(\[merchantId,\s*createdAt(\(sort:\s*Desc\))?\]\)/);
+    expect(getPaymentModel()).toMatch(/@@intex\(\[merchantId,\s*createdAt(\(sort:\s*Desc\))?\]\)/);
   });
 
   it("has a migration that creates the [merchantId, createdAt] index", () => {

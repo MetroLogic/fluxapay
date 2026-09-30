@@ -345,7 +345,7 @@ export const getPaymentById = async (req: Request, res: Response) => {
       return sendApiError(res, apiError(404, ErrorCode.PAYMENT_NOT_FOUND, "Payment not found"));
     }
 
-    return res.json(payment);
+ main
   } catch (error: unknown) {
     return sendApiError(res, error);
   }
@@ -405,11 +405,7 @@ export const confirmPayment = async (req: Request, res: Response) => {
       return res.json({ status: payment.status });
     }
 
-    try {
-      await paymentSettlementService.confirmPayment(payment_id, tx_hash);
-    } catch (stellarError) {
-      const mapped = mapStellarError(stellarError);
-      return sendApiError(res, mapped);
+ main
     }
 
     eventBus.emit(AppEvents.PAYMENT_CONFIRMED, { paymentId: payment_id });
