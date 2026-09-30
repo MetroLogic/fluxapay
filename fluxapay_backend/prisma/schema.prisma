@@ -1,3 +1,4 @@
+
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
@@ -334,6 +335,7 @@ model WebhookLog {
   response_body   String?
   failed_at       DateTime?
   failure_reason  String?
+  permanently_failed_at DateTime?
   created_at      DateTime              @default(now())
   updated_at      DateTime              @updatedAt
   retryAttempts   WebhookRetryAttempt[]
@@ -341,6 +343,7 @@ model WebhookLog {
   @@index([merchantId, created_at(sort: Desc)])
   @@index([merchantId, status, created_at(sort: Desc)])
   @@index([status, failed_at])
+  @@index([status, next_retry_at])
 }
 
 model WebhookRetryAttempt {
@@ -348,10 +351,13 @@ model WebhookRetryAttempt {
   webhookLog     WebhookLog @relation(fields: [webhookLogId], references: [id])
   webhookLogId   String
   attempt_number Int
+  scheduled_at   DateTime?
   http_status    Int?
   response_body  String?
   error_message  String?
   created_at     DateTime   @default(now())
+
+  @@index([webhookLogId, attempt_number])
 }
 
 model Payment {
@@ -682,6 +688,7 @@ enum WebhookStatus {
   delivered
   failed
   retrying
+  permanently_failed
 }
 
 enum RefundStatus {
