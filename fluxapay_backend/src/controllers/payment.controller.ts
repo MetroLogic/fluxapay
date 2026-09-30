@@ -13,6 +13,7 @@ import { paymentSettlementService } from "../services/paymentSettlement.service"
 import { IdempotentRequest, storeIdempotentResponse } from "../middleware/idempotency.middleware";
 import { isTerminalStatus, PaymentStatus } from "../types/payment";
 import { assertValidPositiveAmount, AmountValidationError } from "../utils/amount.util";
+import { mapStellarError, StellarErrorMapping } from "../utils/stellar-error.util";
 
 /**
  * Columns the payments list endpoint is allowed to sort by. Anything else forces
@@ -333,6 +334,27 @@ export const getPaymentById = async (req: Request, res: Response) => {
     if (!payment) {
       return sendApiError(res, apiError(404, ErrorCode.PAYMENT_NOT_FOUND, "Payment not found"));
     }
+
+    // Surface a human-readable Stellar failure alongside the raw code so the
+    // dashboard can render a helpful message and support can debug (#stellar-errors).
+    let stellarError: StellarErrorMapping | null = null;
+    if (payment.status === PaymentStatus.FAILED || payment.status === "failed") {
+      const rawCode =
+        (payment as { stellar_error_code?: string | null }).stellar_error_code ??
+        (payment as { error_code?: string | null }).error_code ??
+        null;
+      stellarError = mapStellarError(rawCode);
+    }
+
+    const responsePayload = {
+      ...payment,
+      ...(stellarError && {
+        error: {
+          message: stellarError.friendlyMessage,
+          code: stellarError.code,
+        },
+      }),
+    };
 
     // Add explorer link if transaction_hash exists (not present in current Payment model).
     const explorerBase = (process.env.STELLAR_HORIZON_URL || "").includes(
