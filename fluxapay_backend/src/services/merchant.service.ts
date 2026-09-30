@@ -23,6 +23,18 @@ import {
   logWebhookSecretRotation,
 } from "./audit.service";
 
+const DEFAULT_API_KEY_ROTATION_GRACE_PERIOD_HOURS = 24;
+
+function getApiKeyRotationGracePeriodHours(configuredHours?: number): number {
+  if (configuredHours === undefined) {
+    return DEFAULT_API_KEY_ROTATION_GRACE_PERIOD_HOURS;
+  }
+  if (!Number.isFinite(configuredHours) || configuredHours <= 0) {
+    throw apiError(400, ErrorCode.INVALID_REQUEST_BODY, "gracePeriodHours must be a positive number");
+  }
+  return configuredHours;
+}
+
 
 export async function signupMerchantService(data: {
   business_name: string;
@@ -208,31 +220,77 @@ export async function getMerchantUserService(data: {
 export async function regenerateApiKeyService(data: {
   merchantId: string;
   mode?: ApiKeyMode;
+  gracePeriodHours?: number;
 }) {
   const { merchantId, mode = "live" } = data;
+  const gracePeriodHours = getApiKeyRotationGracePeriodHours(data.gracePeriodHours);
+  const expiresAt = new Date(Date.now() + gracePeriodHours * 60 * 60 * 1000);
 
   const apiKey = generateApiKey(mode);
   const apiKeyHashed = await hashKey(apiKey);
   const apiKeyLastFour = getLastFour(apiKey);
 
-  await prisma.merchant.update({
-    where: { id: merchantId },
-    data: {
-      api_key_hashed: apiKeyHashed,
-      api_key_last_four: apiKeyLastFour,
-    },
+  await prisma.$transaction(async (tx) => {
+    const merchant = await tx.merchant.findUnique({
+      where: { id: merchantId },
+      select: { api_key_hashed: true, api_key_last_four: true },
+    });
+
+    if (merchant?.api_key_hashed && merchant.api_key_last_four) {
+      const existingKey = await tx.apiKey.findUnique({
+        where: { key_hash: merchant.api_key_hashed },
+        select: { id: true },
+      });
+
+      if (existingKey) {
+        await tx.apiKey.update({
+          where: { id: existingKey.id },
+          data: { status: "active", expires_at: expiresAt },
+        });
+      } else {
+        await tx.apiKey.create({
+          data: {
+            merchantId,
+            name: "Rotated API key",
+            key_hash: merchant.api_key_hashed,
+            key_last_four: merchant.api_key_last_four,
+            environment: mode,
+            expires_at: expiresAt,
+          },
+        });
+      }
+    }
+
+    await tx.merchant.update({
+      where: { id: merchantId },
+      data: {
+        api_key_hashed: apiKeyHashed,
+        api_key_last_four: apiKeyLastFour,
+      },
+    });
+
+    await tx.apiKey.create({
+      data: {
+        merchantId,
+        name: "Primary API key",
+        key_hash: apiKeyHashed,
+        key_last_four: apiKeyLastFour,
+        environment: mode,
+      },
+    });
   });
 
   // Audit log: API key rotation
   logApiKeyRotation({ merchantId, lastFour: apiKeyLastFour }).catch(() => {});
 
-  return { message: "API key regenerated", apiKey };
+  return { message: "API key rotated", apiKey, expiresAt, gracePeriodHours };
 }
 
 export async function rotateApiKeyService(data: {
   merchantId: string;
+  gracePeriodHours?: number;
 }) {
-  return regenerateApiKeyService(data); // Same logic as regenerate
+  return regenerateApiKeyService(data);
 }
 
 export async function updateMerchantProfileService(data: {
