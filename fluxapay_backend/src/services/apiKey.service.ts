@@ -84,10 +84,12 @@ export interface ApiKeyDto {
   id: string;
   name: string;
   last_four: string;
+  prefix: "sk" | "fpk";
   environment: "live" | "test";
   status: "active" | "revoked";
   last_used_at: Date | null;
   created_at: Date;
+  expires_at: Date | null;
 }
 
 // ─── Service ─────────────────────────────────────────────────────────────────
@@ -137,10 +139,12 @@ export class ApiKeyService {
    * Check if merchant has reached maximum active keys.
    */
   private async checkMaxActiveKeys(merchantId: string): Promise<boolean> {
+    const now = new Date();
     const count = await (prisma as any).apiKey.count({
       where: {
         merchantId,
         status: "active",
+        OR: [{ expires_at: null }, { expires_at: { gt: now } }],
       },
     });
 
@@ -230,10 +234,12 @@ export class ApiKeyService {
       id: key.id,
       name: key.name,
       last_four: key.key_last_four,
+      prefix: key.key_hash.startsWith("$2") ? "sk" : "fpk",
       environment: key.environment as "live" | "test",
       status: key.status as "active" | "revoked",
       last_used_at: key.last_used_at,
       created_at: key.created_at,
+      expires_at: key.expires_at,
     }));
   }
 
@@ -290,6 +296,7 @@ export class ApiKeyService {
    * Called during authentication.
    */
   async validateAndUpdateUsage(keyHash: string): Promise<{ valid: boolean; merchantId?: string }> {
+    const now = new Date();
     const apiKey = await (prisma as any).apiKey.findUnique({
       where: {
         key_hash: keyHash,
@@ -300,22 +307,67 @@ export class ApiKeyService {
       return { valid: false };
     }
 
-    if (apiKey.status === "revoked") {
+    if (apiKey.status !== "active" || (apiKey.expires_at && apiKey.expires_at <= now)) {
       return { valid: false };
     }
 
-    // Update last_used_at
-    await (prisma as any).apiKey.update({
-      where: { id: apiKey.id },
+    const updated = await (prisma as any).apiKey.updateMany({
+      where: {
+        id: apiKey.id,
+        status: "active",
+        OR: [{ expires_at: null }, { expires_at: { gt: now } }],
+      },
       data: {
         last_used_at: new Date(),
       },
     });
 
+    if (updated.count !== 1) {
+      return { valid: false };
+    }
+
     return {
       valid: true,
       merchantId: apiKey.merchantId,
     };
+  }
+
+  /** Validate a raw API key, supporting both modern SHA-256 and legacy bcrypt hashes. */
+  async validateRawApiKey(key: string): Promise<{ valid: boolean; merchantId?: string }> {
+    const now = new Date();
+    const candidates = await (prisma as any).apiKey.findMany({
+      where: {
+        key_last_four: this.getLastFour(key),
+        status: "active",
+        OR: [{ expires_at: null }, { expires_at: { gt: now } }],
+      },
+    });
+    const keyHash = this.hashKey(key);
+
+    for (const candidate of candidates) {
+      const matches = candidate.key_hash.startsWith("$2")
+        ? await import("../helpers/crypto.helper").then(({ compareKeys }) => compareKeys(key, candidate.key_hash))
+        : candidate.key_hash === keyHash;
+
+      if (!matches) {
+        continue;
+      }
+
+      const updated = await (prisma as any).apiKey.updateMany({
+        where: {
+          id: candidate.id,
+          status: "active",
+          OR: [{ expires_at: null }, { expires_at: { gt: new Date() } }],
+        },
+        data: { last_used_at: new Date() },
+      });
+
+      if (updated.count === 1) {
+        return { valid: true, merchantId: candidate.merchantId };
+      }
+    }
+
+    return { valid: false };
   }
 
   /**

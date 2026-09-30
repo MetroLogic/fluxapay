@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { retryWebhookWithBackoff, getWebhookRetryConfig } from "../controllers/webhook.controller";
 import {
   getWebhookLogs,
   getWebhookLogDetails,
@@ -9,6 +10,7 @@ import {
   exportWebhookLogs,
   adminGetWebhookLogs,
   adminRetryWebhook,
+  getWebhookAttempts,
 } from "../controllers/webhook.controller";
 import { validate, validateQuery } from "../middleware/validation.middleware";
 import * as webhookSchema from "../schemas/webhook.schema";
@@ -548,6 +550,49 @@ router.post(
   "/admin/logs/:log_id/retry",
   adminAuth,
   adminRetryWebhook
+);
+
+/**
+ * @swagger
+ * /api/v1/webhooks/logs/{log_id}/attempts:
+ *   get:
+ *     summary: Get delivery attempt history for a webhook event
+ *     tags: [Webhooks]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: log_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The webhook log ID
+ *     responses:
+ *       200:
+ *         description: Delivery attempt history retrieved successfully
+ *       404:
+ *         description: Webhook log not found
+ *       401:
+ *         description: Unauthorized
+ */
+router.get(
+  "/logs/:log_id/attempts",
+  authenticateToken, merchantApiKeyRateLimit(),
+  getWebhookAttempts
+);
+
+// Alias /deliveries/:log_id/attempts to /logs/:log_id/attempts
+router.get(
+  "/deliveries/:log_id/attempts",
+  authenticateToken, merchantApiKeyRateLimit(),
+  getWebhookAttempts
+);
+
+// Expose retry backoff configuration (read-only, admin protected)
+router.get(
+  "/admin/retry-config",
+  adminAuth,
+  getWebhookRetryConfig
 );
 
 export default router;

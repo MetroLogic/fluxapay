@@ -55,7 +55,7 @@ const payment = await client.payments.create({
   success_url?: string;            // Optional: Redirect URL after success
   cancel_url?: string;             // Optional: Redirect URL after cancellation
   metadata?: Record<string, any>;  // Optional: Custom metadata
-  expires_in_minutes?: number;     // Optional: Expiration time (default: 30)
+  expires_in_seconds?: number;     // Optional: Expiration time in seconds
 });
 ```
 

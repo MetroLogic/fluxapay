@@ -9,7 +9,10 @@
  */
 
 jest.mock("../../config/prisma", () => ({
-  prisma: { merchant: { findMany: jest.fn() } },
+  prisma: {
+    merchant: { findMany: jest.fn() },
+    apiKey: { findMany: jest.fn(), updateMany: jest.fn() },
+  },
 }));
 
 jest.mock("../../helpers/crypto.helper", () => ({
@@ -19,11 +22,14 @@ jest.mock("../../helpers/crypto.helper", () => ({
 import { authenticateApiKey, isTestApiKey } from "../apiKeyAuth.middleware";
 import { prisma } from "../../config/prisma";
 import { compareKeys } from "../../helpers/crypto.helper";
+import { apiKeyService } from "../../services/apiKey.service";
 import { Response, NextFunction } from "express";
 import { AuthRequest } from "../../types/express";
 
 const mockFindMany = prisma.merchant.findMany as jest.Mock;
 const mockCompare = compareKeys as jest.Mock;
+const mockApiKeyFindMany = (prisma as any).apiKey.findMany as jest.Mock;
+const mockApiKeyUpdateMany = (prisma as any).apiKey.updateMany as jest.Mock;
 
 // Sample API keys are assembled at runtime from a plain hex suffix so the test
 // file never contains a literal Stripe-looking key (push protection flags
@@ -40,6 +46,9 @@ describe("apiKeyAuth.middleware — test mode isolation", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockFindMany.mockResolvedValue([]);
+    mockApiKeyFindMany.mockResolvedValue([]);
+    mockApiKeyUpdateMany.mockResolvedValue({ count: 1 });
     mockReq = { headers: {} };
     mockRes = {
       json: jest.fn().mockReturnThis(),
@@ -126,5 +135,48 @@ describe("apiKeyAuth.middleware — test mode isolation", () => {
       expect(mockNext).not.toHaveBeenCalled();
       expect(mockRes.status).toHaveBeenCalledWith(401);
     });
+  });
+
+  it("authenticates old and new keys concurrently during rotation", async () => {
+    const oldReq = { headers: { "x-api-key": skLiveKey } } as AuthRequest;
+    const newReq = { headers: { "x-api-key": skTestKey } } as AuthRequest;
+    const oldNext = jest.fn();
+    const newNext = jest.fn();
+    mockApiKeyFindMany.mockImplementation(async ({ where }: { where: { key_last_four: string } }) => [
+      {
+        id: where.key_last_four === skLiveKey.slice(-4) ? "old-key" : "new-key",
+        merchantId: "merchant_1",
+        key_hash: "$2b$test-hash",
+      },
+    ]);
+    mockCompare.mockResolvedValue(true);
+
+    await Promise.all([
+      authenticateApiKey(oldReq, mockRes as Response, oldNext as NextFunction),
+      authenticateApiKey(newReq, mockRes as Response, newNext as NextFunction),
+    ]);
+
+    expect(oldNext).toHaveBeenCalledTimes(1);
+    expect(newNext).toHaveBeenCalledTimes(1);
+    expect(oldReq.merchantId).toBe("merchant_1");
+    expect(newReq.merchantId).toBe("merchant_1");
+    expect(mockApiKeyUpdateMany).toHaveBeenCalledTimes(2);
+    expect(apiKeyService).toBeDefined();
+  });
+
+  it("rejects a key that expires before its usage update completes", async () => {
+    mockReq.headers = { "x-api-key": skLiveKey };
+    mockApiKeyFindMany.mockResolvedValueOnce([{
+      id: "expired-during-validation",
+      merchantId: "merchant_1",
+      key_hash: "$2b$test-hash",
+    }]);
+    mockCompare.mockResolvedValueOnce(true);
+    mockApiKeyUpdateMany.mockResolvedValueOnce({ count: 0 });
+
+    await authenticateApiKey(mockReq as AuthRequest, mockRes as Response, mockNext as NextFunction);
+
+    expect(mockNext).not.toHaveBeenCalled();
+    expect(mockRes.status).toHaveBeenCalledWith(401);
   });
 });

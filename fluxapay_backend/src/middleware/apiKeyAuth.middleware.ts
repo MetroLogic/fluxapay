@@ -5,7 +5,9 @@ import { AuthRequest } from "../types/express";
 import { PrismaClient } from "../generated/client/client";
 import { prisma } from "../config/prisma";
 import { compareKeys } from "../helpers/crypto.helper";
+import { apiKeyService } from "../services/apiKey.service";
 import jwt, { JwtPayload } from "jsonwebtoken";
+import { getEnvConfig } from "../config/env.config";
 
 
 /**
@@ -75,6 +77,13 @@ export async function authenticateApiKey(
                 }
             }
 
+            const storedKey = await apiKeyService.validateRawApiKey(key);
+            if (storedKey.valid && storedKey.merchantId) {
+                authReq.merchantId = storedKey.merchantId;
+                authReq.isTestMode = isTestApiKey(key);
+                return next();
+            }
+
             return sendApiError(res, apiError(401, ErrorCode.INVALID_API_KEY, "Invalid API key"));
         } catch (error) {
             console.error("API Key Auth Error:", error);
@@ -84,10 +93,15 @@ export async function authenticateApiKey(
 
     // 4. Try interpreting as JWT (for dashboard/internal use)
     try {
-        const payload = jwt.verify(key, process.env.JWT_SECRET!) as JwtPayload;
-        if (payload && payload.id) {
-            authReq.merchantId = payload.id;
-            authReq.user = { id: payload.id, email: payload.email };
+        const JWT_SECRET = getEnvConfig().JWT_SECRET;
+        const payload = jwt.verify(key, JWT_SECRET) as JwtPayload & { id?: unknown; email?: unknown };
+        const merchantId = typeof payload?.id === "string" && payload.id.trim().length > 0 ? payload.id.trim() : undefined;
+        if (merchantId) {
+            authReq.merchantId = merchantId;
+            authReq.user = {
+                id: merchantId,
+                ...(typeof payload.email === "string" ? { email: payload.email } : {}),
+            };
             return next();
         }
     } catch (err) {

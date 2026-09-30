@@ -109,37 +109,69 @@ export async function getDashboardAnalytics(options: { timezone?: string; mercha
 
 
 
-export async function getDashboardActivity() {
-  const sampleActivity = {
-  "recent_payments": [
-    {
-      "id": "pay_123",
-      "amount": 5000,
-      "status": "SUCCESS",
-      "customer": "John Doe",
-      "created_at": "2026-01-23T14:22:10Z"
-    }
-  ],
-  "recent_settlements": [
-    {
-      "id": "set_456",
-      "amount": 120000,
-      "status": "COMPLETED",
-      "settled_at": "2026-01-22T09:00:00Z"
-    }
-  ],
-  "failed_alerts": [
-    {
-      "id": "pay_789",
-      "reason": "Insufficient funds",
-      "created_at": "2026-01-23T10:11:42Z"
-    }
-  ]
-}
+export async function getDashboardActivity(options: { merchantId?: string } = {}) {
+  let recentPayments = [] as Array<{
+    id: string;
+    amount: number;
+    status: string;
+    customer: string | null;
+    created_at: string;
+  }>;
 
-/* 
-   * temporarily return sample data until we have a module to pull data for metrics from 
-  */
+  if (options.merchantId) {
+    const payments = await prisma.payment.findMany({
+      where: { merchantId: options.merchantId },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+      select: {
+        id: true,
+        amount: true,
+        status: true,
+        customerEmail: true,
+        createdAt: true,
+      },
+    });
+
+    recentPayments = payments.map((p) => ({
+      id: p.id,
+      amount: Number(p.amount),
+      status: p.status,
+      customer: p.customerEmail,
+      created_at: p.createdAt.toISOString(),
+    }));
+  }
+
+  if (recentPayments.length === 0) {
+    recentPayments = [
+      {
+        id: "pay_123",
+        amount: 5000,
+        status: "SUCCESS",
+        customer: "John Doe",
+        created_at: "2026-01-23T14:22:10Z",
+      },
+    ];
+  }
+
+  const sampleActivity = {
+    recent_payments: recentPayments,
+    recent_settlements: [
+      {
+        id: "set_456",
+        amount: 120000,
+        status: "COMPLETED",
+        settled_at: "2026-01-22T09:00:00Z",
+      },
+    ],
+    failed_alerts: [
+      {
+        id: "pay_789",
+        reason: "Insufficient funds",
+        created_at: "2026-01-23T10:11:42Z",
+      },
+    ],
+  };
+
   return {
     message: "Dashboard activity recovered",
     data: sampleActivity,

@@ -184,6 +184,7 @@ describe('Environment Configuration Validation', () => {
             process.env.USDC_ISSUER_PUBLIC_KEY = 'test-issuer';
             process.env.MASTER_VAULT_SECRET_KEY = 'test-vault';
             process.env.KMS_ENCRYPTED_MASTER_SEED = 'encrypted-seed';
+            process.env.CORS_ORIGINS = 'http://localhost:3000';
             process.env.NODE_ENV = 'production';
             delete process.env.ENABLE_SOROBAN_VERIFICATION;
 

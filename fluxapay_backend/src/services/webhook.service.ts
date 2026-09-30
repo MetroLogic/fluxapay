@@ -759,8 +759,14 @@ export async function deliverWebhook(
     const timestamp = new Date().toISOString();
     
     // Verify timestamp before sending (ensures our timestamp is valid)
-    verifyWebhookTimestamp(timestamp);
-    
+    if (!verifyWebhookTimestamp(timestamp)) {
+      throw apiError(
+        400,
+        ErrorCode.INVALID_WEBHOOK_TIMESTAMP,
+        "Invalid or stale webhook timestamp"
+      );
+    }
+
     // Serialize once and sign the exact body we send.
     const body = JSON.stringify(payload);
     const signature = generateWebhookSignature(body, merchantSecret, timestamp);
@@ -831,30 +837,24 @@ export function generateWebhookSignature(
 export function verifyWebhookTimestamp(
   timestamp: string,
   toleranceSeconds?: number,
-): void {
-  const windowSeconds = toleranceSeconds ?? getWebhookTimestampToleranceSeconds();
-  const windowMs = windowSeconds * 1000;
+): boolean {
+  const rawTolerance = toleranceSeconds ?? getWebhookTimestampToleranceSeconds();
+  const windowMs = rawTolerance > 1000 ? rawTolerance : rawTolerance * 1000;
 
   const webhookTime = new Date(timestamp).getTime();
   if (isNaN(webhookTime)) {
-    throw apiError(
-      400,
-      ErrorCode.INVALID_WEBHOOK_TIMESTAMP,
-      "Invalid timestamp format in webhook headers"
-    );
+    return false;
   }
 
   const now = Date.now();
   const diff = now - webhookTime;
 
-  // Check if timestamp is too far in the past or too far in the future
-  if (diff < -windowMs || diff > windowMs) {
-    throw apiError(
-      400,
-      ErrorCode.WEBHOOK_TIMESTAMP_OUTSIDE_TOLERANCE,
-      `Webhook timestamp is outside the allowed ${windowSeconds}-second tolerance window`
-    );
+  // Reject any future timestamp and anything older than the tolerance window.
+  if (webhookTime > now || diff > windowMs) {
+    return false;
   }
+
+  return true;
 }
 
 // Helper function to generate test payload based on event type

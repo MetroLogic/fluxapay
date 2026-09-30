@@ -15,11 +15,33 @@ export function createController<T = Record<string, any>>(
 ): ControllerHandler<T> {
   return async (req: Request, res: Response) => {
     try {
+      const bodyData =
+        typeof req.body === "object" && req.body !== null ? { ...req.body } : {};
+      const bodyParams =
+        typeof bodyData.params === "object" && bodyData.params !== null
+          ? { ...bodyData.params }
+          : {};
+      const bodyQuery =
+        typeof bodyData.query === "object" && bodyData.query !== null
+          ? { ...bodyData.query }
+          : {};
+
       const requestData = {
-        ...(typeof req.body === "object" && req.body !== null ? req.body : {}),
-        params: req.params,
-        query: req.query,
-      } as T;
+        ...bodyData,
+        body: bodyData,
+        params: {
+          ...bodyParams,
+          ...(req.params ?? {}),
+        },
+        query: {
+          ...bodyQuery,
+          ...(req.query ?? {}),
+        },
+      } as T & {
+        body: typeof bodyData;
+        params: Record<string, unknown>;
+        query: Record<string, unknown>;
+      };
 
       const result = await serviceFn(requestData, req);
       res.status(successStatus).json(result);
