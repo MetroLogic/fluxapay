@@ -8,6 +8,7 @@ import {
   downloadExportHandler,
   adminRequestExport,
   adminDownloadExport,
+  exportTransactionReportCsv,
 } from "../controllers/dataExport.controller";
 
 const router = Router();
@@ -68,7 +69,75 @@ router.get("/:jobId", authenticateApiKey, getExportStatus);
  */
 router.get("/:jobId/download", authenticateApiKey, merchantApiKeyRateLimit(), downloadExportHandler);
 
+/**
+ * @swagger
+ * /api/v1/merchants/export/transactions/csv:
+ *   get:
+ *     summary: Export transaction reports to CSV
+ *     tags: [Merchants]
+ *     security:
+ *       - apiKeyAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: from
+ *         required: false
+ *         schema: { type: string, format: date }
+ *       - in: query
+ *         name: to
+ *         required: false
+ *         schema: { type: string, format: date }
+ *     responses:
+ *       200:
+ *         description: CSV file containing transaction report
+ *         content:
+ *           text/csv:
+ *             schema: { type: string }
+ *       401:
+ *         description: Unauthorized
+ */
+router.get("/transactions/csv", authenticateApiKey, merchantApiKeyRateLimit(), exportTransactionReportCsv);
+
 // ── Admin routes ──────────────────────────────────────────────────────────────
+/**
+ * @swagger
+ * /api/v1/merchants/export/admin/{merchantId}:
+ *   post:
+ *     summary: Operator-triggered data export for a merchant
+ *     tags: [Merchants]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: merchantId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       202:
+ *         description: Export job accepted
+ *       403:
+ *         description: Forbidden
+ */
+router.post("/admin/:merchantId", authenticateAdmin, requireAdminRole(AdminPermission.MERCHANTS_READ), adminRequestExport);
+/**
+ * @swagger
+ * /api/v1/merchants/export/admin/{merchantId}/transactions/csv:
+ *   get:
+ *     summary: Operator export of merchant transaction reports to CSV
+ *     tags: [Merchants]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: merchantId
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       202:
+ *         description: Export job accepted
+ *       403:
+ *         description: Forbidden
+ */
+router.get("/admin/:merchantId/transactions/csv", authenticateAdmin, requireAdminRole(AdminPermission.MERCHANTS_READ), exportTransactionReportCsv);
 /**
  * @swagger
  * /api/v1/merchants/export/admin/{merchantId}:
@@ -115,3 +184,4 @@ router.post("/admin/:merchantId", authenticateAdmin, requireAdminRole(AdminPermi
 router.get("/admin/:merchantId/:jobId/download", authenticateAdmin, requireAdminRole(AdminPermission.MERCHANTS_READ), adminDownloadExport);
 
 export default router;
+

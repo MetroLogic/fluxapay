@@ -2,6 +2,7 @@ import { Router } from "express";
 import * as dashboardController from "../controllers/dashboard.controller";
 import { authenticateApiKey } from "../middleware/apiKeyAuth.middleware";
 import { authenticate } from "../middleware/auth.middleware";
+import { exportTransactionsCsv } from "../controllers/dashboard.controller";
 const router = Router();
 
 router.use(authenticateApiKey);
@@ -263,5 +264,45 @@ router.get("/audit-logs", dashboardController.getMerchantAuditLogs);
  *         description: Unauthorized
  */
 router.get("/events", authenticate, dashboardController.streamEvents);
+
+/**
+ * @swagger
+ * /api/v1/dashboard/reports/transactions/export:
+ *   get:
+ *     summary: Export transaction reports to CSV
+ *     tags: [Dashboard]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: date_from
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *       - in: query
+ *         name: date_to
+ *         schema:
+ *           type: string
+ *           format: date-time
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [SUCCESS, PENDING, FAILED]
+ *     responses:
+ *       200:
+ *         description: CSV file containing transaction report
+ *         content:
+ *           text/csv:
+ *             schema:
+ *               type: string
+ *       401:
+ *         description: Unauthorized
+ */
+router.get(
+  "/reports/transactions/export",
+  authenticate,
+  exportTransactionsCsv,
+);
 
 export default router;
