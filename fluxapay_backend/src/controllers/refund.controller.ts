@@ -80,6 +80,16 @@ export async function updateRefundStatus(req: AuthRequest, res: Response) {
       failed_reason: req.body.failed_reason,
     });
 
+    const io = req.app.get("so");
+    if (io) {
+      io.to(`room:merchant:${merchantId}`).emit("refund.status_updated", {
+        refund_id: String(refund_id),
+        status: result.status,
+        failed_reason: result.failed_reason,
+        updated_at: result.updated_at,
+      });
+    }
+
     res.status(200).json(result);
   } catch (err: any) {
     res

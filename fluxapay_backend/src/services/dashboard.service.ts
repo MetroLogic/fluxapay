@@ -118,6 +118,14 @@ export async function getDashboardActivity(options: { merchantId?: string } = {}
     created_at: string;
   }>;
 
+  let recentRefunds = [] as Array<{
+    id: string;
+    paymentId: string;
+    amount: number;
+    status: string;
+    created_at: string;
+  }>;
+
   if (options.merchantId) {
     const payments = await prisma.payment.findMany({
       where: { merchantId: options.merchantId },
@@ -153,8 +161,32 @@ export async function getDashboardActivity(options: { merchantId?: string } = {}
     ];
   }
 
+  if (options.merchantId) {
+    const refunds = await prisma.refund.findMany({
+      where: { payment: { merchantId: options.merchantId } },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+      select: {
+        id: true,
+        paymentId: true,
+        amount: true,
+        status: true,
+        createdAt: true,
+      },
+    });
+
+    recentRefunds = refunds.map((r) => ({
+      id: r.id,
+      paymentId: r.paymentId,
+      amount: Number(r.amount),
+      status: r.status,
+      created_at: r.createdAt.toISOString(),
+    }));
+  }
+
   const sampleActivity = {
     recent_payments: recentPayments,
+    recent_refunds: recentRefunds,
     recent_settlements: [
       {
         id: "set_456",
