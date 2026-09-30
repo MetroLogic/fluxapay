@@ -1,3 +1,4 @@
+
 /**
  * Unit tests for paymentExpiryReminder.service.ts
  *
@@ -9,6 +10,7 @@
  *     the merchant's window are not processed on that tick.
  *  4. The global CHECKOUT_REMINDER_ENABLED guard still applies.
  */
+
 
 // ── Module mocks ──────────────────────────────────────────────────────────────
 
@@ -27,6 +29,7 @@ const mockPrismaClient = {
   },
 };
 
+
 jest.mock("../../generated/client/client", () => ({
   PrismaClient: jest.fn(() => mockPrismaClient),
 }));
@@ -43,6 +46,7 @@ jest.mock("../../services/notificationPreferences.service", () => ({
   getNotificationPreferences: jest.fn(),
 }));
 
+
 // ── Imports (after mocks) ─────────────────────────────────────────────────────
 
 import { runPaymentExpiryReminderJob } from "../../services/paymentExpiryReminder.service";
@@ -50,12 +54,14 @@ import { createAndDeliverWebhook } from "../../services/webhook.service";
 import { sendCheckoutExpiryReminderEmail } from "../../services/email.service";
 import { getNotificationPreferences } from "../../services/notificationPreferences.service";
 
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const MERCHANT_A = "merchant-aaa";
 const MERCHANT_B = "merchant-bbb";
 
 const NOW = new Date("2026-06-26T10:00:00.000Z");
+
 
 /** A payment expiring 4 minutes from NOW (inside the default 5-min window). */
 function makePayment(id: string, merchantId: string, minsFromNow = 4) {
@@ -70,6 +76,7 @@ function makePayment(id: string, merchantId: string, minsFromNow = 4) {
   };
 }
 
+
 /** Stub the CronLock so the lock is always acquired by the current process. */
 function mockLockAcquired() {
   const lockedBy = `${process.env.HOSTNAME ?? "app"}:${process.pid}`;
@@ -79,6 +86,7 @@ function mockLockAcquired() {
     expires_at: new Date(NOW.getTime() + 5 * 60 * 1000),
   });
 }
+
 
 // ── Test setup ────────────────────────────────────────────────────────────────
 
@@ -103,6 +111,7 @@ afterEach(() => {
   delete process.env.CHECKOUT_REMINDER_SEND_EMAIL;
 });
 
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe("runPaymentExpiryReminderJob – notification preference checks", () => {
@@ -117,6 +126,7 @@ describe("runPaymentExpiryReminderJob – notification preference checks", () =>
       expect(mockPrismaClient.payment.findMany).not.toHaveBeenCalled();
     });
   });
+
 
   describe("when merchant has opted OUT (payment_expiry_reminder = false)", () => {
     it("skips the payment and does not send webhook or email", async () => {
@@ -164,6 +174,7 @@ describe("runPaymentExpiryReminderJob – notification preference checks", () =>
       expect(createAndDeliverWebhook).not.toHaveBeenCalled();
     });
   });
+
 
   describe("when merchant is opted IN (default)", () => {
     it("sends webhook and email for the payment", async () => {
@@ -225,6 +236,7 @@ describe("runPaymentExpiryReminderJob – notification preference checks", () =>
     });
   });
 
+
   describe("mixed batch — some merchants opted in, some opted out", () => {
     it("only notifies opted-in merchants", async () => {
       const payments = [
@@ -261,6 +273,7 @@ describe("runPaymentExpiryReminderJob – notification preference checks", () =>
       expect((createAndDeliverWebhook as jest.Mock).mock.calls[0][0]).toBe(MERCHANT_B);
     });
   });
+
 
   describe("per-merchant reminder_minutes_before", () => {
     it("skips a payment that is outside the merchant's personal window", async () => {
@@ -311,6 +324,7 @@ describe("runPaymentExpiryReminderJob – notification preference checks", () =>
     });
   });
 
+
   describe("email preferences respected inside opted-in merchants", () => {
     it("skips email if merchant has email_notifications_enabled = false", async () => {
       const payment = makePayment("pay-010", MERCHANT_A);
@@ -337,6 +351,7 @@ describe("runPaymentExpiryReminderJob – notification preference checks", () =>
       expect(sendCheckoutExpiryReminderEmail).not.toHaveBeenCalled();
     });
   });
+
 
   describe("payment.expiring_soon webhook event", () => {
     it("fires webhook with payment_expiring_soon event type", async () => {
@@ -510,3 +525,4 @@ describe("runPaymentExpiryReminderJob – notification preference checks", () =>
     });
   });
 });
+
