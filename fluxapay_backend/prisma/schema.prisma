@@ -39,7 +39,9 @@ model Merchant {
   checkout_accent_color String?
   /** Email notification preferences */
   email_notifications_enabled Boolean            @default(true)
-  notify_on_payment     Boolean                @default(false)
+  /// Email the merchant when a payment is confirmed. Exposed through
+  /// PATCH /api/v1/merchants/me/notification-preferences (#1190).
+  notify_on_payment     Boolean                @default(true)
   notify_on_settlement  Boolean                @default(true)
   /** On-chain registry state — prevents duplicate Soroban registrations on retry */
   onchain_registered        Boolean   @default(false)
