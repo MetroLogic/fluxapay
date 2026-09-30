@@ -28,6 +28,14 @@ export function isTestApiKey(key: string): boolean {
   return key.startsWith("sk_test_") || key.startsWith("fpk_test_");
 }
 
+/**
+ * True when a raw API key is a production key (sk_live_).
+ * Production keys map to the live data partition.
+ */
+export function isLiveApiKey(key: string): boolean {
+  return key.startsWith("sk_live_");
+}
+
 export async function authenticateApiKey(
     req: AuthRequest,
     res: Response,
@@ -80,6 +88,15 @@ export async function authenticateApiKey(
             const storedKey = await apiKeyService.validateRawApiKey(key);
             if (storedKey.valid && storedKey.merchantId) {
                 authReq.merchantId = storedKey.merchantId;
+                authReq.isTestMode = isTestApiKey(key);
+                return next();
+            }
+
+            // Support key rotation: a key may be in a grace period after rotation.
+            // The previous key remains valid until its grace period expires.
+            const rotatedKey = await apiKeyService.validateRotatedApiKey(key);
+            if (rotatedKey.valid && rotatedKey.merchantId) {
+                authReq.merchantId = rotatedKey.merchantId;
                 authReq.isTestMode = isTestApiKey(key);
                 return next();
             }
