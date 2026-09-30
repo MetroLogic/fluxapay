@@ -235,7 +235,18 @@ export const getPayments = async (req: Request, res: Response) => {
       prisma.payment.count({ where }),
     ]);
 
-    return res.json({ data, meta: { total, page, limit } });
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+    return res.json({
+      data,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1,
+      },
+    });
   } catch (error: unknown) {
     return sendApiError(res, error);
   }
@@ -683,7 +694,18 @@ export const getAdminPayments = async (req: Request, res: Response) => {
       prisma.payment.count({ where: where as any }),
     ]);
 
-    return res.json({ data, meta: { total, page, limit } });
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+    return res.json({
+      data,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1,
+      },
+    });
   } catch (error: unknown) {
     console.error("Error in getAdminPayments:", error);
     return res.status(500).json({ error: "Internal Server Error" });
