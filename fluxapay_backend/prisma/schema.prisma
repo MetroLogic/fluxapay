@@ -853,7 +853,7 @@ model ApiKey {
   merchant          Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
   merchantId        String
   name              String
-  /** SHA-256 hash of the API key */
+  /** Hash of the API key (SHA-256 for managed keys, bcrypt for legacy keys) */
   key_hash          String   @unique
   /** Last 4 characters of the key for display */
   key_last_four     String
@@ -863,11 +863,14 @@ model ApiKey {
   status            ApiKeyStatus            @default(active)
   /** Timestamp when the key was last used for authentication */
   last_used_at      DateTime?
+  /** Timestamp after which this key must no longer authenticate */
+  expires_at        DateTime?
   created_at        DateTime               @default(now())
   updated_at        DateTime               @updatedAt
 
   @@index([merchantId])
   @@index([merchantId, status])
+  @@index([status, expires_at])
   @@index([key_hash])
 }
 

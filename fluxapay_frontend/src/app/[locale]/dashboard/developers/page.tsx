@@ -37,6 +37,34 @@ const ENDPOINTS: { id: Endpoint; label: string }[] = [
   { id: "webhook", label: "Webhook Verification" },
 ];
 
+type ApiKeyRecord = {
+  id: string;
+  name: string;
+  last_four: string;
+  prefix: "sk" | "fpk";
+  environment: "live" | "test";
+  status: "active" | "revoked";
+  created_at: string;
+  expires_at: string | null;
+};
+
+type ApiKeyEntry = ApiKeyRecord & { masked: string };
+
+function mapApiKeyRecords(records: ApiKeyRecord[]): ApiKeyEntry[] {
+  return records.map((record) => ({
+    ...record,
+    masked: `${record.prefix}_${record.environment}_****${record.last_four}`,
+  }));
+}
+
+function formatRemainingTime(milliseconds: number): string {
+  const totalSeconds = Math.max(0, Math.ceil(milliseconds / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return `${hours}h ${minutes}m ${seconds}s`;
+}
+
 // ─── Code block with copy button ────────────────────────────────────────────
 function CodeBlock({
   code,
@@ -420,7 +448,7 @@ function CreateApiKeyModal({
 }: {
   isOpen: boolean;
   onClose: () => void;
-  onCreateSuccess: (key: { id: string; name: string; masked: string; secret: string }) => void;
+  onCreateSuccess: (key: { id: string; name: string; masked: string; secret: string; environment: "live" | "test" }) => void;
   existingNames: Set<string>;
 }) {
   const [name, setName] = useState("");
@@ -519,6 +547,7 @@ function CreateApiKeyModal({
         name: name.trim(),
         masked: `fpk_${environment}_****${(res.last_four as string) || secret.slice(-4)}`,
         secret,
+        environment,
       });
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to create API key");
@@ -750,7 +779,6 @@ export default function DevelopersPage() {
    */
   const [apiKeySecret, setApiKeySecret] = useState<string | null>(null);
   const [showCreateKeyModal, setShowCreateKeyModal] = useState(false);
-  type ApiKeyEntry = { id: string; name: string; masked: string; createdAt: string };
   const [apiKeys, setApiKeys] = useState<ApiKeyEntry[]>([]);
   /**
    * Plaintext secrets keyed by API key id, populated when a key is created.
@@ -769,6 +797,23 @@ export default function DevelopersPage() {
   const [confirmRotateApiKey, setConfirmRotateApiKey] = useState(false);
   const [confirmRotateWebhook, setConfirmRotateWebhook] = useState(false);
   const [rotateError, setRotateError] = useState<string | null>(null);
+  const [rotationGracePeriodHours, setRotationGracePeriodHours] = useState(24);
+  const [currentTime, setCurrentTime] = useState(Date.now());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setCurrentTime(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.keys.listApiKeys().then((result) => {
+      if (cancelled || "error" in result) return;
+      const response = result.data as { data?: ApiKeyRecord[] };
+      setApiKeys(mapApiKeyRecords(response.data ?? []));
+    }).catch(() => undefined);
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     api.merchant
@@ -791,7 +836,7 @@ export default function DevelopersPage() {
     setRotatingApiKey(true);
     setRotateError(null);
     try {
-      const result = await api.keys.rotateApiKey();
+      const result = await api.keys.rotateApiKey(rotationGracePeriodHours);
       if ('error' in result) {
         setRotateError(result.error.message);
         return;
@@ -804,6 +849,11 @@ export default function DevelopersPage() {
       // Update masked display with last four from new key
       const lastFour = rotated.slice(-4);
       setApiKey(`sk_live_****${lastFour}`);
+      const keysResult = await api.keys.listApiKeys();
+      if (!("error" in keysResult)) {
+        const response = keysResult.data as { data?: ApiKeyRecord[] };
+        setApiKeys(mapApiKeyRecords(response.data ?? []));
+      }
     } catch (e: unknown) {
       setRotateError(e instanceof Error ? e.message : "Failed to rotate API key");
     } finally {
@@ -999,9 +1049,20 @@ export default function DevelopersPage() {
                 <div style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem", marginBottom: "0.75rem" }}>
                   <AlertTriangle size={16} style={{ color: "#b91c1c", flexShrink: 0, marginTop: "0.125rem" }} />
                   <p style={{ fontSize: "0.875rem", color: "#b91c1c", lineHeight: 1.5, margin: 0 }}>
-                    This will immediately invalidate your current API key. All integrations using it will stop working.
+                    The new key works immediately. Your current key remains active for the grace period, then expires automatically.
                   </p>
                 </div>
+                <label style={{ display: "block", fontSize: "0.8125rem", color: "#7f1d1d", marginBottom: "0.75rem" }}>
+                  Grace period (hours)
+                  <input
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={rotationGracePeriodHours}
+                    onChange={(event) => setRotationGracePeriodHours(Math.max(1, Number(event.target.value) || 1))}
+                    style={{ display: "block", width: "8rem", marginTop: "0.25rem", padding: "0.4rem", border: "1px solid #d1d5db", borderRadius: "0.375rem" }}
+                  />
+                </label>
                 <div style={{ display: "flex", gap: "0.5rem" }}>
                   <button
                     onClick={handleRotateApiKey}
@@ -1013,7 +1074,7 @@ export default function DevelopersPage() {
                       fontSize: "0.8125rem", fontWeight: 600, opacity: rotatingApiKey ? 0.7 : 1,
                     }}
                   >
-                    {rotatingApiKey ? "Rotating..." : "Yes, rotate it"}
+                    {rotatingApiKey ? "Rotating..." : "Rotate key"}
                   </button>
                   <button
                     onClick={() => setConfirmRotateApiKey(false)}
@@ -1416,11 +1477,28 @@ export default function DevelopersPage() {
                     <th style={{ textAlign: "left", padding: "0.75rem", fontSize: "0.875rem", fontWeight: 600, color: "#1a1a3e" }}>Name</th>
                     <th style={{ textAlign: "left", padding: "0.75rem", fontSize: "0.875rem", fontWeight: 600, color: "#1a1a3e" }}>Key</th>
                     <th style={{ textAlign: "left", padding: "0.75rem", fontSize: "0.875rem", fontWeight: 600, color: "#1a1a3e" }}>Created</th>
+                    <th style={{ textAlign: "left", padding: "0.75rem", fontSize: "0.875rem", fontWeight: 600, color: "#1a1a3e" }}>Status</th>
                     <th style={{ textAlign: "center", padding: "0.75rem", fontSize: "0.875rem", fontWeight: 600, color: "#1a1a3e" }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {apiKeys.map((key) => (
+                  {apiKeys.map((key) => {
+                    const expiryTime = key.expires_at ? Date.parse(key.expires_at) : null;
+                    const remainingTime = expiryTime === null ? null : expiryTime - currentTime;
+                    const status = key.status === "revoked"
+                      ? "Revoked"
+                      : remainingTime === null
+                        ? "Active"
+                        : remainingTime > 0
+                          ? `Expires in ${formatRemainingTime(remainingTime)}`
+                          : "Expired";
+                    const statusColor = key.status === "revoked" || (remainingTime !== null && remainingTime <= 0)
+                      ? "#6b7280"
+                      : remainingTime !== null
+                        ? "#b45309"
+                        : "#166534";
+
+                    return (
                     <tr key={key.id} style={{ borderBottom: "1px solid #e5e7eb" }}>
                       <td style={{ padding: "0.75rem", fontSize: "0.875rem", color: "#1a1a3e" }}>{key.name}</td>
                       <td style={{ padding: "0.75rem", fontSize: "0.875rem", color: "#1a1a3e", fontFamily: "monospace" }}>
@@ -1444,7 +1522,8 @@ export default function DevelopersPage() {
                           />
                         </span>
                       </td>
-                      <td style={{ padding: "0.75rem", fontSize: "0.875rem", color: "#6b7280" }}>{key.createdAt}</td>
+                      <td style={{ padding: "0.75rem", fontSize: "0.875rem", color: "#6b7280" }}>{new Date(key.created_at).toLocaleDateString()}</td>
+                      <td style={{ padding: "0.75rem", fontSize: "0.8125rem", color: statusColor }}>{status}</td>
                       <td style={{ padding: "0.75rem", textAlign: "center" }}>
                         <button
                           style={{
@@ -1462,7 +1541,8 @@ export default function DevelopersPage() {
                         </button>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -1501,7 +1581,17 @@ export default function DevelopersPage() {
         onClose={() => setShowCreateKeyModal(false)}
         existingNames={new Set(apiKeys.map((k) => k.name.toLowerCase()))}
         onCreateSuccess={(key) => {
-          setApiKeys([...apiKeys, { ...key, createdAt: new Date().toLocaleDateString() }]);
+          setApiKeys([...apiKeys, {
+            id: key.id,
+            name: key.name,
+            masked: key.masked,
+            prefix: "fpk",
+            environment: key.environment,
+            status: "active",
+            last_four: key.secret.slice(-4),
+            created_at: new Date().toISOString(),
+            expires_at: null,
+          }]);
           // Hold on to the only plaintext copy of the secret so the row's copy
           // button can hand the developer a working key (#1206).
           setApiKeySecrets((prev) => ({ ...prev, [key.id]: key.secret }));

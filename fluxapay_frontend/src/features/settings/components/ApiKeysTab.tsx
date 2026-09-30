@@ -19,12 +19,16 @@ export function ApiKeysTab({ initialApiKey }: Props) {
   const [showRegenerateModal, setShowRegenerateModal] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [keyRegenerated, setKeyRegenerated] = useState(false);
+  const [gracePeriodHours, setGracePeriodHours] = useState(24);
 
   const handleRegenerateApiKey = async () => {
     setIsRegenerating(true);
     try {
-      const response = await api.keys.regenerate();
-      setApiKey(response.api_key);
+      const result = await api.keys.regenerate();
+      if ("error" in result) throw new Error(result.error.message);
+      const response = result.data as Record<string, unknown>;
+      setApiKey(response.apiKey as string);
+      setGracePeriodHours(Number(response.gracePeriodHours) || 24);
       setShowRegenerateModal(false);
       setKeyRegenerated(true);
       setTimeout(() => setKeyRegenerated(false), 5000);
@@ -66,15 +70,14 @@ export function ApiKeysTab({ initialApiKey }: Props) {
         </div>
         <div className="pt-2">
           <Button variant="destructive" onClick={() => setShowRegenerateModal(true)}>
-            Regenerate API Key
+            Rotate API Key
           </Button>
         </div>
         {keyRegenerated && (
           <div className="flex items-center gap-2 p-3 rounded-lg bg-green-50 border border-green-200 text-green-800 animate-in fade-in slide-in-from-top-2">
             <CheckCircle2 className="h-4 w-4" />
             <p className="text-sm font-medium">
-              API key regenerated successfully! Make sure to update your
-              integrations.
+              API key rotated. Your previous key remains active for {gracePeriodHours} {gracePeriodHours === 1 ? "hour" : "hours"}.
             </p>
           </div>
         )}
@@ -83,13 +86,12 @@ export function ApiKeysTab({ initialApiKey }: Props) {
       <Modal
         isOpen={showRegenerateModal}
         onClose={() => setShowRegenerateModal(false)}
-        title="Regenerate API Key"
+        title="Rotate API Key"
       >
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Are you sure you want to regenerate your API key? Your current API
-            key will be immediately invalidated and any integrations using it
-            will stop working.
+            Your new key will work immediately. Your current key will remain
+            active for 24 hours so you can update integrations without downtime.
           </p>
           <div className="flex gap-3 pt-4">
             <Button
