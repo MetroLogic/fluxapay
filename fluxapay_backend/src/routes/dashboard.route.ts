@@ -31,7 +31,7 @@ router.use(authenticateApiKey);
  *                   properties:
  *                     revenue:
  *                       type: object
- *                        properties:
+ *                       properties:
  *                         today:
  *                           type: number
  *                           example: 120000
