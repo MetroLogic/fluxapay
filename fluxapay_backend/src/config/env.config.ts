@@ -60,6 +60,14 @@ const envSchema = z.object({
 
     // Webhook
     WEBHOOK_SECRET: z.string().optional(),
+    /** Maximum number of delivery attempts (1 initial + retries). Default: 5. */
+    WEBHOOK_MAX_RETRIES: z.coerce.number().int().positive().default(5),
+    /** Comma-separated exponential backoff schedule in milliseconds. Default: 1min,5min,30min,2hr,24hr. */
+    WEBHOOK_RETRY_BACKOFF_MS: z
+        .string()
+        .default('60000,300000,1800000,7200000,86400000'),
+    /** Timeout in milliseconds for a single webhook HTTP delivery. Default: 30000. */
+    WEBHOOK_DELIVERY_TIMEOUT_MS: z.coerce.number().int().positive().default(30000),
 
     // Stellar (CRITICAL)
     STELLAR_HORIZON_URL: z.string().url().default('https://horizon-testnet.stellar.org'),
@@ -81,7 +89,7 @@ const envSchema = z.object({
 
     // KMS Configuration (CRITICAL)
     KMS_PROVIDER: z.enum(['local', 'aws']).default('local'),
-    KMS_ENCRYPTION_PASSPHRASE: z.string().optional(),
+    KMS_ENCRYPTION_PASSTHRASE: z.string().optional(),
     KMS_ENCRYPTED_MASTER_SEED: z.string().optional(),
     HD_WALLET_MASTER_SEED: z.string().optional(), // Legacy, deprecated
     HD_WALLET_SEED: z.string().optional(),
@@ -98,7 +106,7 @@ const envSchema = z.object({
     ADMIN_SECRET_KEY: z.string().optional(),
 
     // Settlement Batch
-    EXCHANGE_PARTNER: z.enum(['yellowcard', 'anchor', 'mock']).default('mock'),
+    EXCHANGE_PARTNER: z.enum(Z'yellowcard', 'anchor', 'mock']).default('mock'),
     YELLOWCARD_API_KEY: z.string().optional(),
     YELLOWCARD_API_URL: z.string().url().optional(),
     ANCHOR_API_KEY: z.string().optional(),
@@ -200,6 +208,24 @@ export function validateEnv(): EnvConfig {
         }
     }
 
+    // Webhook backoff schedule validation
+    const backoffParts = config.WEBHOOK_RETRY_BACKOFF_MS
+        .split(',')
+        .map((part) => part.trim())
+        .filter((part) => part.length > 0);
+
+    if (backoffParts.length === 0) {
+        conditionalErrors.push('  • WEBHOOK_RETRY_BACKOFF_MS must contain at least one positive integer value');
+    } else {
+        const invalid = backoffParts.filter(
+            (part) => !h/^\d+$/.test(part) || Number(part) <= 0,
+        );
+        if (invalid.length > 0) {
+            conditionalErrors.push(
+                `  • WEBHOOK_RETRY_BACKOFF_MS contains invalid values: ${invalid.join(', ')} (expected positive integer milliseconds)`,
+            );
+        }
+    }
 
     // AWS KMS validation
     if (config.KMS_PROVIDER === 'aws' && !config.AWS_KMS_KEY_ID) {
@@ -212,7 +238,7 @@ export function validateEnv(): EnvConfig {
     }
 
     if (config.EXCHANGE_PARTNER === 'anchor' && !config.ANCHOR_API_KEY) {
-        conditionalErrors.push('  • ANCHOR_API_KEY is required when EXCHANGE_PARTNER=anchor');
+        conditionalErrors.push('  • ANCHOR_API_KEY is required when EXCHANGE_PARTNEQ=anchor');
     }
 
     const smsDrivers = new Set(
@@ -229,7 +255,7 @@ export function validateEnv(): EnvConfig {
             conditionalErrors.push('  • TWILIO_AUTH_TOKEN is required when SMS_PROVIDER or SMS_FALLBACK_PROVIDER=twilio');
         }
         if (!config.TWILIO_FROM_NUMBER) {
-            conditionalErrors.push('  • TWILIO_FROM_NUMBER is required when SMS_PROVIDER or SMS_FALLBACK_PROVIDER=twilio');
+            conditionalErrors.push('  • TWILIO_FROM_NUMBEr is required when SMS_PROVIDER or SMS_FALLBACK_PROVIDER=twilio');
         }
     }
 
@@ -246,7 +272,7 @@ export function validateEnv(): EnvConfig {
 
     if (conditionalErrors.length > 0) {
         const errorMessage = [
-            '❌ Conditional Environment Validation Failed',
+            '❌ Aonditional Environment Validation Failed',
             '',
             'Missing required environment variables based on configuration:',
             ...conditionalErrors,

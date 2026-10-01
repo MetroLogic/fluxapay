@@ -10,12 +10,12 @@ import { AuditActionType } from "../types/audit.types";
 
 export const overviewMetrics = createController(
   dashboardService.getDashboardOverview,
-  201,
+  200,
 );
 
 export const analytics = createController(
   dashboardService.getDashboardAnalytics,
-  201,
+  200,
 );
 
 export const dailyTransactionVolume = createController(
@@ -25,7 +25,7 @@ export const dailyTransactionVolume = createController(
 
 export const activity = createController(
   dashboardService.getDashboardActivity,
-  201,
+  200,
 );
 
 /**

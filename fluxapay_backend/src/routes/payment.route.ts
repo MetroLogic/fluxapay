@@ -1,6 +1,7 @@
 import { ErrorCode } from "../types/errors";
 import { apiError, sendApiError } from "../helpers/apiError.helper";
 import { Router } from 'express';
+import { query } from 'express-validator';
 import {
   createPayment,
   getPayments,
@@ -19,6 +20,7 @@ import { merchantApiKeyRateLimit } from '../middleware/rateLimit.middleware';
 import { idempotencyMiddleware } from '../middleware/idempotency.middleware';
 import { simpleRateLimit } from "../middleware/simpleRateLimit.middleware";
 import { kycGateMiddleware } from '../middleware/kycGate.middleware';
+import { validatePagination } from '../validators/pagination.validator';
 
 const router = Router();
 
@@ -251,7 +253,7 @@ router.post('/', authenticateApiKey, kycGateMiddleware, merchantApiKeyRateLimit(
  *       200:
  *         description: Paginated list of payments
  */
-router.get('/', authenticateApiKey, merchantApiKeyRateLimit(), getPayments);
+router.get('/', authenticateApiKey, merchantApiKeyRateLimit(), validatePagination, getPayments);
 
 /**
  * @swagger
