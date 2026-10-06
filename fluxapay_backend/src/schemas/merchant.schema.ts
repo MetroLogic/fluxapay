@@ -199,10 +199,15 @@ export const updateNotificationPreferencesSchema = z
       .min(1, "reminder_minutes_before must be at least 1")
       .max(1440, "reminder_minutes_before must be at most 1440 (24 h)")
       .optional(),
+    // Stored on Merchant rather than MerchantNotificationPreferences, but exposed
+    // through the same endpoint so merchants have one place to manage
+    // preferences (#1190).
+    notify_on_payment: z.boolean().optional(),
   })
   .refine(
     (data) =>
       data.payment_expiry_reminder !== undefined ||
-      data.reminder_minutes_before !== undefined,
+      data.reminder_minutes_before !== undefined ||
+      data.notify_on_payment !== undefined,
     { message: "At least one preference field must be provided" },
   );
