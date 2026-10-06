@@ -259,13 +259,55 @@ router.get('/', authenticateApiKey, merchantApiKeyRateLimit(), validatePaginatio
  * @swagger
  * /api/v1/payments/export:
  *   get:
- *     summary: Export payments as CSV
+ *     summary: Export the transaction history as a CSV file
+ *     description: >
+ *       Streams a CSV of every payment matching the supplied filters. Rows are
+ *       written to the response in batches, so exports of large histories do
+ *       not time out and are not buffered in memory. Rows are ordered
+ *       chronologically (oldest first).
  *     tags: [Payments]
  *     security:
  *       - apiKeyAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: date_from
+ *         description: Inclusive start of the range (YYYY-MM-DD or ISO date-time)
+ *         schema: { type: string }
+ *       - in: query
+ *         name: date_to
+ *         description: Inclusive end of the range; a bare YYYY-MM-DD includes the whole day
+ *         schema: { type: string }
+ *       - in: query
+ *         name: status
+ *         schema: { type: string }
+ *       - in: query
+ *         name: currency
+ *         schema: { type: string }
+ *       - in: query
+ *         name: search
+ *         description: Matches the payment ID or the customer email
+ *         schema: { type: string }
+ *       - in: query
+ *         name: amount_min
+ *         schema: { type: number }
+ *       - in: query
+ *         name: amount_max
+ *         schema: { type: number }
  *     responses:
  *       200:
- *         description: CSV file download
+ *         description: CSV file download (text/csv)
+ *         headers:
+ *           Content-Disposition:
+ *             schema: { type: string }
+ *           X-Export-Row-Count:
+ *             schema: { type: integer }
+ *           X-Export-Truncated:
+ *             description: Present when the export hit the row cap
+ *             schema: { type: string }
+ *       400:
+ *         description: Invalid date range or filters
+ *       401:
+ *         description: Unauthorized
  */
 router.get('/export', authenticateApiKey, merchantApiKeyRateLimit(), exportPayments);
 

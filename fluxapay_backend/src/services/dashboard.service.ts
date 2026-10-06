@@ -109,6 +109,53 @@ export async function getDashboardAnalytics(options: { timezone?: string; mercha
 
 
 
+export async function getDailyTransactionVolume(options: { timezone?: string; merchantId?: string; days?: number } = {}) {
+  const tz = options.timezone || "UTC";
+  const days = options.days && options.days > 0 ? options.days : 30;
+
+  const now = new Date();
+  const start = new Date(now.getTime() - (days - 1) * 24 * 3600 * 1000);
+  start.setUTCHours(0, 0, 0, 0);
+
+  const where: any = { createdAt: { ge: start } };
+  if (options.merchantId) {
+    where.merchantId = options.merchantId;
+  }
+
+  const payments = await prisma.payment.findMany({
+    where,
+    select: { amount: true, createdAt: true, status: true },
+  });
+
+  const buckets = new Map<string, { count: number; amount: number }>();
+  for (const p of payments) {
+    const period = bucketDateInTimezone(p.createdAt, tz);
+    const existing = buckets.get(period) || { count: 0, amount: 0 };
+    buckets.set(period, {
+      count: existing.count + 1,
+      amount: existing.amount + Number(p.amount),
+    });
+  }
+
+  const series: Array<{ date: string; count: number; amount: number }> = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(now.getTime() - i * 24 * 3600 * 1000);
+    const date = bucketDateInTimezone(d, tz);
+    const bucket = buckets.get(date) || { count: 0, amount: 0 };
+    series.push({ date, count: bucket.count, amount: bucket.amount });
+  }
+
+  return {
+    message: "Daily transaction volume recovered",
+    data: {
+      series,
+      timezone: tz,
+      days: days,
+    },
+  };
+}
+
+
 export async function getDashboardActivity(options: { merchantId?: string } = {}) {
   let recentPayments = [] as Array<{
     id: string;
@@ -186,20 +233,6 @@ export async function getDashboardActivity(options: { merchantId?: string } = {}
       },
     ];
   }
-
-  if (recentRefunds.length === 0) {
-    recentRefunds = [
-      {
-        id: "ref_123",
-        paymentId: "pay_123",
-        amount: 2500,
-        status: "PENDING",
-        customer: "John Doe",
-        created_at: "2026-01-23T15:00:00Z",
-      },
-    ];
-  }
-
   const sampleActivity = {
     recent_payments: recentPayments,
     recent_refunds: recentRefunds,

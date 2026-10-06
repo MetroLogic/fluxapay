@@ -38,6 +38,7 @@ import { DepositAddressService } from "./depositAddress.service";
 import { getSweepCronInterval, logSweepConfigAtStartup } from "../config/sweep.config";
 import { acquireCronLock, releaseCronLock, getLockOwner } from "../utils/redisLock.util";
 import { paymentSettlementService } from "./paymentSettlement.service";
+import { processDueWebhookRetries } from "./webhook.service";
 import { sendOpsAlert } from "./settlementAlert.service";
 import { processWebhookRetries } from "./webhookRetry.service";
 import {

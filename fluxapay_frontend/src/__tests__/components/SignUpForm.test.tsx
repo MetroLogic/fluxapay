@@ -36,4 +36,18 @@ describe('SignUpForm', () => {
       expect(screen.getByText('Email is required')).toBeInTheDocument();
     });
   });
+
+  it('rejects an invalid email format on submit', async () => {
+    render(<SignUpForm />);
+    fireEvent.change(screen.getByPlaceholderText('Business name'), {
+      target: { value: 'Acme Corp' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('you@example.com'), {
+      target: { value: 'not-an-email' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /sign up/i }));
+    await waitFor(() => {
+      expect(screen.getByText('Please enter a valid email address')).toBeInTheDocument();
+    });
+  });
 });
