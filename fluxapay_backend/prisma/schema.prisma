@@ -329,7 +329,7 @@ model WebhookLog {
   event_id        String?               @unique
   payment_id      String?
   retry_count     Int                   @default(0)
-  max_retries     Int                   @default(5)
+  max_retries     Int                   @default(3)
   next_retry_at   DateTime?
   request_payload Json?
   response_body   String?
