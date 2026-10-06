@@ -20,7 +20,7 @@ const router = Router();
  *         schema:
  *           type: string
  *           enum: [live, test]
- *         description: Key environment. "test" issues a sk_test_ key for the isolated test-mode partition (default: live).
+ *         description: 'Key environment. "test" issues a sk_test_ key for the isolated test-mode partition (default: live).'
  *     responses:
  *       200:
  *         description: New API key generated
