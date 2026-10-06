@@ -3,6 +3,7 @@ import { authenticateToken } from '../middleware/auth.middleware';
 import { adminAuth } from '../middleware/adminAuth.middleware';
 import { getAuditLogs, getAuditLogByIdHandler, getSettlementPayoutPayload } from '../controllers/audit.controller';
 import { getAdminPayments } from '../controllers/payment.controller';
+import { getAdminUsers } from '../controllers/adminUser.controller';
 
 const router = Router();
 
@@ -42,6 +43,40 @@ router.use(adminAuth);
  *         description: Unauthorized
  */
 router.get('/payments', getAdminPayments);
+
+/**
+ * @swagger
+ * /api/v1/admin/users:
+ *   get:
+ *     summary: List internal operator accounts with search and filters (Admin only)
+ *     tags: [Admin - Users]
+ *     security:
+ *       - bearerAuth: []
+ *       - adminSecret: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema: { type: integer }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer }
+ *       - in: query
+ *         name: search
+ *         description: Case-insensitive partial match on email, id, or role
+ *         schema: { type: string }
+ *       - in: query
+ *         name: role
+ *         schema: { type: string, enum: [support, finance, super_admin] }
+ *       - in: query
+ *         name: is_active
+ *         schema: { type: boolean }
+ *     responses:
+ *       200:
+ *         description: List of admin users
+ *       401:
+ *         description: Unauthorized
+ */
+router.get('/users', getAdminUsers);
 
 /**
  * @swagger
