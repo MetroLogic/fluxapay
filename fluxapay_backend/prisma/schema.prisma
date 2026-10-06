@@ -872,6 +872,8 @@ model ApiKey {
   last_used_at      DateTime?
   /** Timestamp after which this key must no longer authenticate */
   expires_at        DateTime?
+  /** Timestamp when this key was rotated (replaced by a newer key) */
+  rotated_at        DateTime?
   created_at        DateTime               @default(now())
   updated_at        DateTime               @updatedAt
 
@@ -879,6 +881,7 @@ model ApiKey {
   @@index([merchantId, status])
   @@index([status, expires_at])
   @@index([key_hash])
+  @@index([merchantId, environment, status])
 }
 
 enum ApiKeyEnvironment {
@@ -889,6 +892,7 @@ enum ApiKeyEnvironment {
 enum ApiKeyStatus {
   active
   revoked
+  rotated
 }
 
 enum EscrowStatus {
