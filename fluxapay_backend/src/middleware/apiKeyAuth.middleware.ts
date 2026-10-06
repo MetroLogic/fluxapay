@@ -5,6 +5,7 @@ import { AuthRequest } from "../types/express";
 import { PrismaClient } from "../generated/client/client";
 import { prisma } from "../config/prisma";
 import { compareKeys } from "../helpers/crypto.helper";
+import { apiKeyService } from "../services/apiKey.service";
 import jwt, { JwtPayload } from "jsonwebtoken";
 import { getEnvConfig } from "../config/env.config";
 
@@ -74,6 +75,13 @@ export async function authenticateApiKey(
                     authReq.isTestMode = isTestApiKey(key);
                     return next();
                 }
+            }
+
+            const storedKey = await apiKeyService.validateRawApiKey(key);
+            if (storedKey.valid && storedKey.merchantId) {
+                authReq.merchantId = storedKey.merchantId;
+                authReq.isTestMode = isTestApiKey(key);
+                return next();
             }
 
             return sendApiError(res, apiError(401, ErrorCode.INVALID_API_KEY, "Invalid API key"));

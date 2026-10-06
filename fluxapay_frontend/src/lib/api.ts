@@ -48,6 +48,40 @@ const API_BASE_URL = getApiBaseUrl();
  */
 export type Result<T> = { data: T } | { error: ApiError };
 
+/** Result of a streamed transaction-history CSV download. */
+export interface PaymentCsvExportResult {
+  blob: Blob;
+  /** Filename parsed from Content-Disposition, with a sensible fallback. */
+  filename: string;
+  /** Rows the server matched, or null when the header was not present. */
+  rowCount: number | null;
+  /** True when the server stopped at its per-export row cap. */
+  truncated: boolean;
+}
+
+/**
+ * Extract the filename from a `Content-Disposition: attachment` header.
+ * Both `filename="x.csv"` and RFC 5987 `filename*=UTF-8''x.csv` are handled.
+ */
+function parseFilenameHeader(
+  disposition: string | null,
+  fallback = "transactions.csv",
+): string {
+  if (!disposition) return fallback;
+
+  const extended = disposition.match(/filename\*=(?:UTF-8'')?([^;]+)/i);
+  if (extended?.[1]) {
+    try {
+      return decodeURIComponent(extended[1].trim());
+    } catch {
+      // Malformed percent-encoding: fall through to the plain filename.
+    }
+  }
+
+  const plain = disposition.match(/filename="?([^";]+)"?/i);
+  return plain?.[1]?.trim() || fallback;
+}
+
 // Re-export auth functions for backward compatibility
 
 export interface AuthSignupRequest {
@@ -626,11 +660,14 @@ export const api = {
         method: "POST",
         body: JSON.stringify(data),
       }),
-    rotateApiKey: () =>
+    listApiKeys: () =>
+      fetchWithAuth<Record<string, unknown>>("/api/v1/api-keys"),
+    rotateApiKey: (gracePeriodHours = 24) =>
       fetchWithAuth<Record<string, unknown>>(
         "/api/v1/merchants/keys/rotate-api-key",
         {
           method: "POST",
+          body: JSON.stringify({ gracePeriodHours }),
         },
       ),
     rotateWebhookSecret: () =>
@@ -990,13 +1027,23 @@ export const api = {
         `/api/v1/payments/${encodeURIComponent(paymentId)}`,
       ),
 
-    export: async (params?: {
-      status?: string;
-      currency?: string;
-      search?: string;
-      date_from?: string;
-      date_to?: string;
-    }): Promise<Result<Blob>> => {
+    /**
+     * Stream the transaction history as CSV. Unlike the other methods this
+     * returns a Blob plus the server-supplied filename and row count, because
+     * the response is a file download rather than JSON.
+     */
+    export: async (
+      params?: {
+        status?: string;
+        currency?: string;
+        search?: string;
+        date_from?: string;
+        date_to?: string;
+        amount_min?: string | number;
+        amount_max?: string | number;
+      },
+      init?: RequestInit,
+    ): Promise<Result<PaymentCsvExportResult>> => {
       try {
         const sp = new URLSearchParams();
         if (params?.status && params.status !== "all")
@@ -1006,14 +1053,47 @@ export const api = {
         if (params?.search) sp.set("search", params.search);
         if (params?.date_from) sp.set("date_from", params.date_from);
         if (params?.date_to) sp.set("date_to", params.date_to);
+        // `0` is a meaningful amount bound, so test for nullishness not truthiness.
+        if (params?.amount_min !== undefined && params.amount_min !== "")
+          sp.set("amount_min", String(params.amount_min));
+        if (params?.amount_max !== undefined && params.amount_max !== "")
+          sp.set("amount_max", String(params.amount_max));
+
         const response = await fetch(
           `${API_BASE_URL}/api/v1/payments/export?${sp.toString()}`,
-          { headers: { Authorization: `Bearer ${getToken()}` } },
+          {
+            ...init,
+            headers: {
+              Authorization: `Bearer ${getToken()}`,
+              ...(init?.headers ?? {}),
+            },
+          },
         );
-        if (!response.ok)
-          return { error: new ApiError(response.status, "Export failed") };
-        const data = await response.blob();
-        return { data };
+
+        if (!response.ok) {
+          // Surface the API's structured message (e.g. an invalid date range)
+          // instead of a bare status code.
+          let message = "Export failed";
+          try {
+            const body = await response.json();
+            if (body?.message) message = String(body.message);
+          } catch {
+            // Response was not JSON; keep the default message.
+          }
+          return { error: new ApiError(response.status, message) };
+        }
+
+        const rowCountHeader = response.headers.get("X-Export-Row-Count");
+        const parsedRowCount = rowCountHeader ? Number(rowCountHeader) : NaN;
+
+        return {
+          data: {
+            blob: await response.blob(),
+            filename: parseFilenameHeader(response.headers.get("Content-Disposition")),
+            rowCount: Number.isFinite(parsedRowCount) ? parsedRowCount : null,
+            truncated: response.headers.get("X-Export-Truncated") === "true",
+          },
+        };
       } catch (err) {
         return {
           error: new ApiError(
@@ -1403,6 +1483,26 @@ export const api = {
             body: JSON.stringify({ webhook_url: "" }),
           },
         ),
+    },
+    users: {
+      list: (params?: {
+        page?: number;
+        limit?: number;
+        search?: string;
+        role?: string;
+        is_active?: string;
+      }) => {
+        const sp = new URLSearchParams();
+        if (params?.page != null) sp.set("page", String(params.page));
+        if (params?.limit != null) sp.set("limit", String(params.limit));
+        if (params?.search?.trim()) sp.set("search", params.search.trim());
+        if (params?.role && params.role !== "all") sp.set("role", params.role);
+        if (params?.is_active && params.is_active !== "all")
+          sp.set("is_active", params.is_active);
+        return fetchWithAuth<Record<string, unknown>>(
+          `/api/v1/admin/users?${sp.toString()}`,
+        );
+      },
     },
     settlements: {
       list: (params?: {

@@ -111,9 +111,9 @@ export const updateMerchantWebhook = createController(
   },
 );
 
-export const rotateApiKey = createController(async (_, req: AuthRequest) => {
+export const rotateApiKey = createController(async (body: { gracePeriodHours?: number }, req: AuthRequest) => {
   const merchantId = await validateUserId(req);
-  return rotateApiKeyService({ merchantId });
+  return rotateApiKeyService({ merchantId, gracePeriodHours: body.gracePeriodHours });
 });
 
 export const rotateWebhookSecret = createController(

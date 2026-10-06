@@ -11,6 +11,7 @@
  *  • Database backup         – runs daily at 02:00 UTC (encrypted SQL dump)
  *  • Invoice overdue check   – runs every hour
  *  • Idempotency cleanup     – runs daily at 03:00 UTC
+ *  • Webhook retry           – runs every minute (retries failed webhook deliveries with exponential backoff)
  *
  * Environment variables:
  *  SETTLEMENT_CRON           – Cron for settlement (default: "0 0 * * *")
@@ -20,6 +21,7 @@
  *  IDEMPOTENCY_CLEANUP_CRON  – Cron for idempotency cleanup (default: "0 3 * * *")
  *  INVOICE_OVERDUE_CRON      – Cron for invoice overdue check (default: "0 * * * *")
  *  DISABLE_CRON              – Set to "true" to disable all jobs (e.g. in test environments)
+ *  WEBHOOK_RETRY_CRON        – Cron for webhook retry pickup (default: "* * * * *")
  */
 
 import { schedule, validate, type ScheduledTask } from "node-cron";
@@ -38,6 +40,7 @@ import { acquireCronLock, releaseCronLock, getLockOwner } from "../utils/redisLo
 import { paymentSettlementService } from "./paymentSettlement.service";
 import { processDueWebhookRetries } from "./webhook.service";
 import { sendOpsAlert } from "./settlementAlert.service";
+import { processWebhookRetries } from "./webhookRetry.service";
 import {
   trackAddressPoolDepleted,
   trackFunderBalanceLow,
@@ -55,7 +58,7 @@ const INVOICE_OVERDUE_CRON_EXPR = process.env.INVOICE_OVERDUE_CRON ?? "0 * * * *
 const IDEMPOTENCY_CLEANUP_CRON_EXPR = process.env.IDEMPOTENCY_CLEANUP_CRON ?? "0 3 * * *";
 const ADDRESS_POOL_CRON_EXPR = process.env.ADDRESS_POOL_CRON ?? "*/10 * * * *";
 const SETTLEMENT_RETRY_CRON_EXPR = process.env.SETTLEMENT_RETRY_CRON ?? "*/1 * * * *";
-const WEBHOOK_RETRY_CRON_EXPR = process.env.WEBHOOK_RETRY_CRON ?? "*/1 * * * *";
+const WEBHOOK_RETRY_CRON_EXPR = process.env.WEBHOOK_RETRY_CRON ?? "* * * * *";
 
 let settlementTask: ScheduledTask | null = null;
 let billingTask: ScheduledTask | null = null;
@@ -362,22 +365,32 @@ export function startCronJobs(): void {
   }, { timezone: "UTC" });
 
   // ── Webhook Retry Pickup ──────────────────────────────────────────────────
-  webhookRetryTask = schedule(WEBHOOK_RETRY_CRON_EXPR, async () => {
-    const lockOwner = getLockOwner();
-    const acquired = await acquireCronLock("webhook_retry", { lockOwner });
-    if (!acquired) return;
-    try {
-      const result = await processDueWebhookRetries();
-      if (result.due > 0) {
-        console.log(`[Cron] ✅ Webhook retries — processed ${result.processed}/${result.due} due delivery(s).`);
+  if (process.env.DISABLE_WEBHOOK_RETRY_CRON !== "true") {
+    webhookRetryTask = schedule(WEBHOOK_RETRY_CRON_EXPR, async () => {
+      const lockOwner = getLockOwner();
+      const acquired = await acquireCronLock("webhook_retry", { lockOwner });
+      if (!acquired) {
+        return;
       }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error(`[Cron] ❌ Webhook retry job failed: ${msg}`);
-    } finally {
-      await releaseCronLock("webhook_retry", { lockOwner });
-    }
-  }, { timezone: "UTC" });
+      try {
+        const result = await processWebhookRetries();
+        if (result.processed > 0) {
+          console.log(
+            `[Cron] ✅ Webhook retries — ${result.succeeded}/${result.processed} succeeded, ` +
+            `${result.failed} failed, ${result.exhausted} permanently failed.`,
+          );
+        }
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(`[Cron] ❌ Webhook retry job failed: ${msg}`);
+      } finally {
+        await releaseCronLock("webhook_retry", { lockOwner });
+      }
+    }, { timezone: "UTC" });
+    console.log(`[Cron] ✅ Webhook retry job scheduled (${WEBHOOK_RETRY_CRON_EXPR}) in UTC.`);
+  } else {
+    console.log("[Cron] DISABLE_WEBHOOK_RETRY_CRON=true – webhook retry job disabled.");
+  }
 
   console.log("[Cron] All jobs scheduled successfully.");
 }

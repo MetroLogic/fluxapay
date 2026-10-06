@@ -350,6 +350,17 @@ router.patch("/me/webhook", authenticateApiKey, merchantApiKeyRateLimit(), updat
  *     tags: [Merchants]
  *     security:
  *       - bearerAuth: []
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               gracePeriodHours:
+ *                 type: number
+ *                 minimum: 0.01
+ *                 description: Hours the previous key remains valid (default 24).
  *     responses:
  *       200:
  *         description: API key rotated successfully
@@ -362,6 +373,11 @@ router.patch("/me/webhook", authenticateApiKey, merchantApiKeyRateLimit(), updat
  *                   type: string
  *                 apiKey:
  *                   type: string
+ *                 expiresAt:
+ *                   type: string
+ *                   format: date-time
+ *                 gracePeriodHours:
+ *                   type: number
  */
 router.post("/keys/rotate-api-key", authenticateApiKey, merchantApiKeyRateLimit(), merchantRateLimit(), rotateApiKey);
 

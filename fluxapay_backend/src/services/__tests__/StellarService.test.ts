@@ -1,6 +1,7 @@
 import { StellarService } from '../StellarService';
 import { HDWalletService } from '../HDWalletService';
 import { Keypair } from '@stellar/stellar-sdk';
+import { mapStellarError, StellarErrorCode } from '../../utils/stellarErrors';
 
 // Mock the entire stellar-sdk
 jest.mock('@stellar/stellar-sdk', () => {
@@ -206,6 +207,56 @@ describe('StellarService', () => {
             await assertion;
             expect(operation).toHaveBeenCalledTimes(4);
             expect(setTimeoutSpy.mock.calls.map(([, delay]) => delay)).toEqual([100, 200, 400]);
+        });
+    });
+
+    describe('mapStellarError', () => {
+        it('should map insufficient funds error', () => {
+            const result = mapStellarError({ response: { data: { extras: { result_codes: { transaction: 'tx_insufficient_funds' } } } } });
+            expect(result.code).toBe(StellarErrorCode.INSUFFICIENT_FUNDS);
+            expect(result.message).toMatch(/insufficient funds/i);
+        });
+
+        it('should map bad auth error', () => {
+            const result = mapStellarError({ response: { data: { extras: { result_codes: { transaction: 'tx_bad_auth' } } } } });
+            expect(result.code).toBe(StellarErrorCode.BAD_AUTH);
+            expect(result.message).toMatch(/authorization/i);
+        });
+
+        it('should map tx_failed error', () => {
+            const result = mapStellarError({ response: { data: { extras: { result_codes: { transaction: 'tx_failed' } } } } });
+            expect(result.code).toBe(StellarErrorCode.TX_FAILED);
+            expect(result.message).toMatch(/failed/i);
+        });
+
+        it('should map op_underfunded error', () => {
+            const result = mapStellarError({ response: { data: { extras: { result_codes: { operations: ['op_underfunded'] } } } } });
+            expect(result.code).toBe(StellarErrorCode.OP_UNDERFUNDED);
+            expect(result.message).toMatch(/insufficient/i);
+        });
+
+        it('should map op_no_trust error', () => {
+            const result = mapStellarError({ response: { data: { extras: { result_codes: { operations: ['op_no_trust'] } } } } });
+            expect(result.code).toBe(StellarErrorCode.OP_NO_TRUST);
+            expect(result.message).toMatch(/trustline/i);
+        });
+
+        it('should map tx_too_late error', () => {
+            const result = mapStellarError({ response: { data: { extras: { result_codes: { transaction: 'tx_too_late' } } } } });
+            expect(result.code).toBe(StellarErrorCode.TX_TOO_LATE);
+            expect(result.message).toMatch(/expired/i);
+        });
+
+        it('should map tx_bad_seq error', () => {
+            const result = mapStellarError({ response: { data: { extras: { result_codes: { transaction: 'tx_bad_seq' } } } } });
+            expect(result.code).toBe(StellarErrorCode.TX_BAD_SEQ);
+            expect(result.message).toMatch(/sequence/i);
+        });
+
+        it('should return a generic message for unknown errors', () => {
+            const result = mapStellarError(new Error('something weird'));
+            expect(result.code).toBe(StellarErrorCode.UNKNOWN);
+            expect(result.message).toMatch(/unable to process/i);
         });
     });
 
