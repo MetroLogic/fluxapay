@@ -714,6 +714,9 @@ router.patch(
  *                     reminder_minutes_before:
  *                       type: integer
  *                       description: How many minutes before expiry to send the reminder
+ *                     notify_on_payment:
+ *                       type: boolean
+ *                       description: Whether to receive an email when a payment is successfully confirmed
  *       401:
  *         description: Unauthorized
  */
@@ -746,6 +749,9 @@ router.get(
  *                 minimum: 1
  *                 maximum: 1440
  *                 description: Minutes before expiry to send the reminder (1–1440)
+ *               notify_on_payment:
+ *                 type: boolean
+ *                 description: Set to false to stop receiving payment confirmation emails
  *     responses:
  *       200:
  *         description: Preferences updated
