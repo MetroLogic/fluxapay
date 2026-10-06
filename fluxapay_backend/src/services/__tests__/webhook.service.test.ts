@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { WebhookDispatcher, createAndDeliverWebhook, deliverWebhook, generateWebhookSignature, getDeadLetterQueueService, requeueWebhookService, verifyWebhookTimestamp } from "../webhook.service";
+import { WebhookDispatcher, createAndDeliverWebhook, deliverWebhook, generateWebhookSignature, getDeadLetterQueueService, requeueWebhookService, sendTestWebhookService, verifyWebhookTimestamp } from "../webhook.service";
 import { PrismaClient } from "../../generated/client/client";
 
 // Define mock functions inside the factory to avoid jest-hoisting TDZ issues with const
@@ -88,6 +88,7 @@ describe("webhook.service", () => {
 
     // The sent body includes event_id prepended; reconstruct it to verify signature
     const sentBody = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+    expect(sentBody.event).toBe("payment.settled");
     const ts = capturedHeaders["X-FluxaPay-Timestamp"] as string;
     const expectedSig = generateWebhookSignature(sentBody, merchantSecret, ts);
     expect(capturedHeaders["X-FluxaPay-Signature"]).toBe(expectedSig);
@@ -585,6 +586,30 @@ describe("DLQ services", () => {
     await expect(requeueWebhookService({ log_id: "missing" })).rejects.toEqual(
       expect.objectContaining({ status: 404, message: "Webhook log not found" })
     );
+  });
+});
+
+describe("test webhook payload", () => {
+  it("includes the canonical event name", async () => {
+    mockMerchant.findUnique.mockResolvedValueOnce({ id: "m1", webhook_secret: "secret" });
+    mockMerchant.webhookLog.create.mockResolvedValueOnce({ id: "log_test" });
+    mockMerchant.webhookLog.update.mockResolvedValueOnce({ id: "log_test", status: "delivered" });
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: () => Promise.resolve("OK"),
+    }) as any;
+
+    await sendTestWebhookService({
+      merchantId: "m1",
+      event_type: "payment_completed" as any,
+      endpoint_url: "https://example.com/webhook",
+    });
+
+    const payload = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+    expect(payload.event).toBe("payment.settled");
+    expect(payload.event_id).toBeDefined();
+    expect(payload.test_mode).toBe(true);
   });
 });
 
