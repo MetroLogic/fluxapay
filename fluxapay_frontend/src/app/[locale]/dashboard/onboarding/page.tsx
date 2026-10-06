@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
+  Info,
   Upload,
   X,
 } from "lucide-react";
@@ -94,6 +95,66 @@ function clearDraft() {
 
 /** Slices that carry restorable draft data, in the order the steps present them. */
 const RESTORABLE_SECTIONS = ["business", "owner", "bank"] as const;
+
+/** Query param carrying the visible step so browser back/forward can walk the wizard (#1192). */
+const STEP_PARAM = "step";
+
+const MIN_STEP = 1;
+const MAX_STEP = 5;
+
+/** Clamp an arbitrary value into the 1-5 step range. */
+function clampStep(value: number): Step {
+  return Math.min(MAX_STEP, Math.max(MIN_STEP, Math.round(value))) as Step;
+}
+
+/**
+ * Read the step from `?step=`, ignoring absent, blank, and non-numeric values.
+ * Returns null when the URL carries no usable step so the caller can fall back
+ * to the draft rather than jumping the merchant to step 1.
+ */
+function readStepFromUrl(): Step | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = new URL(window.location.href).searchParams.get(STEP_PARAM);
+    if (!raw) return null;
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed)) return null;
+    return clampStep(parsed);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Reflect the current step into the query string.
+ *
+ * `push` controls whether a history entry is created: advancing or going back
+ * through the wizard pushes, while a plain restore of the same step replaces so
+ * a reload does not stack duplicate entries (#1192).
+ */
+function writeStepToUrl(step: Step, push: boolean) {
+  if (typeof window === "undefined") return;
+  try {
+    const url = new URL(window.location.href);
+    if (step === MIN_STEP) {
+      // Step 1 is the default view, so keep the URL clean.
+      url.searchParams.delete(STEP_PARAM);
+    } else {
+      url.searchParams.set(STEP_PARAM, String(step));
+    }
+    const next = `${url.pathname}${url.search}${url.hash}`;
+    if (next === `${window.location.pathname}${window.location.search}${window.location.hash}`) {
+      return;
+    }
+    if (push) {
+      window.history.pushState({ [STEP_PARAM]: step }, "", next);
+    } else {
+      window.history.replaceState({ [STEP_PARAM]: step }, "", next);
+    }
+  } catch {
+    // A blocked or unavailable history must not break the form.
+  }
+}
 
 /**
  * Marks a group of fields as carrying restored draft values (#777).
@@ -184,24 +245,31 @@ export default function MerchantOnboardingPage() {
     hasRestored.current = true;
 
     const draft = loadDraft();
-    if (!draft) return;
+    // A step in the URL means browser back/forward already chose a step, so it
+    // wins over the one recorded in the draft (#1192).
+    const urlStep = readStepFromUrl();
+    if (!draft && urlStep === null) return;
 
     const restored: string[] = [];
-    if (draft.business && Object.keys(draft.business).length > 0) {
+    if (draft?.business && Object.keys(draft.business).length > 0) {
       setBusiness((current) => ({ ...current, ...draft.business }));
       restored.push("business");
     }
-    if (draft.owner && Object.keys(draft.owner).length > 0) {
+    if (draft?.owner && Object.keys(draft.owner).length > 0) {
       setOwner((current) => ({ ...current, ...draft.owner }));
       restored.push("owner");
     }
     // Sensitive bank fields were never written, so only the safe ones return.
-    if (draft.bank && Object.keys(draft.bank).length > 0) {
+    if (draft?.bank && Object.keys(draft.bank).length > 0) {
       setBank((current) => ({ ...current, ...draft.bank }));
       restored.push("bank");
     }
-    if (draft.step) {
-      setStep(Math.min(Math.max(Number(draft.step), 1), 5) as Step);
+    // The URL wins over the draft so back/forward lands where the URL says (#1192).
+    const initialStep = urlStep ?? (draft?.step ? clampStep(Number(draft.step)) : null);
+    if (initialStep !== null) {
+      setStep(initialStep);
+      // Normalise the URL without adding a history entry for the restore itself.
+      writeStepToUrl(initialStep, false);
     }
 
     // File inputs cannot be rehydrated from storage, so `documents` is skipped.
@@ -216,21 +284,97 @@ export default function MerchantOnboardingPage() {
   draftRef.current = { business, owner, documents, bank, step };
   const draftTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => {
-    return () => {
-      if (draftTimer.current) clearTimeout(draftTimer.current);
-    };
-  }, []);
+  /**
+   * True once the application has been submitted, so the flush below knows not
+   * to re-persist a draft that `clearDraft()` just deleted (#1192).
+   */
+  const hasSubmittedRef = useRef(false);
+
+  /** Write the draft immediately, cancelling any pending debounce (#1192). */
+  const flushDraft = useRef(() => {
+    if (draftTimer.current) {
+      clearTimeout(draftTimer.current);
+      draftTimer.current = null;
+    }
+    // A submitted application must not reappear as a resumable draft.
+    if (hasSubmittedRef.current) return;
+    saveDraft(draftRef.current);
+  }).current;
 
   useEffect(() => {
     if (draftTimer.current) clearTimeout(draftTimer.current);
+    if (hasSubmittedRef.current) return;
     draftTimer.current = setTimeout(() => {
+      draftTimer.current = null;
       saveDraft(draftRef.current);
     }, 300);
     return () => {
       if (draftTimer.current) clearTimeout(draftTimer.current);
     };
   }, [business, owner, documents, bank, step]);
+
+  /**
+   * Flush on the way out so a back press or tab switch cannot drop the last
+   * keystrokes (#1192).
+   *
+   * The debounced save alone loses everything typed in the 300ms before an
+   * unmount, and its cleanup cancels the pending timer rather than flushing it.
+   * `pagehide` and `visibilitychange` cover the cases where React never unmounts
+   * the component at all — a bfcache navigation, a tab switch, or mobile Safari
+   * discarding the page.
+   */
+  useEffect(() => {
+    const flush = () => flushDraft();
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") flush();
+    };
+
+    window.addEventListener("pagehide", flush);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.removeEventListener("pagehide", flush);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      // Unmount last: write before the effect above cancels the pending timer.
+      flush();
+    };
+  }, [flushDraft]);
+
+  /**
+   * Let the browser back and forward buttons walk the wizard (#1192).
+   *
+   * Each step change pushes a history entry, so the wizard behaves like a stack
+   * of pages rather than a single long form the user has to restart.
+   */
+  const hasSyncedUrl = useRef(false);
+  useEffect(() => {
+    // On mount the restore effect has already written the step with
+    // replaceState, so only genuine step changes push an entry.
+    if (!hasSyncedUrl.current) {
+      hasSyncedUrl.current = true;
+      return;
+    }
+
+    writeStepToUrl(step, true);
+  }, [step]);
+
+  useEffect(() => {
+    const onPopState = () => {
+      const target = readStepFromUrl();
+      if (target === null) return;
+      setStep((current) => (current === target ? current : target));
+    };
+
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+
+  const goToStep = (next: Step) => {
+    setStep((current) => (current === next ? current : next));
+    // Keep the draft in step with the visible step immediately, so a back press
+    // right after navigating still restores to the right place.
+    draftRef.current = { ...draftRef.current, step: next };
+    saveDraft(draftRef.current);
+  };
 
   const isRestored = (section: string) => restoredSections.includes(section);
   const confirmRestored = () => setRestoredSections([]);
@@ -282,6 +426,9 @@ export default function MerchantOnboardingPage() {
         const upload = await api.kyc.uploadDocument(file as File, documentType);
         if ("error" in upload) throw new Error(upload.error.message);
       }
+      // Set the guard before clearing, so the unmount flush cannot resurrect
+      // the draft this submission is retiring (#1192).
+      hasSubmittedRef.current = true;
       setSubmitted(true);
       clearDraft();
       toast.success("KYC submission received. We will review it within 1-2 business days.");
@@ -328,10 +475,10 @@ export default function MerchantOnboardingPage() {
       toast.error("Please fill in all required fields before continuing.");
       return;
     }
-    setStep((s) => Math.min(s + 1, 5) as Step);
+    goToStep(clampStep(step + 1));
   };
 
-  const prevStep = () => setStep((s) => Math.max(s - 1, 1) as Step);
+  const prevStep = () => goToStep(clampStep(step - 1));
 
   if (submitted) {
     return (
@@ -421,6 +568,17 @@ export default function MerchantOnboardingPage() {
         )}
         {step === 3 && (
           <StepSection title="Documents" description={`Accepted: PDF, JPG, PNG (max 10 MB).`}>
+            <p
+              className="mb-4 flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900"
+              data-testid="document-reupload-note"
+            >
+              <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <span>
+                Your other details are saved as you go, but uploaded documents are
+                kept in memory only. If you leave this page or go back past this
+                step, you will need to select your files again.
+              </span>
+            </p>
             <DocumentForm documents={documents} onChange={setDocuments} />
           </StepSection>
         )}
