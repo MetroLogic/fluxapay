@@ -1,46 +1,20 @@
 {
   "name": "fluxapay-backend",
   "version": "1.0.0",
-  "description": "Fluxapay is a payment gateway on the Stellar blockchain that enables merchants to accept crypto payments and get settled in their local fiat currency.",
-  "main": "index.js",
+  "private": true,
   "scripts": {
-    "build": "prisma generate && tsc -p tsconfig.build.json",
+    "dev": "ts-node src/index.ts",
+    "build": "tsc -p tsconfig.build.json",
     "start": "node dist/index.js",
-    "dev": "nodemon src/index.ts",
-    "worker:payment-monitor": "ts-node src/workers/paymentMonitor.worker.ts",
-    "worker:payment-monitor:dev": "nodemon src/workers/paymentMonitor.worker.ts",
-    "worker:payment-monitor:build": "tsc src/workers/paymentMonitor.worker.ts --outDir dist",
-    "worker:payment-monitor:start": "node dist/workers/paymentMonitor.worker.js",
-    "test": "jest",
-    "test:smoke": "jest --testPathPatterns=api.smoke.test.ts --runInBand --forceExit",
-    "test:integration": "jest --testPathPatterns=integration --runInBand",
-    "prisma:generate": "prisma generate",
-    "prisma:push": "prisma db push",
-    "prisma:studio": "prisma studio",
-    "lint": "eslint src/**/*.ts",
-    "encrypt-seed": "ts-node src/scripts/encrypt-seed.ts",
-    "rotation:dry-run": "ts-node scripts/rotate-master-seed.ts",
-    "rotation:migrate": "ts-node scripts/rotate-master-seed.ts",
-    "rotation:verify": "ts-node scripts/rotate-master-seed.ts verify",
-    "test:contract": "jest --testPathPatterns=openapi.contract.test.ts --runInBand --forceExit",
-    "validate:openapi": "ts-node scripts/validate-openapi-spec.ts && ts-node scripts/export-swagger.ts",
+    "lint": "eslint . --ext .ts",
+    "test": "jest --runInBand",
+    "test:watch": "jest --watch",
+    "test:integration": "jest --runInBand --testPathPattern=src/__tests__/integration",
+    "test:contract": "jest --runInBand src/__tests__/contract",
+    "validate:openapi": "ts-node scripts/validate-openapi-spec.ts",
     "check:route-coverage": "ts-node scripts/check-route-coverage.ts",
-    "detect-breaking-changes": "ts-node scripts/detect-breaking-changes.ts",
-    "loadtest:k6:payments": "k6 run load-tests/k6-payment-create-list.js",
-    "seed": "ts-node prisma/seed.ts",
-    "seed:reset": "ts-node prisma/seed.ts --reset"
+    "check:route-coverage:ci": "ts-node scripts/check-route-coverage.ts --ci"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/MetroLogic/fluxapay-backend.git"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/MetroLogic/fluxapay-backend/issues"
-  },
-  "homepage": "https://github.com/MetroLogic/fluxapay-backend#readme",
   "dependencies": {
     "@opentelemetry/auto-instrumentations-node": "^0.72.0",
     "@opentelemetry/exporter-trace-otlp-http": "^0.214.0",
@@ -73,7 +47,6 @@
     "prisma": "6.19.2",
     "resend": "^6.8.0",
     "sanitize-html": "^2.17.2",
-    "stellar-sdk": "^13.3.0",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
     "zod": "^4.3.5"
@@ -107,5 +80,9 @@
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.54.0"
+  },
+  "license": "ISC",
+  "engines": {
+    "node": ">=20"
   }
 }

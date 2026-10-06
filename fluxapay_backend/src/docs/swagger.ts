@@ -307,7 +307,7 @@ const errorResponse = {
     },
 };
 
-for (const [path, pathItem] of Object.entries(specs.paths || {})) {
+for (const [path, pathItem] of Object.entries((specs as any).paths || {})) {
     for (const method of methods) {
         const operation = (pathItem as Record<string, any>)[method];
         if (!operation) continue;

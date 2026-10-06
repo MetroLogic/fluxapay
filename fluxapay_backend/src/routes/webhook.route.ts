@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { retryWebhookWithBackoff, getWebhookRetryConfig } from "../controllers/webhook.controller";
 import {
   getWebhookLogs,
   getWebhookLogDetails,
@@ -9,6 +10,7 @@ import {
   exportWebhookLogs,
   adminGetWebhookLogs,
   adminRetryWebhook,
+  getWebhookAttempts,
 } from "../controllers/webhook.controller";
 import { validate, validateQuery } from "../middleware/validation.middleware";
 import * as webhookSchema from "../schemas/webhook.schema";
@@ -107,6 +109,41 @@ router.get(
   getWebhookLogs
 );
 
+/**
+ * @swagger
+ * /api/v1/webhooks/deliveries:
+ *   get:
+ *     summary: Get webhook delivery logs (alias for logs)
+ *     tags: [Webhooks]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: event_type
+ *         schema:
+ *           type: string
+ *         description: Filter by event type
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *         description: Filter by webhook status
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *         description: Page number
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *         description: Number of items per page
+ *     responses:
+ *       200:
+ *         description: Webhook logs retrieved successfully
+ *       401:
+ *         description: Unauthorized
+ */
 // Alias /deliveries to /logs
 router.get(
   "/deliveries",
@@ -162,6 +199,31 @@ router.get(
   exportWebhookLogs,
 );
 
+/**
+ * @swagger
+ * /api/v1/webhooks/deliveries/export:
+ *   get:
+ *     summary: Export webhook delivery logs as CSV (alias for logs/export)
+ *     tags: [Webhooks]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: event_type
+ *         schema:
+ *           type: string
+ *         description: Filter by event type
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *         description: Filter by webhook status
+ *     responses:
+ *       200:
+ *         description: CSV file download
+ *       401:
+ *         description: Unauthorized
+ */
 // Alias /deliveries/export to /logs/export
 router.get(
   "/deliveries/export",
@@ -298,6 +360,31 @@ router.post(
   retryWebhook
 );
 
+/**
+ * @swagger
+ * /api/v1/webhooks/deliveries/{log_id}/retry:
+ *   post:
+ *     summary: Retry a failed webhook delivery (alias for logs/retry)
+ *     tags: [Webhooks]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: log_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The webhook log ID to retry
+ *     responses:
+ *       200:
+ *         description: Webhook retry initiated
+ *       400:
+ *         description: Webhook already delivered successfully
+ *       404:
+ *         description: Webhook log not found
+ *       401:
+ *         description: Unauthorized
+ */
 // Alias /deliveries/:log_id/retry to /logs/:log_id/retry
 router.post(
   "/deliveries/:log_id/retry",
@@ -548,6 +635,102 @@ router.post(
   "/admin/logs/:log_id/retry",
   adminAuth,
   adminRetryWebhook
+);
+
+/**
+ * @swagger
+ * /api/v1/webhooks/logs/{log_id}/attempts:
+ *   get:
+ *     summary: Get delivery attempt history for a webhook event
+ *     tags: [Webhooks]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: log_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The webhook log ID
+ *     responses:
+ *       200:
+ *         description: Delivery attempt history retrieved successfully
+ *       404:
+ *         description: Webhook log not found
+ *       401:
+ *         description: Unauthorized
+ */
+router.get(
+  "/logs/:log_id/attempts",
+  authenticateToken, merchantApiKeyRateLimit(),
+  getWebhookAttempts
+);
+
+/**
+ * @swagger
+ * /api/v1/webhooks/deliveries/{log_id}/attempts:
+ *   get:
+ *     summary: Get delivery attempt history (alias for logs/attempts)
+ *     tags: [Webhooks]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: log_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The webhook log ID
+ *     responses:
+ *       200:
+ *         description: Delivery attempt history retrieved successfully
+ *       404:
+ *         description: Webhook log not found
+ *       401:
+ *         description: Unauthorized
+ */
+// Alias /deliveries/:log_id/attempts to /logs/:log_id/attempts
+router.get(
+  "/deliveries/:log_id/attempts",
+  authenticateToken, merchantApiKeyRateLimit(),
+  getWebhookAttempts
+);
+
+/**
+ * @swagger
+ * /api/v1/webhooks/admin/retry-config:
+ *   get:
+ *     summary: Get webhook retry backoff configuration
+ *     tags: [Webhooks - Admin]
+ *     security:
+ *       - adminSecret: []
+ *     responses:
+ *       200:
+ *         description: Webhook retry configuration retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     maxRetries:
+ *                       type: integer
+ *                     backoffMultiplier:
+ *                       type: number
+ *                     initialDelayMs:
+ *                       type: integer
+ *       401:
+ *         description: Unauthorized
+ */
+// Expose retry backoff configuration (read-only, admin protected)
+router.get(
+  "/admin/retry-config",
+  adminAuth,
+  getWebhookRetryConfig
 );
 
 export default router;
