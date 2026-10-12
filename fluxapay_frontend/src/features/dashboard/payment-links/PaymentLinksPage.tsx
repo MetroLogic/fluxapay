@@ -26,6 +26,8 @@ export function PaymentLinksPage() {
   const [description, setDescription] = useState("");
   const [expiry, setExpiry] = useState("");
   const [maxUses, setMaxUses] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const [showQR, setShowQR] = useState<PaymentLink | null>(null);
@@ -35,8 +37,20 @@ export function PaymentLinksPage() {
   const [editMaxUses, setEditMaxUses] = useState("");
 
   const load = useCallback(async () => {
-    const res = await fetch("/api/v1/payment-links");
-    setLinks(await res.json());
+    setLoading(true);
+    setLoadError(null);
+
+    try {
+      const res = await fetch("/api/v1/payment-links");
+      if (!res.ok) throw new Error("Failed to load payment links");
+      setLinks(await res.json());
+    } catch (error) {
+      setLoadError(
+        error instanceof Error ? error.message : "Failed to load payment links",
+      );
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -335,7 +349,18 @@ export function PaymentLinksPage() {
       )}
 
       {/* Table */}
-      {links.length === 0 ? (
+      {loading && links.length === 0 ? (
+        <div className="rounded-lg border border-border p-12 text-center text-sm text-muted-foreground">
+          Loading payment links…
+        </div>
+      ) : loadError && links.length === 0 ? (
+        <div
+          className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive"
+          role="alert"
+        >
+          {loadError}
+        </div>
+      ) : links.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border p-12 text-center">
           <Link2 className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
           <p className="text-sm font-medium">No payment links yet</p>
