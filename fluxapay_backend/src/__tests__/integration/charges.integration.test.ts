@@ -1,5 +1,6 @@
 process.env.USDC_ISSUER_PUBLIC_KEY = process.env.USDC_ISSUER_PUBLIC_KEY || "GBBD47IF6LWK7P7MDEVSCWT73IQIGCEZHR7OMXMBZQ3ZONN2T4U6W23Y";
 process.env.JWT_SECRET = "test-jwt-secret";
+process.env.ADMIN_JWT_SECRET = "test-admin-jwt-secret";
 process.env.STELLAR_HORIZON_URL = "https://horizon-testnet.stellar.org";
 process.env.STELLAR_NETWORK_PASSPHRASE = "Test SDF Network ; September 2015";
 process.env.DATABASE_URL = "postgres://test:test@localhost:5432/test";
@@ -53,6 +54,7 @@ jest.mock("../../middleware/rateLimit.middleware", () => ({
   globalRateLimit: () => (req: any, res: any, next: any) => next(),
   merchantRateLimit: () => (req: any, res: any, next: any) => next(),
   authRateLimit: () => (req: any, res: any, next: any) => next(),
+  adminRateLimit: () => (req: any, res: any, next: any) => next(),
 }));
 
 jest.mock("../../services/payment.service", () => ({

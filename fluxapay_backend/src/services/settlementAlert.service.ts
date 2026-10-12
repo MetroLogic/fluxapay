@@ -86,3 +86,40 @@ export async function sendSettlementFailureAlert(alert: SettlementFailureAlert):
 
   await Promise.all([sendSlackAlert(message), sendTelegramAlert(message)]);
 }
+
+/**
+ * Generic ops alert for non-settlement events (e.g. the FX circuit breaker
+ * opening) that should reach the same Slack/Telegram channels. Shares the
+ * same env-configured channels as sendSettlementFailureAlert. Never throws.
+ */
+export async function sendOpsAlert(prefix: string, message: string): Promise<void> {
+  console.error(`[${prefix}] ${message.replace(/\n/g, " | ")}`);
+
+  const prefixedMessage = `[${prefix}] ${message}`;
+  await Promise.all([sendSlackAlert(prefixedMessage), sendTelegramAlert(prefixedMessage)]);
+}
+
+/**
+ * Sends an alert when the deposit address pool reaches high utilization (e.g. >= 80%).
+ * Never throws.
+ */
+export async function sendDepositPoolAlert(stats: {
+  utilizationPct: number;
+  availableCount: number;
+  totalCount: number;
+  allocatedCount?: number;
+  merchantId?: string;
+  timestamp?: string;
+}): Promise<void> {
+  const pctStr = (stats.utilizationPct * 100).toFixed(1);
+  const timestamp = stats.timestamp || new Date().toISOString();
+  const lines = [
+    `🚨 Deposit Address Pool Alert: High utilization at ${pctStr}% (${stats.availableCount}/${stats.totalCount} available)`,
+    `Pool Size: ${stats.totalCount}`,
+  ];
+  if (stats.merchantId) lines.push(`Merchant ID: ${stats.merchantId}`);
+  lines.push(`Timestamp: ${timestamp}`);
+
+  await sendOpsAlert("DepositAddressPool", lines.join(" | "));
+}
+

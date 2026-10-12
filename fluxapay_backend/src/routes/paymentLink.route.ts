@@ -8,6 +8,8 @@ import {
   getPaymentLinkById,
   updatePaymentLink,
   deletePaymentLink,
+  resolvePaymentLinkBySlug,
+  chargeFromPaymentLink,
 } from "../controllers/paymentLink.controller";
 import {
   createPaymentLinkSchema,
@@ -15,8 +17,73 @@ import {
   paymentLinkParamsSchema,
   updatePaymentLinkSchema,
 } from "../schemas/paymentLink.schema";
+import { simpleRateLimit } from "../middleware/simpleRateLimit.middleware";
 
 const router = Router();
+
+// Rate-limit public payment-link resolution by IP to prevent enumeration
+const publicPaymentLinkRateLimit = simpleRateLimit({
+  keyPrefix: "payment-links:resolve",
+  windowMs: 30_000,
+  max: 30,
+});
+
+/**
+ * @swagger
+ * /api/v1/payment-links/resolve/{slug}:
+ *   get:
+ *     summary: Resolve a payment link by slug (public)
+ *     tags: [Payment Links]
+ *     description: Returns payment link details. Returns 410 Gone if expired or inactive.
+ *     parameters:
+ *       - in: path
+ *         name: slug
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Payment link details
+ *       404:
+ *         description: Not found
+ *       410:
+ *         description: Payment link expired or inactive
+ */
+router.get("/resolve/:slug", publicPaymentLinkRateLimit, resolvePaymentLinkBySlug);
+
+/**
+ * @swagger
+ * /api/v1/payment-links/resolve/{slug}/charge:
+ *   post:
+ *     summary: Create a charge from a payment link (public)
+ *     tags: [Payment Links]
+ *     description: Creates a payment from a payment link. Returns 410 Gone if the link is expired or inactive.
+ *     parameters:
+ *       - in: path
+ *         name: slug
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               amount:
+ *                 type: number
+ *                 description: Required for open-amount links
+ *               customer_email:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: Charge created
+ *       400:
+ *         description: Validation error
+ *       404:
+ *         description: Payment link not found
+ *       410:
+ *         description: Payment link expired or inactive
+ */
+router.post("/resolve/:slug/charge", publicPaymentLinkRateLimit, chargeFromPaymentLink);
 
 /**
  * @swagger

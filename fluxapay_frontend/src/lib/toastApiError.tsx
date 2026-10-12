@@ -56,18 +56,24 @@ function isRetryable(error: unknown): boolean {
 }
 
 export function toastApiError(error: unknown): void {
-  // Don't show toast for auth errors (401/403) as they're handled globally with logout
-  if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
-    return;
-  }
-
   try {
+    // Don't show toast for auth errors (401/403) as they're handled globally
+    // with logout, but still surface them to Sentry instead of swallowing them.
+    if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
+      Sentry.captureException(error, {
+        tags: { error_type: "api_auth_error", status: Number(error.status) },
+      });
+      return;
+    }
+
     toast.error(resolveMessage(error));
     if (error instanceof ApiError && error.status >= 500) {
       Sentry.captureException(error, { tags: { error_type: "api_error", status: error.status } });
     }
-  } catch {
-    // never throw
+  } catch (e) {
+    // Never throw; the caller runs in an event handler. But don't silently
+    // swallow the underlying failure -- log it so it is observable.
+    console.error("toastApiError: failed to display error toast:", e);
   }
 }
 
@@ -97,7 +103,9 @@ export function toastApiErrorWithRetry(
     if (error instanceof ApiError && error.status >= 500) {
       Sentry.captureException(error, { tags: { error_type: "api_error", status: error.status } });
     }
-  } catch {
-    // never throw
+  } catch (e) {
+    // Never throw; the caller runs in an event handler. Log the underlying
+    // failure so toast rendering errors are not silently swallowed.
+    console.error("toastApiErrorWithRetry: failed to display error toast:", e);
   }
 }

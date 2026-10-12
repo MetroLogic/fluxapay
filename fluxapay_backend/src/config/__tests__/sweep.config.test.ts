@@ -1,4 +1,5 @@
 import {
+  getMaxSweepRetryAttempts,
   getSweepConfig,
   getSweepCronInterval,
   getSweepMinBalanceUsdc,
@@ -13,6 +14,7 @@ describe("sweep.config", () => {
     delete process.env.SWEEP_CRON_INTERVAL;
     delete process.env.SWEEP_CRON;
     delete process.env.SWEEP_MIN_BALANCE_USDC;
+    delete process.env.MAX_SWEEP_RETRY_ATTEMPTS;
   });
 
   afterEach(() => {
@@ -52,13 +54,39 @@ describe("sweep.config", () => {
     });
   });
 
+  describe("getMaxSweepRetryAttempts", () => {
+    it("defaults to 5 when unset", () => {
+      expect(getMaxSweepRetryAttempts()).toBe(5);
+    });
+
+    it("reads MAX_SWEEP_RETRY_ATTEMPTS from env", () => {
+      process.env.MAX_SWEEP_RETRY_ATTEMPTS = "3";
+      expect(getMaxSweepRetryAttempts()).toBe(3);
+    });
+
+    it("falls back to default for invalid values", () => {
+      process.env.MAX_SWEEP_RETRY_ATTEMPTS = "not-a-number";
+      expect(getMaxSweepRetryAttempts()).toBe(5);
+    });
+
+    it("falls back to default for zero or negative values", () => {
+      process.env.MAX_SWEEP_RETRY_ATTEMPTS = "0";
+      expect(getMaxSweepRetryAttempts()).toBe(5);
+
+      process.env.MAX_SWEEP_RETRY_ATTEMPTS = "-2";
+      expect(getMaxSweepRetryAttempts()).toBe(5);
+    });
+  });
+
   describe("getSweepConfig", () => {
-    it("returns interval and min balance together", () => {
+    it("returns interval, min balance, and max retry attempts together", () => {
       process.env.SWEEP_CRON_INTERVAL = "0 */2 * * *";
       process.env.SWEEP_MIN_BALANCE_USDC = "2";
+      process.env.MAX_SWEEP_RETRY_ATTEMPTS = "7";
       expect(getSweepConfig()).toEqual({
         cronInterval: "0 */2 * * *",
         minBalanceUsdc: 2,
+        maxSweepRetryAttempts: 7,
       });
     });
   });

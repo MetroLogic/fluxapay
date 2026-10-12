@@ -3,6 +3,7 @@ import {
   MetadataValidationError,
   DEFAULT_METADATA_MAX_BYTES,
   DEFAULT_METADATA_MAX_DEPTH,
+  DEFAULT_METADATA_MAX_KEYS,
 } from "../metadata.util";
 
 describe("metadata util", () => {
@@ -113,6 +114,32 @@ describe("metadata util", () => {
     expect(() => validateAndSanitizeMetadata(nested)).toThrow(
       MetadataValidationError,
     );
+  });
+
+  // ── Key count limit ─────────────────────────────────────────────────────────
+
+  it("accepts metadata with exactly the default max key count", () => {
+    const metadata: Record<string, string> = {};
+    for (let i = 0; i < DEFAULT_METADATA_MAX_KEYS; i++) {
+      metadata[`key_${i}`] = "v";
+    }
+    expect(() => validateAndSanitizeMetadata(metadata)).not.toThrow();
+  });
+
+  it("throws when metadata exceeds the default max key count", () => {
+    const metadata: Record<string, string> = {};
+    for (let i = 0; i < DEFAULT_METADATA_MAX_KEYS + 1; i++) {
+      metadata[`key_${i}`] = "v";
+    }
+    expect(() => validateAndSanitizeMetadata(metadata)).toThrow(
+      MetadataValidationError,
+    );
+  });
+
+  it("respects a custom maxKeys option", () => {
+    expect(() =>
+      validateAndSanitizeMetadata({ a: "1", b: "2", c: "3" }, { maxKeys: 2 }),
+    ).toThrow("maximum key count of 2");
   });
 
   // ── MetadataValidationError shape ───────────────────────────────────────────

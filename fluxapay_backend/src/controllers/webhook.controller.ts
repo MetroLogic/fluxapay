@@ -13,6 +13,8 @@ import {
   exportWebhookLogsService,
   adminGetWebhookLogsService,
   adminRetryWebhookService,
+  getWebhookRetryConfigService,
+  getWebhookDeliveryAttemptsService,
 } from "../services/webhook.service";
 import { WebhookEventType, WebhookStatus } from "../generated/client/client";
 import { AuthRequest } from "../types/express";
@@ -39,6 +41,39 @@ export async function getWebhookLogs(req: AuthRequest, res: Response) {
 
     res.status(200).json(result);
   } catch (err) {
+    console.error(err);
+    sendApiError(res, err);
+  }
+}
+
+/* ── Webhook retry / backoff endpoints ──────────────────────────────────── */
+
+export async function getWebhookRetryConfig(req: Request, res: Response) {
+  try {
+    const result = await getWebhookRetryConfigService();
+    res.status(200).json(result);
+  } catch (err: any) {
+    console.error(err);
+    sendApiError(res, err);
+  }
+}
+
+export async function getWebhookDeliveryAttempts(req: AuthRequest, res: Response) {
+  try {
+    const merchantId = await validateUserId(req);
+    const { log_id } = req.params;
+
+    if (!log_id || Array.isArray(log_id)) {
+      return sendApiError(res, apiError(400, ErrorCode.LOG_ID_REQUIRED, "Log ID is required"));
+    }
+
+    const result = await getWebhookDeliveryAttemptsService({
+      merchantId,
+      log_id,
+    });
+
+    res.status(200).json(result);
+  } catch (err: any) {
     console.error(err);
     sendApiError(res, err);
   }

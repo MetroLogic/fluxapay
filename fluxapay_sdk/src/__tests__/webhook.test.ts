@@ -48,10 +48,14 @@ console.log('\nverifyWebhookSignature – unit tests\n');
 const ts = freshTimestamp();
 const sig = sign(PAYLOAD, ts, SECRET);
 
+const validResult = verifyWebhookSignature(PAYLOAD, sig, ts, SECRET);
 assert(
-  verifyWebhookSignature(PAYLOAD, sig, ts, SECRET).valid === true,
+  validResult.valid === true,
   'valid signature returns { valid: true }',
 );
+if (validResult.valid) {
+  assert(validResult.event.event === 'payment_confirmed', 'returns parsed event on success');
+}
 
 // Wrong secret
 assert(
@@ -68,27 +72,33 @@ assert(
 // Bad signature string
 const result = verifyWebhookSignature(PAYLOAD, 'deadbeef', ts, SECRET);
 assert(result.valid === false, 'bad signature returns { valid: false }');
-assert(typeof result.error === 'string', 'error field is a string on failure');
+if (!result.valid) {
+  assert(typeof result.error === 'string', 'error field is a string on failure');
+}
 
 // Replay protection – timestamp older than tolerance
 const oldTs = new Date(Date.now() - 10 * 60 * 1000).toISOString(); // 10 min ago
 const oldSig = sign(PAYLOAD, oldTs, SECRET);
 const replayResult = verifyWebhookSignature(PAYLOAD, oldSig, oldTs, SECRET, { toleranceSeconds: 300 });
 assert(replayResult.valid === false, 'timestamp older than tolerance is rejected');
-assert(
-  replayResult.error?.includes('older than') === true,
-  'replay error message mentions "older than"',
-);
+if (!replayResult.valid) {
+  assert(
+    replayResult.error?.includes('older than') === true,
+    'replay error message mentions "older than"',
+  );
+}
 
 // Future timestamp
 const futureTs = new Date(Date.now() + 60 * 1000).toISOString();
 const futureSig = sign(PAYLOAD, futureTs, SECRET);
 const futureResult = verifyWebhookSignature(PAYLOAD, futureSig, futureTs, SECRET);
 assert(futureResult.valid === false, 'future timestamp is rejected');
-assert(
-  futureResult.error?.includes('future') === true,
-  'future timestamp error message mentions "future"',
-);
+if (!futureResult.valid) {
+  assert(
+    futureResult.error?.includes('future') === true,
+    'future timestamp error message mentions "future"',
+  );
+}
 
 // Custom tolerance window
 const recentTs = new Date(Date.now() - 30 * 1000).toISOString(); // 30 s ago

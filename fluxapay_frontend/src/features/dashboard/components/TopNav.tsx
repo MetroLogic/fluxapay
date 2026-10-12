@@ -1,11 +1,12 @@
 "use client";
 
-import { Menu, Bell, User, Moon, Sun, Command } from "lucide-react";
+import { Menu, Bell, User, Moon, Sun, Command, Settings, LogOut } from "lucide-react";
 import { Button } from "@/components/Button";
 import { usePathname, useRouter } from "next/navigation";
 import { useTheme } from "@/components/ThemeProvider";
 import { useDashboardNotifications } from "@/hooks/useDashboardNotifications";
-import { useState, useEffect } from "react";
+import { logout } from "@/lib/auth";
+import { useState, useEffect, useRef } from "react";
 
 interface TopNavProps {
     onMenuClick: () => void;
@@ -17,10 +18,33 @@ export function TopNav({ onMenuClick }: TopNavProps) {
     const { isDark, isMounted, toggleTheme } = useTheme();
     const { unreadCount } = useDashboardNotifications({ webhookLimit: 5, payoutLimit: 5 });
     const [isMac, setIsMac] = useState(false);
+    const [isProfileOpen, setIsProfileOpen] = useState(false);
+    const profileRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         setIsMac(typeof navigator !== "undefined" && navigator.platform.toUpperCase().indexOf("MAC") >= 0);
     }, []);
+
+    // Close the profile dropdown when clicking outside.
+    useEffect(() => {
+        function handleClickOutside(event: MouseEvent) {
+            if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
+                setIsProfileOpen(false);
+            }
+        }
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
+    const handleNavigate = (path: string) => {
+        setIsProfileOpen(false);
+        router.push(path);
+    };
+
+    const handleLogout = () => {
+        setIsProfileOpen(false);
+        logout();
+    };
 
     const getTitle = () => {
         if (pathname === "/dashboard") return "Overview";
@@ -96,10 +120,56 @@ export function TopNav({ onMenuClick }: TopNavProps) {
                         {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
                     </Button>
                 )}
-                <Button variant="ghost" size="icon" className="ml-2 rounded-full bg-secondary text-secondary-foreground hover:bg-secondary/80">
-                    <User className="h-5 w-5" />
-                    <span className="sr-only">Profile</span>
-                </Button>
+                <div ref={profileRef} className="relative">
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="ml-2 rounded-full bg-secondary text-secondary-foreground hover:bg-secondary/80"
+                        onClick={() => setIsProfileOpen((prev) => !prev)}
+                        aria-haspopup="menu"
+                        aria-expanded={isProfileOpen}
+                        aria-label="Profile menu"
+                        title="Profile"
+                    >
+                        <User className="h-5 w-5" />
+                        <span className="sr-only">Profile</span>
+                    </Button>
+                    {isProfileOpen && (
+                        <div
+                            role="menu"
+                            aria-label="Profile"
+                            className="absolute right-0 z-50 mt-2 w-48 overflow-hidden rounded-lg border border-border bg-background py-1 shadow-lg"
+                        >
+                            <button
+                                type="button"
+                                role="menuitem"
+                                className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-foreground hover:bg-muted"
+                                onClick={() => handleNavigate("/dashboard/settings")}
+                            >
+                                <User className="h-4 w-4" />
+                                Profile
+                            </button>
+                            <button
+                                type="button"
+                                role="menuitem"
+                                className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-foreground hover:bg-muted"
+                                onClick={() => handleNavigate("/dashboard/settings")}
+                            >
+                                <Settings className="h-4 w-4" />
+                                Settings
+                            </button>
+                            <button
+                                type="button"
+                                role="menuitem"
+                                className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-foreground hover:bg-muted"
+                                onClick={handleLogout}
+                            >
+                                <LogOut className="h-4 w-4" />
+                                Logout
+                            </button>
+                        </div>
+                    )}
+                </div>
             </div>
         </header>
     );

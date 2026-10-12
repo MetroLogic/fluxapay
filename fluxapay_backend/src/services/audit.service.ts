@@ -1,4 +1,5 @@
 import { PrismaClient, Prisma } from '../generated/client/client';
+import { prisma } from "../config/prisma";
 import {
   AuditActionType,
   AuditEntityType,
@@ -11,8 +12,8 @@ import {
   SweepOperationDetails,
   SettlementBatchDetails,
 } from "../types/audit.types";
+import { sanitizeObject } from "../utils/piiRedactor";
 
-const prisma = new PrismaClient();
 
 // Utility function for delay
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -74,6 +75,7 @@ async function safeAuditLog<T>(
  * Emit structured log for audit entry
  */
 function emitStructuredLog(auditLog: any, success: boolean) {
+  const sanitizedDetails = auditLog.details ? sanitizeObject(auditLog.details) : auditLog.details;
   const logData = {
     level: success ? "info" : "warn",
     message: `Audit: ${auditLog.action_type}`,
@@ -83,7 +85,7 @@ function emitStructuredLog(auditLog: any, success: boolean) {
     action_type: auditLog.action_type,
     entity_type: auditLog.entity_type,
     entity_id: auditLog.entity_id,
-    details: auditLog.details,
+    details: sanitizedDetails,
   };
 
   if (success) {
@@ -104,20 +106,22 @@ function redactSensitiveValue(value: string, isSensitive: boolean): string {
 /**
  * Create audit log entry
  */
-async function createAuditLog(
+export async function createAuditLog(
   params: CreateAuditLogParams,
   tx?: Prisma.TransactionClient,
 ): Promise<any> {
   const client = tx || prisma;
 
   return await safeAuditLog(async () => {
+    const sanitizedDetails = params.details ? sanitizeObject(params.details) : params.details;
+
     const auditLog = await client.auditLog.create({
       data: {
         admin_id: params.admin_id,
         action_type: params.action_type,
         entity_type: params.entity_type,
         entity_id: params.entity_id,
-        details: params.details,
+        details: sanitizedDetails,
       },
     });
 
@@ -366,12 +370,12 @@ export async function updateSweepCompletion(params: {
       throw new Error(`Audit log ${params.auditLogId} not found`);
     }
 
-    const updatedDetails = {
+    const updatedDetails = sanitizeObject({
       ...(existingLog.details as any),
       status: params.status,
       statistics: params.statistics,
       failure_reason: params.failureReason,
-    };
+    });
 
     const sweepActionType =
       params.status === "completed"
@@ -389,6 +393,36 @@ export async function updateSweepCompletion(params: {
     emitStructuredLog(updatedLog, params.status === "completed");
     return updatedLog;
   }, `update_sweep_completion_${params.auditLogId}`);
+}
+
+/**
+ * Log a single payment's sweep failure. Called per-payment from within the
+ * sweep batch loop, so callers must catch/ignore rejections themselves
+ * (safeAuditLog throws after exhausting retries) rather than letting a
+ * logging failure abort the batch.
+ */
+export async function logSweepFailure(params: {
+  paymentId: string;
+  error: string;
+  retryCount: number;
+  flaggedForManualReview: boolean;
+}): Promise<any | null> {
+  const details: SweepOperationDetails = {
+    sweep_type: "payment_sweep",
+    trigger_reason: params.paymentId,
+    status: "failed",
+    failure_reason: params.error,
+    retry_count: params.retryCount,
+    flagged_for_manual_review: params.flaggedForManualReview,
+  };
+
+  return await createAuditLog({
+    admin_id: "system",
+    action_type: AuditActionType.sweep_fail,
+    entity_type: AuditEntityType.sweep_operation,
+    entity_id: params.paymentId,
+    details,
+  });
 }
 
 /**
@@ -434,7 +468,7 @@ export async function updateSettlementBatchCompletion(params: {
       throw new Error(`Audit log ${params.auditLogId} not found`);
     }
 
-    const updatedDetails = {
+    const updatedDetails = sanitizeObject({
       ...(existingLog.details as any),
       status: params.status,
       transaction_count: params.transactionCount,
@@ -443,7 +477,7 @@ export async function updateSettlementBatchCompletion(params: {
       completed_at: new Date().toISOString(),
       failure_reason: params.failureReason,
       merchant_results: params.merchantResults,
-    };
+    });
 
     const completionActionType =
       params.status === "failed"
@@ -609,13 +643,25 @@ export async function logApiKeyRotation(params: {
 }
 
 /**
- * Log webhook secret rotation
+ * Log webhook secret rotation.
+ *
+ * The raw secret value (previous or new) must never be written to any log
+ * sink. Only a redacted fingerprint of the *previous* secret — its last 4
+ * characters — is recorded, for forensic/audit purposes (e.g. confirming
+ * whether a known-compromised value was the one just rotated out).
+ *
+ * Note: the field is deliberately named `previous_last_four` rather than
+ * something containing "secret" — sanitizeObject() below redacts *any*
+ * field whose name contains a sensitive substring (including "secret"),
+ * which would blank out this already-redacted, safe-to-store fingerprint.
  */
 export async function logWebhookSecretRotation(params: {
   merchantId: string;
+  previousSecretLastFour?: string;
 }): Promise<any | null> {
   const details = {
     merchant_id: params.merchantId,
+    previous_last_four: params.previousSecretLastFour ?? null,
     rotated_at: new Date().toISOString(),
   };
 

@@ -13,6 +13,7 @@
  *   ANCHOR_API_URL            – Anchor base URL
  */
 
+import { createHash } from "crypto";
 import { sanitizeObject } from "../utils/piiRedactor";
 import { redisClient } from "../middleware/redisIdempotency.middleware";
 import { getLogger } from "../utils/logger";
@@ -50,6 +51,19 @@ export interface PayoutResult {
   raw_partner_payload?: any;
 }
 
+/**
+ * Generate a deterministic idempotency key for exchange payout attempts.
+ * Formatted as sha256(settlementId + attemptNumber).
+ */
+export function generatePayoutIdempotencyKey(
+  settlementId: string,
+  attemptNumber: number = 1,
+): string {
+  return createHash("sha256")
+    .update(`${settlementId}${attemptNumber}`)
+    .digest("hex");
+}
+
 export interface ExchangePartner {
   /**
    * Get a live quote for USDC → fiat conversion.
@@ -63,12 +77,14 @@ export interface ExchangePartner {
    * @param targetCurrency – ISO 4217 currency code (e.g. "NGN", "KES")
    * @param bankAccount    – Merchant's bank account details
    * @param reference      – Internal settlement reference for idempotency
+   * @param attemptNumber  – Payout attempt number (defaults to 1)
    */
   convertAndPayout(
     usdcAmount: number,
     targetCurrency: string,
     bankAccount: BankAccountDetails,
     reference: string,
+    attemptNumber?: number,
   ): Promise<PayoutResult>;
 }
 
@@ -175,7 +191,14 @@ async function getQuoteWithFallback(
 
 export async function getAllCachedFxRates(): Promise<Record<string, CachedFxRate>> {
   try {
-    const keys = await redisClient.keys('fx_rate:USDC:*');
+    const keys: string[] = [];
+    let cursor = '0';
+    do {
+      const [nextCursor, batch] = await redisClient.scan(cursor, 'MATCH', 'fx_rate:USDC:*', 'COUNT', 100);
+      cursor = nextCursor;
+      keys.push(...batch);
+    } while (cursor !== '0');
+
     const rates: Record<string, CachedFxRate> = {};
 
     for (const key of keys) {
@@ -321,13 +344,18 @@ export class YellowCardPartner implements ExchangePartner {
     targetCurrency: string,
     bankAccount: BankAccountDetails,
     reference: string,
+    attemptNumber: number = 1,
   ): Promise<PayoutResult> {
     const quote = await getQuoteWithFallback(this, usdcAmount, targetCurrency);
+    const idempotencyKey = generatePayoutIdempotencyKey(reference, attemptNumber);
 
     const data = await this.request<{
       transferId: string;
     }>("/v2/payments", {
       method: "POST",
+      headers: {
+        "X-Idempotency-Key": idempotencyKey,
+      },
       body: JSON.stringify({
         amount: usdcAmount,
         currency: "USDC",
@@ -419,14 +447,19 @@ export class AnchorPartner implements ExchangePartner {
     targetCurrency: string,
     bankAccount: BankAccountDetails,
     reference: string,
+    attemptNumber: number = 1,
   ): Promise<PayoutResult> {
     const quote = await getQuoteWithFallback(this, usdcAmount, targetCurrency);
+    const idempotencyKey = generatePayoutIdempotencyKey(reference, attemptNumber);
 
     const data = await this.request<{
       reference: string;
       exchange_id: string;
     }>("/v1/offramp/payout", {
       method: "POST",
+      headers: {
+        "X-Idempotency-Key": idempotencyKey,
+      },
       body: JSON.stringify({
         source_amount: usdcAmount,
         source_currency: "USDC",

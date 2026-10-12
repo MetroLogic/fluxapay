@@ -1,22 +1,28 @@
 // Centralized Auth Module for FluxaPay Frontend
 // Handles token storage, retrieval, and global auth state management
 
-import { ApiError } from "./api";
+import { ApiError } from "./errors";
 
 /**
  * Storage keys for auth tokens
  */
 const TOKEN_KEY = "token";
 const ADMIN_KEY = "isAdmin";
+const REFRESH_TOKEN_KEY = "refresh_token";
 
 /**
  * Get the current auth token from storage.
  * Checks localStorage first (persistent), then sessionStorage (session-only).
+ * If no token is found, redirects to login with return URL.
  * @throws {ApiError} If no token is found
  */
 export function getToken(): string {
   const token = localStorage.getItem(TOKEN_KEY) ?? sessionStorage.getItem(TOKEN_KEY);
   if (!token) {
+    if (typeof window !== "undefined" && !window.location.pathname.includes("/login")) {
+      const currentUrl = window.location.pathname + window.location.search;
+      window.location.href = `/login?redirect=${encodeURIComponent(currentUrl)}`;
+    }
     throw new ApiError(401, "No authentication token found");
   }
   return token;
@@ -68,11 +74,46 @@ export function setAdminStatus(isAdmin: boolean): void {
 }
 
 /**
+ * Persist the refresh token beside the access token, in the same storage.
+ */
+export function storeRefreshToken(refreshToken: string, keepLoggedIn = false): void {
+  if (keepLoggedIn) {
+    localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+    sessionStorage.removeItem(REFRESH_TOKEN_KEY);
+  } else {
+    sessionStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+    localStorage.removeItem(REFRESH_TOKEN_KEY);
+  }
+}
+
+/**
+ * The stored refresh token, or null when the session has none.
+ */
+export function getRefreshToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return (
+    localStorage.getItem(REFRESH_TOKEN_KEY) ??
+    sessionStorage.getItem(REFRESH_TOKEN_KEY)
+  );
+}
+
+export function clearRefreshToken(): void {
+  localStorage.removeItem(REFRESH_TOKEN_KEY);
+  sessionStorage.removeItem(REFRESH_TOKEN_KEY);
+}
+
+/** Remove auth token from all storage locations. */
+export function clearToken(): void {
+  localStorage.removeItem(TOKEN_KEY);
+  sessionStorage.removeItem(TOKEN_KEY);
+}
+
+/**
  * Clear all auth-related data from storage
  */
 export function clearAuth(): void {
-  localStorage.removeItem(TOKEN_KEY);
-  sessionStorage.removeItem(TOKEN_KEY);
+  clearToken();
+  clearRefreshToken();
   localStorage.removeItem(ADMIN_KEY);
 }
 

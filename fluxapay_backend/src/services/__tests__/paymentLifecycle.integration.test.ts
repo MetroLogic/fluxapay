@@ -239,11 +239,30 @@ describe('Payment Lifecycle - End-to-End Integration Test', () => {
     const secondCall = mockFetch.mock.calls[1];
 
     expect(firstCall[0]).toBe('https://merchant-webhook.com/api');
-    const firstPayload = JSON.parse(firstCall[1].body);
-    expect(firstPayload.payment_id).toBe(payment.id);
+    const firstBody = JSON.parse(firstCall[1].body);
+    expect(firstBody.payment_id).toBe(payment.id);
 
     expect(secondCall[0]).toBe('https://merchant-webhook.com/api');
-    const secondPayload = JSON.parse(secondCall[1].body);
-    expect(secondPayload.payment_id).toBe(payment.id);
+    const secondBody = JSON.parse(secondCall[1].body);
+    expect(secondBody.payment_id).toBe(payment.id);
+
+    // 5a. Verify webhook HMAC signatures on both calls.
+    // The signing string is `${timestamp}.${JSON.stringify(payload)}`.
+    for (const call of [firstCall, secondCall]) {
+      const headers: Record<string, string> = call[1].headers;
+      const receivedSig = headers['X-FluxaPay-Signature'];
+      const timestamp = headers['X-FluxaPay-Timestamp'];
+      expect(receivedSig).toBeDefined();
+      expect(timestamp).toBeDefined();
+
+      const payload = JSON.parse(call[1].body);
+      const { generateWebhookSignature } = await import('../webhook.service');
+      const expectedSig = generateWebhookSignature(
+        payload,
+        'integration-webhook-secret',
+        timestamp,
+      );
+      expect(receivedSig).toBe(expectedSig);
+    }
   });
 });

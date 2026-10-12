@@ -1,12 +1,13 @@
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { notFound, useParams, useRouter, useSearchParams } from "next/navigation";
 import { api, ApiError, InitiateRefundRequest } from "@/lib/api";
 import { PaymentDetails } from "@/features/dashboard/payments/PaymentDetails";
 import { type Payment } from "@/features/dashboard/payments/types";
 import { type RefundRecord } from "@/features/dashboard/refunds/types";
 import { Button } from "@/components/Button";
+import DashboardNotFound from "../../not-found";
 import { ChevronLeft, Loader2, RefreshCw } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -26,7 +27,11 @@ interface BackendPayment {
   stellar_expert_url?: string;
 }
 
-function mapBackendPayment(p: BackendPayment): Payment {
+export function mapBackendPayment(p: BackendPayment | null | undefined): Payment {
+  if (!p) {
+    notFound();
+  }
+
   return {
     id: p.id,
     amount: p.amount,
@@ -49,17 +54,25 @@ function mapBackendPayment(p: BackendPayment): Payment {
 export default function PaymentDetailsPage() {
   const { id } = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [payment, setPayment] = useState<Payment | null>(null);
   const [refunds, setRefunds] = useState<RefundRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [notFoundError, setNotFoundError] = useState(false);
+  const [serverError, setServerError] = useState(false);
+  const [activeTab, setActiveTab] = useState<string>("details");
 
   const fetchPaymentDetails = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const response = (await api.payments.getById(id as string)) as Record<string, unknown>;
-      const data = (response.payment || response.data || response) as unknown as BackendPayment;
+      const response = (await api.payments.getById(id as string)) as
+        | Record<string, unknown>
+        | null;
+      const data = response
+        ? ((response.payment || response.data || response) as BackendPayment)
+        : null;
       setPayment(mapBackendPayment(data));
       
       // Fetch refunds for this payment if available
@@ -70,6 +83,14 @@ export default function PaymentDetailsPage() {
         console.error("Failed to fetch refunds", e);
       }
     } catch (err) {
+      if (err instanceof ApiError && err.status === 404) {
+        setNotFoundError(true);
+        return;
+      }
+      if (err instanceof ApiError && err.status >= 500) {
+        setServerError(true);
+        return;
+      }
       const msg = err instanceof ApiError ? err.message : "Failed to load payment details";
       setError(msg);
       toast.error(msg);
@@ -81,6 +102,14 @@ export default function PaymentDetailsPage() {
   useEffect(() => {
     if (id) fetchPaymentDetails();
   }, [id, fetchPaymentDetails]);
+
+  // Set active tab from query parameter on mount
+  useEffect(() => {
+    const tabParam = searchParams.get("tab");
+    if (tabParam === "refunds") {
+      setActiveTab("refunds");
+    }
+  }, [searchParams]);
 
   const handleInitiateRefund = async (payload: InitiateRefundRequest) => {
     try {
@@ -99,6 +128,21 @@ export default function PaymentDetailsPage() {
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
         <p className="text-muted-foreground">Loading payment details...</p>
       </div>
+    );
+  }
+
+  if (serverError) {
+    throw new Error(error || "Failed to load payment details");
+  }
+
+  if (notFoundError) {
+    return (
+      <DashboardNotFound
+        title="Payment not found"
+        message="The payment you are looking for does not exist."
+        href="/dashboard/payments"
+        linkLabel="Return to Payments"
+      />
     );
   }
 
@@ -147,6 +191,8 @@ export default function PaymentDetailsPage() {
           refunds={refunds}
           onCreateRefund={handleInitiateRefund}
           onOpenRefundsSection={() => router.push(`/dashboard/refunds?paymentId=${payment.id}`)}
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
         />
       </div>
     </div>

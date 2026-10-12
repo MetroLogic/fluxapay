@@ -3,6 +3,17 @@
  * Tests Yellow Card and Anchor partner integrations with mocked HTTP responses
  */
 
+jest.mock("../../middleware/redisIdempotency.middleware", () => ({
+  redisClient: {
+    get: jest.fn().mockResolvedValue(null),
+    set: jest.fn().mockResolvedValue("OK"),
+    setex: jest.fn().mockResolvedValue("OK"),
+    del: jest.fn().mockResolvedValue(1),
+    scan: jest.fn().mockResolvedValue(["0", []]),
+    on: jest.fn(),
+  },
+}));
+
 import { YellowCardPartner, AnchorPartner, MockExchangePartner } from '../exchange.service';
 
 // Mock fetch globally

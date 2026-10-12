@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo } from 'react';
 import { QRCodeCanvas } from 'qrcode.react';
 import { Copy } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -22,16 +23,18 @@ export function PaymentQRCode({ address, amount, memoType, memo, size = 256 }: P
     toast.success(`${label} copied to clipboard.`);
   };
 
-  const query = new URLSearchParams({ amount: String(amount) });
-  if (memo && memoType) {
-    query.set('memo', memo);
-    query.set('memo_type', memoType);
-  }
+  const { stellarUri, qrAltText } = useMemo(() => {
+    const query = new URLSearchParams({ amount: String(amount) });
+    if (memo && memoType) {
+      query.set('memo', memo);
+      query.set('memo_type', memoType);
+    }
 
-  // Keep existing scheme for compatibility with current wallets
-  const stellarUri = `stellar:${address}?${query.toString()}`;
-
-  const qrAltText = `QR code for Stellar payment of ${amount} to deposit address ${address}`;
+    // Keep existing scheme for compatibility with current wallets
+    const uri = `stellar:${address}?${query.toString()}`;
+    const altText = `QR code for Stellar payment of ${amount} to deposit address ${address}`;
+    return { stellarUri: uri, qrAltText: altText };
+  }, [address, amount, memoType, memo]);
 
   return (
     <div className="flex flex-col items-center space-y-4">

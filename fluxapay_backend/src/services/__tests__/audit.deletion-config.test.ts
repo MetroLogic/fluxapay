@@ -29,6 +29,7 @@ import {
   logMerchantDeleted,
   queryAuditLogs,
 } from '../audit.service';
+import { hashMerchantId } from '../../utils/piiRedactor';
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -53,10 +54,20 @@ describe('Audit Service — merchant deletion and config events', () => {
       expect(auditLog.action_type).toBe(AuditActionType.merchant_deleted);
       expect(auditLog.entity_id).toBe('merchant-42');
       expect(auditLog.details).toMatchObject({
-        merchant_id: 'merchant-42',
+        merchant_id: hashMerchantId('merchant-42'),
         actor: 'admin-99',
         reason: 'account closure',
       });
+    });
+
+    it('redacts raw email inside audit input details and pseudonymises merchant ID', async () => {
+      const auditLog = await logMerchantDeleted({
+        adminId: 'admin-99',
+        merchantId: 'merchant-42',
+        reason: 'Requested by user@example.com',
+      });
+
+      expect(auditLog.details.merchant_id).toBe(hashMerchantId('merchant-42'));
     });
   });
 

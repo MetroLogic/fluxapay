@@ -1,4 +1,5 @@
-import { WebhookDispatcher, createAndDeliverWebhook, deliverWebhook, generateWebhookSignature, getDeadLetterQueueService, requeueWebhookService, verifyWebhookTimestamp } from "../webhook.service";
+import crypto from "crypto";
+import { WebhookDispatcher, createAndDeliverWebhook, deliverWebhook, generateWebhookSignature, getDeadLetterQueueService, requeueWebhookService, sendTestWebhookService, verifyWebhookTimestamp } from "../webhook.service";
 import { PrismaClient } from "../../generated/client/client";
 
 // Define mock functions inside the factory to avoid jest-hoisting TDZ issues with const
@@ -87,6 +88,7 @@ describe("webhook.service", () => {
 
     // The sent body includes event_id prepended; reconstruct it to verify signature
     const sentBody = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+    expect(sentBody.event).toBe("payment.settled");
     const ts = capturedHeaders["X-FluxaPay-Timestamp"] as string;
     const expectedSig = generateWebhookSignature(sentBody, merchantSecret, ts);
     expect(capturedHeaders["X-FluxaPay-Signature"]).toBe(expectedSig);
@@ -115,6 +117,33 @@ describe("webhook.service", () => {
     const ts = opts.headers["X-FluxaPay-Timestamp"];
     const sig = generateWebhookSignature(payload, secret, ts);
     expect(opts.headers["X-FluxaPay-Signature"]).toBe(sig);
+  });
+
+  it("deliverWebhook signs the exact raw body it sends, bound to the timestamp header", async () => {
+    const payload = { event: "payment.confirmed", amount: "10.00" };
+    const secret = "raw-body-secret";
+
+    const fakeFetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: () => Promise.resolve("OK"),
+    });
+    global.fetch = fakeFetch as any;
+
+    await deliverWebhook("https://example.com", payload, secret);
+    const opts = fakeFetch.mock.calls[0][1];
+    const ts = opts.headers["X-FluxaPay-Timestamp"];
+
+    // Receiver-side verification: HMAC over `${timestamp}.${rawBody}`
+    const expected = crypto.createHmac("sha256", secret).update(`${ts}.${opts.body}`).digest("hex");
+    expect(opts.headers["X-FluxaPay-Signature"]).toBe(expected);
+
+    // A replayed body with a fresh timestamp must not verify
+    const replayed = crypto
+      .createHmac("sha256", secret)
+      .update(`${new Date(Date.now() + 60_000).toISOString()}.${opts.body}`)
+      .digest("hex");
+    expect(opts.headers["X-FluxaPay-Signature"]).not.toBe(replayed);
   });
 
   it("should embed event_id in the outgoing payload", async () => {
@@ -191,6 +220,117 @@ describe("webhook.service", () => {
     await createAndDeliverWebhook(merchantId, "payment_completed", { amount: 50 }, undefined, undefined, stableEventId);
 
     expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  // Regression coverage for #1205 — duplicate webhook deliveries.
+  it("should not send the same event twice when two producers race concurrently", async () => {
+    const merchantId = "m-race";
+    const stableEventId = "evt_concurrent-race";
+
+    mockMerchant.findUnique.mockResolvedValue({
+      id: merchantId,
+      webhook_url: "https://example.com/hook",
+      webhook_secret: "secret-race",
+    });
+    mockMerchant.webhookLog.findUnique.mockResolvedValue(null);
+    mockMerchant.webhookLog.create.mockResolvedValue({ id: "log-race" });
+    mockMerchant.webhookLog.update.mockResolvedValue({});
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: () => Promise.resolve("OK"),
+    });
+
+    await Promise.all([
+      createAndDeliverWebhook(merchantId, "payment_completed", { amount: 50 }, undefined, undefined, stableEventId),
+      createAndDeliverWebhook(merchantId, "payment_completed", { amount: 50 }, undefined, undefined, stableEventId),
+    ]);
+
+    // Exactly one HTTP delivery, and exactly one log row created.
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(mockMerchant.webhookLog.create).toHaveBeenCalledTimes(1);
+  });
+
+  it("should not send when another worker already claimed the event_id (P2002)", async () => {
+    const merchantId = "m-p2002";
+    const stableEventId = "evt_unique_collision";
+
+    mockMerchant.findUnique.mockResolvedValue({
+      id: merchantId,
+      webhook_url: "https://example.com/hook",
+      webhook_secret: "secret-p2002",
+    });
+    // First read says "nothing here"; the INSERT then loses the race.
+    mockMerchant.webhookLog.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce({
+      id: "log-winner",
+      status: "pending",
+      event_id: stableEventId,
+    });
+    mockMerchant.webhookLog.create.mockRejectedValue({ code: "P2002" });
+
+    global.fetch = jest.fn();
+
+    const result = await createAndDeliverWebhook(
+      merchantId,
+      "payment_completed",
+      { amount: 50 },
+      undefined,
+      undefined,
+      stableEventId,
+    );
+
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(result).toEqual({ id: "log-winner", status: "pending", event_id: stableEventId });
+  });
+
+  it("should rethrow non-unique-constraint errors from the log insert", async () => {
+    const merchantId = "m-db-error";
+    const stableEventId = "evt_db_error";
+
+    mockMerchant.findUnique.mockResolvedValue({
+      id: merchantId,
+      webhook_url: "https://example.com/hook",
+      webhook_secret: "secret-db",
+    });
+    mockMerchant.webhookLog.findUnique.mockResolvedValue(null);
+    mockMerchant.webhookLog.create.mockRejectedValue({ code: "P2003", message: "fk violation" });
+
+    global.fetch = jest.fn();
+
+    await expect(
+      createAndDeliverWebhook(merchantId, "payment_completed", { amount: 50 }, undefined, undefined, stableEventId),
+    ).rejects.toEqual({ code: "P2003", message: "fk violation" });
+
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it("should allow independent deliveries when no stable event id is supplied", async () => {
+    const merchantId = "m-no-event-id";
+
+    mockMerchant.findUnique.mockResolvedValue({
+      id: merchantId,
+      webhook_url: "https://example.com/hook",
+      webhook_secret: "secret-anon",
+    });
+    mockMerchant.webhookLog.findUnique.mockResolvedValue(null);
+    mockMerchant.webhookLog.create.mockResolvedValue({ id: "log-anon" });
+    mockMerchant.webhookLog.update.mockResolvedValue({});
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: () => Promise.resolve("OK"),
+    });
+
+    // No eventId => random UUID per call => these are genuinely distinct events
+    // and must not be coalesced by the in-flight guard.
+    await Promise.all([
+      createAndDeliverWebhook(merchantId, "payment_completed", { amount: 50 }),
+      createAndDeliverWebhook(merchantId, "payment_completed", { amount: 50 }),
+    ]);
+
+    expect(global.fetch).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -274,6 +414,46 @@ describe("WebhookDispatcher.sendPaymentWebhook", () => {
     expect(global.fetch).not.toHaveBeenCalled();
     expect(mockMerchant.payment.update).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ["payment.created", "pending", "payment.created"],
+    ["payment.pending", "pending", "payment.pending"],
+    ["payment.confirmed", "confirmed", "payment.confirmed"],
+    ["payment.failed", "failed", "payment.failed"],
+    ["payment.settled", "completed", "payment.settled"],
+    ["payment_confirmed", "confirmed", "payment.confirmed"],
+    ["payment_failed", "failed", "payment.failed"],
+  ] as const)(
+    "should emit event=%s with payment status=%s in payload",
+    async (eventType, status, expectedEvent) => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: () => Promise.resolve("OK"),
+      });
+
+      const dispatcher = new WebhookDispatcher(new PrismaClient());
+      const payment = {
+        id: "pay_evt",
+        amount: 42,
+        currency: "USDC",
+        status,
+        transaction_hash: "tx_abc",
+      } as any;
+      const merchant = {
+        id: "m_evt",
+        webhook_url: "https://example.com/hook",
+        webhook_secret: "secret",
+      } as any;
+
+      await dispatcher.sendPaymentWebhook(payment, merchant, eventType as any);
+
+      const sentBody = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+      expect(sentBody.event).toBe(expectedEvent);
+      expect(sentBody.data.status).toBe(status);
+      expect(sentBody.data.payment_id).toBe("pay_evt");
+    },
+  );
 });
 
 describe("DLQ services", () => {
@@ -406,6 +586,30 @@ describe("DLQ services", () => {
     await expect(requeueWebhookService({ log_id: "missing" })).rejects.toEqual(
       expect.objectContaining({ status: 404, message: "Webhook log not found" })
     );
+  });
+});
+
+describe("test webhook payload", () => {
+  it("includes the canonical event name", async () => {
+    mockMerchant.findUnique.mockResolvedValueOnce({ id: "m1", webhook_secret: "secret" });
+    mockMerchant.webhookLog.create.mockResolvedValueOnce({ id: "log_test" });
+    mockMerchant.webhookLog.update.mockResolvedValueOnce({ id: "log_test", status: "delivered" });
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: () => Promise.resolve("OK"),
+    }) as any;
+
+    await sendTestWebhookService({
+      merchantId: "m1",
+      event_type: "payment_completed" as any,
+      endpoint_url: "https://example.com/webhook",
+    });
+
+    const payload = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+    expect(payload.event).toBe("payment.settled");
+    expect(payload.event_id).toBeDefined();
+    expect(payload.test_mode).toBe(true);
   });
 });
 

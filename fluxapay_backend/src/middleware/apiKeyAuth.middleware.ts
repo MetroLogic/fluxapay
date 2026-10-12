@@ -3,19 +3,39 @@ import { apiError, sendApiError } from "../helpers/apiError.helper";
 import { Response, NextFunction } from "express";
 import { AuthRequest } from "../types/express";
 import { PrismaClient } from "../generated/client/client";
+import { prisma } from "../config/prisma";
 import { compareKeys } from "../helpers/crypto.helper";
+import { apiKeyService } from "../services/apiKey.service";
 import jwt, { JwtPayload } from "jsonwebtoken";
+import { getEnvConfig } from "../config/env.config";
 
-const prisma = new PrismaClient();
 
 /**
  * Middleware to authenticate requests using an API key or JWT.
  * Supports:
- * - Authorization: Bearer <sk_live_...>   (production API key)
- * - Authorization: Bearer <fpk_test_...>  (local dev / seed API key)
- * - x-api-key: <sk_live_...> or <fpk_test_...>
- * - Authorization: Bearer <jwt_token>     (dashboard / internal)
+ * - Authorization: Bearer <sk_live_...>    (production API key)
+ * - Authorization: Bearer <sk_test_...>     (Stripe-style test mode key, isolated data)
+ * - Authorization: Bearer <fpk_test_...>    (local dev / seed API key)
+ * - x-api-key: <sk_live_...>, <sk_test_...> or <fpk_test_...>
+ * - Authorization: Bearer <jwt_token>       (dashboard / internal)
  */
+
+/**
+ * True when a raw API key is a test-mode key (sk_test_ / fpk_test_).
+ * Stripe-style test keys map to the isolated test-mode data partition.
+ */
+export function isTestApiKey(key: string): boolean {
+  return key.startsWith("sk_test_") || key.startsWith("fpk_test_");
+}
+
+/**
+ * True when a raw API key is a production key (sk_live_).
+ * Production keys map to the live data partition.
+ */
+export function isLiveApiKey(key: string): boolean {
+  return key.startsWith("sk_live_");
+}
+
 export async function authenticateApiKey(
     req: AuthRequest,
     res: Response,
@@ -42,10 +62,11 @@ export async function authenticateApiKey(
 
     // 3. Try interpreting as API Key first.
     //    FluxaPay keys use the format <prefix>_<32 hex chars>.
-    //    Supported prefixes: sk_live_ (production), fpk_test_ (local dev/seed).
+    //    Supported prefixes: sk_live_ (production), sk_test_ (test mode), fpk_test_ (local dev/seed).
     //    The real validation is the bcrypt hash comparison — the prefix is only
-    //    used to distinguish API keys from JWT tokens.
-    const isApiKey = key.startsWith("sk_live_") || key.startsWith("fpk_test_");
+    //    used to distinguish API keys from JWT tokens and to select the data partition.
+    const isApiKey =
+        key.startsWith("sk_live_") || key.startsWith("sk_test_") || key.startsWith("fpk_test_");
     if (isApiKey) {
         try {
             const lastFour = key.slice(-4);
@@ -59,8 +80,25 @@ export async function authenticateApiKey(
             for (const merchant of merchants) {
                 if (merchant.api_key_hashed && await compareKeys(key, merchant.api_key_hashed)) {
                     authReq.merchantId = merchant.id;
+                    authReq.isTestMode = isTestApiKey(key);
                     return next();
                 }
+            }
+
+            const storedKey = await apiKeyService.validateRawApiKey(key);
+            if (storedKey.valid && storedKey.merchantId) {
+                authReq.merchantId = storedKey.merchantId;
+                authReq.isTestMode = isTestApiKey(key);
+                return next();
+            }
+
+            // Support key rotation: a key may be in a grace period after rotation.
+            // The previous key remains valid until its grace period expires.
+            const rotatedKey = await apiKeyService.validateRotatedApiKey(key);
+            if (rotatedKey.valid && rotatedKey.merchantId) {
+                authReq.merchantId = rotatedKey.merchantId;
+                authReq.isTestMode = isTestApiKey(key);
+                return next();
             }
 
             return sendApiError(res, apiError(401, ErrorCode.INVALID_API_KEY, "Invalid API key"));
@@ -72,10 +110,15 @@ export async function authenticateApiKey(
 
     // 4. Try interpreting as JWT (for dashboard/internal use)
     try {
-        const payload = jwt.verify(key, process.env.JWT_SECRET!) as JwtPayload;
-        if (payload && payload.id) {
-            authReq.merchantId = payload.id;
-            authReq.user = { id: payload.id, email: payload.email };
+        const JWT_SECRET = getEnvConfig().JWT_SECRET;
+        const payload = jwt.verify(key, JWT_SECRET) as JwtPayload & { id?: unknown; email?: unknown };
+        const merchantId = typeof payload?.id === "string" && payload.id.trim().length > 0 ? payload.id.trim() : undefined;
+        if (merchantId) {
+            authReq.merchantId = merchantId;
+            authReq.user = {
+                id: merchantId,
+                ...(typeof payload.email === "string" ? { email: payload.email } : {}),
+            };
             return next();
         }
     } catch (err) {

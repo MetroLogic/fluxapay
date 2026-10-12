@@ -21,6 +21,7 @@ import { resetEnvConfig, validateEnv } from '../../config/env.config';
 function setupMinimalEnv() {
   process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/test';
   process.env.JWT_SECRET = 'test-secret-key-for-testing';
+  process.env.ADMIN_JWT_SECRET = 'test-admin-secret-key-for-testing';
   process.env.FUNDER_SECRET_KEY = 'SBS_TEST_SECRET_KEY_FOR_TESTING_ONLY_1234567890ABCDEF';
   process.env.USDC_ISSUER_PUBLIC_KEY = 'GBTEST_USDC_ISSUER_PUBLIC_KEY_FOR_TESTING_ONLY_12345';
   process.env.MASTER_VAULT_SECRET_KEY = 'SBS_TEST_VAULT_SECRET_KEY_FOR_TESTING_ONLY_123456789';
@@ -206,7 +207,7 @@ describe('CORS Middleware', () => {
       expect(mockMerchantFindMany).toHaveBeenCalledWith({
         where: {
           webhook_url: {
-            startsWith: 'https://merchant-api.com',
+            not: null,
           },
         },
         select: {
@@ -222,6 +223,61 @@ describe('CORS Middleware', () => {
       const callback = jest.fn();
 
       await (options.origin as Function)('https://unregistered-domain.com', callback);
+      expect(callback.mock.calls[0][0]).toBeInstanceOf(Error);
+      expect(callback.mock.calls[0][1]).toBe(false);
+    });
+
+    it('should block a lookalike domain that would pass a naive substring/prefix check against a registered webhook origin', async () => {
+      // Merchant registered "https://evil.legitimate-site.com" as their
+      // webhook origin. An attacker controls "https://evillegitimate-site.com"
+      // (no dot) and must NOT be treated as the same origin.
+      mockMerchantFindMany.mockResolvedValueOnce([
+        { webhook_url: 'https://evil.legitimate-site.com/webhooks' }
+      ]);
+
+      const options = getCorsOptions();
+      const callback = jest.fn();
+
+      await (options.origin as Function)('https://evillegitimate-site.com', callback);
+      expect(callback.mock.calls[0][0]).toBeInstanceOf(Error);
+      expect(callback.mock.calls[0][1]).toBe(false);
+    });
+
+    it('should block a subdomain that is not an exact match of the registered webhook origin', async () => {
+      mockMerchantFindMany.mockResolvedValueOnce([
+        { webhook_url: 'https://merchant-api.com/v1/webhooks' }
+      ]);
+
+      const options = getCorsOptions();
+      const callback = jest.fn();
+
+      await (options.origin as Function)('https://evil.merchant-api.com', callback);
+      expect(callback.mock.calls[0][0]).toBeInstanceOf(Error);
+      expect(callback.mock.calls[0][1]).toBe(false);
+    });
+
+    it('should block a port variation of a registered webhook origin', async () => {
+      mockMerchantFindMany.mockResolvedValueOnce([
+        { webhook_url: 'https://merchant-api.com/v1/webhooks' }
+      ]);
+
+      const options = getCorsOptions();
+      const callback = jest.fn();
+
+      await (options.origin as Function)('https://merchant-api.com:8443', callback);
+      expect(callback.mock.calls[0][0]).toBeInstanceOf(Error);
+      expect(callback.mock.calls[0][1]).toBe(false);
+    });
+
+    it('should block a malformed Origin header instead of throwing', async () => {
+      mockMerchantFindMany.mockResolvedValueOnce([
+        { webhook_url: 'https://merchant-api.com/v1/webhooks' }
+      ]);
+
+      const options = getCorsOptions();
+      const callback = jest.fn();
+
+      await (options.origin as Function)('not-a-valid-origin', callback);
       expect(callback.mock.calls[0][0]).toBeInstanceOf(Error);
       expect(callback.mock.calls[0][1]).toBe(false);
     });

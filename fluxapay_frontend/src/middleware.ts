@@ -1,6 +1,7 @@
 import createMiddleware from "next-intl/middleware";
 import { routing } from "./i18n/routing";
 import { NextRequest, NextResponse } from "next/server";
+import { getClientIp, isBotUserAgent, paymentPageLimiter, logAbuseEvent } from "./lib/rateLimit";
 
 const intlMiddleware = createMiddleware(routing);
 
@@ -67,6 +68,46 @@ function hasAuthToken(request: NextRequest): boolean {
 export default function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // ── 0. Rate limiting for public payment pages ─────────────────────────────
+  // Check if this is a payment page route: /pay/[payment_id] or /checkout/[charge_id]
+  const isPaymentPage = /^\/pay\/[^/]+$/.test(pathname) || /^\/checkout\/[^/]+$/.test(pathname) ||
+                        /^\/(en|fr|pt)\/pay\/[^/]+$/.test(pathname) || /^\/(en|fr|pt)\/checkout\/[^/]+$/.test(pathname);
+
+  if (isPaymentPage) {
+    const clientIp = getClientIp(request);
+    const userAgent = request.headers.get('user-agent');
+
+    // Bot detection
+    if (isBotUserAgent(userAgent)) {
+      logAbuseEvent('bot_detected_payment_page', clientIp, {
+        pathname,
+        userAgent,
+      });
+      return NextResponse.json(
+        { error: 'Access denied' },
+        { status: 403 }
+      );
+    }
+
+    // Rate limiting: max 30 requests per 60 seconds
+    if (!paymentPageLimiter.isAllowed(clientIp)) {
+      const resetMs = paymentPageLimiter.getResetTimeMs(clientIp);
+      logAbuseEvent('payment_page_rate_limit_exceeded', clientIp, {
+        pathname,
+        resetMs,
+      });
+      return NextResponse.json(
+        { error: 'Too many requests. Please try again later.' },
+        {
+          status: 429,
+          headers: {
+            'Retry-After': String(Math.ceil(resetMs / 1000)),
+          },
+        }
+      );
+    }
+  }
+
   // ── 1. Maintenance mode ──────────────────────────────────────────────────
   const isMaintenanceMode =
     process.env.NEXT_PUBLIC_MAINTENANCE_MODE === "true";
@@ -111,7 +152,8 @@ export const config = {
    *  - Locale entry-points handled by next-intl
    *  - Public auth / marketing routes that need next-intl
    *  - All /dashboard/* and /admin/* paths (with and without locale prefix)
-   *    so the auth guard above fires on direct URL navigation
+   *  - Public payment pages (/pay/*, /checkout/*)
+   *    so rate limiting and bot detection fires on direct URL navigation
    *
    * Static files (_next, api, images, etc.) are excluded by Next.js
    * automatically when they match /_next or /api, but we also exclude

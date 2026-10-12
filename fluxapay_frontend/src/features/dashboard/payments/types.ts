@@ -1,16 +1,18 @@
 /**
  * Payment status — aligned with backend Prisma PaymentStatus enum.
- * Values: pending, partially_paid, confirmed, overpaid, expired, failed, paid, completed
  */
 export type PaymentStatus =
   | "pending"
+  | "partially_paid"
   | "confirmed"
+  | "overpaid"
   | "expired"
   | "failed"
-  | "partially_paid"
-  | "overpaid"
   | "paid"
-  | "completed";
+  | "completed"
+  | "cancelled"
+  | "refunded"
+  | "partially_refunded";
 
 export interface WebhookLogEntry {
   id: string;
@@ -21,6 +23,8 @@ export interface WebhookLogEntry {
   attempt: number;
   created_at: string;
   response_body?: string;
+  retry_count?: number;
+  next_retry_at?: string;
 }
 
 export interface StatusHistoryEntry {

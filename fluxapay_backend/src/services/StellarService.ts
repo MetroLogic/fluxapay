@@ -8,6 +8,10 @@ import {
 } from "@stellar/stellar-sdk";
 import { HDWalletService } from "./HDWalletService";
 import { getLogger, getMetricsCollector } from "../utils/logger";
+import {
+  buildStellarApiError,
+  extractStellarErrorCode,
+} from "./StellarErrorMapper";
 
 export class StellarService {
   private server: Horizon.Server;
@@ -176,7 +180,7 @@ export class StellarService {
         destination,
         startingBalance,
       });
-      throw error;
+      throw this.toStellarError(error);
     }
   }
 
@@ -253,7 +257,7 @@ export class StellarService {
         assetCode,
         assetIssuer,
       });
-      throw error;
+      throw this.toStellarError(error);
     }
   }
 
@@ -394,136 +398,95 @@ export class StellarService {
           });
           this.metrics.increment("stellar.operation.repeated_failures", {
             operation: operationName,
+            attempts: attempt.toString(),
             errorType,
           });
-          throw new Error(
-            `${operationName} failed after ${this.MAX_RETRIES} attempts: ${error.message}`,
-          );
+          throw error;
         }
 
-        // Exponential backoff with jitter
-        const delay = this.BASE_DELAY_MS * Math.pow(2, attempt - 1);
-        const jitter = Math.random() * 0.3 * delay; // Add up to 30% jitter
-        const totalDelay = delay + jitter;
-
-        this.logger.info("Retrying operation after delay", {
-          operation: operationName,
-          attempt,
-          delayMs: Math.round(totalDelay),
-          ...context,
-        });
-
-        await this.sleep(totalDelay);
+        // Exponential backoff before retrying
+        const delayMs = this.BASE_DELAY_MS * Math.pow(2, attempt - 1);
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
       }
     }
 
+    // This should never be reached because the loop either returns or throws.
     throw lastError;
   }
 
   /**
-   * Returns fee per operation for a retry attempt, bounded by max fee budget.
-   */
-  private calculateFeeForAttempt(attempt: number): string {
-    const bump = Math.pow(this.feeBumpMultiplier, Math.max(0, attempt - 1));
-    const candidateFee = Math.floor(this.baseFee * bump);
-    return Math.min(candidateFee, this.maxFee).toString();
-  }
-
-  /**
-   * Classifies Horizon errors into categories for better handling.
+   * Classifies a Stellar error into a high-level category for retry decisions.
    */
   private classifyError(error: any): string {
-    if (!error.response) {
-      return "NETWORK_ERROR";
-    }
-
-    const status = error.response.status;
-    const data = error.response.data;
-
-    // HTTP status-based classification
-    if (status === 504 || status === 503) {
-      return "HORIZON_TIMEOUT";
-    }
-
-    if (status === 429) {
-      return "RATE_LIMIT";
-    }
-
-    if (status >= 500) {
-      return "HORIZON_SERVER_ERROR";
-    }
-
-    // Transaction-specific errors
-    if (data?.extras?.result_codes) {
-      const txCode = data.extras.result_codes.transaction;
-      const opCodes = data.extras.result_codes.operations || [];
-
-      if (
-        txCode === "tx_insufficient_balance" ||
-        opCodes.includes("op_underfunded")
-      ) {
+    const code = extractStellarErrorCode(error);
+    if (code) {
+      const normalized = code.toLowerCase();
+      if (normalized.includes("insufficient_funds")) {
         return "INSUFFICIENT_BALANCE";
       }
-
-      if (txCode === "tx_bad_seq") {
-        return "SEQUENCE_ERROR";
+      if (normalized.includes("insufficient_fee")) {
+        return "INSUFFICIENT_FEE";
       }
-
-      if (opCodes.includes("op_already_exists")) {
-        return "ACCOUNT_EXISTS";
+      if (normalized.includes("bad_seq")) {
+        return "BAD_SEQ";
       }
-
-      if (opCodes.includes("op_no_trust")) {
-        return "NO_TRUSTLINE";
+      if (normalized.includes("too_early")) {
+        return "TOO_EARLY";
+      }
+      if (normalized.includes("too_late")) {
+        return "TOO_LATE";
+      }
+      if (normalized.includes("bad_auth")) {
+        return "BADAUTH";
       }
     }
 
-    return "UNKNOWN_ERROR";
+    const message = (error.message || "").toLowerCase();
+    if (message.includes("timeout") || message.includes("etimed")) {
+      return "TIMEO\UT";
+    }
+    if (message.includes("network") || message.includes("connection")) {
+      return "NETWORK";
+    }
+    return "UNKNOWN";
   }
 
   /**
-   * Determines if an error type is retryable.
+   * Determines whether an error category is worth retrying.
    */
   private isRetryableError(errorType: string): boolean {
-    const retryableErrors = [
-      "NETWORK_ERROR",
-      "HORIZON_TIMEOUT",
-      "HORIZON_SERVER_ERROR",
-      "RATE_LIMIT",
-      "SEQUENCE_ERROR", // Sequence errors can be retried as they auto-resolve
-    ];
-
-    return retryableErrors.includes(errorType);
+    const nonRetryable = new Set([
+      "INSUFFICIENT_BALANCE",
+      "BAD_SEQ",
+      "BADAUTH",
+      "TOO_LATE",
+      "UNKNOWN",
+    ]);
+    return !nonRetryable.has(errorType);
   }
 
   /**
-   * Returns the USDC balance for a given Stellar account.
-   * Returns 0 if the account does not exist or has no USDC trustline.
+   * Calculates the fee to use for a given retry attempt, capped at maxFee.
    */
-  public async getAccountBalance(publicKey: string): Promise<number> {
-    try {
-      const account = await this.server.loadAccount(publicKey);
-      for (const balance of account.balances) {
-        if (
-          "asset_code" in balance &&
-          balance.asset_code === "USDC" &&
-          "asset_issuer" in balance &&
-          balance.asset_issuer === this.usdcIssuer
-        ) {
-          return parseFloat(balance.balance);
-        }
-      }
-      return 0;
-    } catch (error: any) {
-      if (error.response?.status === 404) return 0;
-      throw error;
-    }
+  private calculateFeeForAttempt(attempt: number): number {
+    const fee = this.baseFee * Math.pow(this.feeBumpMultiplier, attempt - 1);
+    return Math.min(fee, this.maxFee);
   }
 
   /**
-   * Sleep utility for delays.
+   * Converts a raw Stellar error into a standardized API error that includes
+   * both the friendly message and the raw Stellar error code.
    */
-  private sleep(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
+  private toStellarError(error: any): Error {
+    const { status, code, message, details } = buildStellarApiError(error);
+    const apiError = new Error(message) as Error & {
+      status: number;
+      code: string;
+      details: Record<string, unknown>;
+    };
+    apiError.status = status;
+    apiError.code = code;
+    apiError.details = details;
+    return apiError;
   }
 }

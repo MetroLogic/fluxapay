@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useCallback, useEffect, useRef } from "react";
+import React, { useCallback, useRef } from "react";
+import Link from "next/link";
 import {
   User,
   Shield,
@@ -9,6 +10,14 @@ import {
   Key,
   FileCheck,
 } from "lucide-react";
+import {
+  Breadcrumb,
+  BreadcrumbList,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
 
 const TABS = [
   { id: "profile", label: "Profile", icon: User },
@@ -77,8 +86,58 @@ export function SettingsTabs({
     [activeTab, handleTabClick],
   );
 
+  const handleDashboardClick = (e: React.MouseEvent) => {
+    if (hasUnsavedChanges) {
+      const confirmed = window.confirm(
+        "You have unsaved changes. Are you sure you want to leave?",
+      );
+      if (!confirmed) {
+        e.preventDefault();
+      }
+    }
+  };
+
+  const currentTab = TABS.find((t) => t.id === activeTab);
+
   return (
     <div className="space-y-6">
+      {/* Breadcrumb Navigation */}
+      <Breadcrumb aria-label="Settings breadcrumb">
+        <BreadcrumbList>
+          <BreadcrumbItem>
+            <BreadcrumbLink asChild>
+              <Link href="/dashboard" onClick={handleDashboardClick}>
+                Dashboard
+              </Link>
+            </BreadcrumbLink>
+          </BreadcrumbItem>
+          <BreadcrumbSeparator />
+          <BreadcrumbItem>
+            {activeTab === "profile" ? (
+              <BreadcrumbPage>Settings</BreadcrumbPage>
+            ) : (
+              <BreadcrumbLink asChild>
+                <button
+                  type="button"
+                  onClick={() => handleTabClick("profile")}
+                  className="cursor-pointer transition-colors hover:text-foreground"
+                >
+                  Settings
+                </button>
+              </BreadcrumbLink>
+            )}
+          </BreadcrumbItem>
+          {activeTab !== "profile" && (
+            <>
+              <BreadcrumbSeparator />
+              <BreadcrumbItem>
+                <BreadcrumbPage>{currentTab?.label ?? activeTab}</BreadcrumbPage>
+              </BreadcrumbItem>
+            </>
+          )}
+        </BreadcrumbList>
+      </Breadcrumb>
+
       <div>
         <h2 className="text-2xl font-bold tracking-tight">Settings</h2>
         <p className="text-muted-foreground">

@@ -26,6 +26,21 @@ export function createHealthRouter(prisma: PrismaClient): Router {
    *                 uptime:
    *                   type: number
    *                   description: Process uptime in seconds
+   *                 fx_circuit_breaker:
+   *                   type: object
+   *                   description: Current state of the FX rate circuit breaker
+   *                   properties:
+   *                     state:
+   *                       type: string
+   *                       enum: [closed, open, half_open]
+   *                     consecutiveFailures:
+   *                       type: number
+   *                     openedAt:
+   *                       type: string
+   *                       nullable: true
+   *                     lastError:
+   *                       type: string
+   *                       nullable: true
    */
   router.get("/", controller.getHealth);
 
@@ -34,7 +49,7 @@ export function createHealthRouter(prisma: PrismaClient): Router {
    * /health/ready:
    *   get:
    *     summary: Deep readiness check
-   *     description: Verifies database, Redis, and Stellar Horizon connectivity. No authentication required.
+    *     description: Verifies database, Redis, Stellar Horizon, and enabled Soroban RPC connectivity. No authentication required.
    *     responses:
    *       200:
    *         description: All dependencies are available

@@ -3,7 +3,7 @@ import { ErrorCode } from "../types/errors";
 import { PrismaClient, Prisma } from "../generated/client/client";
 import { sendInvoiceEmail } from "./email.service";
 
-const prisma = new PrismaClient();
+import { prisma } from "../config/prisma";
 
 export async function generateDailyReconciliationReportService(params: {
   merchantId: string;

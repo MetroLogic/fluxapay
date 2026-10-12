@@ -6,9 +6,25 @@ const router = Router();
 
 /**
  * @swagger
- * /api/v1/admin/address-pool/stats:
+ * /api/v1/admin/address-pool:
  *   get:
  *     summary: Retrieve address pool statistics
+ *     tags: [Address Pool - Admin]
+ *     security:
+ *       - adminSecret: []
+ *     responses:
+ *       200:
+ *         description: Address pool statistics
+ *       401:
+ *         description: Unauthorized
+ */
+router.get("/", adminAuth, getAddressPoolStats);
+
+/**
+ * @swagger
+ * /api/v1/admin/address-pool/stats:
+ *   get:
+ *     summary: Retrieve address pool statistics (alias)
  *     tags: [Address Pool - Admin]
  *     security:
  *       - adminSecret: []

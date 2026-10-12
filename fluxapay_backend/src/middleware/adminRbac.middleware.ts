@@ -6,47 +6,71 @@ import { AdminRole } from "../generated/client/client";
 import { verifyAdminToken } from "../helpers/adminJwt.helper";
 
 /**
+ * Typed permission strings for admin RBAC.
+ * Use these constants instead of raw strings so TypeScript catches typos.
+ *
+ * @example
+ *   router.get('/settlements', authenticateAdmin, requireAdminRole(AdminPermission.SETTLEMENTS_READ), handler)
+ */
+export const AdminPermission = {
+  KYC_READ:              "kyc:read",
+  KYC_WRITE:             "kyc:write",
+  PAYMENTS_READ:         "payments:read",
+  AUDIT_READ:            "audit:read",
+  MERCHANTS_READ:        "merchants:read",
+  MERCHANTS_WRITE:       "merchants:write",
+  SETTLEMENTS_READ:      "settlements:read",
+  SETTLEMENTS_WRITE:     "settlements:write",
+  RECONCILIATION_READ:   "reconciliation:read",
+  RECONCILIATION_WRITE:  "reconciliation:write",
+  SWEEP_WRITE:           "sweep:write",
+  CONFIG_WRITE:          "config:write",
+} as const;
+
+export type AdminPermissionValue = typeof AdminPermission[keyof typeof AdminPermission];
+
+/**
  * Permission matrix for admin roles.
  *
- * support    – read-only: view KYC submissions, payments, audit logs
- * finance    – support permissions + write access to settlements, reconciliation
+ * support     – read-only: view KYC submissions, payments, audit logs
+ * finance     – support permissions + write access to settlements, reconciliation
  * super_admin – all permissions
  */
-export const ROLE_PERMISSIONS: Record<AdminRole, readonly string[]> = {
+export const ROLE_PERMISSIONS: Record<AdminRole, readonly AdminPermissionValue[]> = {
   [AdminRole.support]: [
-    "kyc:read",
-    "payments:read",
-    "audit:read",
-    "merchants:read",
+    AdminPermission.KYC_READ,
+    AdminPermission.PAYMENTS_READ,
+    AdminPermission.AUDIT_READ,
+    AdminPermission.MERCHANTS_READ,
   ],
   [AdminRole.finance]: [
-    "kyc:read",
-    "payments:read",
-    "audit:read",
-    "merchants:read",
-    "settlements:read",
-    "settlements:write",
-    "reconciliation:read",
-    "reconciliation:write",
-    "sweep:write",
+    AdminPermission.KYC_READ,
+    AdminPermission.PAYMENTS_READ,
+    AdminPermission.AUDIT_READ,
+    AdminPermission.MERCHANTS_READ,
+    AdminPermission.SETTLEMENTS_READ,
+    AdminPermission.SETTLEMENTS_WRITE,
+    AdminPermission.RECONCILIATION_READ,
+    AdminPermission.RECONCILIATION_WRITE,
+    AdminPermission.SWEEP_WRITE,
   ],
   [AdminRole.super_admin]: [
-    "kyc:read",
-    "kyc:write",
-    "payments:read",
-    "audit:read",
-    "merchants:read",
-    "merchants:write",
-    "settlements:read",
-    "settlements:write",
-    "reconciliation:read",
-    "reconciliation:write",
-    "sweep:write",
-    "config:write",
+    AdminPermission.KYC_READ,
+    AdminPermission.KYC_WRITE,
+    AdminPermission.PAYMENTS_READ,
+    AdminPermission.AUDIT_READ,
+    AdminPermission.MERCHANTS_READ,
+    AdminPermission.MERCHANTS_WRITE,
+    AdminPermission.SETTLEMENTS_READ,
+    AdminPermission.SETTLEMENTS_WRITE,
+    AdminPermission.RECONCILIATION_READ,
+    AdminPermission.RECONCILIATION_WRITE,
+    AdminPermission.SWEEP_WRITE,
+    AdminPermission.CONFIG_WRITE,
   ],
 };
 
-export function hasPermission(role: AdminRole, permission: string): boolean {
+export function hasPermission(role: AdminRole, permission: AdminPermissionValue): boolean {
   return ROLE_PERMISSIONS[role]?.includes(permission) ?? false;
 }
 
@@ -79,9 +103,9 @@ export function authenticateAdmin(
  * Must be used after authenticateAdmin.
  *
  * @example
- *   router.get('/settlements', authenticateAdmin, requireAdminRole('settlements:read'), handler)
+ *   router.get('/settlements', authenticateAdmin, requireAdminRole(AdminPermission.SETTLEMENTS_READ), handler)
  */
-export function requireAdminRole(permission: string) {
+export function requireAdminRole(permission: AdminPermissionValue) {
   return (req: AuthRequest, res: Response, next: NextFunction) => {
     const role = req.adminUser?.role;
     if (!role) {

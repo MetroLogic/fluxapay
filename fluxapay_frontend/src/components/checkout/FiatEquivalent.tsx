@@ -30,9 +30,11 @@ export function FiatEquivalent({ usdcAmount, fiatCurrency = 'USD' }: FiatEquival
     let cancelled = false;
 
     async function load() {
-      const rateData = await api.fx.getRate(fiatCurrency);
-      if (cancelled || !rateData) return;
+      const result = await api.fx.getRate(fiatCurrency);
+      if (cancelled) return;
+      if ('error' in result) return;
 
+      const rateData = result.data;
       const equivalent = usdcAmount * rateData.rate;
       const noDecimals = ['JPY', 'KRW', 'VND', 'CLP', 'ISK'];
       const fractionDigits = noDecimals.includes(fiatCurrency.toUpperCase()) ? 0 : 2;

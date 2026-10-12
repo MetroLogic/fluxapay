@@ -1,9 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PaymentsTable } from "@/features/dashboard/payments/PaymentsTable";
 import { PaymentsFilters } from "@/features/dashboard/payments/PaymentsFilters";
+import { ExportTransactionsModal } from "@/features/dashboard/payments/ExportTransactionsModal";
+import type { TransactionExportFilters } from "@/services/transactionCsvExport.service";
 import { type Payment } from "@/features/dashboard/payments/types";
 import { PaymentDrawer } from "@/features/dashboard/payments/PaymentDrawer";
 import { usePaymentUpdates } from "@/hooks/usePaymentUpdates";
@@ -102,6 +104,7 @@ function PaymentsContent() {
     { id: string; url: string; amount: number; currency: string; description?: string; createdAt: string }[]
   >([]);
   const { exportData, exportingFormat } = useMerchantDataExport();
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const fetchAbortRef = useRef<AbortController | null>(null);
 
   const handleSearchChange = useCallback((value: string) => {
@@ -191,6 +194,10 @@ function PaymentsContent() {
   }, []);
 
   const handleExport = (format: MerchantExportFormat) => {
+    if (format === "csv") {
+      setIsExportModalOpen(true);
+      return;
+    }
     exportData({
       resource: "payments",
       format,
@@ -207,6 +214,20 @@ function PaymentsContent() {
       limit: PAGE_SIZE,
     });
   };
+
+  /** Seed the export dialog with whatever the table is currently filtered by. */
+  const exportDialogFilters = useMemo<TransactionExportFilters>(
+    () => ({
+      status: statusFilter,
+      currency: currencyFilter,
+      search: search || undefined,
+      dateFrom: dateFrom || undefined,
+      dateTo: dateTo || undefined,
+      amountMin: amountMin || undefined,
+      amountMax: amountMax || undefined,
+    }),
+    [statusFilter, currencyFilter, search, dateFrom, dateTo, amountMin, amountMax],
+  );
 
   const handleOpenCreateLink = () => {
     setShowCreateLinkModal(true);
@@ -305,7 +326,11 @@ function PaymentsContent() {
           <Button variant="secondary" className="gap-2" onClick={() => router.push("/dashboard/refunds")}>
             Refunds
           </Button>
-          <ExportActionButtons onExport={handleExport} exportingFormat={exportingFormat} />
+          <ExportActionButtons
+            onExport={handleExport}
+            exportingFormat={exportingFormat}
+            formats={["csv", "pdf"]}
+          />
           <Button className="gap-2" onClick={handleOpenCreateLink}>
             <Plus className="h-4 w-4" />
             New Payment
@@ -367,6 +392,7 @@ function PaymentsContent() {
             onDateToChange={(v) => setDateTo(v)}
             onAmountMinChange={(v) => setAmountMin(v)}
             onAmountMaxChange={(v) => setAmountMax(v)}
+            onExportCsv={() => setIsExportModalOpen(true)}
           />
         }
         footer={
@@ -392,6 +418,12 @@ function PaymentsContent() {
         payment={drawerPayment}
         isOpen={isDrawerOpen}
         onClose={handleCloseDrawer}
+      />
+
+      <ExportTransactionsModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        initialFilters={exportDialogFilters}
       />
 
       <Modal

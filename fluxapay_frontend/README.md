@@ -44,4 +44,5 @@ The real E2E mode in CI depends on the backend stack started from the repository
 | Variable | Required | Default | Description |
 |---|---|---|---|
 | `NEXT_PUBLIC_API_URL` | Yes | — | Backend API base URL |
+| `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` | No | — | WalletConnect Cloud project ID for LOBSTR, xBull, and other WalletConnect wallets in hosted checkout. Create a project at `https://cloud.reown.com`. |
 | `NEXT_PUBLIC_STATUS_URL` | No | `/status` | URL for the system status page. Set to an external uptime service (e.g. `https://status.fluxapay.com`) to open in a new tab from the footer and developer portal. Falls back to the internal `/status` route. |

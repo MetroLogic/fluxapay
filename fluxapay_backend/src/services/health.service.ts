@@ -1,13 +1,17 @@
 import { PrismaClient } from "../generated/client/client";
 import { getRedisClient } from "../sms/otpSmsRateLimiter";
+import { rpc } from "@stellar/stellar-sdk";
+import { isSorobanVerificationEnabled } from "../utils/sorobanVerification.util";
 
 export const DEPENDENCY_TIMEOUT_MS = 200;
 
 const HORIZON_URL =
   process.env.STELLAR_HORIZON_URL || "https://horizon-testnet.stellar.org";
+const SOROBAN_RPC_URL =
+  process.env.SOROBAN_RPC_URL || "https://soroban-testnet.stellar.org";
 
-export type DependencyName = "database" | "redis" | "horizon";
-export type DependencyStatus = "up" | "down";
+export type DependencyName = "database" | "redis" | "horizon" | "soroban";
+export type DependencyStatus = "up" | "down" | "disabled";
 
 export interface DependencyCheckResult {
   status: DependencyStatus;
@@ -78,15 +82,34 @@ export async function checkHorizon(): Promise<DependencyCheckResult> {
   });
 }
 
+export async function checkSorobanRpc(): Promise<DependencyCheckResult> {
+  if (!isSorobanVerificationEnabled()) {
+    return { status: "disabled", latencyMs: 0 };
+  }
+
+  return timedCheck(async () => {
+    const server = new rpc.Server(SOROBAN_RPC_URL);
+    await server.getHealth();
+  });
+}
+
 export async function getReadiness(prisma: PrismaClient): Promise<ReadinessResult> {
-  const [database, redis, horizon] = await Promise.all([
+  const [database, redis, horizon, soroban] = await Promise.all([
     checkDatabase(prisma),
     checkRedis(),
     checkHorizon(),
+    checkSorobanRpc(),
   ]);
 
-  const dependencies = { database, redis, horizon };
-  const allUp = Object.values(dependencies).every((dependency) => dependency.status === "up");
+  const dependencies: Record<DependencyName, DependencyCheckResult> = {
+    database,
+    redis,
+    horizon,
+    soroban,
+  };
+  const allUp = Object.values(dependencies).every(
+    (dependency) => dependency.status !== "down",
+  );
 
   return {
     status: allUp ? "ok" : "degraded",

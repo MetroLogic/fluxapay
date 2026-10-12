@@ -1,5 +1,11 @@
 /**
- * Performance optimization utilities for React components
+ * Performance optimization utilities for React components.
+ *
+ * For Core Web Vitals tracking (LCP, CLS, FID, INP), see src/app/lib/reportWebVitals.ts
+ * which is initialized in src/app/providers.tsx via useEffect.
+ *
+ * This file provides runtime optimization techniques (throttle, memoize, render performance tracking)
+ * to help components run efficiently and feed into overall Web Vitals.
  */
 
 import { useEffect, useRef } from 'react';

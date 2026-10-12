@@ -15,6 +15,7 @@ import { runSettlementBatch } from "../services/settlementBatch.service";
 import { adminAuth } from "../middleware/adminAuth.middleware";
 import { apiError, sendApiError } from "../helpers/apiError.helper";
 import { ErrorCode } from "../types/errors";
+import { prisma } from "../config/prisma";
 
 const router = Router();
 
@@ -85,11 +86,7 @@ router.post("/run", adminAuth, async (_req: Request, res: Response) => {
  *         description: System status
  */
 router.get("/status", adminAuth, async (_req: Request, res: Response) => {
-    const { PrismaClient } = await import("../generated/client/client");
-    const prisma = new PrismaClient();
-
-    try {
-        const [unsettledCount, pendingSettlements, recentBatches] = await Promise.all([
+    const [unsettledCount, pendingSettlements, recentBatches] = await Promise.all([
             // Payments swept but not yet settled
             prisma.payment.count({ where: { swept: true, settled: false } }),
             // Settlements in pending/processing state
@@ -109,9 +106,9 @@ router.get("/status", adminAuth, async (_req: Request, res: Response) => {
                     created_at: true,
                 },
             }),
-        ]);
+    ]);
 
-        res.json({
+    res.json({
             status: "ok",
             unsettled_payment_count: unsettledCount,
             pending_settlement_count: pendingSettlements,
@@ -119,10 +116,7 @@ router.get("/status", adminAuth, async (_req: Request, res: Response) => {
             settlement_fee_percent: parseFloat(process.env.SETTLEMENT_FEE_PERCENT ?? "2"),
             cron_schedule: process.env.SETTLEMENT_CRON ?? "0 0 * * *",
             recent_batches: recentBatches,
-        });
-    } finally {
-        await prisma.$disconnect();
-    }
+    });
 });
 
 export default router;

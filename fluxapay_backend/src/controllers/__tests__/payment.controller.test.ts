@@ -23,8 +23,21 @@ jest.mock("../../services/payment.service", () => ({
   },
 }));
 
-import { createPayment, getPaymentById } from "../payment.controller";
+jest.mock("../../helpers/request.helper", () => ({
+  // Mirrors the real validateUserId: resolves req.merchantId (or req.user.id),
+  // throws a 401 API error when the request is unauthenticated.
+  validateUserId: jest.fn(async (req: { merchantId?: string; user?: { id?: string } }) => {
+    const merchantId = req?.merchantId || req?.user?.id;
+    if (!merchantId) {
+      throw { status: 401, code: "UNAUTHORIZED", message: "Unauthorized" };
+    }
+    return merchantId;
+  }),
+}));
+
+import { createPayment, getPaymentById, getPayments } from "../payment.controller";
 import { PaymentService } from "../../services/payment.service";
+import { validateUserId } from "../../helpers/request.helper";
 
 describe("createPayment controller", () => {
   beforeEach(() => {
@@ -65,6 +78,138 @@ describe("createPayment controller", () => {
       }),
     );
     expect(PaymentService.createPayment).not.toHaveBeenCalled();
+  });
+});
+
+describe("getPayments controller — test-mode partition", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    // validateUserId mock derives merchant from req.merchantId and throws 401
+    // when absent (mirrors the real helper) — no override needed here.
+    prismaMock.payment.findMany.mockResolvedValue([]);
+    prismaMock.payment.count.mockResolvedValue(0);
+  });
+
+  const buildReq = (isTestMode?: boolean) =>
+    ({ merchantId: "merchant_1", isTestMode, query: {} }) as any;
+
+  const buildRes = () => {
+    const res: any = { json: jest.fn(), status: jest.fn().mockReturnThis() };
+    return res;
+  };
+
+  it("live key lists only live payments (is_test_mode: false)", async () => {
+    await getPayments(buildReq(false), buildRes());
+
+    const where = prismaMock.payment.findMany.mock.calls[0][0].where;
+    expect(where.is_test_mode).toBe(false);
+    expect(prismaMock.payment.count).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ is_test_mode: false }) }),
+    );
+  });
+
+  it("test key lists only test payments (is_test_mode: true)", async () => {
+    await getPayments(buildReq(true), buildRes());
+
+    const where = prismaMock.payment.findMany.mock.calls[0][0].where;
+    expect(where.is_test_mode).toBe(true);
+  });
+
+  it("JWT dashboard requests are not mode-filtered", async () => {
+    await getPayments(buildReq(undefined), buildRes());
+
+    const where = prismaMock.payment.findMany.mock.calls[0][0].where;
+    expect(where).not.toHaveProperty("is_test_mode");
+  });
+});
+
+/**
+ * Issue #1208 — the transactions list endpoint returned slowly for merchants with
+ * many payments. Three contributing causes are covered here: an unbounded `limit`,
+ * an arbitrary client-supplied sort column, and a `search` filter referencing a
+ * column that does not exist on the Payment model (which made `?search=` throw a
+ * Prisma validation error at runtime).
+ */
+describe("getPayments controller — list performance and query safety (#1208)", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    prismaMock.payment.findMany.mockResolvedValue([]);
+    prismaMock.payment.count.mockResolvedValue(0);
+  });
+
+  const buildRes = () => {
+    const res: any = { json: jest.fn(), status: jest.fn().mockReturnThis() };
+    return res;
+  };
+
+  const reqWithQuery = (query: Record<string, unknown>) =>
+    ({ merchantId: "merchant_1", isTestMode: false, query }) as any;
+
+  it("defaults to page 1 with a limit of 10", async () => {
+    const res = buildRes();
+    await getPayments(reqWithQuery({}), res);
+
+    const args = prismaMock.payment.findMany.mock.calls[0][0];
+    expect(args.skip).toBe(0);
+    expect(args.take).toBe(10);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ meta: expect.objectContaining({ page: 1, limit: 10 }) }),
+    );
+  });
+
+  it("clamps limit to a maximum of 100 rows per page", async () => {
+    const res = buildRes();
+    await getPayments(reqWithQuery({ limit: "100000" }), res);
+
+    expect(prismaMock.payment.findMany.mock.calls[0][0].take).toBe(100);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ meta: expect.objectContaining({ limit: 100 }) }),
+    );
+  });
+
+  it("falls back to the default limit for non-numeric or non-positive limits", async () => {
+    await getPayments(reqWithQuery({ limit: "abc" }), buildRes());
+    expect(prismaMock.payment.findMany.mock.calls[0][0].take).toBe(10);
+
+    jest.clearAllMocks();
+    prismaMock.payment.findMany.mockResolvedValue([]);
+    prismaMock.payment.count.mockResolvedValue(0);
+
+    await getPayments(reqWithQuery({ limit: "-5" }), buildRes());
+    expect(prismaMock.payment.findMany.mock.calls[0][0].take).toBe(10);
+  });
+
+  it("ignores an unknown sort_by and falls back to createdAt", async () => {
+    await getPayments(reqWithQuery({ sort_by: "DROP TABLE" }), buildRes());
+
+    const args = prismaMock.payment.findMany.mock.calls[0][0];
+    expect(Object.keys(args.orderBy)).toEqual(["createdAt"]);
+  });
+
+  it("honours an allow-listed sort_by column", async () => {
+    await getPayments(reqWithQuery({ sort_by: "amount", order: "asc" }), buildRes());
+
+    const args = prismaMock.payment.findMany.mock.calls[0][0];
+    expect(args.orderBy).toEqual({ amount: "asc" });
+  });
+
+  it("searches only fields that exist on the Payment model", async () => {
+    await getPayments(reqWithQuery({ search: "buyer@example.com" }), buildRes());
+
+    const where = prismaMock.payment.findMany.mock.calls[0][0].where;
+    const searchedFields = where.OR.map((clause: Record<string, unknown>) => Object.keys(clause)[0]);
+    // `order_id` was never a column on Payment, so referencing it made every
+    // ?search= request fail with a Prisma validation error.
+    expect(searchedFields).toEqual(["id", "customer_email"]);
+    expect(searchedFields).not.toContain("order_id");
+  });
+
+  it("applies currency and status filters for the indexed list path", async () => {
+    await getPayments(reqWithQuery({ status: "confirmed", currency: "USDC" }), buildRes());
+
+    const where = prismaMock.payment.findMany.mock.calls[0][0].where;
+    expect(where.status).toBe("confirmed");
+    expect(where.currency).toBe("USDC");
   });
 });
 

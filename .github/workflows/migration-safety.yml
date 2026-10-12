@@ -1,0 +1,135 @@
+name: Migration Safety Check
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'fluxapay_backend/prisma/migrations/**'
+      - 'fluxapay_backend/prisma/schema.prisma'
+      - 'fluxapay_backend/scripts/migration-safety.ts'
+
+jobs:
+  check-migration-safety:
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: fluxapay_migration_check
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/fluxapay_migration_check?schema=public
+
+    defaults:
+      run:
+        working-directory: ./fluxapay_backend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch full history to compare migrations
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: './fluxapay_backend/package-lock.json'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Apply existing migrations to baseline database
+        run: |
+          # Apply all migrations from main/develop branch to establish baseline
+          git fetch origin ${{ github.base_ref }}
+          git checkout origin/${{ github.base_ref }} -- prisma/migrations
+          npx prisma migrate deploy || echo "No baseline migrations to apply"
+          
+      - name: Restore current branch schema
+        run: |
+          git checkout ${{ github.sha }} -- prisma/migrations prisma/schema.prisma
+
+      - name: Run Migration Safety Check
+        id: safety_check
+        run: |
+          echo "Running migration safety check..."
+          npx ts-node scripts/migration-safety.ts
+        continue-on-error: true
+
+      - name: Check for migration-approved label
+        if: steps.safety_check.outcome == 'failure'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: labels } = await github.rest.issues.listLabelsOnIssue({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            
+            const hasApprovedLabel = labels.some(label => label.name === 'migration-approved');
+            
+            if (!hasApprovedLabel) {
+              core.setFailed(
+                '❌ DESTRUCTIVE MIGRATION DETECTED WITHOUT APPROVAL\n\n' +
+                'This PR contains a destructive database migration (DROP TABLE, DROP COLUMN, etc.).\n\n' +
+                'Required actions:\n' +
+                '1. Ensure a database backup strategy is in place\n' +
+                '2. Document the migration plan and rollback procedure\n' +
+                '3. Get approval from a database administrator or senior engineer\n' +
+                '4. Apply the "migration-approved" label to this PR\n\n' +
+                'See CONTRIBUTING.md for more details on the destructive migration policy.'
+              );
+            } else {
+              core.notice(
+                '⚠️  Destructive migration detected but "migration-approved" label is present. ' +
+                'Proceeding with caution. Ensure backup procedures are followed before deployment.'
+              );
+            }
+
+      - name: Migration Safety Summary
+        if: steps.safety_check.outcome == 'success'
+        run: |
+          echo "✅ Migration safety check passed!"
+          echo "The pending migrations appear to be additive and safe to deploy."
+
+      - name: Comment on PR - Destructive Migration Warning
+        if: steps.safety_check.outcome == 'failure'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: labels } = await github.rest.issues.listLabelsOnIssue({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            
+            const hasApprovedLabel = labels.some(label => label.name === 'migration-approved');
+            
+            const warningMessage = hasApprovedLabel
+              ? '⚠️  **Destructive Migration Approved**\n\nThis PR contains a destructive database migration that has been approved via the `migration-approved` label.\n\n**Before merging:**\n- [ ] Database backup has been verified\n- [ ] Migration plan documented\n- [ ] Rollback procedure tested\n- [ ] Senior engineer approval obtained'
+              : '🚨 **Destructive Migration Detected**\n\nThis PR contains a destructive database migration (DROP TABLE, DROP COLUMN, etc.).\n\n**This PR is blocked until the `migration-approved` label is applied.**\n\n**Required actions:**\n1. Document the migration plan in this PR description\n2. Ensure database backup procedures are in place\n3. Get approval from a senior engineer or DBA\n4. Apply the `migration-approved` label\n\nSee [CONTRIBUTING.md](../blob/main/CONTRIBUTING.md) for details.';
+            
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: warningMessage
+            });

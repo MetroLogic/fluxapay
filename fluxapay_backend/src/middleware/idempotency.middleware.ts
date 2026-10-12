@@ -2,9 +2,9 @@ import { Request, Response, NextFunction } from "express";
 import { apiError, sendApiError } from "../helpers/apiError.helper";
 import { ErrorCode } from "../types/errors";
 import { PrismaClient } from "../generated/client/client";
+import { prisma } from "../config/prisma";
 import crypto from "crypto";
 
-const prisma = new PrismaClient();
 
 const IDEMPOTENCY_TTL_HOURS = 24;
 
@@ -88,8 +88,9 @@ export const idempotencyMiddleware = async (
         return next();
       }
 
-      // Return cached response
+      // Return cached response with replay header so callers can detect replays
       res
+        .set("X-Idempotent-Replayed", "true")
         .status(existingRecord.response_code)
         .json(existingRecord.response_body);
       return;

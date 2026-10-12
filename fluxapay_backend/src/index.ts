@@ -5,7 +5,6 @@ import "./tracing";
 import dotenv from "dotenv";
 import { validateEnv, EnvValidationError } from "./config/env.config";
 import { startCronJobs } from "./services/cron.service";
-import { startPaymentMonitor } from "./services/paymentMonitor.service";
 import { startPaymentOracle, stopPaymentOracle } from "./services/paymentOracle.service";
 import { initializeEmailNotifications } from "./services/emailNotification.service";
 import { registerShutdownHandlers } from "./services/shutdown.service";
@@ -50,10 +49,7 @@ try {
     // Start scheduled jobs (daily settlement batch, etc.)
     startCronJobs();
 
-    // Start payment monitor loop (legacy polling)
-    startPaymentMonitor();
-
-    // Start payment oracle service (enhanced monitoring with smart contract verification)
+    // Start payment oracle service — the sole Horizon poller for on-chain USDC detection
     startPaymentOracle();
 
     // Initialize email notification listeners
@@ -65,16 +61,22 @@ try {
     // Initialize per-payment settlement service (subscribes to PAYMENT_CONFIRMED events)
     // Service auto-starts via constructor subscription
     logger.info("Payment settlement service initialized");
+
+    // Pick up any settlement retries that were pending before restart
+    paymentSettlementService.processPendingSettlementRetries().catch((err) => {
+      logger.error("Failed to process pending settlement retries on startup", { error: err });
+    });
   });
 
   /**
    * Register SIGTERM / SIGINT / uncaughtException / unhandledRejection handlers.
    *
    * Shutdown sequence (see shutdown.service.ts for full details):
-   *  1. Stop cron jobs and payment monitor (no new background work)
+   *  1. Stop cron jobs and payment oracle / Horizon poller (no new background work)
    *  2. Close the HTTP server (drain in-flight requests)
-   *  3. Disconnect Prisma
-   *  4. Exit 0
+   *  3. Run registered cleanup callbacks (close Redis clients)
+   *  4. Disconnect Prisma
+   *  5. Exit 0
    *
    * A hard-kill timer fires after SHUTDOWN_TIMEOUT_MS (default 30 s) to
    * guarantee the process always terminates even when a request hangs.

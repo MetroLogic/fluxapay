@@ -13,18 +13,19 @@ import { ErrorCode } from "../types/errors";
  *   - OTPs, BankAccount, Customers, Subscriptions are hard-deleted.
  */
 import { PrismaClient } from "../generated/client/client";
+import { prisma } from "../config/prisma";
 import {
   logMerchantDeleted,
   logApiKeysRevoked,
   logWebhooksDeactivated,
   logChargesCancelled,
 } from "./audit.service";
+import { invalidateAllMerchantTokens } from "./auth.service";
 import { deleteFromCloudinary } from "./cloudinary.service";
 import { getLogger } from "../utils/logger";
 
 const logger = getLogger();
 
-const prisma = new PrismaClient();
 
 const ANON_EMAIL = (id: string) => `deleted-${id}@anonymized.invalid`;
 const ANON_PHONE = (id: string) => `+000000${id.slice(-6)}`;
@@ -65,10 +66,13 @@ export async function requestDeletion(
  *
  * Financial records (payments, settlements, refunds, invoices) are retained.
  * PII is overwritten. Cascades revoke keys, deactivate webhooks, cancel charges.
+ *
+ * @param force - When true, skip the in-flight settlement guard (use with care).
  */
 export async function executeDeletion(
   merchantId: string,
   adminId: string,
+  force = false,
 ): Promise<void> {
   const merchant = await prisma.merchant.findUnique({ where: { id: merchantId } });
   if (!merchant) throw apiError(404, ErrorCode.MERCHANT_NOT_FOUND, "Merchant not found");
@@ -78,6 +82,45 @@ export async function executeDeletion(
     where: { merchantId },
   });
   if (!deletionReq) throw apiError(400, ErrorCode.NO_DELETION_REQUEST, "No deletion request found for this merchant");
+
+  // Guard: refuse if any settlements are still in progress unless force=true.
+  if (!force) {
+    const inflightSettlements = await prisma.settlement.findMany({
+      where: {
+        merchantId,
+        status: { in: ["pending", "processing"] },
+      },
+      select: { id: true, status: true },
+    });
+
+    if (inflightSettlements.length > 0) {
+      const ids = inflightSettlements.map((s) => s.id).join(", ");
+      logger.warn("executeDeletion blocked — in-flight settlements exist", {
+        event: "deletion_blocked_inflight_settlements",
+        merchantId,
+        settlementIds: ids,
+      });
+      throw apiError(
+        409,
+        ErrorCode.INFLIGHT_SETTLEMENTS,
+        `Cannot delete merchant while settlements are in progress. ` +
+          `Pending/processing settlement IDs: ${ids}. ` +
+          `Wait for them to complete or use force=true to override.`,
+      );
+    }
+  }
+
+  // Revoke every outstanding refresh token *before* committing the
+  // deletion, so a merchant whose account is being deleted can't obtain a
+  // new access token via /auth/refresh once this call returns (#1063).
+  // Note: an access token (JWT) already issued and still within its short
+  // validity window (15 minutes) is not retroactively invalidated by this —
+  // authenticateToken verifies JWTs statelessly (signature + expiry only)
+  // and does not re-check merchant status against the DB per request. That
+  // is a separate, broader change (would affect every authenticated
+  // request) and is out of scope for this fix; this closes the session
+  // (refresh-token) persistence gap the issue describes.
+  await invalidateAllMerchantTokens(merchantId);
 
   await prisma.$transaction(async (tx) => {
     // 1. Revoke all active API keys

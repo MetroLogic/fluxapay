@@ -18,6 +18,7 @@ import {
   CheckoutBrandingShell,
   DEFAULT_ACCENT,
 } from '@/components/checkout/CheckoutBrandingShell';
+import { sanitizeRedirectUrl } from '@/lib/safeUrl';
 
 /**
  * Hosted checkout page at /checkout/[charge_id]
@@ -30,7 +31,7 @@ export default function CheckoutPage() {
   const searchParams = useSearchParams();
   const chargeId = params.charge_id as string;
 
-  const { payment, loading, error, isOffline, retryConnection, depositAddressUpdated } =
+  const { payment, loading, error, isOffline, retryConnection, depositAddressUpdated, connectionType } =
     usePaymentStatus(chargeId);
 
   // Notify the customer when the deposit address has changed (e.g. after timeout reset).
@@ -59,7 +60,7 @@ export default function CheckoutPage() {
   useEffect(() => {
     if (payment?.status === 'confirmed' && payment.successUrl) {
       const timer = setTimeout(() => {
-        window.location.href = payment.successUrl!;
+        window.location.href = sanitizeRedirectUrl(payment.successUrl);
       }, 2000);
       return () => clearTimeout(timer);
     }
@@ -102,6 +103,19 @@ export default function CheckoutPage() {
               {t('checkout.retryNow')}
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Polling fallback banner — shown when SSE max retries are exhausted */}
+      {!isOffline && connectionType === 'polling' && (
+        <div
+          className="mx-auto mt-4 w-full max-w-2xl rounded-lg border border-yellow-300 bg-yellow-50 px-4 py-3 text-yellow-900"
+          role="status"
+          aria-live="polite"
+        >
+          <p className="text-sm font-medium">
+            Real-time updates unavailable. Checking for status every 10 seconds.
+          </p>
         </div>
       )}
 
@@ -239,6 +253,7 @@ export default function CheckoutPage() {
                 assetCode={payment.currency}
                 memo={payment.memo}
                 memoType={payment.memoType}
+                paymentId={chargeId}
               />
             </div>
           </div>
@@ -261,7 +276,7 @@ export default function CheckoutPage() {
             <p className="mb-6 text-sm text-gray-500">{t('checkout.contactMerchantExcess')}</p>
             <div className="flex flex-col gap-4">
               {payment.successUrl && (
-                <a href={payment.successUrl} className="inline-block rounded-lg px-6 py-3 font-semibold text-white transition-opacity hover:opacity-90" style={{ backgroundColor: 'var(--checkout-accent)' }}>
+                <a href={sanitizeRedirectUrl(payment.successUrl)} className="inline-block rounded-lg px-6 py-3 font-semibold text-white transition-opacity hover:opacity-90" style={{ backgroundColor: 'var(--checkout-accent)' }}>
                   {t('checkout.returnToMerchant')}
                 </a>
               )}
@@ -343,14 +358,14 @@ export default function CheckoutPage() {
               </div>
             )}
 
-            {/* SEP-0007 Deep-link Button */}
-            <div className="mb-6 flex justify-center">
+            <div className="mb-6">
               <StellarPayButton
                 address={payment.address}
                 amount={payment.amount}
                 assetCode={payment.currency}
                 memo={payment.memo}
                 memoType={payment.memoType}
+                paymentId={chargeId}
               />
             </div>
 

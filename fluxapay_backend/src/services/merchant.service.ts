@@ -1,6 +1,7 @@
 import { apiError } from "../helpers/apiError.helper";
 import { ErrorCode } from "../types/errors";
 import { PrismaClient, Prisma } from "../generated/client/client";
+import { prisma } from "../config/prisma";
 import {
   normalizeCheckoutAccentHex,
   normalizeCheckoutLogoUrl,
@@ -13,7 +14,7 @@ import { sendMerchantOtpSms } from "./smsOtp.service";
 import { isDevEnv } from "../helpers/env.helper";
 import { generateToken } from "../helpers/jwt.helper";
 import { merchantRegistryService } from "./merchantRegistry.service";
-import { generateApiKey, generateWebhookSecret, hashKey, getLastFour } from "../helpers/crypto.helper";
+import { generateApiKey, generateWebhookSecret, hashKey, getLastFour, ApiKeyMode } from "../helpers/crypto.helper";
 import * as crypto from "crypto";
 import {
   logMerchantProfileUpdate,
@@ -22,7 +23,18 @@ import {
   logWebhookSecretRotation,
 } from "./audit.service";
 
-const prisma = new PrismaClient();
+const DEFAULT_API_KEY_ROTATION_GRACE_PERIOD_HOURS = 24;
+
+function getApiKeyRotationGracePeriodHours(configuredHours?: number): number {
+  if (configuredHours === undefined) {
+    return DEFAULT_API_KEY_ROTATION_GRACE_PERIOD_HOURS;
+  }
+  if (!Number.isFinite(configuredHours) || configuredHours <= 0) {
+    throw apiError(400, ErrorCode.INVALID_REQUEST_BODY, "gracePeriodHours must be a positive number");
+  }
+  return configuredHours;
+}
+
 
 export async function signupMerchantService(data: {
   business_name: string;
@@ -207,31 +219,78 @@ export async function getMerchantUserService(data: {
 
 export async function regenerateApiKeyService(data: {
   merchantId: string;
+  mode?: ApiKeyMode;
+  gracePeriodHours?: number;
 }) {
-  const { merchantId } = data;
+  const { merchantId, mode = "live" } = data;
+  const gracePeriodHours = getApiKeyRotationGracePeriodHours(data.gracePeriodHours);
+  const expiresAt = new Date(Date.now() + gracePeriodHours * 60 * 60 * 1000);
 
-  const apiKey = generateApiKey();
+  const apiKey = generateApiKey(mode);
   const apiKeyHashed = await hashKey(apiKey);
   const apiKeyLastFour = getLastFour(apiKey);
 
-  await prisma.merchant.update({
-    where: { id: merchantId },
-    data: {
-      api_key_hashed: apiKeyHashed,
-      api_key_last_four: apiKeyLastFour,
-    },
+  await prisma.$transaction(async (tx) => {
+    const merchant = await tx.merchant.findUnique({
+      where: { id: merchantId },
+      select: { api_key_hashed: true, api_key_last_four: true },
+    });
+
+    if (merchant?.api_key_hashed && merchant.api_key_last_four) {
+      const existingKey = await tx.apiKey.findUnique({
+        where: { key_hash: merchant.api_key_hashed },
+        select: { id: true },
+      });
+
+      if (existingKey) {
+        await tx.apiKey.update({
+          where: { id: existingKey.id },
+          data: { status: "active", expires_at: expiresAt },
+        });
+      } else {
+        await tx.apiKey.create({
+          data: {
+            merchantId,
+            name: "Rotated API key",
+            key_hash: merchant.api_key_hashed,
+            key_last_four: merchant.api_key_last_four,
+            environment: mode,
+            expires_at: expiresAt,
+          },
+        });
+      }
+    }
+
+    await tx.merchant.update({
+      where: { id: merchantId },
+      data: {
+        api_key_hashed: apiKeyHashed,
+        api_key_last_four: apiKeyLastFour,
+      },
+    });
+
+    await tx.apiKey.create({
+      data: {
+        merchantId,
+        name: "Primary API key",
+        key_hash: apiKeyHashed,
+        key_last_four: apiKeyLastFour,
+        environment: mode,
+      },
+    });
   });
 
   // Audit log: API key rotation
   logApiKeyRotation({ merchantId, lastFour: apiKeyLastFour }).catch(() => {});
 
-  return { message: "API key regenerated", apiKey };
+  return { message: "API key rotated", apiKey, expiresAt, gracePeriodHours };
 }
 
 export async function rotateApiKeyService(data: {
   merchantId: string;
+  gracePeriodHours?: number;
 }) {
-  return regenerateApiKeyService(data); // Same logic as regenerate
+  return regenerateApiKeyService(data);
 }
 
 export async function updateMerchantProfileService(data: {
@@ -288,13 +347,24 @@ export async function rotateWebhookSecretService(data: {
 }) {
   const { merchantId } = data;
   const newSecret = crypto.randomBytes(32).toString("hex");
+
+  const existing = await prisma.merchant.findUnique({
+    where: { id: merchantId },
+    select: { webhook_secret: true },
+  });
+
   await prisma.merchant.update({
     where: { id: merchantId },
     data: { webhook_secret: newSecret },
   });
 
-  // Audit log: webhook secret rotation (value is never logged)
-  logWebhookSecretRotation({ merchantId }).catch(() => {});
+  // Audit log: webhook secret rotation. The raw secret values (old or new)
+  // are never logged — only the last 4 characters of the previous secret
+  // are recorded, as a fingerprint for forensic/audit purposes.
+  logWebhookSecretRotation({
+    merchantId,
+    previousSecretLastFour: existing?.webhook_secret ? getLastFour(existing.webhook_secret) : undefined,
+  }).catch(() => {});
 
   return { message: "Webhook secret rotated", webhook_secret: newSecret };
 }
@@ -341,17 +411,6 @@ export async function updateSettlementScheduleService(data: {
   }
 
   return { message: "Settlement schedule updated", settlement_schedule, settlement_day: finalSettlementDay };
-  const updateData: { settlement_schedule: string; settlement_day: number | null } = {
-    settlement_schedule,
-    // Clear settlement_day when switching to daily so batch logic stays consistent
-    settlement_day: settlement_schedule === "daily" ? null : (settlement_day ?? null),
-  };
-
-  await prisma.merchant.update({
-    where: { id: merchantId },
-    data: updateData,
-  });
-  return { message: "Settlement schedule updated", settlement_schedule, settlement_day: updateData.settlement_day };
 }
 
 export async function updateBankAccountService(data: {

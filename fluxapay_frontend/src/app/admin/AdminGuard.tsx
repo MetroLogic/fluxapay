@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { Loader2, ShieldOff } from 'lucide-react';
 import { isAuthenticated, isAdmin } from '@/lib/auth';
 
@@ -15,6 +15,7 @@ const ADMIN_ENABLED = process.env.NEXT_PUBLIC_ADMIN_ENABLED === 'true';
  */
 export default function AdminGuard({ children }: { children: React.ReactNode }) {
     const router = useRouter();
+    const pathname = usePathname();
     const [checked, setChecked] = useState(!ADMIN_ENABLED);
 
     useEffect(() => {
@@ -28,7 +29,7 @@ export default function AdminGuard({ children }: { children: React.ReactNode }) 
             return;
         }
         setChecked(true);
-    }, [router]);
+    }, [router, pathname]);
 
     if (!checked) {
         return (

@@ -62,7 +62,7 @@ function InvoicesContent() {
     setPage(1);
   }, [statusFilter, debouncedSearch]);
 
-  const fetchInvoices = useCallback(async () => {
+  const fetchInvoices = useCallback(async (signal?: AbortSignal) => {
     setIsLoading(true);
     setLoadError(null);
     try {
@@ -71,12 +71,14 @@ function InvoicesContent() {
         limit: PAGE_SIZE,
         status: statusFilter !== "all" ? statusFilter : undefined,
         search: debouncedSearch.trim() || undefined,
+        signal,
       });
       setTotal(meta.total);
       setInvoices(
         (rows as Record<string, unknown>[]).map((r) => mapBackendInvoice(r)),
       );
     } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
       if (err instanceof ApiError) {
         setLoadError(err.message);
         toast.error(err.message);
@@ -91,7 +93,9 @@ function InvoicesContent() {
   }, [page, statusFilter, debouncedSearch]);
 
   useEffect(() => {
-    fetchInvoices();
+    const controller = new AbortController();
+    void fetchInvoices(controller.signal);
+    return () => controller.abort();
   }, [fetchInvoices]);
 
   const handleCreateInvoice = async (

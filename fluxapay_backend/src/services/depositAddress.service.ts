@@ -3,15 +3,33 @@ import { PrismaClient, DepositAddressStatus } from "../generated/client/client";
 import { KMSFactory } from "./kms";
 import * as crypto from "crypto";
 import { eventBus, AppEvents } from "./EventService";
+import { ErrorCode } from "../types/errors";
+import { sendDepositPoolAlert } from "./settlementAlert.service";
 
-const prisma = new PrismaClient();
+import { prisma } from "../config/prisma";
+
+export class PoolExhaustedError extends Error {
+  public readonly status = 503;
+  public readonly code = ErrorCode.POOL_EXHAUSTED;
+  public readonly retryAfterSeconds: number;
+
+  constructor(
+    message = "Deposit address pool is exhausted. Please try again later.",
+    retryAfterSeconds = 30,
+  ) {
+    super(message);
+    this.name = "PoolExhaustedError";
+    this.retryAfterSeconds = retryAfterSeconds;
+  }
+}
 
 export class DepositAddressService {
   /**
    * Pre-generates Stellar keypairs and stores them in the DepositAddress pool.
    * @param count Number of addresses to generate
+   * @param seedVersion Epoch of master seed (default: 1)
    */
-  static async generatePoolAddresses(count: number): Promise<number> {
+  static async generatePoolAddresses(count: number, seedVersion: number = 1): Promise<number> {
     const kmsProvider = KMSFactory.getProvider();
     let generated = 0;
 
@@ -34,6 +52,7 @@ export class DepositAddressService {
           public_key: publicKey,
           secret_key: encryptedSecret,
           derivation_path: "random", // We use random generation, no BIP44 path needed
+          seedVersion,
           status: "available",
         },
       });
@@ -47,7 +66,34 @@ export class DepositAddressService {
    * Allocates an available address from the pool for a payment.
    * @param paymentId The payment ID
    */
-  static async allocateAddress(paymentId: string): Promise<string | null> {
+  static async allocateAddress(paymentId: string, merchantId?: string): Promise<string | null> {
+    const stats = await this.getPoolStats();
+
+    // Fires the ops alert with current pool size, merchant ID, and timestamp.
+    // Awaited (not fire-and-forget) so it is guaranteed to have been sent
+    // before any PoolExhaustedError is thrown below.
+    const fireExhaustionAlert = async () => {
+      await sendDepositPoolAlert({
+        ...stats,
+        merchantId,
+        timestamp: new Date().toISOString(),
+      }).catch((err) => {
+        console.error("Failed to send deposit pool alert:", err);
+      });
+    };
+
+    if (stats.totalCount > 0) {
+      // Alert when utilization >= 80% (0.8)
+      if (stats.utilizationPct >= 0.8) {
+        await fireExhaustionAlert();
+      }
+
+      // Graceful 503 typed error when utilization >= 95% (0.95)
+      if (stats.utilizationPct >= 0.95) {
+        throw new PoolExhaustedError();
+      }
+    }
+
     return await prisma.$transaction(async (tx) => {
       // Find an available address and lock it for update
       const address = await tx.$queryRaw<any[]>`
@@ -58,6 +104,16 @@ export class DepositAddressService {
       `;
 
       if (!address || address.length === 0) {
+        if (stats.totalCount > 0) {
+          // The stats snapshot above indicated capacity, but a concurrent
+          // allocation exhausted the pool before this query ran. Ensure an
+          // ops alert is always fired immediately before surfacing the 503,
+          // even if the pre-check above didn't already send one.
+          if (stats.utilizationPct < 0.8) {
+            await fireExhaustionAlert();
+          }
+          throw new PoolExhaustedError();
+        }
         return null; // Pool is empty
       }
 
@@ -103,7 +159,7 @@ export class DepositAddressService {
   }
 
   /**
-   * Retrieves pool stats for the admin dashboard.
+   * Retrieves pool stats for the admin dashboard and monitoring.
    */
   static async getPoolStats() {
     const stats = await prisma.depositAddress.groupBy({
@@ -117,6 +173,7 @@ export class DepositAddressService {
       available: 0,
       assigned: 0,
       cooldown: 0,
+      retiring: 0,
       total: 0,
     };
 
@@ -124,10 +181,26 @@ export class DepositAddressService {
       if (stat.status === "available") result.available = stat._count.status;
       if (stat.status === "assigned") result.assigned = stat._count.status;
       if (stat.status === "cooldown") result.cooldown = stat._count.status;
+      if (stat.status === "retiring") result.retiring = stat._count.status;
       result.total += stat._count.status;
     }
 
-    return result;
+    const availableCount = result.available;
+    const allocatedCount = result.assigned;
+    const totalCount = result.total;
+    const nonAvailableCount = totalCount - availableCount;
+    const utilizationPct =
+      totalCount > 0
+        ? Number((nonAvailableCount / totalCount).toFixed(4))
+        : 0;
+
+    return {
+      ...result,
+      availableCount,
+      allocatedCount,
+      totalCount,
+      utilizationPct,
+    };
   }
 
   /**

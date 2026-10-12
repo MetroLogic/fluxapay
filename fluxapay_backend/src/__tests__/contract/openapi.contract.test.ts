@@ -101,6 +101,27 @@ beforeAll(async () => {
     });
     testMerchantId = created.id;
   }
+
+  await prisma.merchantKYC.upsert({
+    where: { merchantId: testMerchantId },
+    create: {
+      merchantId: testMerchantId,
+      business_type: 'registered_business',
+      legal_business_name: 'Test Business LLC',
+      country_of_registration: 'US',
+      business_address: '123 Test St',
+      director_full_name: 'Test Director',
+      director_email: 'director@example.com',
+      director_phone: '+15551234567',
+      government_id_type: 'passport',
+      government_id_number: 'P1234567',
+      kyc_status: 'approved',
+    },
+    update: {
+      kyc_status: 'approved',
+    },
+  });
+
   testApiKey = RAW_TEST_API_KEY;
 });
 
@@ -158,6 +179,25 @@ function normalizePath(path: string): string {
 }
 
 describe('OpenAPI Contract Tests', () => {
+  it('provides stable operation metadata and response schemas for every route', () => {
+    for (const [path, pathItem] of Object.entries(specs.paths || {})) {
+      for (const method of ['get', 'post', 'put', 'patch', 'delete', 'options', 'head', 'trace']) {
+        const operation = (pathItem as any)[method];
+        if (!operation) continue;
+
+        expect(operation.operationId).toBeTruthy();
+        expect(operation.description).toBeTruthy();
+        expect(Object.keys(operation.responses || {}).length).toBeGreaterThan(0);
+        for (const response of Object.values(operation.responses) as any[]) {
+          expect(response.description).toBeTruthy();
+          if (response.content) {
+            expect(Object.keys(response.content).length).toBeGreaterThan(0);
+          }
+        }
+      }
+    }
+  });
+
   describe('Payments API', () => {
     let createdPaymentId: string;
 

@@ -10,9 +10,8 @@
  * Registered only in production by src/app/sw-register.tsx.
  */
 
-const SHELL_CACHE = 'fluxapay-shell-v1';
-const STATIC_CACHE = 'fluxapay-static-v1';
-const KNOWN_CACHES = [SHELL_CACHE, STATIC_CACHE];
+const BUILD_HASH = self.NEXT_PUBLIC_BUILD_HASH || 'dev';
+const CACHE_NAME = `fluxapay-v${BUILD_HASH}`;
 
 const STATIC_EXTENSIONS = /\.(js|css|png|jpg|jpeg|svg|woff2?|ttf|ico|webmanifest|json)$/;
 
@@ -26,13 +25,13 @@ const PRECACHE_URLS = [
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches
-      .open(SHELL_CACHE)
+      .open(CACHE_NAME)
       .then((cache) => cache.addAll(PRECACHE_URLS))
       .then(() => self.skipWaiting()),
   );
 });
 
-// Remove caches from older SW versions on activate.
+// Delete all caches not matching the current version on activate.
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches
@@ -40,7 +39,7 @@ self.addEventListener('activate', (event) => {
       .then((keys) =>
         Promise.all(
           keys
-            .filter((key) => !KNOWN_CACHES.includes(key))
+            .filter((key) => key !== CACHE_NAME)
             .map((key) => caches.delete(key)),
         ),
       )
@@ -58,12 +57,12 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (url.pathname.startsWith('/pay/') && request.mode === 'navigate') {
-    event.respondWith(staleWhileRevalidate(request, SHELL_CACHE));
+    event.respondWith(staleWhileRevalidate(request, CACHE_NAME));
     return;
   }
 
   if (STATIC_EXTENSIONS.test(url.pathname)) {
-    event.respondWith(cacheFirst(request, STATIC_CACHE));
+    event.respondWith(cacheFirst(request, CACHE_NAME));
     return;
   }
 });
@@ -71,7 +70,7 @@ self.addEventListener('fetch', (event) => {
 /**
  * Cache-first: serve from cache, populate cache on miss.
  */
-async function cacheFirst(request, cacheName) {
+async function cacheFirst(request, cacheName = CACHE_NAME) {
   const cached = await caches.match(request);
   if (cached) return cached;
 
@@ -87,7 +86,7 @@ async function cacheFirst(request, cacheName) {
  * Network-first: fetch from network, cache success, fall back to cache on failure.
  */
 async function networkFirst(request) {
-  const cacheName = STATIC_CACHE;
+  const cacheName = CACHE_NAME;
   try {
     const response = await fetch(request);
     if (response.ok) {

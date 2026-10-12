@@ -28,7 +28,11 @@ jest.mock('../../generated/client/client', () => ({
   })),
   RefundStatus: {},
   WebhookEventType: {},
-  Prisma: {},
+  Prisma: {
+    TransactionIsolationLevel: {
+      Serializable: 'Serializable',
+    },
+  },
 }));
 
 // ── Mock: webhook service ──────────────────────────────────────────────────────
@@ -214,21 +218,22 @@ describe('Refund Service - Validation', () => {
       });
     });
 
-    it('should reject refund for expired payment', async () => {
+    it('should allow refund for confirmed payment after deposit window expiration', async () => {
       setupTransaction(
-        makePayment({ expiration: new Date(Date.now() - 86_400_000) }), // 24 h ago
+        makePayment({
+          status: 'confirmed',
+          expiration: new Date(Date.now() - 86_400_000), // 24 h ago
+        }),
       );
 
-      await expect(
-        createRefundService({
-          merchantId: 'test-merchant',
-          payment_id: 'expired-payment',
-          amount: 50,
-        }),
-      ).rejects.toMatchObject({
-        status: 400,
-        message: 'Payment has expired and cannot be refunded',
+      const result = await createRefundService({
+        merchantId: 'test-merchant',
+        payment_id: 'expired-payment',
+        amount: 50,
       });
+
+      expect(result.message).toBe('Refund created successfully');
+      expect(Number(result.data.amount)).toBe(50);
     });
 
     it('should reject refund for failed payment', async () => {
@@ -424,6 +429,86 @@ describe('Refund Service - Validation', () => {
       });
 
       expect(secondResult.data.id).toBe(firstResult.data.id);
+    });
+  });
+
+  // ── Concurrent Refunds & Race Condition Locking ────────────────────────────
+  describe('Concurrent Refund Race Conditions', () => {
+    it('prevents race conditions when concurrent refunds exceed payment amount using Promise.all', async () => {
+      const payment = makePayment({ amount: 100 });
+      let refundedSoFar = 0;
+      let isLocked = false;
+      const lockQueue: Array<() => void> = [];
+
+      const acquireLock = () =>
+        new Promise<void>((resolve) => {
+          if (!isLocked) {
+            isLocked = true;
+            resolve();
+          } else {
+            lockQueue.push(resolve);
+          }
+        });
+
+      const releaseLock = () => {
+        if (lockQueue.length > 0) {
+          const next = lockQueue.shift()!;
+          next();
+        } else {
+          isLocked = false;
+        }
+      };
+
+      const txClient = {
+        $queryRaw: jest.fn().mockResolvedValue([payment]),
+        payment: { findUnique: mockPaymentFindUnique },
+        refund: {
+          findMany: jest.fn().mockImplementation(async () => {
+            if (refundedSoFar > 0) {
+              return [makeRefund({ amount: refundedSoFar, status: 'pending' })];
+            }
+            return [];
+          }),
+          findFirst: mockRefundFindFirst,
+          create: jest.fn().mockImplementation(async ({ data }) => {
+            refundedSoFar += Number(data.amount);
+            return makeRefund({ ...data, id: `refund-${Date.now()}` });
+          }),
+        },
+      };
+
+      mockTransaction.mockImplementation(async (cb: any) => {
+        await acquireLock();
+        try {
+          return await cb(txClient);
+        } finally {
+          releaseLock();
+        }
+      });
+
+      const requests = [
+        createRefundService({
+          merchantId: 'test-merchant',
+          payment_id: 'test-payment',
+          amount: 60,
+        }),
+        createRefundService({
+          merchantId: 'test-merchant',
+          payment_id: 'test-payment',
+          amount: 60,
+        }),
+      ];
+
+      const results = await Promise.allSettled(requests);
+      const fulfilled = results.filter((r) => r.status === 'fulfilled');
+      const rejected = results.filter((r) => r.status === 'rejected');
+
+      expect(fulfilled).toHaveLength(1);
+      expect(rejected).toHaveLength(1);
+      expect((rejected[0] as PromiseRejectedResult).reason).toMatchObject({
+        status: 422,
+        message: expect.stringContaining('exceeds remaining refundable amount'),
+      });
     });
   });
 });

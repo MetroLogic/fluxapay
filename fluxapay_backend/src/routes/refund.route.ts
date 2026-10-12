@@ -5,12 +5,14 @@ import { validate, validateQuery } from "../middleware/validation.middleware";
 import { idempotencyMiddleware } from "../middleware/idempotency.middleware";
 import {
   createRefund,
+  getRefundById,
   listRefunds,
   updateRefundStatus,
 } from "../controllers/refund.controller";
 import {
   createRefundSchema,
   listRefundsQuerySchema,
+  refundParamsSchema,
   updateRefundStatusSchema,
 } from "../schemas/refund.schema";
 
@@ -29,7 +31,7 @@ const router = Router();
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/CreateRefundRequest'
+ *             $ref: '#components/schemas/CreateRefundRequest'
  *     responses:
  *       201:
  *         description: Refund created
@@ -39,19 +41,24 @@ const router = Router();
  *     security:
  *       - apiKeyAuth: []
  *     parameters:
- *       - in: query
+ *       - in query
  *         name: page
  *         schema:
  *           type: integer
- *       - in: query
+ *       - in query
  *         name: limit
  *         schema:
  *           type: integer
- *       - in: query
+ *       - in query
  *         name: status
  *         schema:
  *           type: string
- *           enum: [pending, processing, completed, failed]
+ *            enum: [pending, processing, completed, failed]
+ *       - in query
+ *         name: payment_id
+ *         schema:
+ *           type: string
+ *         description: Filter refunds for one payment
  *     responses:
  *       200:
  *         description: Refunds retrieved
@@ -68,6 +75,38 @@ router.get(
   authenticateApiKey, merchantApiKeyRateLimit(),
   validateQuery(listRefundsQuerySchema),
   listRefunds,
+);
+
+/**
+ * @swagger
+ * /api/v1/refunds/{refund_id}:
+ *   get:
+ *     operationId: getRefundById
+ *     summary: Get a merchant-owned refund
+ *     description: Returns a refund only when it belongs to the authenticated merchant.
+ *     tags: [Refunds]
+ *     security:
+ *       - apiKeyAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: refund_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Refund retrieved
+ *       401:
+ *         description: Authentication required
+ *       404:
+ *         description: Refund not found
+ */
+router.get(
+  "/:refund_id",
+  authenticateApiKey,
+  merchantApiKeyRateLimit(),
+  validate(refundParamsSchema),
+  getRefundById,
 );
 
 /**
@@ -89,7 +128,7 @@ router.get(
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/UpdateRefundStatusRequest'
+ *             $ref: '#components/schemas/UpdateRefundStatusRequest'
  *     responses:
  *       200:
  *         description: Refund status updated

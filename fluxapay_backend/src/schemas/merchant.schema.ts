@@ -48,6 +48,20 @@ export const resendOtpSchema = z.object({
   channel: z.enum(['email', 'phone']),
 });
 
+export const forgotPasswordSchema = z.object({
+  email: z.email('Invalid email address'),
+});
+
+export const validateResetTokenQuerySchema = z.object({
+  token: z.string().min(1, 'token is required'),
+});
+
+export const resetPasswordSchema = z.object({
+  token: z.string().min(1, 'token is required'),
+  // Matches the frontend's ResetPasswordForm payload field name.
+  new_password: z.string().min(6, 'Password must be at least 6 characters'),
+});
+
 export const settlementScheduleSchema = z
   .object({
     settlement_schedule: z.enum(['daily', 'weekly']).optional().default('daily'),
@@ -185,10 +199,15 @@ export const updateNotificationPreferencesSchema = z
       .min(1, "reminder_minutes_before must be at least 1")
       .max(1440, "reminder_minutes_before must be at most 1440 (24 h)")
       .optional(),
+    // Stored on Merchant rather than MerchantNotificationPreferences, but exposed
+    // through the same endpoint so merchants have one place to manage
+    // preferences (#1190).
+    notify_on_payment: z.boolean().optional(),
   })
   .refine(
     (data) =>
       data.payment_expiry_reminder !== undefined ||
-      data.reminder_minutes_before !== undefined,
+      data.reminder_minutes_before !== undefined ||
+      data.notify_on_payment !== undefined,
     { message: "At least one preference field must be provided" },
   );

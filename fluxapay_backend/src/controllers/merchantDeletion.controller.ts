@@ -60,12 +60,14 @@ export async function adminRequestDeletion(req: AuthRequest, res: Response) {
 /**
  * POST /api/v1/admin/merchants/:merchantId/anonymize
  * Admin: execute PII anonymization (irreversible).
+ * Body: { force?: boolean } — set force=true to bypass in-flight settlement guard.
  */
 export async function adminExecuteDeletion(req: AuthRequest, res: Response) {
   try {
     const { merchantId } = req.params as Record<string, string>;
     const adminId = req.user?.id ?? "admin";
-    await executeDeletion(merchantId, adminId);
+    const force = Boolean(req.body?.force);
+    await executeDeletion(merchantId, adminId, force);
     res.json({ message: "Merchant account anonymized. Financial records retained." });
   } catch (err: any) {
     sendApiError(res, err);

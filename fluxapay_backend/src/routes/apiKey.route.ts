@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import {
   createApiKey,
+  rotateApiKey,
   listApiKeys,
   revokeApiKey,
 } from '../controllers/apiKey.controller';
@@ -67,6 +68,7 @@ const router = Router();
  *         description: Rate limit exceeded
  */
 router.post('/', authenticateApiKey, merchantApiKeyRateLimit(), createApiKey);
+router.post('/:id/rotate', authenticateApiKey, merchantApiKeyRateLimit(), rotateApiKey);
 
 /**
  * @swagger

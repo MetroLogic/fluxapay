@@ -2,6 +2,7 @@ import sanitizeHtml from "sanitize-html";
 
 export const DEFAULT_METADATA_MAX_BYTES = 16 * 1024;
 export const DEFAULT_METADATA_MAX_DEPTH = 5;
+export const DEFAULT_METADATA_MAX_KEYS = 50;
 
 export class MetadataValidationError extends Error {
   public readonly status = 400;
@@ -70,6 +71,7 @@ function sanitizeValue(value: unknown): unknown {
 
 export function validateAndSanitizeMetadata(
   metadata: unknown,
+  options?: { maxKeys?: number },
 ): Record<string, unknown> {
   if (metadata == null) {
     return {};
@@ -87,6 +89,16 @@ export function validateAndSanitizeMetadata(
     process.env.PAYMENT_METADATA_MAX_DEPTH,
     DEFAULT_METADATA_MAX_DEPTH,
   );
+  const maxKeys =
+    options?.maxKeys ??
+    toPositiveInt(process.env.PAYMENT_METADATA_MAX_KEYS, DEFAULT_METADATA_MAX_KEYS);
+
+  const keyCount = Object.keys(metadata as Record<string, unknown>).length;
+  if (keyCount > maxKeys) {
+    throw new MetadataValidationError(
+      `Metadata exceeds maximum key count of ${maxKeys}`,
+    );
+  }
 
   let serialized: string;
   try {

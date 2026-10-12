@@ -1,9 +1,10 @@
+import { useState } from "react";
 import { Invoice, InvoiceStatus } from "./types";
 import { Badge } from "@/components/Badge";
 import { Button } from "@/components/Button";
-import { Copy, ExternalLink, User, Receipt, Calendar, Download, Mail } from "lucide-react";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
+import { Copy, ExternalLink, User, Receipt, Calendar, Download, Mail, Loader2 } from "lucide-react";
+import { api } from "@/lib/api";
+import toast from "react-hot-toast";
 
 interface InvoiceDetailsProps {
   invoice: Invoice;
@@ -27,65 +28,26 @@ const statusLabel: Record<InvoiceStatus, string> = {
 
 
 export const InvoiceDetails = ({ invoice }: InvoiceDetailsProps) => {
+  const [pdfLoading, setPdfLoading] = useState(false);
   const copyToClipboard = (text: string) => navigator.clipboard.writeText(text);
 
-  const handleDownloadPDF = () => {
-    const doc = new jsPDF();
-    
-    // Header
-    doc.setFontSize(22);
-    doc.setTextColor(40);
-    doc.text(`INVOICE`, 14, 22);
-    
-    doc.setFontSize(11);
-    doc.setTextColor(100);
-    doc.text(`${invoice.invoice_number}`, 14, 30);
-    doc.text(`Status: ${statusLabel[invoice.status]}`, 14, 36);
-    doc.text(`Date: ${new Date(invoice.created_at).toLocaleDateString()}`, 14, 42);
-    doc.text(`Due: ${new Date(invoice.due_date).toLocaleDateString()}`, 14, 48);
-    
-    // Customer Info
-    doc.setFontSize(14);
-    doc.setTextColor(40);
-    doc.text(`Billed To:`, 14, 62);
-    doc.setFontSize(11);
-    doc.setTextColor(100);
-    doc.text(`${invoice.customer_name}`, 14, 68);
-    doc.text(`${invoice.customer_email}`, 14, 74);
-
-    // Line items table
-    const tableData = invoice.line_items.map((item) => [
-      item.description,
-      item.quantity.toString(),
-      item.unit_price.toLocaleString(undefined, { minimumFractionDigits: 2 }),
-      (item.quantity * item.unit_price).toLocaleString(undefined, { minimumFractionDigits: 2 }),
-    ]);
-
-    autoTable(doc, {
-      startY: 85,
-      head: [["Description", "Qty", "Unit Price", "Subtotal"]],
-      body: tableData,
-      foot: [["", "", "Total", `${invoice.total_amount.toLocaleString(undefined, { minimumFractionDigits: 2 })} ${invoice.currency}`]],
-      theme: "striped",
-      headStyles: { fillColor: [15, 23, 42] }, // tailwind slate-900
-      styles: { fontSize: 10 },
-    });
-    
-    // Footer details (Payment Info & Notes)
-    const finalY = (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY || 100;
-    
-    doc.setFontSize(10);
-    doc.setTextColor(40);
-    doc.text(`Payment Link:`, 14, finalY + 15);
-    doc.setTextColor(59, 130, 246); // tailwind blue-500
-    doc.text(invoice.payment_link, 14, finalY + 21);
-    
-    if (invoice.notes) {
-      doc.setTextColor(100);
-      doc.text(`Notes:\n${invoice.notes}`, 14, finalY + 35);
+  const handleDownloadPDF = async () => {
+    setPdfLoading(true);
+    try {
+      const blob = await api.invoices.export(invoice.id);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${invoice.invoice_number}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      toast.error("Failed to export PDF. Please try again.");
+    } finally {
+      setPdfLoading(false);
     }
-
-    doc.save(`${invoice.invoice_number}.pdf`);
   };
 
   const handleEmailInvoice = () => {
@@ -283,9 +245,11 @@ export const InvoiceDetails = ({ invoice }: InvoiceDetailsProps) => {
         <Button
           className="flex-1 gap-2 bg-secondary text-secondary-foreground hover:bg-secondary/80"
           onClick={handleDownloadPDF}
+          disabled={pdfLoading}
+          aria-busy={pdfLoading}
         >
-          <Download className="h-4 w-4" />
-          Download PDF
+          {pdfLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+          {pdfLoading ? "Generating PDF…" : "Download PDF"}
         </Button>
       </div>
     </div>

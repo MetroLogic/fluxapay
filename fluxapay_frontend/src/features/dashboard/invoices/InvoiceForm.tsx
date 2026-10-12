@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Invoice, LineItem } from "./types";
 import { Button } from "@/components/Button";
 import { ChevronUp, ChevronDown, RefreshCw } from "lucide-react";
@@ -17,11 +17,11 @@ const ALL_CURRENCIES = [...FIAT_CURRENCIES, ...CRYPTO_CURRENCIES];
 const DRAFT_KEY = "invoice_form_draft";
 
 const isCrypto = (c: string) => CRYPTO_CURRENCIES.includes(c);
-const getDecimalPlaces = (c: string) => (c === "XLM" ? 7 : c === "USDC" ? 7 : 2);
+const getDecimalPlaces = (c: string) => (c === "XLM" ? 7 : c === "USDC" ? 6 : 2);
 
 const emptyLineItem = (): LineItem => ({ description: "", quantity: 1, unit_price: 0 });
 
-interface DraftState {
+export interface DraftState {
   customerName: string;
   customerEmail: string;
   currency: string;
@@ -30,19 +30,59 @@ interface DraftState {
   lineItems: LineItem[];
 }
 
+/**
+ * Fields never written to localStorage.
+ *
+ * localStorage is unencrypted, survives the tab, and is readable by any script
+ * running on the origin. Customer contact details are the merchant's customers'
+ * personal data, not the merchant's own — so a shared or borrowed device, or a
+ * single XSS foothold, would expose people who never used this app. Losing an
+ * autosaved name or email costs a retype; leaking one is a data breach.
+ *
+ * Everything else in the draft describes the invoice, not a person, and is
+ * safe to keep so the autosave still does its job.
+ */
+const PII_DRAFT_FIELDS = ["customerName", "customerEmail"] as const;
+
+type PiiDraftField = (typeof PII_DRAFT_FIELDS)[number];
+
+/** The draft shape actually persisted: everything except {@link PII_DRAFT_FIELDS}. */
+export type PersistedDraftState = Omit<DraftState, PiiDraftField>;
+
+/** Strip PII from a draft before it goes anywhere near storage. */
+export function stripPiiFromDraft(state: DraftState): PersistedDraftState {
+  const persisted: Record<string, unknown> = { ...state };
+  for (const field of PII_DRAFT_FIELDS) {
+    delete persisted[field];
+  }
+  return persisted as PersistedDraftState;
+}
+
 function loadDraft(): DraftState | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = localStorage.getItem(DRAFT_KEY);
-    return raw ? (JSON.parse(raw) as DraftState) : null;
+    if (!raw) return null;
+    const stored = JSON.parse(raw) as Partial<DraftState>;
+    // PII was never stored, so it restores empty. Drafts written by an older
+    // build may still contain it; ignoring those fields here means the next
+    // save also purges them from storage.
+    return {
+      customerName: "",
+      customerEmail: "",
+      currency: stored.currency ?? "USD",
+      dueDate: stored.dueDate ?? "",
+      notes: stored.notes ?? "",
+      lineItems: stored.lineItems ?? [emptyLineItem()],
+    };
   } catch {
     return null;
   }
 }
 
-function saveDraft(state: DraftState) {
+export function saveDraft(state: DraftState) {
   try {
-    localStorage.setItem(DRAFT_KEY, JSON.stringify(state));
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(stripPiiFromDraft(state)));
   } catch {
     // storage quota exceeded
   }
@@ -70,8 +110,18 @@ export const InvoiceForm = ({ onSubmit, onCancel }: InvoiceFormProps) => {
 
   const { rateData, isLoading: isRateLoading, mutate: refreshRate } = useFxRate(currency);
 
+  // Debounce draft saves to at most once per second, preventing
+  // localStorage writes on every keystroke during rapid typing.
+  const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
-    saveDraft({ customerName, customerEmail, currency, dueDate, notes, lineItems });
+    if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
+    draftTimerRef.current = setTimeout(() => {
+      saveDraft({ customerName, customerEmail, currency, dueDate, notes, lineItems });
+    }, 1000);
+    return () => {
+      if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
+    };
   }, [customerName, customerEmail, currency, dueDate, notes, lineItems]);
 
   const updateLineItem = (index: number, field: keyof LineItem, value: string | number) => {
@@ -173,6 +223,17 @@ export const InvoiceForm = ({ onSubmit, onCancel }: InvoiceFormProps) => {
   };
 
   const handleCurrencyChange = (newCurrency: string) => {
+    if (newCurrency === currency) return;
+    const wasFiat = !isCrypto(currency);
+    const willBeCrypto = isCrypto(newCurrency);
+
+    // When switching between fiat and crypto families, reset line item
+    // prices to avoid displaying wildly wrong amounts (e.g. fiat prices
+    // shown as crypto amounts).
+    if (wasFiat !== willBeCrypto) {
+      setLineItems((prev) => prev.map((item) => ({ ...item, unit_price: 0 })));
+    }
+
     setCurrency(newCurrency);
   };
 

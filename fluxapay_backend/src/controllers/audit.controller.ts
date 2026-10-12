@@ -5,8 +5,8 @@ import { AuthRequest } from "../types/express";
 import { queryAuditLogs, getAuditLogById } from "../services/audit.service";
 import { AuditActionType } from "../types/audit.types";
 import { PrismaClient } from "../generated/client/client";
+import { prisma } from "../config/prisma";
 
-const prisma = new PrismaClient();
 
 /**
  * GET /api/admin/audit-logs

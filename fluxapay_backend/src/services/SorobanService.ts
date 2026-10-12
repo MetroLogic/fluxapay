@@ -92,7 +92,7 @@ export class SorobanService {
             nativeToScVal(paymentId, { type: 'string' }),
             nativeToScVal(transactionHash, { type: 'string' }),
             nativeToScVal(new Address(payerAddress)),
-            nativeToScVal(amountReceived * 10000000, { type: 'i128' }) // Assuming 7 decimals
+            nativeToScVal(BigInt(Math.round(amountReceived * 1e7)), { type: 'i128' }) // Assuming 7 decimals
         ];
 
         try {

@@ -15,6 +15,32 @@ const router = Router();
 
 /**
  * @swagger
+ * /api/v1/admin/sweep/preview:
+ *   get:
+ *     operationId: previewSweep
+ *     summary: Preview eligible payments before a sweep
+ *     description: Lists paid, unswept payments that the next sweep can process.
+ *     tags: [Admin - Sweep]
+ *     security:
+ *       - adminSecret: []
+ *     responses:
+ *       200:
+ *         description: Eligible payment preview
+ *       401:
+ *         description: Unauthorized
+ */
+router.get("/preview", adminAuth, async (_req: Request, res: Response) => {
+  try {
+    const payments = await sweepService.previewPaidPayments();
+    res.status(200).json({ payments });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    sendApiError(res, apiError(500, ErrorCode.SETTLEMENT_FAILED, `Sweep preview failed: ${msg}`));
+  }
+});
+
+/**
+ * @swagger
  * /api/v1/admin/sweep/run:
  *   post:
  *     summary: Manually trigger a sweep of paid payments

@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   Users,
+  Building,
   CreditCard,
   Wallet,
   Webhook,
@@ -22,7 +23,8 @@ import {
 
 const navigation = [
   { name: "Overview", href: "/admin/overview", icon: LayoutDashboard },
-  { name: "Merchants", href: "/admin/merchants", icon: Users },
+  { name: "Merchants", href: "/admin/merchants", icon: Building },
+  { name: "Users", href: "/admin/users", icon: Users },
   { name: "Payments", href: "/admin/payments", icon: CreditCard },
   { name: "Settlements", href: "/admin/settlements", icon: Wallet },
   { name: "Reconciliation", href: "/admin/reconciliation", icon: Scale },

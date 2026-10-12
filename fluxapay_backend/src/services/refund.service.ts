@@ -6,10 +6,10 @@ import {
   WebhookEventType,
   Prisma,
 } from "../generated/client/client";
+import { prisma } from "../config/prisma";
 import { createAndDeliverWebhook } from "./webhook.service";
 import { PaymentStatus, getRefundableStatuses } from "../types/payment";
 
-const prisma = new PrismaClient();
 
 /**
  * Validates that a payment can be refunded
@@ -55,7 +55,11 @@ async function validatePaymentForRefund(
   }
 
   // Check if payment has expired
-  if (payment.expiration && new Date(payment.expiration) < new Date()) {
+  if (
+    payment.status === PaymentStatus.PENDING &&
+    payment.expiration &&
+    new Date(payment.expiration) < new Date()
+  ) {
     throw apiError(400, ErrorCode.PAYMENT_EXPIRED, "Payment has expired and cannot be refunded");
   }
 
@@ -167,7 +171,11 @@ export async function createRefundService(params: {
       }
 
       // Check if payment has expired
-      if (paymentRecord.expiration && new Date(paymentRecord.expiration) < new Date()) {
+      if (
+        paymentRecord.status === PaymentStatus.PENDING &&
+        paymentRecord.expiration &&
+        new Date(paymentRecord.expiration) < new Date()
+      ) {
         throw apiError(400, ErrorCode.PAYMENT_EXPIRED, "Payment has expired and cannot be refunded");
       }
 
@@ -230,6 +238,9 @@ export async function createRefundService(params: {
 
       return createdRefund;
     },
+    {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+    },
   );
 
   return {
@@ -243,13 +254,17 @@ export async function listRefundsService(params: {
   page: number;
   limit: number;
   status?: RefundStatus;
+  paymentId?: string;
 }) {
-  const { merchantId, page, limit, status } = params;
+  const { merchantId, page, limit, status, paymentId } = params;
   const skip = (page - 1) * limit;
 
   const where: Record<string, unknown> = { merchantId };
   if (status) {
     where.status = status;
+  }
+  if (paymentId) {
+    where.paymentId = paymentId;
   }
 
   const [refunds, total] = await Promise.all([
@@ -274,6 +289,16 @@ export async function listRefundsService(params: {
       },
     },
   };
+}
+
+export async function getRefundByIdService(merchantId: string, refundId: string) {
+  const refund = await prisma.refund.findFirst({
+    where: { id: refundId, merchantId },
+  });
+  if (!refund) {
+    throw apiError(404, ErrorCode.REFUND_NOT_FOUND, "Refund not found");
+  }
+  return { message: "Refund retrieved", data: refund };
 }
 
 export async function updateRefundStatusService(params: {
@@ -319,7 +344,11 @@ export async function updateRefundStatusService(params: {
         failed_reason: updated.failed_reason,
         occurred_at: new Date().toISOString(),
       },
-      updated.paymentId
+      updated.paymentId,
+      undefined,
+      // Stable id per refund+outcome, so a retried status update cannot notify
+      // the merchant twice for the same terminal state (#1205).
+      `${updated.id}:${eventType}`,
     );
   }
 

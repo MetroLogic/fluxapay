@@ -89,12 +89,14 @@ export const OtpInput = ({
           }}
           type="text"
           inputMode="numeric"
+          autoComplete="one-time-code"
           maxLength={1}
           value={digit}
           onChange={(e) => handleChange(idx, e)}
           onKeyDown={(e) => handleKeyDown(idx, e)}
           onPaste={handlePaste}
           disabled={disabled}
+          aria-label={`Digit ${idx + 1} of ${length}`}
           className={cn(
             "w-12 h-14 text-center text-2xl font-bold rounded-xl border transition-all duration-200",
             "focus:ring-2 focus:ring-[#5649DF] focus:border-[#5649DF] outline-none",

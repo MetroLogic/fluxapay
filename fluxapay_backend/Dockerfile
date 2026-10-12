@@ -93,8 +93,8 @@ RUN apk add --no-cache curl
 
 WORKDIR /app
 
-# Create a non-root user and group
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+# Create a non-root user and group with UID 1001
+RUN addgroup -g 1001 -S appgroup && adduser -u 1001 -S appuser -G appgroup
 
 # Copy only what is needed to run the app
 COPY --from=builder --chown=appuser:appgroup /app/dist ./dist

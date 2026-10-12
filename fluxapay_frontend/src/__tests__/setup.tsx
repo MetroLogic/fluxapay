@@ -32,6 +32,11 @@ vi.mock('next/navigation', () => ({
 }));
 
 vi.mock('@/i18n/routing', () => ({
+  routing: {
+    locales: ['en', 'fr', 'pt'],
+    defaultLocale: 'en',
+    localePrefix: 'as-needed',
+  },
   Link: ({ children }: { children: React.ReactNode; href: string }) => children,
   useRouter: () => ({
     push: vi.fn(),

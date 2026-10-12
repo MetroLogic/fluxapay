@@ -1,0 +1,86 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: fluxapay_postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-fluxapay_dev}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - fluxapay-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: fluxapay_redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - fluxapay-net
+
+  fluxapay_backend:
+    build:
+      context: ./fluxapay_backend
+      dockerfile: Dockerfile.dev
+    container_name: fluxapay_backend
+    environment:
+      NODE_ENV: development
+      PORT: 3001
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-fluxapay_dev}?schema=public
+      REDIS_URL: redis://redis:6379
+    env_file:
+      - .env
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./fluxapay_backend:/usr/src/app
+      - /usr/src/app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - fluxapay-net
+
+  fluxapay_frontend:
+    build:
+      context: ./fluxapay_frontend
+      dockerfile: Dockerfile.dev
+    container_name: fluxapay_frontend
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+    env_file:
+      - .env
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./fluxapay_frontend:/usr/src/app
+      - /usr/src/app/node_modules
+    depends_on:
+      - fluxapay_backend
+    networks:
+      - fluxapay-net
+
+volumes:
+  postgres_data:
+
+networks:
+  fluxapay-net:
+    driver: bridge

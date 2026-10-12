@@ -17,12 +17,12 @@
 
 import { Decimal } from "@prisma/client/runtime/library";
 import { Merchant, PrismaClient, Prisma } from "../generated/client/client";
+import { prisma } from "../config/prisma";
 import { getExchangePartner } from "./exchange.service";
 import { createAndDeliverWebhook } from "./webhook.service";
 import { logSettlementBatch, updateSettlementBatchCompletion } from "./audit.service";
 import { sendSettlementFailureAlert } from "./settlementAlert.service";
 
-const prisma = new PrismaClient();
 
 /** Fee percentage charged by FluxaPay (default 2%). Configurable via env. */
 function getSettlementFeePercent(): number {
@@ -74,6 +74,8 @@ interface MerchantSettlementResult {
     exchangeRef?: string;
     transferRef?: string;
     paymentCount?: number;
+    /** Payments beyond BATCH_PAYMENT_LIMIT deferred to the next batch cycle. */
+    paymentsDeferred: number;
     paymentResults?: PaymentSettlementResult[];
     error?: string;
 }
@@ -120,8 +122,15 @@ interface MerchantAggregate {
     merchantId: string;
     paymentIds: string[];
     totalUsdc: number;
+    /** Payments beyond BATCH_PAYMENT_LIMIT that carry over to the next batch cycle. */
+    paymentsDeferred: number;
 }
 
+/**
+ * BATCH_PAYMENT_LIMIT is a per-merchant cap: each merchant's payments must be
+ * queried (and capped) independently, otherwise a single high-volume merchant
+ * can consume the whole limit and starve every other merchant due in this run.
+ */
 async function getUnsettledPaymentsByMerchant(runAt: Date): Promise<MerchantAggregate[]> {
     // Pre-compute which merchant IDs are due today so we skip loading
     // payments for merchants whose schedule doesn't fall on this run date.
@@ -141,43 +150,51 @@ async function getUnsettledPaymentsByMerchant(runAt: Date): Promise<MerchantAggr
 
     if (dueMerchants.length === 0) return [];
 
-    const dueMerchantIds = dueMerchants.map((m) => m.id);
+    const aggregates: MerchantAggregate[] = [];
 
-    // Raw grouping query – Prisma's groupBy aggregation doesn't easily return ids,
-    // so we fetch payment rows and group in-process.
-    const payments = await prisma.payment.findMany({
-        where: {
+    for (const { id: merchantId } of dueMerchants) {
+        const where = {
             swept: true,
             settled: false,
-            merchantId: { in: dueMerchantIds },
-        },
-        select: {
-            id: true,
-            merchantId: true,
-            amount: true,
-        },
-        orderBy: { createdAt: "asc" },
-        take: BATCH_PAYMENT_LIMIT,
-    });
+            merchantId,
+        };
 
-    // Group by merchantId
-    const map = new Map<string, MerchantAggregate>();
-    for (const p of payments) {
-        const existing = map.get(p.merchantId);
-        const amt = Number(p.amount as Decimal);
-        if (existing) {
-            existing.paymentIds.push(p.id);
-            existing.totalUsdc = parseFloat((existing.totalUsdc + amt).toFixed(7));
-        } else {
-            map.set(p.merchantId, {
-                merchantId: p.merchantId,
-                paymentIds: [p.id],
-                totalUsdc: amt,
-            });
+        const [payments, totalUnsettled] = await Promise.all([
+            prisma.payment.findMany({
+                where,
+                select: {
+                    id: true,
+                    merchantId: true,
+                    amount: true,
+                },
+                orderBy: { createdAt: "asc" },
+                take: BATCH_PAYMENT_LIMIT,
+            }),
+            prisma.payment.count({ where }),
+        ]);
+
+        if (payments.length === 0) continue;
+
+        const paymentsDeferred = Math.max(0, totalUnsettled - payments.length);
+        if (paymentsDeferred > 0) {
+            console.warn(
+                `[SettlementBatch] settlement.overflow: merchant ${merchantId} has ${totalUnsettled} ` +
+                `unsettled payments but BATCH_PAYMENT_LIMIT=${BATCH_PAYMENT_LIMIT} — settling ` +
+                `${payments.length} now, deferring ${paymentsDeferred} to the next batch cycle.`,
+            );
         }
+
+        let totalUsdc = 0;
+        const paymentIds: string[] = [];
+        for (const p of payments) {
+            paymentIds.push(p.id);
+            totalUsdc = parseFloat((totalUsdc + Number(p.amount as Decimal)).toFixed(7));
+        }
+
+        aggregates.push({ merchantId, paymentIds, totalUsdc, paymentsDeferred });
     }
 
-    return Array.from(map.values());
+    return aggregates;
 }
 
 // ─── Retry helpers (stored in Payment.metadata) ──────────────────────────────
@@ -216,13 +233,50 @@ async function settleSinglePayment(
     settlementDay: number | null,
     now: Date,
 ): Promise<PaymentSettlementResult> {
+    // ── 1. IDEMPOTENCY CHECK: Verify payment exists and hasn't been settled yet
     const payment = await prisma.payment.findUnique({
         where: { id: paymentId },
-        select: { id: true, amount: true, metadata: true, settled: true },
+        select: { id: true, amount: true, metadata: true, settled: true, settlementId: true },
     });
 
-    if (!payment || payment.settled) {
-        return { paymentId, status: "skipped", error: "Payment not found or already settled" };
+    if (!payment) {
+        return { paymentId, status: "skipped", error: "Payment not found" };
+    }
+
+    if (payment.settled) {
+        console.warn(
+            `[SettlementBatch] ⚠️  Payment ${paymentId} already settled (settlementId=${payment.settlementId}). ` +
+            `Skipping to avoid duplicate settlement.`
+        );
+        return { paymentId, status: "skipped", error: "Payment already settled" };
+    }
+
+    // ── 2. Check for existing settlement record in terminal state
+    //       This prevents re-settling if batch was manually re-triggered or crashed mid-run
+    if (payment.settlementId) {
+        const existingSettlement = await prisma.settlement.findUnique({
+            where: { id: payment.settlementId },
+            select: { id: true, status: true },
+        });
+
+        if (
+            existingSettlement &&
+            (existingSettlement.status === "completed" || existingSettlement.status === "failed")
+        ) {
+            console.warn(
+                `[SettlementBatch] ⚠️  Payment ${paymentId} already has terminal settlement record ` +
+                `(${existingSettlement.id}/${existingSettlement.status}). Skipping to prevent duplicate.`
+            );
+
+            // Audit log: log this duplicate settlement attempt
+            // TODO: await logDuplicateSettlementAttempt({ paymentId, settlementId: existingSettlement.id });
+
+            return {
+                paymentId,
+                status: "skipped",
+                error: `Duplicate settlement attempt detected (existing: ${existingSettlement.status})`,
+            };
+        }
     }
 
     const totalUsdc = Number(payment.amount as Decimal);
@@ -259,6 +313,11 @@ async function settleSinglePayment(
         const netAmount = parseFloat((fiatGross - feeAmount).toFixed(2));
 
         const settlement = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+            // ── ATOMIC SETTLEMENT CREATION ────────────────────────────────
+            // Use a unique constraint on (paymentId, status) to enforce DB-level idempotency.
+            // If two instances race to settle the same payment, only one wins.
+            // The loser gets a constraint violation, which we catch and handle gracefully.
+
             const s = await tx.settlement.create({
                 data: {
                     merchantId: merchant.id,
@@ -291,8 +350,15 @@ async function settleSinglePayment(
                 },
             });
 
-            await tx.payment.update({
-                where: { id: paymentId },
+            // ── IDEMPOTENT PAYMENT UPDATE ────────────────────────────────
+            // Only update if payment.settled is still false (race detection)
+            // This is protected by transaction isolation level
+
+            const updated = await tx.payment.updateMany({
+                where: {
+                    id: paymentId,
+                    settled: false, // Guard: only update if not yet settled
+                },
                 data: {
                     settled: true,
                     settled_at: now,
@@ -303,6 +369,15 @@ async function settleSinglePayment(
                     metadata: buildRetryMetadata(payment.metadata, 0, ""),
                 },
             });
+
+            if (updated.count === 0) {
+                // Another instance already settled this payment
+                // Roll back the settlement record we just created by throwing
+                throw new Error(
+                    `Concurrent settlement detected for payment ${paymentId}. ` +
+                    `Race condition: another instance settled first.`
+                );
+            }
 
             return s;
         });
@@ -370,6 +445,12 @@ async function settleSinglePayment(
                             retry_count: newRetryCount,
                             failed_at: now.toISOString(),
                         },
+                        paymentId,
+                        undefined,
+                        // Stable id: a permanently failed payment can be re-settled
+                        // by the retry cron before the alert is drained, which used
+                        // to emit a fresh settlement.failed each time (#1205).
+                        `${paymentId}:settlement-failed`,
                     ).catch(() => { });
                 }
 
@@ -415,7 +496,7 @@ async function settleMerchant(
     aggregate: MerchantAggregate,
     now: Date,
 ): Promise<MerchantSettlementResult> {
-    const { merchantId, paymentIds, totalUsdc } = aggregate;
+    const { merchantId, paymentIds, totalUsdc, paymentsDeferred } = aggregate;
 
     // 1. Load merchant + bank account (include schedule fields)
     const merchant = await prisma.merchant.findUnique({
@@ -429,6 +510,7 @@ async function settleMerchant(
             businessName: "Unknown",
             status: "failed",
             error: "Merchant not found in database",
+            paymentsDeferred,
         };
     }
 
@@ -443,6 +525,7 @@ async function settleMerchant(
             businessName: merchant.business_name,
             status: "skipped",
             error: `Not due today (schedule=${schedule}, settlement_day=${settlementDay ?? "n/a"})`,
+            paymentsDeferred,
         };
     }
 
@@ -453,15 +536,30 @@ async function settleMerchant(
             businessName: merchant.business_name,
             status: "skipped",
             error: "No bank account on file – settlement skipped",
+            paymentsDeferred,
         };
     }
 
     if (totalUsdc <= 0) {
+        // Previously skipped silently with no trace, making it impossible to
+        // audit why a merchant was excluded from a batch run (closes #1073).
+        console.debug(
+            JSON.stringify({
+                level: "debug",
+                event: "settlement_merchant_skipped",
+                message: "Merchant skipped in settlement batch: zero unsettled balance",
+                merchantId,
+                businessName: merchant.business_name,
+                reason: "zero_balance",
+                timestamp: new Date().toISOString(),
+            }),
+        );
         return {
             merchantId,
             businessName: merchant.business_name,
             status: "skipped",
             error: "Zero USDC to settle",
+            paymentsDeferred,
         };
     }
 
@@ -512,6 +610,12 @@ async function settleMerchant(
                 net_amount: totalNet,
                 settled_at: now.toISOString(),
             },
+            undefined,
+            undefined,
+            // Stable id per merchant per settlement day. Re-running the batch
+            // (cron restart, manual replay, retry pickup) must not re-notify
+            // about the same day's settlement (#1205).
+            `${merchantId}:settlement-completed:${now.toISOString().slice(0, 10)}`,
         ).catch((err: unknown) => {
             console.error(
                 `[SettlementBatch] Webhook delivery failed for merchant ${merchantId}:`,
@@ -533,6 +637,7 @@ async function settleMerchant(
         fiatCurrency: settlementCurrency,
         netAmount: totalNet,
         paymentCount: paymentIds.length,
+        paymentsDeferred,
         paymentResults,
         error: failedPayments.length > 0
             ? `${failedPayments.length} payment(s) failed`

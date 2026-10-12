@@ -71,7 +71,7 @@ export function RefundForm({
       return;
     }
 
-    const idempotencyKey = `refund_${paymentId}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const idempotencyKey = `refund_${paymentId}_${crypto.randomUUID()}`;
 
     try {
       setIsSubmitting(true);

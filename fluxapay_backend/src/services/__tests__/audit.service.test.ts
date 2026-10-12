@@ -8,18 +8,29 @@ import {
   updateSettlementBatchCompletion,
   queryAuditLogs,
   getAuditLogById,
+  createAuditLog,
+  logWebhookSecretRotation,
 } from '../audit.service';
+import { hashMerchantId } from '../../utils/piiRedactor';
 
-const prisma = new PrismaClient();
+const describeWithDatabase = process.env.DATABASE_URL && !process.env.DATABASE_URL.includes('mock') ? describe : describe.skip;
 
-describe('Audit Service', () => {
+describeWithDatabase('Audit Service', () => {
+  let prisma: PrismaClient;
+
+  beforeAll(() => {
+    prisma = new PrismaClient();
+  });
+
   beforeEach(async () => {
     // Clean up audit logs before each test
     await prisma.auditLog.deleteMany({});
   });
 
   afterAll(async () => {
-    await prisma.$disconnect();
+    if (prisma) {
+      await prisma.$disconnect();
+    }
   });
 
   describe('logKycDecision', () => {
@@ -42,7 +53,7 @@ describe('Audit Service', () => {
       expect(auditLog?.action_type).toBe(AuditActionType.kyc_approve);
       expect(auditLog?.entity_type).toBe(AuditEntityType.merchant_kyc);
       expect(auditLog?.details).toMatchObject({
-        merchant_id: 'merchant-456',
+        merchant_id: hashMerchantId('merchant-456'),
         previous_status: KYCStatus.pending_review,
         new_status: KYCStatus.approved,
         reason: 'All documents verified',
@@ -63,8 +74,27 @@ describe('Audit Service', () => {
 
       expect(auditLog?.action_type).toBe(AuditActionType.kyc_reject);
       expect(auditLog?.details).toMatchObject({
+        merchant_id: hashMerchantId('merchant-456'),
         reason: 'Incomplete documents',
       });
+    });
+
+    it('should redact raw email in audit input details', async () => {
+      const auditLog = await createAuditLog({
+        admin_id: 'admin-123',
+        action_type: AuditActionType.kyc_approve,
+        entity_type: AuditEntityType.merchant_kyc,
+        entity_id: 'merchant-456',
+        details: {
+          merchant_id: 'merchant-456',
+          email: 'sensitive-user@example.com',
+          director_email: 'director@test.com',
+        },
+      });
+
+      expect(auditLog?.details.merchant_id).toBe(hashMerchantId('merchant-456'));
+      expect(auditLog?.details.email).toBe('[REDACTED]');
+      expect(auditLog?.details.director_email).toBe('[REDACTED]');
     });
 
     it('should handle missing reason gracefully', async () => {
@@ -98,10 +128,9 @@ describe('Audit Service', () => {
       expect(auditLog?.entity_type).toBe(AuditEntityType.system_config);
       expect(auditLog?.entity_id).toBe('settlement_fee_percent');
       expect(auditLog?.details).toMatchObject({
-        config_key: 'settlement_fee_percent',
-        previous_value: '2.0',
-        new_value: '2.5',
-        is_sensitive: false,
+        changed_fields: ['settlement_fee_percent'],
+        old_values: { settlement_fee_percent: '2.0' },
+        new_values: { settlement_fee_percent: '2.5' },
       });
     });
 
@@ -116,9 +145,35 @@ describe('Audit Service', () => {
 
       const auditLog = await logConfigChange(params);
 
-      expect(auditLog?.details.previous_value).toBe('***REDACTED***');
-      expect(auditLog?.details.new_value).toBe('***REDACTED***');
-      expect(auditLog?.details.is_sensitive).toBe(true);
+      expect(auditLog?.details.old_values.api_secret_key).toBe('***REDACTED***');
+      expect(auditLog?.details.new_values.api_secret_key).toBe('***REDACTED***');
+      expect(auditLog?.details.changed_fields).toContain('api_secret_key');
+    });
+  });
+
+  describe('logWebhookSecretRotation', () => {
+    it('should never log the raw previous secret value, only a last-4 fingerprint', async () => {
+      const rawPreviousSecret = 'whsec_super_secret_value_1234567890';
+
+      const auditLog = await logWebhookSecretRotation({
+        merchantId: 'merchant-456',
+        previousSecretLastFour: rawPreviousSecret.slice(-4),
+      });
+
+      expect(auditLog).toBeDefined();
+      expect(auditLog?.action_type).toBe(AuditActionType.webhook_secret_rotated);
+      expect(auditLog?.details.previous_last_four).toBe('7890');
+
+      // The full raw secret must never appear anywhere in the stored details.
+      const serialized = JSON.stringify(auditLog?.details);
+      expect(serialized).not.toContain(rawPreviousSecret);
+      expect(serialized).not.toContain('whsec_super_secret_value');
+    });
+
+    it('should record null when no previous secret is available', async () => {
+      const auditLog = await logWebhookSecretRotation({ merchantId: 'merchant-456' });
+
+      expect(auditLog?.details.previous_last_four).toBeNull();
     });
   });
 

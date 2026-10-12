@@ -10,6 +10,11 @@ export interface FluxaPayConfig {
    * Defaults to the hosted production URL.
    */
   baseUrl?: string;
+  /**
+   * Number of retries for transient 5xx errors and network failures.
+   * Defaults to 3. Set to 0 to disable retries.
+   */
+  retries?: number;
 }
 
 export interface CreatePaymentParams {
@@ -27,8 +32,8 @@ export interface CreatePaymentParams {
   cancel_url?: string;
   /** Arbitrary metadata attached to the payment. */
   metadata?: Record<string, unknown>;
-  /** Minutes until payment link expires. Default: 30. */
-  expires_in_minutes?: number;
+  /** Seconds until payment link expires. Defaults to the merchant plan setting. */
+  expires_in_seconds?: number;
 }
 
 export interface Payment {
@@ -52,13 +57,44 @@ export interface PaymentStatus {
   confirmed_at?: string;
 }
 
-export interface WebhookEvent {
-  event: string;
+export interface WebhookEventBase {
   payment_id: string;
   merchant_id: string;
   timestamp: string;
   data: Record<string, unknown>;
 }
+
+export interface PaymentCreatedEvent extends WebhookEventBase {
+  event: 'payment_created';
+}
+
+export interface PaymentPendingEvent extends WebhookEventBase {
+  event: 'payment_pending';
+}
+
+export interface PaymentConfirmedEvent extends WebhookEventBase {
+  event: 'payment_confirmed';
+}
+
+export interface PaymentFailedEvent extends WebhookEventBase {
+  event: 'payment_failed';
+}
+
+export interface PaymentSettledEvent extends WebhookEventBase {
+  event: 'payment_settled';
+}
+
+export interface RefundCompletedEvent extends WebhookEventBase {
+  event: 'refund_completed';
+}
+
+export type WebhookEvent =
+  | PaymentCreatedEvent
+  | PaymentPendingEvent
+  | PaymentConfirmedEvent
+  | PaymentFailedEvent
+  | PaymentSettledEvent
+  | RefundCompletedEvent;
 
 export interface CreateInvoiceParams {
   /** Customer name for the invoice. */
@@ -97,6 +133,89 @@ export interface Invoice {
   updated_at: string;
 }
 
+export interface CreateCustomerParams {
+  email: string;
+  name?: string;
+  phone?: string;
+  stellar_address?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export type UpdateCustomerParams = Partial<CreateCustomerParams>;
+
+export interface Customer {
+  id: string;
+  merchantId: string;
+  email: string;
+  name: string | null;
+  phone: string | null;
+  stellar_address: string | null;
+  metadata: Record<string, unknown>;
+  deleted_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CustomerDetails extends Customer {
+  payment_count: number;
+  total_volume: number;
+}
+
+export interface CustomerListParams {
+  page?: number;
+  limit?: number;
+  search?: string;
+  created_after?: string;
+  created_before?: string;
+}
+
+export interface CustomerListResponse {
+  data: Customer[];
+  meta: { total: number; page: number; limit: number };
+}
+
+export type RefundStatus = 'pending' | 'processing' | 'completed' | 'failed';
+
+export interface CreateRefundParams {
+  payment_id: string;
+  amount: number;
+  reason?: string;
+  idempotency_key?: string;
+}
+
+export interface Refund {
+  id: string;
+  merchantId: string;
+  paymentId: string;
+  amount: number | string;
+  currency: string;
+  reason: string | null;
+  status: RefundStatus;
+  failed_reason: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RefundResponse {
+  message: string;
+  data: Refund;
+}
+
+export interface RefundListParams {
+  page?: number;
+  limit?: number;
+  status?: RefundStatus;
+  payment_id?: string;
+}
+
+export interface RefundListResponse {
+  message: string;
+  data: {
+    refunds: Refund[];
+    pagination: { page: number; limit: number; total: number; total_pages: number };
+  };
+}
+
 // ── Webhook Verification Helper ──────────────────────────────────────────────
 
 export interface VerifyWebhookSignatureOptions {
@@ -104,10 +223,9 @@ export interface VerifyWebhookSignatureOptions {
   toleranceSeconds?: number;
 }
 
-export interface WebhookVerificationResult {
-  valid: boolean;
-  error?: string;
-}
+export type WebhookVerificationResult = 
+  | { valid: true; event: WebhookEvent }
+  | { valid: false; error: string };
 
 /**
  * Verify a FluxaPay webhook signature without instantiating the SDK client.
@@ -127,6 +245,7 @@ export interface WebhookVerificationResult {
  *
  * const result = verifyWebhookSignature(rawBody, sig, ts, process.env.WEBHOOK_SECRET!);
  * if (!result.valid) throw new Error(result.error);
+ * console.log(result.event.event); // typed as 'payment_created' | 'payment_pending' | ...
  * ```
  */
 export function verifyWebhookSignature(
@@ -176,20 +295,29 @@ export function verifyWebhookSignature(
     return { valid: false, error: 'Signature verification failed' };
   }
 
-  return { valid: true };
+  try {
+    const event = JSON.parse(rawBody) as WebhookEvent;
+    return { valid: true, event };
+  } catch {
+    return { valid: false, error: 'Invalid JSON payload' };
+  }
 }
 
 // ── Errors ───────────────────────────────────────────────────────────────────
 
 export class FluxaPayError extends Error {
+  public readonly retryable: boolean;
+
   constructor(
     public readonly statusCode: number,
     message: string,
     public readonly code?: string,
     public readonly raw?: unknown,
+    public readonly requestId?: string,
   ) {
     super(message);
     this.name = 'FluxaPayError';
+    this.retryable = [429, 502, 503, 504].includes(statusCode);
   }
 
   /** Branch on machine-readable error code from the API. */
@@ -202,6 +330,24 @@ export class FluxaPayError extends Error {
 
 const DEFAULT_BASE_URL = 'https://api.fluxapay.com';
 const API_VERSION = 'v1';
+const RETRYABLE_METHODS = new Set(['DELETE', 'GET', 'HEAD', 'OPTIONS', 'PUT']);
+const INITIAL_RETRY_DELAY_MS = 100;
+const MAX_RETRY_DELAY_MS = 30_000;
+
+function retryDelay(retryIndex: number): number {
+  const maxDelay = Math.min(MAX_RETRY_DELAY_MS, INITIAL_RETRY_DELAY_MS * 2 ** retryIndex);
+  return Math.floor(Math.random() * maxDelay);
+}
+
+function retryAfterDelay(header: string | null): number | undefined {
+  if (header === null || header.trim() === '') return undefined;
+
+  const seconds = Number(header);
+  if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000);
+
+  const retryAt = Date.parse(header);
+  return Number.isNaN(retryAt) ? undefined : Math.max(0, retryAt - Date.now());
+}
 
 async function request<T>(
   baseUrl: string,
@@ -209,9 +355,10 @@ async function request<T>(
   method: string,
   path: string,
   body?: unknown,
+  retries = 3,
 ): Promise<T> {
   const url = `${baseUrl}${path}`;
-  const res = await fetch(url, {
+  const options: RequestInit = {
     method,
     headers: {
       'Content-Type': 'application/json',
@@ -219,21 +366,49 @@ async function request<T>(
       'X-API-Version': API_VERSION,
     },
     body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
+  };
+  const retryLimit = Number.isFinite(retries) ? Math.max(0, Math.floor(retries)) : 0;
+  const canRetry = RETRYABLE_METHODS.has(method.toUpperCase());
+  let retriesMade = 0;
 
-  const json = await res.json().catch(() => null);
+  while (true) {
+    let res: Response;
+    try {
+      res = await fetch(url, options);
+    } catch (error) {
+      if (!canRetry || retriesMade >= retryLimit) throw error;
+      await new Promise((resolve) => setTimeout(resolve, retryDelay(retriesMade)));
+      retriesMade++;
+      continue;
+    }
 
-  if (!res.ok) {
-    const body = json as { message?: string; code?: string } | null;
-    throw new FluxaPayError(
-      res.status,
-      body?.message ?? `HTTP ${res.status}`,
-      body?.code,
-      json,
-    );
+    const json = await res.json().catch(() => null);
+
+    if (!res.ok) {
+      const responseBody = json as { message?: string; code?: string } | null;
+      const requestId =
+        res.headers.get('x-request-id') ??
+        res.headers.get('X-Request-ID') ??
+        undefined;
+      const error = new FluxaPayError(
+        res.status,
+        responseBody?.message ?? `HTTP ${res.status}`,
+        responseBody?.code,
+        json,
+        requestId,
+      );
+
+      if (!canRetry || !error.retryable || retriesMade >= retryLimit) throw error;
+
+      const backoff = retryDelay(retriesMade);
+      const serverDelay = res.status === 429 ? retryAfterDelay(res.headers.get('retry-after')) : undefined;
+      await new Promise((resolve) => setTimeout(resolve, Math.max(backoff, serverDelay ?? 0)));
+      retriesMade++;
+      continue;
+    }
+
+    return json as T;
   }
-
-  return json as T;
 }
 
 /**
@@ -258,11 +433,13 @@ async function request<T>(
 export class FluxaPay {
   private readonly baseUrl: string;
   private readonly apiKey: string;
+  private readonly retries: number;
 
   constructor(config: FluxaPayConfig) {
     if (!config.apiKey) throw new Error('FluxaPay: apiKey is required');
     this.apiKey = config.apiKey;
     this.baseUrl = (config.baseUrl ?? DEFAULT_BASE_URL).replace(/\/$/, '');
+    this.retries = config.retries ?? 3;
   }
 
   // ── payments ───────────────────────────────────────────────────────────────
@@ -275,7 +452,7 @@ export class FluxaPay {
      * Canonical route: POST /api/payments
      */
     create: (params: CreatePaymentParams): Promise<Payment> =>
-      request<Payment>(this.baseUrl, this.apiKey, 'POST', '/api/payments', params),
+      request<Payment>(this.baseUrl, this.apiKey, 'POST', '/api/payments', params, this.retries),
 
     /**
      * Retrieve a payment by its ID.
@@ -283,7 +460,7 @@ export class FluxaPay {
      * Canonical route: GET /api/payments/:payment_id
      */
     get: (paymentId: string): Promise<Payment> =>
-      request<Payment>(this.baseUrl, this.apiKey, 'GET', `/api/payments/${paymentId}`),
+      request<Payment>(this.baseUrl, this.apiKey, 'GET', `/api/payments/${paymentId}`, undefined, this.retries),
 
     /**
      * Poll the current status of a payment.
@@ -292,7 +469,7 @@ export class FluxaPay {
      * (Status is included in the payment object)
      */
     getStatus: (paymentId: string): Promise<PaymentStatus> =>
-      request<PaymentStatus>(this.baseUrl, this.apiKey, 'GET', `/api/payments/${paymentId}`),
+      request<PaymentStatus>(this.baseUrl, this.apiKey, 'GET', `/api/payments/${paymentId}`, undefined, this.retries),
 
     /**
      * List recent payments.
@@ -305,7 +482,62 @@ export class FluxaPay {
       if (params?.limit) qs.set('limit', String(params.limit));
       if (params?.status) qs.set('status', params.status);
       const query = qs.toString();
-      return request(this.baseUrl, this.apiKey, 'GET', `/api/payments${query ? `?${query}` : ''}`);
+      return request(this.baseUrl, this.apiKey, 'GET', `/api/payments${query ? `?${query}` : ''}`, undefined, this.retries);
+    },
+  };
+
+  // ── customers ──────────────────────────────────────────────────────────────
+
+  readonly customers = {
+    /** Create a customer for the authenticated merchant. */
+    create: (params: CreateCustomerParams): Promise<Customer> =>
+      request<Customer>(this.baseUrl, this.apiKey, 'POST', '/api/v1/customers', params, this.retries),
+
+    /** Retrieve a customer and its payment summary. */
+    get: (customerId: string): Promise<CustomerDetails> =>
+      request<CustomerDetails>(this.baseUrl, this.apiKey, 'GET', `/api/v1/customers/${encodeURIComponent(customerId)}`, undefined, this.retries),
+
+    /** List customers with optional search and creation-date filters. */
+    list: (params?: CustomerListParams): Promise<CustomerListResponse> => {
+      const qs = new URLSearchParams();
+      if (params?.page !== undefined) qs.set('page', String(params.page));
+      if (params?.limit !== undefined) qs.set('limit', String(params.limit));
+      if (params?.search !== undefined) qs.set('search', params.search);
+      if (params?.created_after !== undefined) qs.set('created_after', params.created_after);
+      if (params?.created_before !== undefined) qs.set('created_before', params.created_before);
+      const query = qs.toString();
+      return request(this.baseUrl, this.apiKey, 'GET', `/api/v1/customers${query ? `?${query}` : ''}`, undefined, this.retries);
+    },
+
+    /** Update a customer's profile. */
+    update: (customerId: string, params: UpdateCustomerParams): Promise<Customer> =>
+      request<Customer>(this.baseUrl, this.apiKey, 'PATCH', `/api/v1/customers/${encodeURIComponent(customerId)}`, params, this.retries),
+
+    /** Soft-delete and anonymize a customer. */
+    delete: (customerId: string): Promise<void> =>
+      request<void>(this.baseUrl, this.apiKey, 'DELETE', `/api/v1/customers/${encodeURIComponent(customerId)}`, undefined, this.retries),
+  };
+
+  // ── refunds ────────────────────────────────────────────────────────────────
+
+  readonly refunds = {
+    /** Create a refund for a payment. */
+    create: (params: CreateRefundParams): Promise<RefundResponse> =>
+      request<RefundResponse>(this.baseUrl, this.apiKey, 'POST', '/api/v1/refunds', params, this.retries),
+
+    /** Retrieve a refund by ID. */
+    get: (refundId: string): Promise<RefundResponse> =>
+      request<RefundResponse>(this.baseUrl, this.apiKey, 'GET', `/api/v1/refunds/${encodeURIComponent(refundId)}`, undefined, this.retries),
+
+    /** List refunds with optional status or payment filters. */
+    list: (params?: RefundListParams): Promise<RefundListResponse> => {
+      const qs = new URLSearchParams();
+      if (params?.page !== undefined) qs.set('page', String(params.page));
+      if (params?.limit !== undefined) qs.set('limit', String(params.limit));
+      if (params?.status !== undefined) qs.set('status', params.status);
+      if (params?.payment_id !== undefined) qs.set('payment_id', params.payment_id);
+      const query = qs.toString();
+      return request(this.baseUrl, this.apiKey, 'GET', `/api/v1/refunds${query ? `?${query}` : ''}`, undefined, this.retries);
     },
   };
 
@@ -333,7 +565,7 @@ export class FluxaPay {
       if (params?.date_from) qs.set('date_from', params.date_from);
       if (params?.date_to) qs.set('date_to', params.date_to);
       const query = qs.toString();
-      return request(this.baseUrl, this.apiKey, 'GET', `/api/settlements${query ? `?${query}` : ''}`);
+      return request(this.baseUrl, this.apiKey, 'GET', `/api/settlements${query ? `?${query}` : ''}`, undefined, this.retries);
     },
 
     /**
@@ -342,7 +574,7 @@ export class FluxaPay {
      * Canonical route: GET /api/settlements/summary
      */
     summary: (): Promise<unknown> =>
-      request(this.baseUrl, this.apiKey, 'GET', '/api/settlements/summary'),
+      request(this.baseUrl, this.apiKey, 'GET', '/api/settlements/summary', undefined, this.retries),
 
     /**
      * Get a specific settlement by ID.
@@ -350,7 +582,7 @@ export class FluxaPay {
      * Canonical route: GET /api/settlements/:settlement_id
      */
     get: (settlementId: string): Promise<unknown> =>
-      request(this.baseUrl, this.apiKey, 'GET', `/api/settlements/${settlementId}`),
+      request(this.baseUrl, this.apiKey, 'GET', `/api/settlements/${settlementId}`, undefined, this.retries),
 
     /**
      * Export settlement report.
@@ -358,7 +590,7 @@ export class FluxaPay {
      * Canonical route: GET /api/settlements/:settlement_id/export
      */
     export: (settlementId: string, format: 'pdf' | 'csv' = 'pdf'): Promise<Blob> =>
-      request(this.baseUrl, this.apiKey, 'GET', `/api/settlements/${settlementId}/export?format=${format}`),
+      request(this.baseUrl, this.apiKey, 'GET', `/api/settlements/${settlementId}/export?format=${format}`, undefined, this.retries),
   };
 
   // ── merchant ────────────────────────────────────────────────────────────────
@@ -370,7 +602,7 @@ export class FluxaPay {
      * Canonical route: GET /api/merchants/me
      */
     getProfile: (): Promise<unknown> =>
-      request(this.baseUrl, this.apiKey, 'GET', '/api/merchants/me'),
+      request(this.baseUrl, this.apiKey, 'GET', '/api/merchants/me', undefined, this.retries),
 
     /**
      * Update the authenticated merchant's profile.
@@ -383,7 +615,7 @@ export class FluxaPay {
       settlement_schedule?: 'daily' | 'weekly';
       settlement_day?: number;
     }): Promise<unknown> =>
-      request(this.baseUrl, this.apiKey, 'PATCH', '/api/merchants/me', data),
+      request(this.baseUrl, this.apiKey, 'PATCH', '/api/merchants/me', data, this.retries),
 
     /**
      * Update webhook URL.
@@ -391,7 +623,7 @@ export class FluxaPay {
      * Canonical route: PATCH /api/merchants/me/webhook
      */
     updateWebhook: (webhook_url: string): Promise<unknown> =>
-      request(this.baseUrl, this.apiKey, 'PATCH', '/api/merchants/me/webhook', { webhook_url }),
+      request(this.baseUrl, this.apiKey, 'PATCH', '/api/merchants/me/webhook', { webhook_url }, this.retries),
 
     /**
      * Update settlement schedule.
@@ -402,7 +634,7 @@ export class FluxaPay {
       settlement_schedule: 'daily' | 'weekly';
       settlement_day?: number;
     }): Promise<unknown> =>
-      request(this.baseUrl, this.apiKey, 'PATCH', '/api/merchants/me/settlement-schedule', data),
+      request(this.baseUrl, this.apiKey, 'PATCH', '/api/merchants/me/settlement-schedule', data, this.retries),
 
     /**
      * Add a bank account for settlements.
@@ -415,7 +647,7 @@ export class FluxaPay {
       bank_code: string;
       account_name?: string;
     }): Promise<unknown> =>
-      request(this.baseUrl, this.apiKey, 'POST', '/api/merchants/me/bank-account', data),
+      request(this.baseUrl, this.apiKey, 'POST', '/api/merchants/me/bank-account', data, this.retries),
   };
 
   // ── webhooks ────────────────────────────────────────────────────────────────
@@ -463,7 +695,7 @@ export class FluxaPay {
      * Canonical route: POST /api/invoices
      */
     create: (params: CreateInvoiceParams): Promise<Invoice> =>
-      request<Invoice>(this.baseUrl, this.apiKey, 'POST', '/api/invoices', params),
+      request<Invoice>(this.baseUrl, this.apiKey, 'POST', '/api/invoices', params, this.retries),
 
     /**
      * Retrieve an invoice by its ID.
@@ -471,7 +703,7 @@ export class FluxaPay {
      * Canonical route: GET /api/invoices/:invoice_id
      */
     get: (invoiceId: string): Promise<Invoice> =>
-      request<Invoice>(this.baseUrl, this.apiKey, 'GET', `/api/invoices/${invoiceId}`),
+      request<Invoice>(this.baseUrl, this.apiKey, 'GET', `/api/invoices/${invoiceId}`, undefined, this.retries),
 
     /**
      * List invoices.
@@ -484,7 +716,7 @@ export class FluxaPay {
       if (params?.limit) qs.set('limit', String(params.limit));
       if (params?.status) qs.set('status', params.status);
       const query = qs.toString();
-      return request(this.baseUrl, this.apiKey, 'GET', `/api/invoices${query ? `?${query}` : ''}`);
+      return request(this.baseUrl, this.apiKey, 'GET', `/api/invoices${query ? `?${query}` : ''}`, undefined, this.retries);
     },
 
     /**
@@ -493,7 +725,7 @@ export class FluxaPay {
      * Canonical route: PATCH /api/invoices/:invoice_id/status
      */
     updateStatus: (invoiceId: string, status: Invoice['status']): Promise<Invoice> =>
-      request<Invoice>(this.baseUrl, this.apiKey, 'PATCH', `/api/invoices/${invoiceId}/status`, { status }),
+      request<Invoice>(this.baseUrl, this.apiKey, 'PATCH', `/api/invoices/${invoiceId}/status`, { status }, this.retries),
   };
 }
 

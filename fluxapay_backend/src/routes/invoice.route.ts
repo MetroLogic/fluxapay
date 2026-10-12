@@ -2,7 +2,8 @@ import { Router } from "express";
 import { authenticateApiKey } from "../middleware/apiKeyAuth.middleware";
 import { merchantApiKeyRateLimit } from "../middleware/rateLimit.middleware";
 import { validate, validateQuery } from "../middleware/validation.middleware";
-import { createInvoice, listInvoices, getInvoiceById, updateInvoiceStatus, exportInvoice, sendInvoice, voidInvoice } from "../controllers/invoice.controller";
+import { idempotencyMiddleware } from "../middleware/idempotency.middleware";
+import { createInvoice, listInvoices, getInvoiceById, updateInvoiceStatus, exportInvoice, getInvoiceExportStatus, downloadInvoiceExport, sendInvoice, voidInvoice } from "../controllers/invoice.controller";
 import {
   createInvoiceSchema,
   listInvoicesQuerySchema,
@@ -21,6 +22,17 @@ const router = Router();
  *     tags: [Invoices]
  *     security:
  *       - apiKeyAuth: []
+ *     parameters:
+ *       - in: header
+ *         name: Idempotency-Key
+ *         required: false
+ *         schema:
+ *           type: string
+ *           maxLength: 255
+ *         description: >
+ *           Optional unique key for idempotent request handling. If provided,
+ *           duplicate requests within 24 hours return the original response with
+ *           an X-Idempotent-Replayed: true header instead of creating a second invoice.
  *     requestBody:
  *       required: true
  *       content:
@@ -50,6 +62,12 @@ const router = Router();
  *     responses:
  *       201:
  *         description: Invoice and payment intent created
+ *         headers:
+ *           X-Idempotent-Replayed:
+ *             schema:
+ *               type: string
+ *               enum: ["true"]
+ *             description: Present when this response was served from the idempotency cache (duplicate request).
  *       400:
  *         description: Validation error
  *       401:
@@ -85,7 +103,7 @@ const router = Router();
  *       200:
  *         description: Paginated list of invoices
  */
-router.post("/", authenticateApiKey, merchantApiKeyRateLimit(), validate(createInvoiceSchema), createInvoice);
+router.post("/", authenticateApiKey, merchantApiKeyRateLimit(), idempotencyMiddleware, validate(createInvoiceSchema), createInvoice);
 router.get("/", authenticateApiKey, merchantApiKeyRateLimit(), validateQuery(listInvoicesQuerySchema), listInvoices);
 
 /**
@@ -235,4 +253,126 @@ router.post("/:invoice_id/void", authenticateApiKey, merchantApiKeyRateLimit(), 
  */
 router.get("/:invoice_id/export", authenticateApiKey, merchantApiKeyRateLimit(), validate(exportInvoiceSchema), exportInvoice);
 
+/**
+ * @swagger
+ * /api/v1/invoices/{invoice_id}/export:
+ *   post:
+ *     summary: Start an async invoice export job
+ *     tags: [Invoices]
+ *     security:
+ *       - apiKeyAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: invoice_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: format
+ *         schema:
+ *           type: string
+ *           enum: [pdf, csv, json]
+ *           default: pdf
+ *     responses:
+ *       202:
+ *         description: Export job accepted
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *       404:
+ *         description: Invoice not found
+ */
+router.post("/:invoice_id/export", authenticateApiKey, merchantApiKeyRateLimit(), validate(exportInvoiceSchema), exportInvoice);
+
+/**
+ * @swagger
+ * /api/v1/invoices/exports/{jobId}:
+ *   get:
+ *     summary: Get invoice export job status by job id
+ *     tags: [Invoices]
+ *     security:
+ *       - apiKeyAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: jobId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Export job status
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *       404:
+ *         description: Export job not found
+ */
+router.get("/exports/:jobId", authenticateApiKey, merchantApiKeyRateLimit(), getInvoiceExportStatus);
+
+/**
+ * @swagger
+ * /api/v1/invoices/{invoice_id}/export/{jobId}/status:
+ *   get:
+ *     summary: Get async invoice export job status
+ *     tags: [Invoices]
+ *     security:
+ *       - apiKeyAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: invoice_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: jobId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Export job status
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *       404:
+ *         description: Invoice or export job not found
+ */
+router.get("/:invoice_id/export/:jobId/status", authenticateApiKey, merchantApiKeyRateLimit(), validate(getInvoiceByIdSchema), getInvoiceExportStatus);
+
+/**
+ * @swagger
+ * /api/v1/invoices/{invoice_id}/export/{jobId}/download:
+ *   get:
+ *     summary: Download a completed async invoice export
+ *     tags: [Invoices]
+ *     security:
+ *       - apiKeyAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: invoice_id
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: path
+ *         name: jobId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Export file download
+ *         content:
+ *           application/octet-stream:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *       404:
+ *         description: Invoice or export job not found
+ */
+router.get("/:invoice_id/export/:jobId/download", authenticateApiKey, merchantApiKeyRateLimit(), validate(getInvoiceByIdSchema), downloadInvoiceExport);
+
 export default router;
+

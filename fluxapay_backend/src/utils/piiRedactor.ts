@@ -148,7 +148,11 @@ export function sanitizeObject(obj: any, sensitiveFields: string[] = []): any {
   for (const key of Object.keys(sanitized)) {
     const lowerKey = key.toLowerCase();
     
-    if (allSensitiveFields.some(field => lowerKey.includes(field.toLowerCase()))) {
+    if (lowerKey === 'merchant_id' || lowerKey === 'merchantid') {
+      if (typeof sanitized[key] === 'string' && sanitized[key]) {
+        sanitized[key] = hashMerchantId(sanitized[key]);
+      }
+    } else if (allSensitiveFields.some(field => lowerKey.includes(field.toLowerCase()))) {
       sanitized[key] = '[REDACTED]';
     } else if (typeof sanitized[key] === 'object' && sanitized[key] !== null) {
       // Recursively sanitize nested objects

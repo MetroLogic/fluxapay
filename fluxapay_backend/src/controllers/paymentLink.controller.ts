@@ -9,6 +9,8 @@ import {
   listPaymentLinksService,
   updatePaymentLinkService,
   deletePaymentLinkService,
+  getPaymentLinkBySlugService,
+  createChargeFromPaymentLinkService,
 } from "../services/paymentLink.service";
 
 export async function createPaymentLink(req: AuthRequest, res: Response) {
@@ -92,6 +94,73 @@ export async function deletePaymentLink(req: AuthRequest, res: Response) {
     res.status(204).send();
   } catch (err: unknown) {
     const e = err as { status?: number; message?: string };
+    sendApiError(res, err);
+  }
+}
+
+/**
+ * GET /api/v1/payment-links/resolve/:slug
+ * Public endpoint — resolves a payment link by slug.
+ * Returns 410 Gone if the link is expired or inactive.
+ */
+export async function resolvePaymentLinkBySlug(req: Request, res: Response) {
+  try {
+    const slug = String(req.params.slug);
+    const paymentLink = await getPaymentLinkBySlugService(slug);
+
+    const checkoutBase = process.env.PAY_CHECKOUT_BASE || process.env.BASE_URL || "http://localhost:3000";
+    const shortUrl = `${checkoutBase.replace(/\/$/, "")}/pay/${paymentLink.slug}`;
+
+    res.status(200).json({
+      id: paymentLink.id,
+      slug: paymentLink.slug,
+      title: paymentLink.title,
+      description: paymentLink.description,
+      amount: paymentLink.amount ? Number(paymentLink.amount) / 100 : null,
+      currency: paymentLink.currency,
+      expiry: paymentLink.expiry,
+      merchant: paymentLink.merchant
+        ? {
+            business_name: paymentLink.merchant.business_name,
+            checkout_logo_url: paymentLink.merchant.checkout_logo_url,
+            checkout_accent_color: paymentLink.merchant.checkout_accent_color,
+          }
+        : null,
+      short_url: shortUrl,
+    });
+  } catch (err: unknown) {
+    sendApiError(res, err);
+  }
+}
+
+/**
+ * POST /api/v1/payment-links/resolve/:slug/charge
+ * Public endpoint — creates a payment charge from a payment link.
+ * Validates expiry and active status before creating the charge.
+ */
+export async function chargeFromPaymentLink(req: Request, res: Response) {
+  try {
+    const slug = String(req.params.slug);
+
+    // Resolve slug to get the link (enforces expiry + active checks)
+    const paymentLink = await getPaymentLinkBySlugService(slug);
+
+    const payment = await createChargeFromPaymentLinkService({
+      paymentLinkId: paymentLink.id,
+      amount: req.body.amount,
+      customer_email: req.body.customer_email,
+    });
+
+    const checkoutBase = process.env.PAY_CHECKOUT_BASE || process.env.BASE_URL || "http://localhost:3000";
+
+    res.status(201).json({
+      id: payment.id,
+      amount: Number(payment.amount) / 100,
+      currency: payment.currency,
+      status: payment.status,
+      checkout_url: payment.checkout_url || `${checkoutBase.replace(/\/$/, "")}/pay/${payment.id}`,
+    });
+  } catch (err: unknown) {
     sendApiError(res, err);
   }
 }

@@ -76,6 +76,8 @@ export interface SweepOperationDetails {
     transaction_hash?: string;
   };
   failure_reason?: string;
+  retry_count?: number;
+  flagged_for_manual_review?: boolean;
 }
 
 export interface SettlementBatchDetails {

@@ -28,8 +28,13 @@ type ExportPayload = {
   webhook_logs_summary?: { records?: ExportRow[] };
 };
 
-const POLL_INTERVAL_MS = 1500;
-const MAX_POLL_ATTEMPTS = 40;
+// #833: 3s interval and a 5-minute ceiling, per the issue. The previous
+// 1.5s x 40 attempts gave up after 60 seconds — well inside the time a large
+// export legitimately takes, so merchants saw "taking longer than expected"
+// on jobs that were still running fine and would have completed.
+const POLL_INTERVAL_MS = 3_000;
+const MAX_POLL_DURATION_MS = 5 * 60 * 1_000;
+const MAX_POLL_ATTEMPTS = Math.ceil(MAX_POLL_DURATION_MS / POLL_INTERVAL_MS);
 
 const columnsByResource: Record<
   MerchantExportResource,
@@ -194,17 +199,40 @@ function downloadPdf(resource: MerchantExportResource, rows: ExportRow[]) {
   doc.save(filename(resource, "pdf"));
 }
 
-async function waitForExport(jobId: string) {
+/**
+ * Poll an export job to completion (#833).
+ *
+ * `onProgress` surfaces elapsed time to the caller so the loading state can
+ * say something truthful while waiting, rather than showing an unchanging
+ * spinner for up to five minutes.
+ *
+ * The deadline is wall-clock, not attempt-count: a slow status endpoint makes
+ * each attempt take longer than the interval, so counting attempts alone would
+ * overshoot the five-minute bound the issue specifies.
+ */
+export async function waitForExport(
+  jobId: string,
+  onProgress?: (elapsedMs: number) => void,
+) {
+  const startedAt = Date.now();
+
   for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt += 1) {
     const job = await api.merchantExports.status(jobId);
     if (job.status === "completed") return job;
     if (job.status === "failed") {
       throw new Error(job.error || "Export job failed.");
     }
+
+    const elapsed = Date.now() - startedAt;
+    if (elapsed >= MAX_POLL_DURATION_MS) break;
+
+    onProgress?.(elapsed);
     await wait(POLL_INTERVAL_MS);
   }
 
-  throw new Error("Export is taking longer than expected. Please try again.");
+  throw new Error(
+    "Export timed out after 5 minutes. It may still finish — check your exports shortly.",
+  );
 }
 
 export function useMerchantDataExport() {
@@ -224,7 +252,11 @@ export function useMerchantDataExport() {
         limit: options.limit,
       });
 
-      await waitForExport(job.jobId);
+      await waitForExport(job.jobId, (elapsedMs) => {
+        // Keep the toast honest about the wait instead of an idle spinner.
+        const seconds = Math.floor(elapsedMs / 1000);
+        toast.loading(`Preparing ${label} export... (${seconds}s)`, { id: toastId });
+      });
       const payload = (await api.merchantExports.download(job.jobId)) as ExportPayload;
       const filteredRows = filterRows(
         rowsFromPayload(payload, options.resource, options.fallbackRows),

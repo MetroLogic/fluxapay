@@ -3,10 +3,11 @@ import { apiError, sendApiError } from "../helpers/apiError.helper";
 import type { Request, Response, NextFunction, RequestHandler } from "express";
 import { AuthRequest } from "../types/express";
 import { PrismaClient } from "../generated/client/client";
+import { prisma } from "../config/prisma";
 import { isDevEnv } from "../helpers/env.helper";
 import Redis from "ioredis";
+import { closeRedisClient } from "../utils/redisClose.util";
 
-const prisma = new PrismaClient();
 
 /**
  * Rate Limiting Middleware
@@ -19,7 +20,8 @@ const prisma = new PrismaClient();
  * 2. merchantRateLimit()          - Per-merchant (200 req/60s) — UNUSED (legacy)
  * 3. authRateLimit()              - Auth endpoints by IP (10 req/15m) — auth.route.ts
  * 4. merchantApiKeyRateLimit()    - Per-merchant API key (200 req/60s) — payment.route.ts
- * 5. captchaCheck()               - CAPTCHA requirement check — payment.controller.ts
+ * 5. adminRateLimit()             - Admin routes by IP (60 req/60s) - app.ts
+ * 6. captchaCheck()               - CAPTCHA requirement check — payment.controller.ts
  *
  * For public endpoints, see simpleRateLimit.middleware.ts instead.
  *
@@ -40,6 +42,8 @@ export function getRedisClientForRateLimit(): Redis {
       lazyConnect: true,
       maxRetriesPerRequest: 2,
       enableOfflineQueue: false,
+      connectTimeout: 2000,
+      retryStrategy: () => null,
     });
 
     redisClient.on("error", (err) => {
@@ -54,6 +58,13 @@ export function getRedisClientForRateLimit(): Redis {
 
 export function setRedisClientForTests(client: Redis): void {
   redisClient = client;
+}
+
+/** Closes the rate-limit Redis connection, if one was opened (used on shutdown). */
+export async function closeRateLimitRedisClient(): Promise<void> {
+  const client = redisClient;
+  redisClient = null;
+  await closeRedisClient(client);
 }
 
 export function resetRedisClientForTests(): void {
@@ -390,6 +401,109 @@ export function authRateLimit(): RequestHandler {
 }
 
 /**
+ * Rate limit for password reset request endpoint (forgot-password).
+ *
+ * Default: 5 requests per 15 minutes per email and per IP.
+ * Configurable via env vars:
+ *   FORGOT_PASSWORD_RATE_MAX
+ *   FORGOT_PASSWORD_RATE_WINDOW_MS
+ */
+export function forgotPasswordRateLimit(): RequestHandler {
+  const max = parseInt(process.env.FORGOT_PASSWORD_RATE_MAX || "5", 10);
+  const windowMs = parseInt(process.env.FORGOT_PASSWORD_RATE_WINDOW_MS || "900000", 10);
+
+  return async (req: Request, res: Response, next: NextFunction) => {
+    const ip = getIp(req);
+    // email is expected in body
+    const bodyAny: any = req.body || {};
+    const emailRaw = (bodyAny.email || "").toString().trim().toLowerCase();
+
+    // Check IP-level first
+    const ipKey = `forgot_ip:${ip}`;
+    const ipCheck = await checkLimit(ipKey, max, windowMs);
+
+    // Check email-level (if provided)
+    let emailCheck = { allowed: true, retryAfterSeconds: 0, remaining: max };
+    if (emailRaw) {
+      const emailKey = `forgot_email:${emailRaw}`;
+      emailCheck = await checkLimit(emailKey, max, windowMs);
+    }
+
+    // Prefer the stricter remaining value for headers
+    const remaining = Math.min(ipCheck.remaining, emailCheck.remaining);
+
+    res.setHeader("X-RateLimit-Limit", String(max));
+    res.setHeader("X-RateLimit-Remaining", String(remaining));
+    res.setHeader("X-RateLimit-Window", String(windowMs / 1000));
+
+    if (!ipCheck.allowed || !emailCheck.allowed) {
+      const retryAfter = Math.max(ipCheck.retryAfterSeconds, emailCheck.retryAfterSeconds);
+      res.setHeader("Retry-After", String(retryAfter));
+
+      // Log the rate limit event
+      logRateLimitEvent({
+        ipAddress: ip,
+        endpoint: req.path,
+        limitType: "forgot_password",
+        retryAfterSeconds: retryAfter,
+      });
+
+      return sendApiError(
+        res,
+        apiError(429, ErrorCode.RATE_LIMIT_EXCEEDED, "Too many password reset requests. Please try again later.", {
+          retryAfterSeconds: retryAfter,
+        }),
+      );
+    }
+
+    next();
+  };
+}
+
+/**
+ * Rate limit for reset-password endpoint to mitigate token brute-forcing.
+ *
+ * Default: 10 requests per 15 minutes per IP.
+ * Configurable via env vars:
+ *   RESET_PASSWORD_RATE_MAX
+ *   RESET_PASSWORD_RATE_WINDOW_MS
+ */
+export function resetPasswordRateLimit(): RequestHandler {
+  const max = parseInt(process.env.RESET_PASSWORD_RATE_MAX || "10", 10);
+  const windowMs = parseInt(process.env.RESET_PASSWORD_RATE_WINDOW_MS || "900000", 10);
+
+  return async (req: Request, res: Response, next: NextFunction) => {
+    const ip = getIp(req);
+    const key = `reset:${ip}`;
+    const { allowed, retryAfterSeconds, remaining } = await checkLimit(key, max, windowMs);
+
+    res.setHeader("X-RateLimit-Limit", String(max));
+    res.setHeader("X-RateLimit-Remaining", String(remaining));
+    res.setHeader("X-RateLimit-Window", String(windowMs / 1000));
+
+    if (!allowed) {
+      res.setHeader("Retry-After", String(retryAfterSeconds));
+
+      logRateLimitEvent({
+        ipAddress: ip,
+        endpoint: req.path,
+        limitType: "reset_password",
+        retryAfterSeconds,
+      });
+
+      return sendApiError(
+        res,
+        apiError(429, ErrorCode.RATE_LIMIT_EXCEEDED, "Too many password reset attempts. Please try again later.", {
+          retryAfterSeconds,
+        }),
+      );
+    }
+
+    next();
+  };
+}
+
+/**
  * Per-merchant / per-API-key limit for routes that run *after* `authenticateApiKey`
  * or JWT that sets `merchantId` / `user.id`.
  *
@@ -436,6 +550,52 @@ export function merchantApiKeyRateLimit(): RequestHandler {
           429,
           ErrorCode.RATE_LIMIT_EXCEEDED,
           "API rate limit for this key exceeded. Please slow down.",
+          { retryAfterSeconds },
+        ),
+      );
+    }
+
+    next();
+  };
+}
+
+/**
+ * Rate limit for admin routes protected by X-Admin-Secret.
+ *
+ * Default: 60 requests per 60 seconds per IP.
+ * Configurable via env vars:
+ *   ADMIN_RATE_LIMIT_MAX
+ *   ADMIN_RATE_LIMIT_WINDOW_MS
+ */
+export function adminRateLimit(): RequestHandler {
+  const max = parseInt(process.env.ADMIN_RATE_LIMIT_MAX || "60", 10);
+  const windowMs = parseInt(process.env.ADMIN_RATE_LIMIT_WINDOW_MS || "60000", 10);
+
+  return async (req: Request, res: Response, next: NextFunction) => {
+    const ip = getIp(req);
+    const key = `admin:${ip}`;
+    const { allowed, retryAfterSeconds, remaining } = await checkLimit(key, max, windowMs);
+
+    res.setHeader("X-RateLimit-Limit", String(max));
+    res.setHeader("X-RateLimit-Remaining", String(remaining));
+    res.setHeader("X-RateLimit-Window", String(windowMs / 1000));
+
+    if (!allowed) {
+      res.setHeader("Retry-After", String(retryAfterSeconds));
+
+      logRateLimitEvent({
+        ipAddress: ip,
+        endpoint: req.path,
+        limitType: "admin",
+        retryAfterSeconds,
+      });
+
+      return sendApiError(
+        res,
+        apiError(
+          429,
+          ErrorCode.RATE_LIMIT_EXCEEDED,
+          "Admin rate limit exceeded. Please slow down.",
           { retryAfterSeconds },
         ),
       );

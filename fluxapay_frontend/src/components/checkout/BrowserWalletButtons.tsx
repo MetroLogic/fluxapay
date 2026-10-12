@@ -49,6 +49,60 @@ export interface BrowserWalletButtonsProps {
 
 type WalletState = 'detecting' | 'ready' | 'signing' | 'submitting' | 'success' | 'error';
 
+async function createStellarWalletKit() {
+  const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID;
+  if (!projectId) {
+    throw new Error(
+      'Mobile wallet connection is not configured. Use the payment address or QR code below.',
+    );
+  }
+
+  const [kitSdk, moduleUtils, walletConnect, kitTypes] = await Promise.all([
+    import('@creit.tech/stellar-wallets-kit/sdk'),
+    import('@creit.tech/stellar-wallets-kit/modules/utils'),
+    import('@creit.tech/stellar-wallets-kit/modules/wallet-connect'),
+    import('@creit.tech/stellar-wallets-kit/types'),
+  ]);
+  const networkPassphrase =
+    STELLAR_NETWORK === 'PUBLIC' ? kitTypes.Networks.PUBLIC : kitTypes.Networks.TESTNET;
+  const allowedChain =
+    STELLAR_NETWORK === 'PUBLIC'
+      ? walletConnect.WalletConnectTargetChain.PUBLIC
+      : walletConnect.WalletConnectTargetChain.TESTNET;
+
+  kitSdk.StellarWalletsKit.init({
+    modules: [
+      ...moduleUtils.defaultModules(),
+      new walletConnect.WalletConnectModule({
+        projectId,
+        allowedChains: [allowedChain],
+        metadata: {
+          name: 'FluxaPay Checkout',
+          description: 'Connect a Stellar wallet to complete your payment.',
+          url: window.location.origin,
+          icons: [`${window.location.origin}/favicon.ico`],
+        },
+      }),
+    ],
+    network: networkPassphrase,
+    authModal: { showInstallLabel: true, hideUnsupportedWallets: true },
+  });
+
+  return { kit: kitSdk.StellarWalletsKit, networkPassphrase };
+}
+
+let stellarWalletKitPromise: ReturnType<typeof createStellarWalletKit> | undefined;
+
+function getStellarWalletKit() {
+  if (!stellarWalletKitPromise) {
+    stellarWalletKitPromise = createStellarWalletKit().catch((error: unknown) => {
+      stellarWalletKitPromise = undefined;
+      throw error;
+    });
+  }
+  return stellarWalletKitPromise;
+}
+
 export function BrowserWalletButtons({
   address,
   amount,
@@ -82,23 +136,25 @@ export function BrowserWalletButtons({
         }
       }
 
-      // Albedo: load script if not already present
-      if (typeof window !== 'undefined' && typeof window.albedo === 'undefined') {
-        await new Promise<void>((resolve) => {
-          const existing = document.querySelector('script[src*="albedo.link"]');
-          if (existing) { resolve(); return; }
-          const script = document.createElement('script');
-          script.src = 'https://albedo.link/serve.js';
-          script.async = true;
-          script.onload = () => resolve();
-          script.onerror = () => resolve(); // fail silently
-          document.head.appendChild(script);
-        });
-      }
+      const detectAlbedo = async () => {
+        if (typeof window !== 'undefined' && typeof window.albedo === 'undefined') {
+          await new Promise<void>((resolve) => {
+            const existing = document.querySelector('script[src*="albedo.link"]');
+            if (existing) { resolve(); return; }
+            const script = document.createElement('script');
+            script.src = 'https://albedo.link/serve.js';
+            script.async = true;
+            script.onload = () => resolve();
+            script.onerror = () => resolve();
+            document.head.appendChild(script);
+          });
+        }
 
-      // Give albedo a moment to initialise
-      await new Promise((r) => setTimeout(r, 300));
-      if (!cancelled) setAlbedoAvailable(typeof window.albedo !== 'undefined');
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        if (!cancelled) setAlbedoAvailable(typeof window.albedo !== 'undefined');
+      };
+
+      void detectAlbedo();
       if (!cancelled) setState('ready');
     };
 
@@ -193,37 +249,60 @@ export function BrowserWalletButtons({
     }
   }, [address, amount, assetCode, assetIssuer, memo, memoType, onPaymentConfirmed]);
 
+  const handleStellarWalletKit = useCallback(async () => {
+    setState('signing');
+    setStatusMsg('Opening Stellar wallet selector…');
+    try {
+      const { kit, networkPassphrase } = await getStellarWalletKit();
+      const { address: publicKey } = await kit.authModal();
+
+      if (!paymentId) {
+        setState('ready');
+        setStatusMsg(`Wallet connected (${publicKey.slice(0, 6)}…${publicKey.slice(-4)}).`);
+        return;
+      }
+
+      setStatusMsg('Building transaction…');
+      const buildRes = await fetch(
+        `${API_BASE}/api/v1/payments/${paymentId}/build-transaction`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sourceAccount: publicKey }),
+        },
+      );
+
+      if (!buildRes.ok) {
+        throw new Error('Could not prepare the payment transaction. Use the address or QR code below.');
+      }
+
+      const buildData = await buildRes.json() as { xdr?: string };
+      if (!buildData.xdr) throw new Error('No transaction returned. Use the address or QR code below.');
+
+      setStatusMsg('Please approve the transaction in your wallet…');
+      const { signedTxXdr } = await kit.signTransaction(buildData.xdr, {
+        networkPassphrase,
+        address: publicKey,
+      });
+
+      setState('submitting');
+      setStatusMsg('Submitting to Stellar network…');
+      const hash = await submitToHorizon(signedTxXdr);
+      setTxHash(hash);
+      setState('success');
+      setStatusMsg('Payment submitted successfully!');
+      onPaymentConfirmed?.(hash);
+    } catch (err) {
+      setState('error');
+      setStatusMsg(err instanceof Error ? err.message : 'Stellar wallet connection failed');
+    }
+  }, [paymentId, submitToHorizon, onPaymentConfirmed]);
+
   if (state === 'detecting') {
     return (
       <div className="flex items-center justify-center gap-2 text-sm text-gray-500 py-2">
         <Loader2 className="h-4 w-4 animate-spin" />
         Detecting browser wallets…
-      </div>
-    );
-  }
-
-  if (!freighterAvailable && !albedoAvailable) {
-    return (
-      <div className="rounded-lg border border-dashed border-gray-200 p-4 text-center text-sm text-gray-500 space-y-2">
-        <p className="font-medium">No browser wallet detected</p>
-        <div className="flex items-center justify-center gap-4">
-          <a
-            href="https://www.freighter.app/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline"
-          >
-            Install Freighter <ExternalLink className="h-3 w-3" />
-          </a>
-          <a
-            href="https://albedo.link/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline"
-          >
-            Use Albedo <ExternalLink className="h-3 w-3" />
-          </a>
-        </div>
       </div>
     );
   }
@@ -261,11 +340,45 @@ export function BrowserWalletButtons({
         </p>
       )}
 
+      {!freighterAvailable && !albedoAvailable && (
+        <div className="rounded-lg border border-dashed border-gray-200 p-4 text-center text-sm text-gray-500 space-y-2">
+          <p className="font-medium">No browser wallet detected</p>
+          <div className="flex items-center justify-center gap-4">
+            <a
+              href="https://www.freighter.app/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline"
+            >
+              Install Freighter <ExternalLink className="h-3 w-3" />
+            </a>
+            <a
+              href="https://albedo.link/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline"
+            >
+              Use Albedo <ExternalLink className="h-3 w-3" />
+            </a>
+          </div>
+        </div>
+      )}
+
       <p className="text-xs text-center text-gray-500 font-medium uppercase tracking-wider">
-        Pay with browser wallet
+        Pay with a Stellar wallet
       </p>
 
       <div className="flex flex-col gap-2 sm:flex-row sm:justify-center">
+        <button
+          onClick={handleStellarWalletKit}
+          disabled={busy}
+          className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-700 bg-emerald-50 px-5 py-2.5 text-sm font-semibold text-emerald-800 transition-colors hover:bg-emerald-100 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700"
+          aria-label="Connect Stellar Wallet"
+        >
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wallet className="h-4 w-4" />}
+          Connect Stellar Wallet
+        </button>
+
         {freighterAvailable && (
           <button
             onClick={handleFreighter}

@@ -92,3 +92,35 @@ export const revokeApiKey = async (req: Request, res: Response) => {
     sendApiError(res, apiError(500, ErrorCode.API_KEY_REVOKE_FAILED, "Failed to revoke API key"));
   }
 };
+
+/**
+ * POST /v1/api-keys/:id/rotate
+ * Rotate an API key by revoking the existing key and issuing a replacement.
+ */
+export const rotateApiKey = async (req: Request, res: Response) => {
+  try {
+    const merchantId = await validateUserId(req as AuthRequest);
+    const keyId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+
+    const result = await apiKeyService.rotateApiKey(merchantId, keyId, merchantId);
+
+    res.status(200).json(result);
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      if (error.message === "API key not found") {
+        return sendApiError(res, apiError(404, ErrorCode.API_KEY_NOT_FOUND, "API key not found"));
+      }
+      if (error.message === "API key is already revoked") {
+        return sendApiError(res, apiError(400, ErrorCode.API_KEY_ALREADY_REVOKED, "API key is already revoked"));
+      }
+      if (error.message.includes("Rate limit exceeded")) {
+        return sendApiError(res, apiError(429, ErrorCode.API_KEY_RATE_LIMIT, error.message));
+      }
+      if (error.message.includes("Maximum active keys")) {
+        return sendApiError(res, apiError(422, ErrorCode.MAX_ACTIVE_KEYS, error.message));
+      }
+    }
+    console.error("Error rotating API key:", error);
+    sendApiError(res, apiError(500, ErrorCode.API_KEY_ROTATE_FAILED, "Failed to rotate API key"));
+  }
+};

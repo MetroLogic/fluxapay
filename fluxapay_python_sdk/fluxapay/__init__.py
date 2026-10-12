@@ -6,7 +6,7 @@ import hashlib
 import hmac
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union, Literal
 
 import httpx
 
@@ -19,6 +19,13 @@ __all__ = [
     "PaymentStatus",
     "Invoice",
     "WebhookEvent",
+    "WebhookEventBase",
+    "PaymentCreatedEvent",
+    "PaymentPendingEvent",
+    "PaymentConfirmedEvent",
+    "PaymentFailedEvent",
+    "PaymentSettledEvent",
+    "RefundCompletedEvent",
     "verify_webhook_signature",
 ]
 
@@ -30,10 +37,21 @@ _API_VERSION = "v1"
 
 
 class FluxaPayError(Exception):
-    def __init__(self, status_code: int, message: str, raw: Any = None) -> None:
+    def __init__(
+        self,
+        status_code: int,
+        message: str,
+        raw: Any = None,
+        code: Optional[str] = None,
+        request_id: Optional[str] = None,
+    ) -> None:
         super().__init__(message)
         self.status_code = status_code
+        self.message = message
         self.raw = raw
+        self.code = code
+        self.request_id = request_id
+        self.retryable = status_code in (429, 502, 503, 504)
 
 
 # ── Models ────────────────────────────────────────────────────────────────────
@@ -65,25 +83,57 @@ class PaymentStatus:
 @dataclass
 class Invoice:
     id: str
-    customer_name: str
+    customer_name: Optional[str]
     customer_email: str
     currency: str
     amount: float
     status: str
-    due_date: str
+    due_date: Optional[str]
     created_at: str
-    updated_at: str
+    updated_at: Optional[str] = None
     line_items: List[Dict[str, Any]] = field(default_factory=list)
     notes: Optional[str] = None
 
 
 @dataclass
-class WebhookEvent:
-    event: str
+class WebhookEventBase:
     payment_id: str
     merchant_id: str
     timestamp: str
     data: Dict[str, Any]
+
+@dataclass
+class PaymentCreatedEvent(WebhookEventBase):
+    event: Literal["payment_created"]
+
+@dataclass
+class PaymentPendingEvent(WebhookEventBase):
+    event: Literal["payment_pending"]
+
+@dataclass
+class PaymentConfirmedEvent(WebhookEventBase):
+    event: Literal["payment_confirmed"]
+
+@dataclass
+class PaymentFailedEvent(WebhookEventBase):
+    event: Literal["payment_failed"]
+
+@dataclass
+class PaymentSettledEvent(WebhookEventBase):
+    event: Literal["payment_settled"]
+
+@dataclass
+class RefundCompletedEvent(WebhookEventBase):
+    event: Literal["refund_completed"]
+
+WebhookEvent = Union[
+    PaymentCreatedEvent,
+    PaymentPendingEvent,
+    PaymentConfirmedEvent,
+    PaymentFailedEvent,
+    PaymentSettledEvent,
+    RefundCompletedEvent
+]
 
 
 # ── Webhook verification ──────────────────────────────────────────────────────
@@ -145,10 +195,19 @@ def _raise_for(response: httpx.Response) -> None:
         try:
             body = response.json()
             message = body.get("message", f"HTTP {response.status_code}")
+            code = body.get("code")
         except Exception:
             body = None
             message = f"HTTP {response.status_code}"
-        raise FluxaPayError(response.status_code, message, body)
+            code = None
+        request_id = response.headers.get("x-request-id") or response.headers.get("X-Request-ID")
+        raise FluxaPayError(
+            status_code=response.status_code,
+            message=message,
+            raw=body,
+            code=code,
+            request_id=request_id,
+        )
 
 
 # ── Resource mixins (shared logic) ────────────────────────────────────────────
@@ -185,23 +244,44 @@ class _SettlementsMixin:
         return {k: v for k, v in kwargs.items() if v is not None}
 
 
+class _InvoicesMixin:
+    def _invoice_create_body(self, **kwargs: Any) -> Dict[str, Any]:
+        return {k: v for k, v in kwargs.items() if v is not None}
+
+    def _invoice_list_params(self, **kwargs: Any) -> Dict[str, Any]:
+        return {k: v for k, v in kwargs.items() if v is not None}
+
+    @staticmethod
+    def _invoice_from_response(payload: Dict[str, Any]) -> Invoice:
+        data = payload.get("data", payload)
+        return Invoice(**{k: data[k] for k in Invoice.__dataclass_fields__ if k in data})
+
+
+class _RefundsMixin:
+    def _refund_create_body(self, **kwargs: Any) -> Dict[str, Any]:
+        return {k: v for k, v in kwargs.items() if v is not None}
+
+    def _refund_list_params(self, **kwargs: Any) -> Dict[str, Any]:
+        return {k: v for k, v in kwargs.items() if v is not None}
+
+
 # ── Synchronous client ────────────────────────────────────────────────────────
 
 
-class FluxaPay(_PaymentsMixin, _SettlementsMixin):
+class FluxaPay(_PaymentsMixin, _SettlementsMixin, _InvoicesMixin, _RefundsMixin):
     """Synchronous FluxaPay API client.
 
     Example::
 
         from fluxapay import FluxaPay
 
-        client = FluxaPay(api_key="sk_live_...")
-        payment = client.payments.create(
-            amount=49.99,
-            currency="USD",
-            customer_email="buyer@example.com",
-        )
-        print(payment.checkout_url)
+        with FluxaPay(api_key="sk_live_...") as client:
+            payment = client.payments.create(
+                amount=49.99,
+                currency="USD",
+                customer_email="buyer@example.com",
+            )
+            print(payment.checkout_url)
     """
 
     def __init__(self, api_key: str, base_url: str = _DEFAULT_BASE_URL) -> None:
@@ -290,6 +370,104 @@ class FluxaPay(_PaymentsMixin, _SettlementsMixin):
     def payments(self) -> "_Payments":
         return self._Payments(self)
 
+    # ── invoices ──────────────────────────────────────────────────────────────
+
+    class _Invoices:
+        def __init__(self, client: "FluxaPay") -> None:
+            self._c = client
+
+        def create(
+            self,
+            amount: float,
+            currency: str,
+            customer_email: str,
+            customer_name: Optional[str] = None,
+            line_items: Optional[List[Dict[str, Any]]] = None,
+            notes: Optional[str] = None,
+            metadata: Optional[Dict[str, Any]] = None,
+            due_date: Optional[str] = None,
+            tax_rate: Optional[float] = None,
+        ) -> Invoice:
+            body = self._c._invoice_create_body(
+                amount=amount,
+                currency=currency,
+                customer_email=customer_email,
+                customer_name=customer_name,
+                line_items=line_items,
+                notes=notes,
+                metadata=metadata,
+                due_date=due_date,
+                tax_rate=tax_rate,
+            )
+            data = self._c._post("/api/v1/invoices", body)
+            return self._c._invoice_from_response(data)
+
+        def get(self, invoice_id: str) -> Invoice:
+            data = self._c._get(f"/api/v1/invoices/{invoice_id}")
+            return self._c._invoice_from_response(data)
+
+        def list(
+            self,
+            page: Optional[int] = None,
+            limit: Optional[int] = None,
+            status: Optional[str] = None,
+            search: Optional[str] = None,
+        ) -> Dict[str, Any]:
+            params = self._c._invoice_list_params(
+                page=page, limit=limit, status=status, search=search,
+            )
+            return self._c._get("/api/v1/invoices", params=params)
+
+        def update_status(self, invoice_id: str, status: str) -> Invoice:
+            data = self._c._patch(
+                f"/api/v1/invoices/{invoice_id}/status", {"status": status},
+            )
+            return self._c._invoice_from_response(data)
+
+    @property
+    def invoices(self) -> "_Invoices":
+        return self._Invoices(self)
+
+    # ── refunds ───────────────────────────────────────────────────────────────
+
+    class _Refunds:
+        def __init__(self, client: "FluxaPay") -> None:
+            self._c = client
+
+        def create(
+            self,
+            payment_id: str,
+            amount: float,
+            reason: Optional[str] = None,
+            idempotency_key: Optional[str] = None,
+        ) -> Dict[str, Any]:
+            body = self._c._refund_create_body(
+                payment_id=payment_id,
+                amount=amount,
+                reason=reason,
+                idempotency_key=idempotency_key,
+            )
+            return self._c._post("/api/v1/refunds", body)
+
+        def get(self, refund_id: str) -> Dict[str, Any]:
+            return self._c._get(f"/api/v1/refunds/{refund_id}")
+
+        def list(
+            self,
+            page: Optional[int] = None,
+            limit: Optional[int] = None,
+            status: Optional[str] = None,
+            payment_id: Optional[str] = None,
+        ) -> Dict[str, Any]:
+            params = self._c._refund_list_params(
+                page=page, limit=limit, status=status, payment_id=payment_id,
+            )
+            return self._c._get("/api/v1/refunds", params=params)
+
+    @property
+    def refunds(self) -> "_Refunds":
+        return self._Refunds(self)
+
     # ── settlements ───────────────────────────────────────────────────────────
 
     class _Settlements:
@@ -338,7 +516,19 @@ class FluxaPay(_PaymentsMixin, _SettlementsMixin):
         def parse(self, raw_body: str) -> WebhookEvent:
             import json
             d = json.loads(raw_body)
-            return WebhookEvent(**{k: d[k] for k in WebhookEvent.__dataclass_fields__ if k in d})
+            event_type = d.get("event")
+            classes = {
+                "payment_created": PaymentCreatedEvent,
+                "payment_pending": PaymentPendingEvent,
+                "payment_confirmed": PaymentConfirmedEvent,
+                "payment_failed": PaymentFailedEvent,
+                "payment_settled": PaymentSettledEvent,
+                "refund_completed": RefundCompletedEvent,
+            }
+            cls = classes.get(event_type)
+            if not cls:
+                raise ValueError(f"Unknown event type: {event_type}")
+            return cls(**{k: d[k] for k in cls.__dataclass_fields__ if k in d})
 
     @property
     def webhooks(self) -> "_Webhooks":
@@ -348,7 +538,7 @@ class FluxaPay(_PaymentsMixin, _SettlementsMixin):
 # ── Asynchronous client ───────────────────────────────────────────────────────
 
 
-class AsyncFluxaPay(_PaymentsMixin, _SettlementsMixin):
+class AsyncFluxaPay(_PaymentsMixin, _SettlementsMixin, _InvoicesMixin, _RefundsMixin):
     """Async FluxaPay API client (requires ``httpx`` with async support).
 
     Example::
@@ -453,6 +643,104 @@ class AsyncFluxaPay(_PaymentsMixin, _SettlementsMixin):
     @property
     def payments(self) -> "_AsyncPayments":
         return self._AsyncPayments(self)
+
+    # ── invoices ──────────────────────────────────────────────────────────────
+
+    class _AsyncInvoices:
+        def __init__(self, client: "AsyncFluxaPay") -> None:
+            self._c = client
+
+        async def create(
+            self,
+            amount: float,
+            currency: str,
+            customer_email: str,
+            customer_name: Optional[str] = None,
+            line_items: Optional[List[Dict[str, Any]]] = None,
+            notes: Optional[str] = None,
+            metadata: Optional[Dict[str, Any]] = None,
+            due_date: Optional[str] = None,
+            tax_rate: Optional[float] = None,
+        ) -> Invoice:
+            body = self._c._invoice_create_body(
+                amount=amount,
+                currency=currency,
+                customer_email=customer_email,
+                customer_name=customer_name,
+                line_items=line_items,
+                notes=notes,
+                metadata=metadata,
+                due_date=due_date,
+                tax_rate=tax_rate,
+            )
+            data = await self._c._post("/api/v1/invoices", body)
+            return self._c._invoice_from_response(data)
+
+        async def get(self, invoice_id: str) -> Invoice:
+            data = await self._c._get(f"/api/v1/invoices/{invoice_id}")
+            return self._c._invoice_from_response(data)
+
+        async def list(
+            self,
+            page: Optional[int] = None,
+            limit: Optional[int] = None,
+            status: Optional[str] = None,
+            search: Optional[str] = None,
+        ) -> Dict[str, Any]:
+            params = self._c._invoice_list_params(
+                page=page, limit=limit, status=status, search=search,
+            )
+            return await self._c._get("/api/v1/invoices", params=params)
+
+        async def update_status(self, invoice_id: str, status: str) -> Invoice:
+            data = await self._c._patch(
+                f"/api/v1/invoices/{invoice_id}/status", {"status": status},
+            )
+            return self._c._invoice_from_response(data)
+
+    @property
+    def invoices(self) -> "_AsyncInvoices":
+        return self._AsyncInvoices(self)
+
+    # ── refunds ───────────────────────────────────────────────────────────────
+
+    class _AsyncRefunds:
+        def __init__(self, client: "AsyncFluxaPay") -> None:
+            self._c = client
+
+        async def create(
+            self,
+            payment_id: str,
+            amount: float,
+            reason: Optional[str] = None,
+            idempotency_key: Optional[str] = None,
+        ) -> Dict[str, Any]:
+            body = self._c._refund_create_body(
+                payment_id=payment_id,
+                amount=amount,
+                reason=reason,
+                idempotency_key=idempotency_key,
+            )
+            return await self._c._post("/api/v1/refunds", body)
+
+        async def get(self, refund_id: str) -> Dict[str, Any]:
+            return await self._c._get(f"/api/v1/refunds/{refund_id}")
+
+        async def list(
+            self,
+            page: Optional[int] = None,
+            limit: Optional[int] = None,
+            status: Optional[str] = None,
+            payment_id: Optional[str] = None,
+        ) -> Dict[str, Any]:
+            params = self._c._refund_list_params(
+                page=page, limit=limit, status=status, payment_id=payment_id,
+            )
+            return await self._c._get("/api/v1/refunds", params=params)
+
+    @property
+    def refunds(self) -> "_AsyncRefunds":
+        return self._AsyncRefunds(self)
 
     # ── settlements ───────────────────────────────────────────────────────────
 

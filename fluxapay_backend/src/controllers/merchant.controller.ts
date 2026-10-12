@@ -19,6 +19,11 @@ import {
   updateBankAccountService,
 } from "../services/merchant.service";
 import {
+  requestPasswordResetService,
+  validatePasswordResetTokenService,
+  resetPasswordService,
+} from "../services/passwordReset.service";
+import {
   getNotificationPreferences,
   updateNotificationPreferences,
 } from "../services/notificationPreferences.service";
@@ -29,6 +34,8 @@ type SignupRequest = z.infer<typeof merchantSchema.signupSchema>;
 type LoginRequest = z.infer<typeof merchantSchema.loginSchema>;
 type VerifyOtpRequest = z.infer<typeof merchantSchema.verifyOtpSchema>;
 type ResendOtpRequest = z.infer<typeof merchantSchema.resendOtpSchema>;
+type ForgotPasswordRequest = z.infer<typeof merchantSchema.forgotPasswordSchema>;
+type ResetPasswordRequest = z.infer<typeof merchantSchema.resetPasswordSchema>;
 
 export const signupMerchant = createController<SignupRequest>(
   signupMerchantService,
@@ -54,6 +61,18 @@ export const resendOtp = createController<ResendOtpRequest>(
       ip,
     });
   },
+);
+
+export const forgotPassword = createController<ForgotPasswordRequest>(
+  requestPasswordResetService,
+);
+
+export const validateResetToken = createController(
+  validatePasswordResetTokenService,
+);
+
+export const resetPassword = createController<ResetPasswordRequest>(
+  resetPasswordService,
 );
 
 export const getLoggedInMerchant = createController(
@@ -92,9 +111,9 @@ export const updateMerchantWebhook = createController(
   },
 );
 
-export const rotateApiKey = createController(async (_, req: AuthRequest) => {
+export const rotateApiKey = createController(async (body: { gracePeriodHours?: number }, req: AuthRequest) => {
   const merchantId = await validateUserId(req);
-  return rotateApiKeyService({ merchantId });
+  return rotateApiKeyService({ merchantId, gracePeriodHours: body.gracePeriodHours });
 });
 
 export const rotateWebhookSecret = createController(
@@ -108,12 +127,45 @@ export const rotateWebhookSecret = createController(
 
 import { Request, Response } from "express";
 import { PrismaClient } from "../generated/client/client";
+import { prisma as adminPrisma } from "../config/prisma";
 
-const adminPrisma = new PrismaClient();
+
+/**
+ * Defense-in-depth admin gate. Mirrors the logic in adminAuth middleware so
+ * handlers are safe even if mounted without the route-level middleware.
+ *
+ * Returns an error payload if the request is NOT authorised, or null if it is.
+ * Callers should `return sendApiError(res, err)` when non-null.
+ */
+function assertAdminRequest(req: Request): ReturnType<typeof apiError> | null {
+  const adminSecret = process.env.ADMIN_SECRET;
+  const providedSecret = req.headers["x-admin-secret"];
+
+  if (!adminSecret) {
+    if (process.env.NODE_ENV === "production") {
+      return apiError(
+        503,
+        ErrorCode.SERVICE_UNAVAILABLE,
+        "Admin endpoints are disabled in production because ADMIN_SECRET is not configured.",
+      );
+    }
+    // Dev fallthrough — allowed without a secret
+    return null;
+  }
+
+  if (providedSecret !== adminSecret) {
+    return apiError(401, ErrorCode.UNAUTHORIZED, "Unauthorized. Invalid or missing admin secret.");
+  }
+
+  return null;
+}
 
 /** GET /api/merchants/admin/list – paginated merchant list */
 export async function adminListMerchants(req: Request, res: Response) {
   try {
+    const denied = assertAdminRequest(req);
+    if (denied) return sendApiError(res, denied);
+
     const page = Math.max(1, parseInt((req.query.page as string) || "1"));
     const limit = Math.min(100, Math.max(1, parseInt((req.query.limit as string) || "20")));
     const status = req.query.status as string | undefined;
@@ -149,6 +201,9 @@ export async function adminListMerchants(req: Request, res: Response) {
 /** GET /api/merchants/admin/:merchantId – single merchant detail */
 export async function adminGetMerchant(req: Request, res: Response) {
   try {
+    const denied = assertAdminRequest(req);
+    if (denied) return sendApiError(res, denied);
+
     const merchantId = String(req.params.merchantId);
     const merchant = await adminPrisma.merchant.findUnique({
       where: { id: merchantId },
@@ -168,6 +223,9 @@ export async function adminGetMerchant(req: Request, res: Response) {
 /** PATCH /api/merchants/admin/:merchantId/status – suspend / activate */
 export async function adminUpdateMerchantStatus(req: Request, res: Response) {
   try {
+    const denied = assertAdminRequest(req);
+    if (denied) return sendApiError(res, denied);
+
     const merchantId = String(req.params.merchantId);
     const { status } = req.body as { status: MerchantStatus };
 
@@ -187,9 +245,14 @@ export async function adminUpdateMerchantStatus(req: Request, res: Response) {
   }
 }
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /** POST /api/merchants/admin/bulk-status – bulk suspend / activate */
 export async function adminBulkUpdateMerchantStatus(req: Request, res: Response) {
   try {
+    const denied = assertAdminRequest(req);
+    if (denied) return sendApiError(res, denied);
+
     const { merchantIds, status, reason } = req.body as {
       merchantIds: string[];
       status: MerchantStatus;
@@ -199,6 +262,16 @@ export async function adminBulkUpdateMerchantStatus(req: Request, res: Response)
     if (!Array.isArray(merchantIds) || merchantIds.length === 0) {
       return sendApiError(res, apiError(400, ErrorCode.INVALID_MERCHANT_IDS, "merchantIds must be a non-empty array"));
     }
+
+    // Validate UUID format before hitting the database
+    const invalidIds = merchantIds.filter((id) => typeof id !== "string" || !UUID_REGEX.test(id));
+    if (invalidIds.length > 0) {
+      return sendApiError(
+        res,
+        apiError(400, ErrorCode.INVALID_MERCHANT_IDS, `Invalid merchant IDs: ${invalidIds.join(", ")}`),
+      );
+    }
+
     if (!["active", "suspended"].includes(status)) {
       return sendApiError(res, apiError(400, ErrorCode.INVALID_STATUS_VALUE, "status must be active or suspended"));
     }
@@ -238,6 +311,9 @@ export async function adminBulkUpdateMerchantStatus(req: Request, res: Response)
 /** PATCH /api/merchants/admin/:merchantId/webhook – update webhook URL */
 export async function adminUpdateMerchantWebhook(req: Request, res: Response) {
   try {
+    const denied = assertAdminRequest(req);
+    if (denied) return sendApiError(res, denied);
+
     const merchantId = String(req.params.merchantId);
     const { webhook_url } = req.body as { webhook_url: string };
 
@@ -326,7 +402,11 @@ export const getNotificationPreferencesController = createController(
 
 export const updateNotificationPreferencesController = createController(
   async (
-    body: { payment_expiry_reminder?: boolean; reminder_minutes_before?: number },
+    body: {
+      payment_expiry_reminder?: boolean;
+      reminder_minutes_before?: number;
+      notify_on_payment?: boolean;
+    },
     req: AuthRequest,
   ) => {
     const merchantId = await validateUserId(req);
@@ -334,6 +414,7 @@ export const updateNotificationPreferencesController = createController(
       merchantId,
       payment_expiry_reminder: body.payment_expiry_reminder,
       reminder_minutes_before: body.reminder_minutes_before,
+      notify_on_payment: body.notify_on_payment,
     });
     return { message: "Notification preferences updated", preferences };
   },

@@ -8,6 +8,7 @@ const options: swaggerJsdoc.Options = {
             version: '1.0.0',
             description:
                 'API documentation for Fluxapay Backend.\n\n' +
+                'Every response includes the `X-FluxaPay-Request-ID` header for request tracing.\n\n' +
                 '**Request size limits:** JSON request bodies are limited to **1MB** (`REQUEST_BODY_SIZE_LIMIT`). ' +
                 'Multipart file uploads are limited to **10MB** per file.',
         },
@@ -22,6 +23,13 @@ const options: swaggerJsdoc.Options = {
             },
         ],
         components: {
+            headers: {
+                FluxaPayRequestId: {
+                    description: 'Unique identifier for correlating this response with backend logs.',
+                    schema: { type: 'string' },
+                    example: '6f6d9d8e-3f77-4d19-9f22-92d4f49fb640',
+                },
+            },
             securitySchemes: {
                 bearerAuth: {
                     type: 'http',
@@ -89,6 +97,12 @@ const options: swaggerJsdoc.Options = {
                             type: 'string',
                             description: 'Optional Customer id (must belong to the authenticated merchant)',
                             example: 'clxyz123customer',
+                        },
+                        note: {
+                            type: 'string',
+                            maxLength: 500,
+                            description: 'Optional internal note for merchant reference (not exposed to customer)',
+                            example: 'Order #1234 - Support Ticket #567',
                         },
                         metadata: {
                             type: 'object',
@@ -173,13 +187,18 @@ const options: swaggerJsdoc.Options = {
                         'payment.pending',
                         'payment.confirmed',
                         'payment.failed',
+                        'payment.expired',
+                        'payment.expiring_soon',
                         'payment.settled',
+                        'payment.duplicate_received',
                         'refund.created',
                         'refund.completed',
                         'refund.failed',
                         'subscription.created',
                         'subscription.cancelled',
                         'subscription.renewed',
+                        'invoice.paid',
+                        'invoice.overdue',
                     ],
                     description: 'Canonical webhook event names. Legacy names (payment_completed, etc.) are supported for backward compatibility.',
                     example: 'payment.confirmed',
@@ -277,3 +296,52 @@ const options: swaggerJsdoc.Options = {
 };
 
 export const specs = swaggerJsdoc(options);
+
+const methods = ['get', 'post', 'put', 'patch', 'delete', 'options', 'head', 'trace'];
+const errorResponse = {
+    description: 'The request failed.',
+    content: {
+        'application/json': {
+            schema: { $ref: '#/components/schemas/ErrorResponse' },
+        },
+    },
+};
+
+for (const [path, pathItem] of Object.entries((specs as any).paths || {})) {
+    for (const method of methods) {
+        const operation = (pathItem as Record<string, any>)[method];
+        if (!operation) continue;
+
+        const segments = path
+            .split('/')
+            .filter(Boolean)
+            .map((segment) => segment.startsWith('{')
+                ? `by_${segment.slice(1, -1)}`
+                : segment)
+            .join('_');
+        operation.operationId ||= `${method}_${segments}`
+            .replace(/[^a-zA-Z0-9_]/g, '_')
+            .replace(/_+/g, '_');
+
+        const readablePath = path.replace(/[{}]/g, '');
+        operation.summary ||= `${method.toUpperCase()} ${readablePath}`;
+        operation.description ||= `${operation.summary}.`;
+        operation.tags ||= ['API'];
+        operation.responses ||= {};
+        operation.responses.default ||= errorResponse;
+
+        for (const [status, response] of Object.entries(operation.responses) as [string, any][]) {
+            response.description ||= status === 'default'
+                ? errorResponse.description
+                : `${method.toUpperCase()} ${readablePath} response (${status}).`;
+            if (status === '204' || status === '304' || response.content) continue;
+            response.content = {
+                'application/json': {
+                    schema: status === 'default' || Number(status) >= 400
+                        ? { $ref: '#/components/schemas/ErrorResponse' }
+                        : { type: 'object', additionalProperties: true },
+                },
+            };
+        }
+    }
+}

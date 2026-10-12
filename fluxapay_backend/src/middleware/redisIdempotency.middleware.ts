@@ -4,9 +4,20 @@ import { Request, Response, NextFunction } from "express";
 import Redis from "ioredis";
 import { AuthRequest } from "../types/express";
 import { v4 as uuidv4, validate as validateUUID } from "uuid";
+import { closeRedisClient } from "../utils/redisClose.util";
 
 // Initialize Redis connection. Adjust the URL based on env vars if needed.
-export const redisClient = new Redis(process.env.REDIS_URL || "redis://localhost:6379");
+// Fail fast when Redis is down (no offline queue) so tests/CI do not hang indefinitely.
+export const redisClient = new Redis(process.env.REDIS_URL || "redis://localhost:6379", {
+  maxRetriesPerRequest: 1,
+  enableOfflineQueue: false,
+  connectTimeout: 2000,
+});
+
+/** Closes the shared idempotency/lock Redis connection (used on shutdown). */
+export async function closeIdempotencyRedisClient(): Promise<void> {
+  await closeRedisClient(redisClient);
+}
 
 export const redisIdempotencyMiddleware = async (
   req: Request,

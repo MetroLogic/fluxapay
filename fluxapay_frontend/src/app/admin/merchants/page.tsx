@@ -164,10 +164,9 @@ const AdminMerchantsPage = () => {
     const toggleAccountStatus = async (id: string) => {
         const merchant = merchants.find(m => m.id === id);
         if (!merchant) return;
-        const newStatus = merchant.accountStatus === 'active' ? 'pending_verification' : 'active';
+        const newStatus = merchant.accountStatus === 'active' ? 'suspended' : 'active';
         try {
-            const res = await api.adminMerchants.updateStatus(id, newStatus);
-            if (!res.ok) throw new Error();
+            await api.admin.merchants.updateStatus(id, newStatus as "active" | "suspended");
             void mutate();
             toast.success(`Merchant ${newStatus === 'active' ? 'activated' : 'suspended'}`);
         } catch (err) {

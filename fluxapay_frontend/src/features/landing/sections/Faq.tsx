@@ -1,11 +1,7 @@
 "use client";
 
 import { useState } from "react";
-
-interface FAQItem {
-  question: string;
-  answer: string;
-}
+import { FAQ_ITEMS, FAQItem } from "./faq-data";
 
 const FAQAccordion = ({
   item,
@@ -44,33 +40,6 @@ const FAQAccordion = ({
 function FAQContent() {
   const [openIndex, setOpenIndex] = useState(0);
 
-  const faqItems: FAQItem[] = [
-    {
-      question: "What is Fluxapay",
-      answer: "Join paywall pup and integrate seamlessly into your website.",
-    },
-    {
-      question: "What do I need to sign up?",
-      answer:
-        "FluxaPay is a payment gateway built on the Stellar blockchain that enables merchants to accept USDC (stablecoin) payments and get settled in their local fiat currency.",
-    },
-    {
-      question: "How fast is onboarding?",
-      answer:
-        "Our streamlined onboarding process is designed to get you started in minutes. Most merchants are ready to accept payments within 24 hours.",
-    },
-    {
-      question: "How many accounts can i create?",
-      answer:
-        "You can create multiple merchant accounts under your organization. Each account can be configured separately for different use cases or business units.",
-    },
-    {
-      question: "What tech stack do you support?",
-      answer:
-        "We provide REST APIs, SDKs for popular frameworks (React, Node.js, Python, etc.), and pre-built integrations for popular platforms like Shopify and WooCommerce.",
-    },
-  ];
-
   return (
     <section className="py-24 bg-white">
       <div className="max-w-7xl mx-auto px-4">
@@ -96,7 +65,7 @@ function FAQContent() {
 
           {/* Right Column */}
           <div>
-            {faqItems.map((item, index) => (
+            {FAQ_ITEMS.map((item, index) => (
               <FAQAccordion
                 key={index}
                 item={item}

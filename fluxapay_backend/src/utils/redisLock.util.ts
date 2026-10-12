@@ -20,10 +20,18 @@ const DEFAULT_TTL_SECONDS = 300; // 5 minutes
 const LOCK_PREFIX = "cron:lock:";
 
 /**
- * Generate a lock owner identifier
+ * Generate a lock owner identifier.
+ *
+ * Exported so a caller can generate ONE owner id per tick/execution and pass
+ * it explicitly to both `acquireCronLock` and `releaseCronLock`. Relying on
+ * each function's own default (calling this internally) is unsafe: since it
+ * includes `Date.now()`, two independent calls — one at acquire time, one at
+ * release time — produce different strings, so `releaseCronLock`'s
+ * ownership check would never match and the lock would never actually be
+ * released (it would sit until its TTL expires instead).
  */
-function getLockOwner(): string {
-  return `${os.hostname()}:${process.pid}:${Date.now()}`;
+export function getLockOwner(): string {
+  return `${os.hostname()}:${process.pid}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
 }
 
 /**
