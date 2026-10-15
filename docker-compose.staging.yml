@@ -53,7 +53,8 @@ services:
         condition: service_healthy
     command: ["sh", "-c", "npx prisma migrate deploy && npm start"]
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      # The production image ships without curl; probe with Node's fetch.
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:' + (process.env.PORT || 3000) + '/health', { signal: AbortSignal.timeout(4000) }).then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
       interval: 10s
       timeout: 5s
       retries: 5

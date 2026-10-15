@@ -2,16 +2,21 @@ FROM node:18-alpine
 
 WORKDIR /usr/src/app
 
-# Create a non-root user and group with UID 1001 for development
-RUN addgroup -g 1001 -S nodegroup && adduser -u 1001 -S nodeuser -G nodegroup
-
-# Copy package files and install as root (needed for npm install)
+# Copy package files and install as root (needed for npm install), then hand
+# the tree to the unprivileged `node` user (UID 1000) that ships with the
+# official image.
 COPY package*.json ./
 RUN npm install && \
-    chown -R nodeuser:nodegroup /usr/src/app
+    chown -R node:node /usr/src/app
 
 # Switch to non-root user
-USER nodeuser
+USER node
+
+# Same probe as the production image; docker-compose.yml also declares it so
+# dependants can wait on `service_healthy`.  Generous start period: the dev
+# CMD generates the Prisma client, pushes the schema and seeds first.
+HEALTHCHECK --interval=15s --timeout=5s --start-period=90s --retries=5 \
+  CMD node -e "fetch('http://127.0.0.1:' + (process.env.PORT || 3000) + '/health', { signal: AbortSignal.timeout(4000) }).then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
 
 # We need wait-for script or similar for depending on postgres, but Docker compose healthchecks handle the wait.
 # We will use command from docker-compose, but we can set a default.

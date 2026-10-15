@@ -33,24 +33,77 @@ with FluxaPay(api_key="sk_live_...") as client:
 
 ### Asynchronous
 
+`AsyncFluxaPayClient` is the async/await client for FastAPI, Starlette, Django async views
+and any other asyncio code. It runs on `httpx.AsyncClient`, and every method has the same
+name, arguments and return type as the synchronous client. You just `await` it.
+
 ```python
 import asyncio
-from fluxapay import AsyncFluxaPay
+from fluxapay import AsyncFluxaPayClient
 
 async def main():
-    async with AsyncFluxaPay(api_key="sk_live_...") as client:
+    async with AsyncFluxaPayClient(api_key="sk_live_...") as client:
         payment = await client.payments.create(
             amount=49.99,
-            currency="USD",
+            currency="USDC",
             customer_email="buyer@example.com",
+            idempotency_key="order-1234",  # optional, makes retries safe
         )
         print(payment.checkout_url)
 
         status = await client.payments.get_status(payment.id)
         print(status.status)
 
+        link = await client.payment_links.create(title="Pro plan", currency="USD", amount=25)
+        print(link["short_url"])
+
 asyncio.run(main())
 ```
+
+Resources: `payments`, `payment_links`, `invoices`, `refunds`, `settlements`, `merchants`
+(all awaitable) and `webhooks` (`verify` / `parse`, which are plain functions because they
+never touch the network).
+
+Options:
+
+```python
+AsyncFluxaPayClient(
+    api_key="sk_test_...",
+    base_url="https://api.fluxapay.com",
+    timeout=10.0,                        # seconds
+    headers={"X-Client-Name": "acme"},   # added to every request
+    http_client=my_httpx_async_client,   # optional; reuse your own pool/transport
+)
+```
+
+Always close the client: use `async with`, or call `await client.aclose()`. If you pass your
+own `http_client`, closing it stays your job.
+
+**FastAPI:** create one client for the app's lifetime and share it across requests:
+
+```python
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, Request
+from fluxapay import AsyncFluxaPayClient
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    async with AsyncFluxaPayClient(api_key="sk_live_...") as client:
+        app.state.fluxapay = client
+        yield
+
+app = FastAPI(lifespan=lifespan)
+
+@app.post("/checkout")
+async def checkout(request: Request):
+    payment = await request.app.state.fluxapay.payments.create(
+        amount=49.99, currency="USDC", customer_email="buyer@example.com"
+    )
+    return {"checkout_url": payment.checkout_url}
+```
+
+A runnable script is in [`examples/async_usage.py`](examples/async_usage.py). The older
+`AsyncFluxaPay` class is still available for existing code.
 
 ### Webhook Verification
 

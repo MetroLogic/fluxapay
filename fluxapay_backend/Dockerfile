@@ -7,7 +7,9 @@
 #   Stage 2 (builder) – compile TypeScript, generate Prisma client, copy
 #                       native binaries into dist/.
 #   Stage 3 (runner)  – minimal runtime image; only production node_modules and
-#                       compiled JS; runs as a non-root user.
+#                       compiled JS; runs as the unprivileged `node` user
+#                       (UID 1000) that ships with the official image, and
+#                       declares a HEALTHCHECK against GET /health.
 #
 # Build args (all optional):
 #   NODE_VERSION      – base Node.js version tag  (default: 20-alpine)
@@ -89,21 +91,25 @@ RUN npm prune --omit=dev
 # ── Stage 3: production runner ────────────────────────────────────────────────
 FROM node:${NODE_VERSION} AS runner
 
-RUN apk add --no-cache curl
+# OpenSSL is required by the Prisma query engine at runtime.  No curl/wget:
+# the health check below uses Node's built-in fetch, keeping the image small.
+RUN apk add --no-cache openssl
 
+# The official image already provides an unprivileged `node` user (UID/GID
+# 1000).  Make it own the working directory so the app can write runtime
+# files (e.g. logs) without root.
 WORKDIR /app
+RUN chown node:node /app
 
-# Create a non-root user and group with UID 1001
-RUN addgroup -g 1001 -S appgroup && adduser -u 1001 -S appuser -G appgroup
+# Copy only what is needed to run the app, owned by the runtime user
+COPY --from=builder --chown=node:node /app/dist ./dist
+COPY --from=builder --chown=node:node /app/node_modules ./node_modules
+COPY --from=builder --chown=node:node /app/prisma ./prisma
+COPY --from=builder --chown=node:node /app/package.json ./package.json
 
-# Copy only what is needed to run the app
-COPY --from=builder --chown=appuser:appgroup /app/dist ./dist
-COPY --from=builder --chown=appuser:appgroup /app/node_modules ./node_modules
-COPY --from=builder --chown=appuser:appgroup /app/prisma ./prisma
-COPY --from=builder --chown=appuser:appgroup /app/package.json ./package.json
-
-# Switch to non-root user
-USER appuser
+# Drop root privileges for everything that follows, including CMD and
+# HEALTHCHECK.
+USER node
 
 ARG PORT=3000
 ENV PORT=${PORT} \
@@ -111,9 +117,11 @@ ENV PORT=${PORT} \
 
 EXPOSE ${PORT}
 
-# Health check — hits the /health endpoint every 30 s.
-# start-period gives Prisma time to connect + run any pending migrations.
+# Health check — GET /health every 30 s; any non-2xx response, connection
+# error or 4 s timeout counts as a failure, and 3 consecutive failures mark
+# the container unhealthy.  start-period gives Prisma time to connect and run
+# any pending migrations.  PORT is read at check time, so `-e PORT=...` works.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-  CMD curl -f http://localhost:${PORT}/health || exit 1
+  CMD node -e "fetch('http://127.0.0.1:' + (process.env.PORT || 3000) + '/health', { signal: AbortSignal.timeout(4000) }).then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
 
 CMD ["node", "dist/index.js"]

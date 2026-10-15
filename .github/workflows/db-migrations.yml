@@ -1,0 +1,219 @@
+name: Database Migrations
+
+# Applies every Prisma migration to a throwaway PostgreSQL container, checks
+# the result matches schema.prisma, seeds it, then rolls the whole schema back
+# and re-applies it. Any failure fails the job.
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - "fluxapay_backend/prisma/**"
+      - "fluxapay_backend/package.json"
+      - "fluxapay_backend/package-lock.json"
+      - ".github/workflows/db-migrations.yml"
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - "fluxapay_backend/prisma/**"
+      - "fluxapay_backend/package.json"
+      - "fluxapay_backend/package-lock.json"
+      - ".github/workflows/db-migrations.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: db-migrations-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  migrations:
+    name: Migrate, seed and roll back
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: fluxapay_migrations
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/fluxapay_migrations?schema=public
+      # Scratch database `prisma migrate diff` replays migrations into.
+      SHADOW_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/fluxapay_shadow?schema=public
+      PGHOST: localhost
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: fluxapay_migrations
+
+    defaults:
+      run:
+        working-directory: ./fluxapay_backend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: ./fluxapay_backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate schema
+        run: npx prisma validate
+
+      - name: Check migration directory layout
+        run: |
+          # Every migration folder must contain exactly one migration.sql, and
+          # names must be unique once the timestamp prefix is stripped, so two
+          # branches adding the same migration twice don't slip through.
+          status=0
+          for dir in prisma/migrations/*/; do
+            if [ ! -f "${dir}migration.sql" ]; then
+              echo "::error file=fluxapay_backend/${dir}::missing migration.sql"
+              status=1
+            fi
+          done
+          dupes=$(ls -d prisma/migrations/*/ | xargs -n1 basename | sed 's/^[0-9]*_//' | sort | uniq -d)
+          if [ -n "$dupes" ]; then
+            echo "::error::duplicate migration names: $dupes"
+            status=1
+          fi
+          exit $status
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Create shadow database
+        run: psql -v ON_ERROR_STOP=1 -c 'CREATE DATABASE fluxapay_shadow;'
+
+      - name: Apply all migrations from scratch
+        run: npx prisma migrate deploy
+
+      - name: Verify no failed or pending migrations
+        run: npx prisma migrate status
+
+      - name: Check schema.prisma matches the migrations
+        run: |
+          # Exit code 2 means the migrations do not produce schema.prisma —
+          # someone changed the schema without a migration, or two migrations
+          # conflict.
+          set +e
+          npx prisma migrate diff \
+            --from-migrations prisma/migrations \
+            --to-schema-datamodel prisma/schema.prisma \
+            --shadow-database-url "$SHADOW_DATABASE_URL" \
+            --script > drift.sql
+          npx prisma migrate diff \
+            --from-migrations prisma/migrations \
+            --to-schema-datamodel prisma/schema.prisma \
+            --shadow-database-url "$SHADOW_DATABASE_URL" \
+            --exit-code > /dev/null
+          code=$?
+          set -e
+          if [ "$code" -eq 2 ]; then
+            echo "::error::prisma/schema.prisma differs from the result of applying prisma/migrations. Create a migration with 'npx prisma migrate dev'. Missing SQL:"
+            cat drift.sql
+            exit 1
+          elif [ "$code" -ne 0 ]; then
+            echo "::error::prisma migrate diff failed (exit $code)"
+            exit "$code"
+          fi
+          echo "Migrations and schema.prisma are in sync."
+
+      - name: Seed database
+        run: npx prisma db seed
+
+      - name: Re-run seed (must be idempotent)
+        run: npx prisma db seed
+
+      - name: Verify seeded relational integrity
+        run: |
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          BEGIN
+            IF (SELECT count(*) FROM "Merchant") = 0 THEN
+              RAISE EXCEPTION 'seed created no merchants';
+            END IF;
+            IF (SELECT count(*) FROM "Payment") = 0 THEN
+              RAISE EXCEPTION 'seed created no payments';
+            END IF;
+            IF EXISTS (
+              SELECT 1 FROM "Payment" p
+              LEFT JOIN "Merchant" m ON m.id = p."merchantId"
+              WHERE m.id IS NULL
+            ) THEN
+              RAISE EXCEPTION 'payments reference missing merchants';
+            END IF;
+            IF EXISTS (
+              SELECT 1 FROM "Customer" c
+              LEFT JOIN "Merchant" m ON m.id = c."merchantId"
+              WHERE m.id IS NULL
+            ) THEN
+              RAISE EXCEPTION 'customers reference missing merchants';
+            END IF;
+          END $$;
+          SQL
+          # Every foreign key in the schema must be enforced (none NOT VALID).
+          invalid=$(psql -tA -c "SELECT count(*) FROM pg_constraint WHERE contype = 'f' AND NOT convalidated;")
+          if [ "$invalid" != "0" ]; then
+            echo "::error::$invalid foreign key constraint(s) are NOT VALID"
+            exit 1
+          fi
+
+      - name: Roll back the full schema
+        run: |
+          # Prisma has no down migrations, so derive one: the SQL that takes
+          # the migrated database back to empty. Applying it proves the
+          # schema can be torn down cleanly (no orphaned types, sequences or
+          # circular dependencies).
+          npx prisma migrate diff \
+            --from-url "$DATABASE_URL" \
+            --to-empty \
+            --script > rollback.sql
+          echo "Generated rollback.sql ($(wc -l < rollback.sql) lines)"
+          npx prisma db execute --url "$DATABASE_URL" --file rollback.sql
+          psql -v ON_ERROR_STOP=1 -c 'DROP TABLE IF EXISTS "_prisma_migrations";'
+
+      - name: Verify the rollback left an empty schema
+        run: |
+          tables=$(psql -tA -c "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public';")
+          types=$(psql -tA -c "SELECT count(*) FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace WHERE n.nspname = 'public' AND t.typtype = 'e';")
+          if [ "$tables" != "0" ] || [ "$types" != "0" ]; then
+            echo "::error::rollback left $tables table(s) and $types enum type(s) behind"
+            exit 1
+          fi
+
+      - name: Re-apply migrations and seed after rollback
+        run: |
+          npx prisma migrate deploy
+          npx prisma migrate status
+          npx prisma db seed
+
+      - name: Upload SQL artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: migration-sql
+          path: |
+            fluxapay_backend/drift.sql
+            fluxapay_backend/rollback.sql
+          if-no-files-found: ignore

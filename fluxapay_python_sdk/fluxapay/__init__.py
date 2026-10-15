@@ -778,3 +778,10 @@ class AsyncFluxaPay(_PaymentsMixin, _SettlementsMixin, _InvoicesMixin, _RefundsM
     @property
     def webhooks(self) -> "FluxaPay._Webhooks":
         return FluxaPay._Webhooks()
+
+
+# ── Recommended async client ──────────────────────────────────────────────────
+# Imported last: ``async_client`` builds on the models and helpers above.
+from .async_client import AsyncFluxaPayClient  # noqa: E402
+
+__all__.append("AsyncFluxaPayClient")

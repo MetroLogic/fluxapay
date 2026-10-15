@@ -55,6 +55,15 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    # GET /health inside the container (PORT=3001 above).  Uses Node's
+    # built-in fetch, so no curl is needed in the image.
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:' + (process.env.PORT || 3000) + '/health', { signal: AbortSignal.timeout(4000) }).then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      # The dev command runs prisma generate, db push and seed before serving.
+      start_period: 90s
     networks:
       - fluxapay-net
 
@@ -74,7 +83,8 @@ services:
       - ./fluxapay_frontend:/usr/src/app
       - /usr/src/app/node_modules
     depends_on:
-      - fluxapay_backend
+      fluxapay_backend:
+        condition: service_healthy
     networks:
       - fluxapay-net
 
