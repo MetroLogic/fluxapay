@@ -19,9 +19,10 @@
   ],
   "scripts": {
     "build": "tsc",
-    "test": "npm run test:unit && npm run test:webhook && npm run test:integration",
+    "test": "npm run test:unit && npm run test:webhook && npm run test:webhook-signature && npm run test:integration",
     "test:unit": "tsx src/__tests__/sdk.test.ts",
     "test:webhook": "tsx src/__tests__/webhook.test.ts",
+    "test:webhook-signature": "vitest run src/__tests__/webhookSignature.test.ts",
     "test:integration": "tsx src/__tests__/integration.test.ts",
     "prepublishOnly": "npm run build"
   },
@@ -44,6 +45,7 @@
   "devDependencies": {
     "@types/node": "^20.19.33",
     "tsx": "^4.20.6",
-    "typescript": "^5.0.0"
+    "typescript": "^5.0.0",
+    "vitest": "^3.2.4"
   }
 }
