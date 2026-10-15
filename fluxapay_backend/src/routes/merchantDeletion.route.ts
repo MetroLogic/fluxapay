@@ -64,6 +64,7 @@ router.get(
  *     parameters:
  *       - in: path
  *         name: merchantId
+ *         description: Unique identifier of the merchant.
  *         required: true
  *         schema: { type: string }
  *     responses:
@@ -84,6 +85,7 @@ router.post("/admin/:merchantId/deletion-request", authenticateToken, adminAuth,
  *     parameters:
  *       - in: path
  *         name: merchantId
+ *         description: Unique identifier of the merchant.
  *         required: true
  *         schema: { type: string }
  *     responses:

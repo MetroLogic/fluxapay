@@ -38,6 +38,7 @@ router.post("/", authenticateApiKey, merchantApiKeyRateLimit(), requestExport);
  *     parameters:
  *       - in: path
  *         name: jobId
+ *         description: Identifier of the asynchronous export job.
  *         required: true
  *         schema: { type: string }
  *     responses:
@@ -58,6 +59,7 @@ router.get("/:jobId", authenticateApiKey, getExportStatus);
  *     parameters:
  *       - in: path
  *         name: jobId
+ *         description: Identifier of the asynchronous export job.
  *         required: true
  *         schema: { type: string }
  *     responses:
@@ -80,6 +82,7 @@ router.get("/:jobId/download", authenticateApiKey, merchantApiKeyRateLimit(), do
  *     parameters:
  *       - in: path
  *         name: merchantId
+ *         description: Unique identifier of the merchant.
  *         required: true
  *         schema: { type: string }
  *     responses:
@@ -100,10 +103,12 @@ router.post("/admin/:merchantId", authenticateAdmin, requireAdminRole(AdminPermi
  *     parameters:
  *       - in: path
  *         name: merchantId
+ *         description: Unique identifier of the merchant.
  *         required: true
  *         schema: { type: string }
  *       - in: path
  *         name: jobId
+ *         description: Identifier of the asynchronous export job.
  *         required: true
  *         schema: { type: string }
  *     responses:

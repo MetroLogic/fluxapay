@@ -12,6 +12,8 @@
     "test:integration": "jest --runInBand --testPathPattern=src/__tests__/integration",
     "test:contract": "jest --runInBand src/__tests__/contract",
     "validate:openapi": "ts-node scripts/validate-openapi-spec.ts",
+    "openapi:export": "ts-node scripts/export-swagger.ts",
+    "lint:openapi": "npm run openapi:export && npx --yes @stoplight/spectral-cli@6.11.1 lint swagger.json --ruleset .spectral.yaml --fail-severity=error",
     "check:route-coverage": "ts-node scripts/check-route-coverage.ts",
     "check:route-coverage:ci": "ts-node scripts/check-route-coverage.ts --ci"
   },

@@ -17,15 +17,18 @@ import {
   paymentLinkParamsSchema,
   updatePaymentLinkSchema,
 } from "../schemas/paymentLink.schema";
-import { simpleRateLimit } from "../middleware/simpleRateLimit.middleware";
+import { ipRateLimit } from "../middleware/ipRateLimit.middleware";
 
 const router = Router();
 
-// Rate-limit public payment-link resolution by IP to prevent enumeration
-const publicPaymentLinkRateLimit = simpleRateLimit({
-  keyPrefix: "payment-links:resolve",
-  windowMs: 30_000,
-  max: 30,
+// Redis token-bucket limit on public payment-link resolution, keyed by IP, to
+// prevent slug enumeration. Tunable via PAYMENT_LINK_RATE_LIMIT_CAPACITY /
+// PAYMENT_LINK_RATE_LIMIT_REFILL_PER_SECOND.
+const publicPaymentLinkRateLimit = ipRateLimit({
+  name: "payment-links:resolve",
+  envPrefix: "PAYMENT_LINK_RATE_LIMIT",
+  capacity: 30,
+  refillPerSecond: 1,
 });
 
 /**
@@ -38,6 +41,7 @@ const publicPaymentLinkRateLimit = simpleRateLimit({
  *     parameters:
  *       - in: path
  *         name: slug
+ *         description: Public slug of the payment link.
  *         required: true
  *         schema: { type: string }
  *     responses:
@@ -60,6 +64,7 @@ router.get("/resolve/:slug", publicPaymentLinkRateLimit, resolvePaymentLinkBySlu
  *     parameters:
  *       - in: path
  *         name: slug
+ *         description: Public slug of the payment link.
  *         required: true
  *         schema: { type: string }
  *     requestBody:
@@ -149,12 +154,15 @@ router.post("/resolve/:slug/charge", publicPaymentLinkRateLimit, chargeFromPayme
  *     parameters:
  *       - in: query
  *         name: page
+ *         description: Page number to return (1-indexed).
  *         schema: { type: integer }
  *       - in: query
  *         name: limit
+ *         description: Maximum number of items to return per page.
  *         schema: { type: integer }
  *       - in: query
  *         name: active
+ *         description: Filter by whether the payment link is active.
  *         schema: { type: boolean }
  *     responses:
  *       200:
@@ -175,6 +183,7 @@ router.get("/", authenticateApiKey, merchantApiKeyRateLimit(), validateQuery(lis
  *     parameters:
  *       - in: path
  *         name: id
+ *         description: Unique identifier of the payment link.
  *         required: true
  *         schema: { type: string }
  *     responses:
@@ -191,6 +200,7 @@ router.get("/", authenticateApiKey, merchantApiKeyRateLimit(), validateQuery(lis
  *     parameters:
  *       - in: path
  *         name: id
+ *         description: Unique identifier of the payment link.
  *         required: true
  *         schema: { type: string }
  *     requestBody:
@@ -226,6 +236,7 @@ router.get("/", authenticateApiKey, merchantApiKeyRateLimit(), validateQuery(lis
  *     parameters:
  *       - in: path
  *         name: id
+ *         description: Unique identifier of the payment link.
  *         required: true
  *         schema: { type: string }
  *     responses:

@@ -63,9 +63,11 @@ const router = Router();
  *     parameters:
  *       - in: query
  *         name: page
+ *         description: Page number to return (1-indexed).
  *         schema: { type: integer }
  *       - in: query
  *         name: limit
+ *         description: Maximum number of items to return per page.
  *         schema: { type: integer }
  *       - in: query
  *         name: search
@@ -103,6 +105,7 @@ router.get(
  *     parameters:
  *       - in: path
  *         name: id
+ *         description: Unique identifier of the customer.
  *         required: true
  *         schema: { type: string }
  *     responses:
@@ -119,6 +122,7 @@ router.get(
  *     parameters:
  *       - in: path
  *         name: id
+ *         description: Unique identifier of the customer.
  *         required: true
  *         schema: { type: string }
  *     requestBody:
@@ -156,6 +160,7 @@ router.get(
  *     parameters:
  *       - in: path
  *         name: id
+ *         description: Unique identifier of the customer.
  *         required: true
  *         schema: { type: string }
  *     responses:

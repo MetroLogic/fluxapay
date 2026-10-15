@@ -1,0 +1,33 @@
+# Spectral ruleset for the FluxaPay public OpenAPI spec.
+#
+# Run locally with `npm run lint:openapi` (exports swagger.json from the
+# swagger-jsdoc annotations, then lints it). CI fails on any `error`;
+# `warn` findings are reported but do not block a merge.
+#
+# Docs: https://docs.stoplight.io/docs/spectral/
+extends:
+  - [spectral:oas, recommended]
+
+rules:
+  # ── Blocking: these break SDK generators or mislead integrators ────────────
+  # OpenAPI 3.0 structural validity (unknown keywords, wrong types, etc.).
+  oas3-schema: error
+  # Unresolved `$ref`s are reported by Spectral's core resolver as `invalid-ref`.
+  # Every `{param}` in a path must be declared, and vice versa.
+  path-params: error
+  # Generated SDK method names come from operationIds, so they must be unique.
+  operation-operationId-unique: error
+  # Examples must validate against the schema they illustrate.
+  oas3-valid-media-example: error
+  oas3-valid-schema-example: error
+  # Every parameter must explain what it does.
+  oas3-parameter-description: error
+  # A `$ref` with sibling keys silently drops those keys in OpenAPI 3.0.
+  no-$ref-siblings: error
+
+  # ── Advisory: tracked, but not yet enforced across the whole spec ──────────
+  info-contact: warn
+  info-license: off
+  license-url: off
+  operation-tag-defined: warn
+  oas3-unused-component: warn

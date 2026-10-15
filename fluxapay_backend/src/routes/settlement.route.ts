@@ -38,20 +38,24 @@ router.use(merchantApiKeyRateLimit());
  *         description: Items per page
  *       - in: query
  *         name: status
+ *         description: Filter by settlement status.
  *         schema:
  *           type: string
  *           enum: [pending, processing, completed, failed]
  *       - in: query
  *         name: currency
+ *         description: Filter by ISO 4217 currency code (e.g. USD, NGN).
  *         schema:
  *           type: string
  *       - in: query
  *         name: date_from
+ *         description: Only include records created on or after this date (ISO 8601).
  *         schema:
  *           type: string
  *           format: date
  *       - in: query
  *         name: date_to
+ *         description: Only include records created on or before this date (ISO 8601).
  *         schema:
  *           type: string
  *           format: date
@@ -106,10 +110,12 @@ router.get("/export", validate(settlementSchema.exportSettlementRangeSchema), ex
  *     parameters:
  *       - in: query
  *         name: month
+ *         description: Month to report on (1-12).
  *         schema:
  *           type: string
  *       - in: query
  *         name: year
+ *         description: Four-digit year to report on (e.g. 2026).
  *         schema:
  *           type: string
  *     responses:
@@ -129,11 +135,13 @@ router.get("/summary", validate(settlementSchema.settlementSummarySchema), getSe
  *     parameters:
  *       - in: query
  *         name: date_from
+ *         description: Only include records created on or after this date (ISO 8601).
  *         schema:
  *           type: string
  *           format: date-time
  *       - in: query
  *         name: date_to
+ *         description: Only include records created on or before this date (ISO 8601).
  *         schema:
  *           type: string
  *           format: date-time
@@ -154,6 +162,7 @@ router.get("/batch", validate(settlementSchema.settlementBatchSchema), getSettle
  *     parameters:
  *       - in: path
  *         name: settlement_id
+ *         description: Unique identifier of the settlement.
  *         required: true
  *         schema:
  *           type: string
@@ -176,11 +185,13 @@ router.get("/:settlement_id", validate(settlementSchema.settlementDetailsSchema)
  *     parameters:
  *       - in: path
  *         name: settlement_id
+ *         description: Unique identifier of the settlement.
  *         required: true
  *         schema:
  *           type: string
  *       - in: query
  *         name: format
+ *         description: Output format of the exported file.
  *         schema:
  *           type: string
  *           enum: [pdf, csv]

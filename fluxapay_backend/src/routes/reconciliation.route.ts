@@ -34,12 +34,14 @@ router.use(authenticateToken);
  *         description: Optional merchant filter
  *       - in: query
  *         name: period_start
+ *         description: Start of the billing period (ISO 8601 date).
  *         required: true
  *         schema:
  *           type: string
  *           format: date-time
  *       - in: query
  *         name: period_end
+ *         description: End of the billing period (ISO 8601 date).
  *         required: true
  *         schema:
  *           type: string
@@ -61,18 +63,22 @@ router.get("/summary", validateQuery(reconciliationSummaryQuerySchema), getRecon
  *     parameters:
  *       - in: query
  *         name: merchant_id
+ *         description: Filter results to a single merchant ID.
  *         schema:
  *           type: string
  *       - in: query
  *         name: is_resolved
+ *         description: Filter reconciliation alerts by whether they have been resolved.
  *         schema:
  *           type: boolean
  *       - in: query
  *         name: page
+ *         description: Page number to return (1-indexed).
  *         schema:
  *           type: integer
  *       - in: query
  *         name: limit
+ *         description: Maximum number of items to return per page.
  *         schema:
  *           type: integer
  *     responses:
@@ -92,6 +98,7 @@ router.get("/alerts", validateQuery(discrepancyAlertsQuerySchema), listDiscrepan
  *     parameters:
  *       - in: path
  *         name: alert_id
+ *         description: Unique identifier of the alert.
  *         required: true
  *         schema:
  *           type: string

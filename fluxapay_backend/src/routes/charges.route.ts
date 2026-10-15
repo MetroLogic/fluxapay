@@ -64,6 +64,7 @@ router.post(
  *     parameters:
  *       - in: path
  *         name: id
+ *         description: Unique identifier of the refund.
  *         required: true
  *         schema:
  *           type: string
@@ -106,6 +107,7 @@ router.post(
  *     parameters:
  *       - in: path
  *         name: id
+ *         description: Unique identifier of the refund.
  *         required: true
  *         schema:
  *           type: string

@@ -11,6 +11,42 @@ on:
       - develop
 
 jobs:
+  openapi-lint:
+    name: OpenAPI spec lint (Spectral)
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ./fluxapay_backend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: './fluxapay_backend/package-lock.json'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate OpenAPI structure and refs (swagger-parser)
+        run: npm run validate:openapi
+
+      - name: Lint OpenAPI spec (Spectral)
+        run: npm run lint:openapi
+
+      - name: Upload OpenAPI spec
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: openapi-spec
+          path: fluxapay_backend/swagger.json
+          if-no-files-found: ignore
+
   build-and-test:
     runs-on: ubuntu-latest
 

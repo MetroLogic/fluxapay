@@ -23,18 +23,23 @@ router.use(adminAuth);
  *     parameters:
  *       - in: query
  *         name: page
+ *         description: Page number to return (1-indexed).
  *         schema: { type: integer }
  *       - in: query
  *         name: limit
+ *         description: Maximum number of items to return per page.
  *         schema: { type: integer }
  *       - in: query
  *         name: status
+ *         description: Filter by payment status.
  *         schema: { type: string }
  *       - in: query
  *         name: currency
+ *         description: Filter by ISO 4217 currency code (e.g. USD, NGN).
  *         schema: { type: string }
  *       - in: query
  *         name: search
+ *         description: Case-insensitive free-text search term.
  *         schema: { type: string }
  *     responses:
  *       200:
@@ -56,9 +61,11 @@ router.get('/payments', getAdminPayments);
  *     parameters:
  *       - in: query
  *         name: page
+ *         description: Page number to return (1-indexed).
  *         schema: { type: integer }
  *       - in: query
  *         name: limit
+ *         description: Maximum number of items to return per page.
  *         schema: { type: integer }
  *       - in: query
  *         name: search
@@ -66,9 +73,11 @@ router.get('/payments', getAdminPayments);
  *         schema: { type: string }
  *       - in: query
  *         name: role
+ *         description: Filter admin users by role.
  *         schema: { type: string, enum: [support, finance, super_admin] }
  *       - in: query
  *         name: is_active
+ *         description: Filter by whether the account is active.
  *         schema: { type: boolean }
  *     responses:
  *       200:
@@ -90,10 +99,12 @@ router.get('/users', getAdminUsers);
  *     parameters:
  *       - in: query
  *         name: userId
+ *         description: Filter audit entries by the ID of the acting user.
  *         schema:
  *           type: string
  *       - in: query
  *         name: action
+ *         description: Filter audit entries by action name.
  *         schema:
  *           type: string
  *     responses:
@@ -116,6 +127,7 @@ router.get('/audit-logs', getAuditLogs);
  *     parameters:
  *       - in: path
  *         name: id
+ *         description: Unique identifier of the audit log.
  *         required: true
  *         schema:
  *           type: string
@@ -141,6 +153,7 @@ router.get('/audit-logs/:id', getAuditLogByIdHandler);
  *     parameters:
  *       - in: path
  *         name: settlement_id
+ *         description: Unique identifier of the settlement.
  *         required: true
  *         schema:
  *           type: string
