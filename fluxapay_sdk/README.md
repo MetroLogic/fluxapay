@@ -39,8 +39,34 @@ console.log('Payment URL:', payment.checkout_url);
 const client = new FluxaPay({
   apiKey: string;      // Required: Your FluxaPay API key
   baseUrl?: string;    // Optional: API base URL (defaults to production)
+  maxRetries?: number; // Optional: automatic retries for transient failures (default 2, 0 disables)
+  timeout?: number;    // Optional: per-attempt timeout in ms (default 30000, 0 disables)
+  retryInitialDelayMs?: number; // Optional: backoff base delay (default 100)
+  retryMaxDelayMs?: number;     // Optional: max single backoff / Retry-After wait (default 30000)
 });
 ```
+
+#### Automatic retries
+
+Requests that fail with HTTP `429`, `502`, `503`, `504`, a network error or a timeout are retried
+up to `maxRetries` times with exponential backoff and full jitter. On `429` the SDK waits at least as
+long as the `Retry-After` header asks (seconds or HTTP date). If that is longer than
+`retryMaxDelayMs`, the error is returned instead of waiting.
+
+Only idempotent requests are retried: `GET`, `PUT`, `DELETE`, and `POST`/`PATCH` requests that carry
+an idempotency key. Creating a payment without a key is never retried, so a blip cannot create a
+duplicate charge:
+
+```typescript
+const payment = await client.payments.create(
+  { amount: 49.99, currency: 'USDC', customer_email: 'buyer@example.com' },
+  { idempotencyKey: 'order_123' }, // safe to retry; sent as Idempotency-Key
+);
+```
+
+`client.refunds.create({ ..., idempotency_key })` forwards its key the same way. A request that
+still times out after the last retry throws `FluxaPayError` with `statusCode: 408` and
+`code: 'REQUEST_TIMEOUT'`.
 
 ### Payments
 

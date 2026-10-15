@@ -11,10 +11,35 @@ export interface FluxaPayConfig {
    */
   baseUrl?: string;
   /**
-   * Number of retries for transient 5xx errors and network failures.
-   * Defaults to 3. Set to 0 to disable retries.
+   * Maximum number of automatic retries for idempotent requests that fail with
+   * HTTP 429, 502, 503, 504, a network error or a timeout. Defaults to 2.
+   * Set to 0 to disable retries.
    */
+  maxRetries?: number;
+  /** @deprecated Use `maxRetries`. Used only when `maxRetries` is not set. */
   retries?: number;
+  /**
+   * Per-attempt request timeout in milliseconds. Defaults to 30000.
+   * Set to 0 to disable the timeout.
+   */
+  timeout?: number;
+  /** Base delay for exponential backoff, in milliseconds. Defaults to 100. */
+  retryInitialDelayMs?: number;
+  /**
+   * Upper bound for a single backoff delay, in milliseconds. Defaults to 30000.
+   * A 429 whose `Retry-After` asks for longer than this is not retried.
+   */
+  retryMaxDelayMs?: number;
+}
+
+/** Per-request options. */
+export interface RequestOptions {
+  /**
+   * Sent as the `Idempotency-Key` header. POST and PATCH requests are only
+   * retried automatically when an idempotency key is provided, so a retry can
+   * never create a duplicate payment.
+   */
+  idempotencyKey?: string;
 }
 
 export interface CreatePaymentParams {
@@ -331,12 +356,40 @@ export class FluxaPayError extends Error {
 const DEFAULT_BASE_URL = 'https://api.fluxapay.com';
 const API_VERSION = 'v1';
 const RETRYABLE_METHODS = new Set(['DELETE', 'GET', 'HEAD', 'OPTIONS', 'PUT']);
+const DEFAULT_MAX_RETRIES = 2;
+const DEFAULT_TIMEOUT_MS = 30_000;
 const INITIAL_RETRY_DELAY_MS = 100;
 const MAX_RETRY_DELAY_MS = 30_000;
 
-function retryDelay(retryIndex: number): number {
-  const maxDelay = Math.min(MAX_RETRY_DELAY_MS, INITIAL_RETRY_DELAY_MS * 2 ** retryIndex);
+interface RetryConfig {
+  maxRetries: number;
+  timeoutMs: number;
+  initialDelayMs: number;
+  maxDelayMs: number;
+}
+
+function nonNegative(value: number | undefined, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.floor(value)) : fallback;
+}
+
+function resolveRetryConfig(config: FluxaPayConfig): RetryConfig {
+  return {
+    maxRetries: nonNegative(config.maxRetries ?? config.retries, DEFAULT_MAX_RETRIES),
+    timeoutMs: nonNegative(config.timeout, DEFAULT_TIMEOUT_MS),
+    initialDelayMs: nonNegative(config.retryInitialDelayMs, INITIAL_RETRY_DELAY_MS),
+    maxDelayMs: nonNegative(config.retryMaxDelayMs, MAX_RETRY_DELAY_MS),
+  };
+}
+
+/** Exponential backoff with full jitter: random delay in [0, min(max, base * 2^n)). */
+function retryDelay(retryIndex: number, initialDelayMs = INITIAL_RETRY_DELAY_MS, maxDelayMs = MAX_RETRY_DELAY_MS): number {
+  const maxDelay = Math.min(maxDelayMs, initialDelayMs * 2 ** retryIndex);
   return Math.floor(Math.random() * maxDelay);
+}
+
+function isTimeoutError(error: unknown): boolean {
+  const name = (error as { name?: unknown } | null)?.name;
+  return name === 'TimeoutError' || name === 'AbortError';
 }
 
 function retryAfterDelay(header: string | null): number | undefined {
@@ -355,29 +408,55 @@ async function request<T>(
   method: string,
   path: string,
   body?: unknown,
-  retries = 3,
+  retries: number | RetryConfig = DEFAULT_MAX_RETRIES,
+  requestOptions: RequestOptions = {},
 ): Promise<T> {
+  const retry: RetryConfig =
+    typeof retries === 'number'
+      ? {
+          maxRetries: nonNegative(retries, 0),
+          timeoutMs: DEFAULT_TIMEOUT_MS,
+          initialDelayMs: INITIAL_RETRY_DELAY_MS,
+          maxDelayMs: MAX_RETRY_DELAY_MS,
+        }
+      : retries;
+
   const url = `${baseUrl}${path}`;
-  const options: RequestInit = {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-      'X-API-Version': API_VERSION,
-    },
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${apiKey}`,
+    'X-API-Version': API_VERSION,
   };
-  const retryLimit = Number.isFinite(retries) ? Math.max(0, Math.floor(retries)) : 0;
-  const canRetry = RETRYABLE_METHODS.has(method.toUpperCase());
+  const idempotencyKey = requestOptions.idempotencyKey?.trim();
+  if (idempotencyKey) headers['Idempotency-Key'] = idempotencyKey;
+
+  const retryLimit = retry.maxRetries;
+  // Non-idempotent writes are only retried when the server can de-duplicate
+  // them via Idempotency-Key; otherwise a retry could double-charge.
+  const canRetry = RETRYABLE_METHODS.has(method.toUpperCase()) || Boolean(idempotencyKey);
   let retriesMade = 0;
 
   while (true) {
+    const options: RequestInit = {
+      method,
+      headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+      // AbortSignal.timeout does not go through globalThis.setTimeout, so it is
+      // unaffected by the backoff timer and cleans itself up.
+      signal: retry.timeoutMs > 0 ? AbortSignal.timeout(retry.timeoutMs) : undefined,
+    };
+
     let res: Response;
     try {
       res = await fetch(url, options);
     } catch (error) {
-      if (!canRetry || retriesMade >= retryLimit) throw error;
-      await new Promise((resolve) => setTimeout(resolve, retryDelay(retriesMade)));
+      if (!canRetry || retriesMade >= retryLimit) {
+        if (isTimeoutError(error)) {
+          throw new FluxaPayError(408, `Request timed out after ${retry.timeoutMs}ms`, 'REQUEST_TIMEOUT', error);
+        }
+        throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, retryDelay(retriesMade, retry.initialDelayMs, retry.maxDelayMs)));
       retriesMade++;
       continue;
     }
@@ -400,8 +479,10 @@ async function request<T>(
 
       if (!canRetry || !error.retryable || retriesMade >= retryLimit) throw error;
 
-      const backoff = retryDelay(retriesMade);
+      const backoff = retryDelay(retriesMade, retry.initialDelayMs, retry.maxDelayMs);
       const serverDelay = res.status === 429 ? retryAfterDelay(res.headers.get('retry-after')) : undefined;
+      // Don't sit on a request for longer than the caller allows; surface the 429 instead.
+      if (serverDelay !== undefined && serverDelay > retry.maxDelayMs) throw error;
       await new Promise((resolve) => setTimeout(resolve, Math.max(backoff, serverDelay ?? 0)));
       retriesMade++;
       continue;
@@ -433,13 +514,13 @@ async function request<T>(
 export class FluxaPay {
   private readonly baseUrl: string;
   private readonly apiKey: string;
-  private readonly retries: number;
+  private readonly retries: RetryConfig;
 
   constructor(config: FluxaPayConfig) {
     if (!config.apiKey) throw new Error('FluxaPay: apiKey is required');
     this.apiKey = config.apiKey;
     this.baseUrl = (config.baseUrl ?? DEFAULT_BASE_URL).replace(/\/$/, '');
-    this.retries = config.retries ?? 3;
+    this.retries = resolveRetryConfig(config);
   }
 
   // ── payments ───────────────────────────────────────────────────────────────
@@ -448,11 +529,14 @@ export class FluxaPay {
     /**
      * Create a new payment link.
      * Returns a `checkout_url` your customer should be redirected to.
-     * 
+     *
+     * Pass `{ idempotencyKey }` to make the request safe to retry: without it,
+     * failed POSTs are never retried automatically.
+     *
      * Canonical route: POST /api/payments
      */
-    create: (params: CreatePaymentParams): Promise<Payment> =>
-      request<Payment>(this.baseUrl, this.apiKey, 'POST', '/api/payments', params, this.retries),
+    create: (params: CreatePaymentParams, options: RequestOptions = {}): Promise<Payment> =>
+      request<Payment>(this.baseUrl, this.apiKey, 'POST', '/api/payments', params, this.retries, options),
 
     /**
      * Retrieve a payment by its ID.
@@ -521,9 +605,14 @@ export class FluxaPay {
   // ── refunds ────────────────────────────────────────────────────────────────
 
   readonly refunds = {
-    /** Create a refund for a payment. */
+    /**
+     * Create a refund for a payment. When `idempotency_key` is set it is also
+     * sent as the `Idempotency-Key` header, which makes the request safe to retry.
+     */
     create: (params: CreateRefundParams): Promise<RefundResponse> =>
-      request<RefundResponse>(this.baseUrl, this.apiKey, 'POST', '/api/v1/refunds', params, this.retries),
+      request<RefundResponse>(this.baseUrl, this.apiKey, 'POST', '/api/v1/refunds', params, this.retries, {
+        idempotencyKey: params.idempotency_key,
+      }),
 
     /** Retrieve a refund by ID. */
     get: (refundId: string): Promise<RefundResponse> =>
