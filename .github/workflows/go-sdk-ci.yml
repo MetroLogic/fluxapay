@@ -1,0 +1,41 @@
+name: Go SDK CI
+
+on:
+  pull_request:
+    paths:
+      - "fluxapay_go_sdk/**"
+      - ".github/workflows/go-sdk-ci.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "fluxapay_go_sdk/**"
+      - ".github/workflows/go-sdk-ci.yml"
+
+jobs:
+  test:
+    name: vet, build examples, test
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ./fluxapay_go_sdk
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: fluxapay_go_sdk/go.mod
+          cache: false
+
+      - name: Vet (SDK and examples)
+        run: go vet ./...
+
+      - name: Build examples
+        run: go build ./examples/...
+
+      - name: Test
+        run: go test -race -count=1 ./...

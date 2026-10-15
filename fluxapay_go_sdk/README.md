@@ -48,6 +48,62 @@ if !valid {
 event, _ := client.Webhooks.Parse(rawBody)
 ```
 
+## Payment Links
+
+```go
+link, err := client.CreatePaymentLink(ctx, &fluxapay.CreatePaymentLinkParams{
+    Title:    "Pro plan - monthly",
+    Amount:   25, // omit (0) for an open-amount link
+    Currency: "USD",
+    Expiry:   time.Now().Add(30 * 24 * time.Hour).UTC().Format(time.RFC3339),
+})
+if errors.Is(err, fluxapay.ErrInvalidParams) {
+    // rejected client-side, no request was sent
+}
+fmt.Println(link.ShortURL)
+
+// Also: client.PaymentLinks.Get(ctx, id) and client.PaymentLinks.List(ctx, params)
+```
+
+## Waiting for a Payment
+
+`WaitForPayment` polls until the payment reaches a terminal status, with
+exponential backoff and full `context` support:
+
+```go
+ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
+defer cancel()
+
+payment, err := client.WaitForPayment(ctx, paymentID,
+    fluxapay.WithPollInterval(2*time.Second),     // first delay (default 2s)
+    fluxapay.WithMaxPollInterval(15*time.Second), // backoff cap (default 30s)
+)
+var statusErr *fluxapay.PaymentStatusError
+var timeoutErr *fluxapay.WaitTimeoutError
+switch {
+case err == nil:
+    // confirmed / paid / completed / overpaid
+case errors.As(err, &statusErr):
+    // expired / failed / cancelled; statusErr.Payment has the final state
+case errors.As(err, &timeoutErr):
+    // context deadline, cancellation or WithPollTimeout
+}
+```
+
+Transient errors (429, 502–504, network failures) are retried while polling;
+other API errors are returned immediately. Other options: `WithPollBackoff`,
+`WithPollTimeout`, `WithSuccessStatuses`, `WithFailureStatuses`, `WithOnPoll`.
+
+## Examples
+
+Runnable programs for a checkout flow, a webhook server and payment links are in
+[`examples/`](./examples/README.md):
+
+```bash
+export FLUXAPAY_API_KEY=sk_test_...
+go run ./examples/checkout_flow
+```
+
 ## Customers
 
 List and retrieve customer records for the authenticated merchant.
