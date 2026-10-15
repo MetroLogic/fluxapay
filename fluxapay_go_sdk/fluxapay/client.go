@@ -250,11 +250,12 @@ type Client struct {
 	baseURL    string
 	httpClient *http.Client
 
-	Payments    *PaymentsResource
-	Settlements *SettlementsResource
-	Invoices    *InvoicesResource
-	Refunds     *RefundsResource
-	Webhooks    *WebhooksResource
+	Payments     *PaymentsResource
+	PaymentLinks *PaymentLinksResource
+	Settlements  *SettlementsResource
+	Invoices     *InvoicesResource
+	Refunds      *RefundsResource
+	Webhooks     *WebhooksResource
 }
 
 // New creates a new FluxaPay client with the given API key.
@@ -268,6 +269,7 @@ func New(apiKey string, opts ...Option) *Client {
 		o(c)
 	}
 	c.Payments = &PaymentsResource{client: c}
+	c.PaymentLinks = &PaymentLinksResource{client: c}
 	c.Settlements = &SettlementsResource{client: c}
 	c.Invoices = &InvoicesResource{client: c}
 	c.Refunds = &RefundsResource{client: c}
