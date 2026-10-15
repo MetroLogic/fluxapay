@@ -18,29 +18,35 @@ import { validatePayment, validateUpdatePayment } from '../validators/payment.va
 import { authenticateApiKey } from '../middleware/apiKeyAuth.middleware';
 import { merchantApiKeyRateLimit } from '../middleware/rateLimit.middleware';
 import { idempotencyMiddleware } from '../middleware/idempotency.middleware';
-import { simpleRateLimit } from "../middleware/simpleRateLimit.middleware";
+import { ipRateLimit } from "../middleware/ipRateLimit.middleware";
 import { kycGateMiddleware } from '../middleware/kycGate.middleware';
 import { validatePagination } from '../validators/pagination.validator';
 
 const router = Router();
 
-// Rate-limit unauthenticated status checks by IP *and* payment id so a single
-// client cannot enumerate or hammer an arbitrary number of payment ids.
-const publicPaymentStatusRateLimit = simpleRateLimit({
-  keyPrefix: "payments:status",
-  windowMs: 30_000,
-  max: 30,
-  getKey: (req) => {
-    const ip = req.ip || req.socket.remoteAddress || "unknown";
-    const paymentId = req.params.id || "unknown";
-    return `${ip}:${paymentId}`;
-  },
+// Redis token-bucket limits for unauthenticated endpoints, keyed by client IP
+// so a single client cannot enumerate or hammer payment ids. Thresholds can be
+// tuned per limiter via env (e.g. PAYMENT_STATUS_RATE_LIMIT_CAPACITY).
+const publicPaymentStatusRateLimit = ipRateLimit({
+  name: "payments:status",
+  envPrefix: "PAYMENT_STATUS_RATE_LIMIT",
+  capacity: 30,
+  refillPerSecond: 1,
 });
 
-const publicPaymentStreamRateLimit = simpleRateLimit({
-  keyPrefix: "payments:stream",
-  windowMs: 30_000,
-  max: 15,
+const publicPaymentStreamRateLimit = ipRateLimit({
+  name: "payments:stream",
+  envPrefix: "PAYMENT_STREAM_RATE_LIMIT",
+  capacity: 15,
+  refillPerSecond: 0.5,
+});
+
+// Hosted checkout polls status every few seconds, so it gets a larger bucket.
+const publicCheckoutRateLimit = ipRateLimit({
+  name: "checkout",
+  envPrefix: "CHECKOUT_RATE_LIMIT",
+  capacity: 60,
+  refillPerSecond: 2,
 });
 
 /**
@@ -166,6 +172,7 @@ router.get('/:id/stream', publicPaymentStreamRateLimit, streamPaymentStatus);
  *     parameters:
  *       - in: path
  *         name: id
+ *         description: Unique identifier of the payment.
  *         required: true
  *         schema: { type: string }
  *     responses:
@@ -183,6 +190,7 @@ router.get('/:id/stream', publicPaymentStreamRateLimit, streamPaymentStatus);
  *     parameters:
  *       - in: path
  *         name: id
+ *         description: Unique identifier of the payment.
  *         required: true
  *         schema: { type: string }
  *     responses:
@@ -200,6 +208,7 @@ router.get('/:id/stream', publicPaymentStreamRateLimit, streamPaymentStatus);
  *     parameters:
  *       - in: path
  *         name: id
+ *         description: Unique identifier of the payment.
  *         required: true
  *         schema: { type: string }
  *     responses:
@@ -214,8 +223,8 @@ router.get('/:id/stream', publicPaymentStreamRateLimit, streamPaymentStatus);
 router.get('/checkout/:id/stream', (_req, res) => {
   sendApiError(res, apiError(404, ErrorCode.CHECKOUT_SSE_UNAVAILABLE, "Checkout SSE is not available; use polling"));
 });
-router.get('/checkout/:id/status', getPublicCheckoutPaymentStatus);
-router.get('/checkout/:id', getPublicCheckoutPayment);
+router.get('/checkout/:id/status', publicCheckoutRateLimit, getPublicCheckoutPaymentStatus);
+router.get('/checkout/:id', publicCheckoutRateLimit, getPublicCheckoutPayment);
 
 router.post('/', authenticateApiKey, kycGateMiddleware, merchantApiKeyRateLimit(), idempotencyMiddleware, validatePayment, createPayment);
 
@@ -230,24 +239,31 @@ router.post('/', authenticateApiKey, kycGateMiddleware, merchantApiKeyRateLimit(
  *     parameters:
  *       - in: query
  *         name: page
+ *         description: Page number to return (1-indexed).
  *         schema: { type: integer }
  *       - in: query
  *         name: limit
+ *         description: Maximum number of items to return per page.
  *         schema: { type: integer }
  *       - in: query
  *         name: status
+ *         description: Filter by payment status.
  *         schema: { type: string }
  *       - in: query
  *         name: currency
+ *         description: Filter by ISO 4217 currency code (e.g. USD, NGN).
  *         schema: { type: string }
  *       - in: query
  *         name: search
+ *         description: Case-insensitive free-text search term.
  *         schema: { type: string }
  *       - in: query
  *         name: date_from
+ *         description: Only include records created on or after this date (ISO 8601).
  *         schema: { type: string, format: date-time }
  *       - in: query
  *         name: date_to
+ *         description: Only include records created on or before this date (ISO 8601).
  *         schema: { type: string, format: date-time }
  *     responses:
  *       200:
@@ -279,9 +295,11 @@ router.get('/', authenticateApiKey, merchantApiKeyRateLimit(), validatePaginatio
  *         schema: { type: string }
  *       - in: query
  *         name: status
+ *         description: Filter by payment status.
  *         schema: { type: string }
  *       - in: query
  *         name: currency
+ *         description: Filter by ISO 4217 currency code (e.g. USD, NGN).
  *         schema: { type: string }
  *       - in: query
  *         name: search
@@ -289,9 +307,11 @@ router.get('/', authenticateApiKey, merchantApiKeyRateLimit(), validatePaginatio
  *         schema: { type: string }
  *       - in: query
  *         name: amount_min
+ *         description: Only include records with an amount greater than or equal to this value.
  *         schema: { type: number }
  *       - in: query
  *         name: amount_max
+ *         description: Only include records with an amount less than or equal to this value.
  *         schema: { type: number }
  *     responses:
  *       200:
@@ -322,6 +342,7 @@ router.get('/export', authenticateApiKey, merchantApiKeyRateLimit(), exportPayme
  *     parameters:
  *       - in: path
  *         name: id
+ *         description: Unique identifier of the payment.
  *         required: true
  *         schema:
  *           type: string

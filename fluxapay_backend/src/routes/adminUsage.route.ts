@@ -16,15 +16,19 @@ const router = Router();
  *     parameters:
  *       - in: query
  *         name: merchant_id
+ *         description: Filter results to a single merchant ID.
  *         schema: { type: string }
  *       - in: query
  *         name: over_limit
+ *         description: When true, only return merchants that exceeded their plan limits.
  *         schema: { type: boolean }
  *       - in: query
  *         name: page
+ *         description: Page number to return (1-indexed).
  *         schema: { type: integer }
  *       - in: query
  *         name: limit
+ *         description: Maximum number of items to return per page.
  *         schema: { type: integer }
  *     responses:
  *       200:

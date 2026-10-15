@@ -574,25 +574,30 @@ router.post(
  *         description: Filter by webhook status
  *       - in: query
  *         name: date_from
+ *         description: Only include records created on or after this date (ISO 8601).
  *         schema:
  *           type: string
  *           format: date-time
  *       - in: query
  *         name: date_to
+ *         description: Only include records created on or before this date (ISO 8601).
  *         schema:
  *           type: string
  *           format: date-time
  *       - in: query
  *         name: search
+ *         description: Case-insensitive free-text search term.
  *         schema:
  *           type: string
  *       - in: query
  *         name: page
+ *         description: Page number to return (1-indexed).
  *         schema:
  *           type: integer
  *           default: 1
  *       - in: query
  *         name: limit
+ *         description: Maximum number of items to return per page.
  *         schema:
  *           type: integer
  *           default: 10

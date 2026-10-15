@@ -1,4 +1,11 @@
 import crypto from 'crypto';
+import {
+  verifySignature,
+  DEFAULT_WEBHOOK_TOLERANCE_SECONDS,
+  type WebhookSignatureHeader,
+} from './webhooks';
+
+export * from './webhooks';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -676,6 +683,27 @@ export class FluxaPay {
         toleranceSeconds: timestamp ? 300 : Number.MAX_SAFE_INTEGER,
       }).valid;
     },
+
+    /**
+     * Verify a webhook and return the parsed event, throwing on failure.
+     *
+     * Uses a constant-time comparison and rejects deliveries whose
+     * `X-FluxaPay-Timestamp` is outside `toleranceSeconds` (default 300).
+     *
+     * @throws {SignatureVerificationError} invalid or missing signature
+     * @throws {TimestampToleranceError}    timestamp outside the tolerance window
+     *
+     * @example
+     * ```ts
+     * const event = client.webhooks.verifySignature(req.body, req.headers, process.env.FLUXAPAY_WEBHOOK_SECRET!);
+     * ```
+     */
+    verifySignature: (
+      rawBody: string | Buffer,
+      signatureHeader: WebhookSignatureHeader,
+      secret: string,
+      toleranceSeconds: number = DEFAULT_WEBHOOK_TOLERANCE_SECONDS,
+    ): WebhookEvent => verifySignature(rawBody, signatureHeader, secret, toleranceSeconds),
 
     /**
      * Parse and return a typed `WebhookEvent` from the raw body string.

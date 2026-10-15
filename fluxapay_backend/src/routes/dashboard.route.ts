@@ -256,26 +256,31 @@ router.get("/overview/activity", dashboardController.activity);
  *     parameters:
  *       - in: query
  *         name: page
+ *         description: Page number to return (1-indexed).
  *         schema:
  *           type: integer
  *           default: 1
  *       - in: query
  *         name: limit
+ *         description: Maximum number of items to return per page.
  *         schema:
  *           type: integer
  *           default: 20
  *       - in: query
  *         name: action_type
+ *         description: Filter audit entries by action type.
  *         schema:
  *           type: string
  *           enum: [merchant_profile_updated, bank_account_updated, api_key_rotated, webhook_secret_rotated]
  *       - in: query
  *         name: date_from
+ *         description: Only include records created on or after this date (ISO 8601).
  *         schema:
  *           type: string
  *           format: date-time
  *       - in: query
  *         name: date_to
+ *         description: Only include records created on or before this date (ISO 8601).
  *         schema:
  *           type: string
  *           format: date-time

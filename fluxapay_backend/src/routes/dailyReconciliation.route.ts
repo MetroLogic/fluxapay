@@ -56,15 +56,19 @@ const router = Router();
  *     parameters:
  *       - in: query
  *         name: page
+ *         description: Page number to return (1-indexed).
  *         schema: { type: integer }
  *       - in: query
  *         name: limit
+ *         description: Maximum number of items to return per page.
  *         schema: { type: integer }
  *       - in: query
  *         name: start_date
+ *         description: Start of the reporting range (ISO 8601 date).
  *         schema: { type: string, format: date-time }
  *       - in: query
  *         name: end_date
+ *         description: End of the reporting range (ISO 8601 date).
  *         schema: { type: string, format: date-time }
  *     responses:
  *       200:
@@ -84,6 +88,7 @@ router.get("/", authenticateApiKey, merchantApiKeyRateLimit(), validateQuery(lis
  *     parameters:
  *       - in: path
  *         name: date
+ *         description: Reconciliation date in YYYY-MM-DD format.
  *         required: true
  *         schema: { type: string, format: date }
  *     responses:
@@ -105,6 +110,7 @@ router.get("/:date", authenticateApiKey, merchantApiKeyRateLimit(), getDailyReco
  *     parameters:
  *       - in: path
  *         name: date
+ *         description: Reconciliation date in YYYY-MM-DD format.
  *         required: true
  *         schema: { type: string, format: date }
  *     responses:
@@ -130,6 +136,7 @@ router.get("/:date/csv", authenticateApiKey, merchantApiKeyRateLimit(), getDaily
  *     parameters:
  *       - in: path
  *         name: date
+ *         description: Reconciliation date in YYYY-MM-DD format.
  *         required: true
  *         schema: { type: string, format: date }
  *     responses:

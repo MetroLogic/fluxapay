@@ -22,6 +22,7 @@ const router = Router();
  *     parameters:
  *       - in: path
  *         name: id
+ *         description: Unique identifier of the escrow.
  *         required: true
  *         schema:
  *           type: string
@@ -71,6 +72,7 @@ router.post(
  *     parameters:
  *       - in: path
  *         name: id
+ *         description: Unique identifier of the escrow.
  *         required: true
  *         schema:
  *           type: string
@@ -101,6 +103,7 @@ router.post(
  *     parameters:
  *       - in: path
  *         name: id
+ *         description: Unique identifier of the escrow.
  *         required: true
  *         schema:
  *           type: string

@@ -80,17 +80,20 @@ const router = Router();
  *     parameters:
  *       - in: query
  *         name: page
+ *         description: Page number to return (1-indexed).
  *         schema:
  *           type: integer
  *           default: 1
  *       - in: query
  *         name: limit
+ *         description: Maximum number of items to return per page.
  *         schema:
  *           type: integer
  *           default: 10
  *           maximum: 100
  *       - in: query
  *         name: status
+ *         description: Filter by invoice status.
  *         schema:
  *           type: string
  *           enum: [pending, paid, cancelled, overdue]
@@ -117,6 +120,7 @@ router.get("/", authenticateApiKey, merchantApiKeyRateLimit(), validateQuery(lis
  *     parameters:
  *       - in: path
  *         name: invoice_id
+ *         description: Unique identifier of the invoice.
  *         required: true
  *         schema:
  *           type: string
@@ -139,6 +143,7 @@ router.get("/:invoice_id", authenticateApiKey, validate(getInvoiceByIdSchema), g
  *     parameters:
  *       - in: path
  *         name: invoice_id
+ *         description: Unique identifier of the invoice.
  *         required: true
  *         schema:
  *           type: string
@@ -174,6 +179,7 @@ router.patch("/:invoice_id/status", authenticateApiKey, validate(updateInvoiceSt
  *     parameters:
  *       - in: path
  *         name: invoice_id
+ *         description: Unique identifier of the invoice.
  *         required: true
  *         schema:
  *           type: string
@@ -198,6 +204,7 @@ router.post("/:invoice_id/send", authenticateApiKey, merchantApiKeyRateLimit(), 
  *     parameters:
  *       - in: path
  *         name: invoice_id
+ *         description: Unique identifier of the invoice.
  *         required: true
  *         schema:
  *           type: string
@@ -224,6 +231,7 @@ router.post("/:invoice_id/void", authenticateApiKey, merchantApiKeyRateLimit(), 
  *     parameters:
  *       - in: path
  *         name: invoice_id
+ *         description: Unique identifier of the invoice.
  *         required: true
  *         schema:
  *           type: string
@@ -264,11 +272,13 @@ router.get("/:invoice_id/export", authenticateApiKey, merchantApiKeyRateLimit(),
  *     parameters:
  *       - in: path
  *         name: invoice_id
+ *         description: Unique identifier of the invoice.
  *         required: true
  *         schema:
  *           type: string
  *       - in: query
  *         name: format
+ *         description: Output format of the exported file.
  *         schema:
  *           type: string
  *           enum: [pdf, csv, json]
@@ -296,6 +306,7 @@ router.post("/:invoice_id/export", authenticateApiKey, merchantApiKeyRateLimit()
  *     parameters:
  *       - in: path
  *         name: jobId
+ *         description: Identifier of the asynchronous export job.
  *         required: true
  *         schema:
  *           type: string
@@ -322,11 +333,13 @@ router.get("/exports/:jobId", authenticateApiKey, merchantApiKeyRateLimit(), get
  *     parameters:
  *       - in: path
  *         name: invoice_id
+ *         description: Unique identifier of the invoice.
  *         required: true
  *         schema:
  *           type: string
  *       - in: path
  *         name: jobId
+ *         description: Identifier of the asynchronous export job.
  *         required: true
  *         schema:
  *           type: string
@@ -353,11 +366,13 @@ router.get("/:invoice_id/export/:jobId/status", authenticateApiKey, merchantApiK
  *     parameters:
  *       - in: path
  *         name: invoice_id
+ *         description: Unique identifier of the invoice.
  *         required: true
  *         schema:
  *           type: string
  *       - in: path
  *         name: jobId
+ *         description: Identifier of the asynchronous export job.
  *         required: true
  *         schema:
  *           type: string

@@ -200,6 +200,7 @@ router.post(
  *     parameters:
  *       - in: query
  *         name: token
+ *         description: Password reset token received by email.
  *         required: true
  *         schema:
  *           type: string
@@ -438,6 +439,7 @@ router.get("/admin/list", adminAuth, adminListMerchants);
  *     parameters:
  *       - in: path
  *         name: merchantId
+ *         description: Unique identifier of the merchant.
  *         required: true
  *         schema:
  *           type: string
@@ -462,6 +464,7 @@ router.get("/admin/:merchantId", adminAuth, adminGetMerchant);
  *     parameters:
  *       - in: path
  *         name: merchantId
+ *         description: Unique identifier of the merchant.
  *         required: true
  *         schema:
  *           type: string
@@ -497,6 +500,7 @@ router.patch("/admin/:merchantId/status", adminAuth, adminUpdateMerchantStatus);
  *     parameters:
  *       - in: path
  *         name: merchantId
+ *         description: Unique identifier of the merchant.
  *         required: true
  *         schema:
  *           type: string

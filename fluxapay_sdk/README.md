@@ -250,7 +250,53 @@ await client.merchant.addBankAccount({
 
 ### Webhooks
 
-#### Verify Webhook Signature
+#### Verify Webhook Signature (recommended)
+
+`webhooks.verifySignature(rawBody, signatureHeader, secret, toleranceSeconds?)` checks the
+HMAC-SHA256 signature with a constant-time comparison (`crypto.timingSafeEqual`), rejects
+replayed deliveries outside the tolerance window (default **300 seconds**), and returns the
+parsed event. Pass the **raw** body: re-serialized JSON will not match the signature.
+
+```typescript
+import express from 'express';
+import {
+  webhooks,
+  SignatureVerificationError,
+  TimestampToleranceError,
+} from '@fluxapay/sdk';
+
+app.post('/webhooks/fluxapay', express.raw({ type: 'application/json' }), (req, res) => {
+  try {
+    // `req.headers` carries X-FluxaPay-Signature and X-FluxaPay-Timestamp.
+    const event = webhooks.verifySignature(req.body, req.headers, process.env.FLUXAPAY_WEBHOOK_SECRET!);
+    console.log(event.event, event.payment_id);
+    res.sendStatus(200);
+  } catch (err) {
+    if (err instanceof SignatureVerificationError) return res.status(400).send('Invalid signature');
+    if (err instanceof TimestampToleranceError) return res.status(400).send('Stale webhook');
+    throw err;
+  }
+});
+```
+
+The same helper is available on a client instance as `fluxapay.webhooks.verifySignature(...)`.
+
+`signatureHeader` accepts any of:
+
+| Form | Example |
+|------|---------|
+| Request headers | `req.headers` |
+| Explicit pair | `{ signature: req.get('X-FluxaPay-Signature'), timestamp: req.get('X-FluxaPay-Timestamp') }` |
+| Combined string | `t=2026-01-01T00:00:00.000Z,v1=<hex>` (several `v1=` entries allowed) |
+
+| Error | When |
+|-------|------|
+| `SignatureVerificationError` | Signature or timestamp missing/malformed, signature mismatch, or body is not JSON |
+| `TimestampToleranceError` | Signature is valid but the timestamp is more than `toleranceSeconds` away from now. Exposes `timestamp`, `toleranceSeconds` and `ageSeconds` |
+
+Both extend `WebhookVerificationError`. Pass `Infinity` as `toleranceSeconds` to skip the replay check.
+
+#### Verify Webhook Signature (boolean, legacy)
 
 ```typescript
 const isValid = client.webhooks.verify(
@@ -318,6 +364,9 @@ All SDK methods use the canonical `/api/*` routes:
 
 ```bash
 npm test
+
+# Webhook signature verification only (Vitest, fixed HMAC test vectors)
+npm run test:webhook-signature
 ```
 
 ### Integration Tests
