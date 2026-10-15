@@ -15,6 +15,13 @@ __all__ = [
     "FluxaPay",
     "AsyncFluxaPay",
     "FluxaPayError",
+    "BadRequestError",
+    "AuthenticationError",
+    "PermissionDeniedError",
+    "NotFoundError",
+    "ConflictError",
+    "RateLimitError",
+    "ServerError",
     "Payment",
     "PaymentStatus",
     "Invoice",
@@ -52,6 +59,65 @@ class FluxaPayError(Exception):
         self.code = code
         self.request_id = request_id
         self.retryable = status_code in (429, 502, 503, 504)
+        self.errors: List[Dict[str, Any]] = []
+        if isinstance(raw, dict) and isinstance(raw.get("errors"), list):
+            self.errors = raw["errors"]
+
+    def __repr__(self) -> str:
+        return (
+            f"{type(self).__name__}(status_code={self.status_code!r}, "
+            f"code={self.code!r}, message={self.message!r})"
+        )
+
+
+class BadRequestError(FluxaPayError):
+    """HTTP 400: the request failed validation. Field errors are in ``errors``."""
+
+
+class AuthenticationError(FluxaPayError):
+    """HTTP 401: the API key is missing, invalid or revoked."""
+
+
+class PermissionDeniedError(FluxaPayError):
+    """HTTP 403: authenticated, but not allowed (e.g. ``KYC_REQUIRED``)."""
+
+
+class NotFoundError(FluxaPayError):
+    """HTTP 404: the resource does not exist or belongs to another merchant."""
+
+
+class ConflictError(FluxaPayError):
+    """HTTP 409 / 410 / 422: the resource state prevents the request."""
+
+
+class RateLimitError(FluxaPayError):
+    """HTTP 429: too many requests. ``retry_after`` holds the advised wait in seconds."""
+
+    def __init__(self, *args: Any, retry_after: Optional[float] = None, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.retry_after = retry_after
+
+
+class ServerError(FluxaPayError):
+    """HTTP 5xx: FluxaPay or an upstream dependency failed."""
+
+
+def _error_class_for(status_code: int) -> type:
+    if status_code == 400:
+        return BadRequestError
+    if status_code == 401:
+        return AuthenticationError
+    if status_code == 403:
+        return PermissionDeniedError
+    if status_code == 404:
+        return NotFoundError
+    if status_code in (409, 410, 422):
+        return ConflictError
+    if status_code == 429:
+        return RateLimitError
+    if status_code >= 500:
+        return ServerError
+    return FluxaPayError
 
 
 # ── Models ────────────────────────────────────────────────────────────────────
@@ -182,31 +248,72 @@ def verify_webhook_signature(
 # ── Internal HTTP helpers ─────────────────────────────────────────────────────
 
 
-def _headers(api_key: str) -> Dict[str, str]:
-    return {
-        "Authorization": f"Bearer {api_key}",
+def _headers(api_key: str, extra: Optional[Dict[str, str]] = None) -> Dict[str, str]:
+    """Default request headers. ``extra`` headers are added, but cannot replace
+    the ``Authorization`` header derived from ``api_key``."""
+    headers = {
         "Content-Type": "application/json",
         "X-API-Version": _API_VERSION,
     }
+    if extra:
+        headers.update({k: v for k, v in extra.items() if k.lower() != "authorization"})
+    headers["Authorization"] = f"Bearer {api_key}"
+    return headers
+
+
+def _parse_retry_after(value: Optional[str]) -> Optional[float]:
+    if not value:
+        return None
+    try:
+        return max(0.0, float(value))
+    except ValueError:
+        pass
+    from email.utils import parsedate_to_datetime
+
+    try:
+        retry_at = parsedate_to_datetime(value)
+    except (TypeError, ValueError):
+        return None
+    if retry_at is None:
+        return None
+    return max(0.0, retry_at.timestamp() - time.time())
+
+
+def _json_or_none(response: httpx.Response) -> Any:
+    if response.status_code == 204 or not response.content:
+        return None
+    return response.json()
 
 
 def _raise_for(response: httpx.Response) -> None:
     if not response.is_success:
         try:
             body = response.json()
+            if not isinstance(body, dict):
+                raise ValueError("error body is not an object")
             message = body.get("message", f"HTTP {response.status_code}")
             code = body.get("code")
         except Exception:
             body = None
             message = f"HTTP {response.status_code}"
             code = None
-        request_id = response.headers.get("x-request-id") or response.headers.get("X-Request-ID")
-        raise FluxaPayError(
+        if not isinstance(body, dict):
+            body = None
+        request_id = (
+            response.headers.get("x-fluxapay-request-id")
+            or response.headers.get("x-request-id")
+        )
+        error_cls = _error_class_for(response.status_code)
+        kwargs: Dict[str, Any] = {}
+        if error_cls is RateLimitError:
+            kwargs["retry_after"] = _parse_retry_after(response.headers.get("retry-after"))
+        raise error_cls(
             status_code=response.status_code,
             message=message,
             raw=body,
             code=code,
             request_id=request_id,
+            **kwargs,
         )
 
 
@@ -261,6 +368,10 @@ class _RefundsMixin:
     def _refund_create_body(self, **kwargs: Any) -> Dict[str, Any]:
         return {k: v for k, v in kwargs.items() if v is not None}
 
+    @staticmethod
+    def _refund_headers(idempotency_key: Optional[str]) -> Optional[Dict[str, str]]:
+        return {"Idempotency-Key": idempotency_key} if idempotency_key else None
+
     def _refund_list_params(self, **kwargs: Any) -> Dict[str, Any]:
         return {k: v for k, v in kwargs.items() if v is not None}
 
@@ -268,7 +379,32 @@ class _RefundsMixin:
 # ── Synchronous client ────────────────────────────────────────────────────────
 
 
-class FluxaPay(_PaymentsMixin, _SettlementsMixin, _InvoicesMixin, _RefundsMixin):
+class _PaymentLinksMixin:
+    @staticmethod
+    def _payment_link_body(**kwargs: Any) -> Dict[str, Any]:
+        return {k: v for k, v in kwargs.items() if v is not None}
+
+    @staticmethod
+    def _payment_link_list_params(
+        page: Optional[int], limit: Optional[int], active: Optional[bool]
+    ) -> Dict[str, Any]:
+        p: Dict[str, Any] = {}
+        if page is not None:
+            p["page"] = page
+        if limit is not None:
+            p["limit"] = limit
+        if active is not None:
+            p["active"] = "true" if active else "false"
+        return p
+
+
+def _merchant_from_response(payload: Any) -> Dict[str, Any]:
+    if isinstance(payload, dict) and isinstance(payload.get("merchant"), dict):
+        return payload["merchant"]
+    return payload
+
+
+class FluxaPay(_PaymentsMixin, _SettlementsMixin, _InvoicesMixin, _RefundsMixin, _PaymentLinksMixin):
     """Synchronous FluxaPay API client.
 
     Example::
@@ -284,15 +420,30 @@ class FluxaPay(_PaymentsMixin, _SettlementsMixin, _InvoicesMixin, _RefundsMixin)
             print(payment.checkout_url)
     """
 
-    def __init__(self, api_key: str, base_url: str = _DEFAULT_BASE_URL) -> None:
+    def __init__(
+        self,
+        api_key: str,
+        base_url: str = _DEFAULT_BASE_URL,
+        *,
+        timeout: float = 30.0,
+        headers: Optional[Dict[str, str]] = None,
+    ) -> None:
+        """
+        Args:
+            api_key: Secret API key (``sk_live_...`` / ``sk_test_...``).
+            base_url: API base URL.
+            timeout: Request timeout in seconds.
+            headers: Extra headers sent with every request (cannot override
+                ``Authorization``).
+        """
         if not api_key:
             raise ValueError("api_key is required")
         self._api_key = api_key
         self._base_url = base_url.rstrip("/")
         self._http = httpx.Client(
             base_url=self._base_url,
-            headers=_headers(api_key),
-            timeout=30.0,
+            headers=_headers(api_key, headers),
+            timeout=timeout,
         )
 
     def close(self) -> None:
@@ -309,8 +460,8 @@ class FluxaPay(_PaymentsMixin, _SettlementsMixin, _InvoicesMixin, _RefundsMixin)
         _raise_for(r)
         return r.json()
 
-    def _post(self, path: str, body: Dict) -> Any:
-        r = self._http.post(path, json=body)
+    def _post(self, path: str, body: Dict, headers: Optional[Dict[str, str]] = None) -> Any:
+        r = self._http.post(path, json=body, headers=headers)
         _raise_for(r)
         return r.json()
 
@@ -318,6 +469,11 @@ class FluxaPay(_PaymentsMixin, _SettlementsMixin, _InvoicesMixin, _RefundsMixin)
         r = self._http.patch(path, json=body)
         _raise_for(r)
         return r.json()
+
+    def _delete(self, path: str) -> Any:
+        r = self._http.delete(path)
+        _raise_for(r)
+        return _json_or_none(r)
 
     # ── payments ──────────────────────────────────────────────────────────────
 
@@ -447,7 +603,7 @@ class FluxaPay(_PaymentsMixin, _SettlementsMixin, _InvoicesMixin, _RefundsMixin)
                 reason=reason,
                 idempotency_key=idempotency_key,
             )
-            return self._c._post("/api/v1/refunds", body)
+            return self._c._post("/api/v1/refunds", body, headers=self._c._refund_headers(idempotency_key))
 
         def get(self, refund_id: str) -> Dict[str, Any]:
             return self._c._get(f"/api/v1/refunds/{refund_id}")
@@ -467,6 +623,91 @@ class FluxaPay(_PaymentsMixin, _SettlementsMixin, _InvoicesMixin, _RefundsMixin)
     @property
     def refunds(self) -> "_Refunds":
         return self._Refunds(self)
+
+    # ── payment links ─────────────────────────────────────────────────────────
+
+    class _PaymentLinks:
+        def __init__(self, client: "FluxaPay") -> None:
+            self._c = client
+
+        def create(
+            self,
+            title: str,
+            currency: str,
+            amount: Optional[float] = None,
+            description: Optional[str] = None,
+            redirect_url: Optional[str] = None,
+            expiry: Optional[str] = None,
+            metadata: Optional[Dict[str, Any]] = None,
+            customer_id: Optional[str] = None,
+        ) -> Dict[str, Any]:
+            """Create a reusable payment link. Omit ``amount`` for an open-amount link."""
+            body = self._c._payment_link_body(
+                title=title,
+                currency=currency,
+                amount=amount,
+                description=description,
+                redirect_url=redirect_url,
+                expiry=expiry,
+                metadata=metadata,
+                customer_id=customer_id,
+            )
+            return self._c._post("/api/v1/payment-links", body)
+
+        def get(self, link_id: str) -> Dict[str, Any]:
+            return self._c._get(f"/api/v1/payment-links/{link_id}")
+
+        def list(
+            self,
+            page: Optional[int] = None,
+            limit: Optional[int] = None,
+            active: Optional[bool] = None,
+        ) -> Dict[str, Any]:
+            params = self._c._payment_link_list_params(page, limit, active)
+            return self._c._get("/api/v1/payment-links", params=params)
+
+        def update(
+            self,
+            link_id: str,
+            title: Optional[str] = None,
+            description: Optional[str] = None,
+            redirect_url: Optional[str] = None,
+            active: Optional[bool] = None,
+            metadata: Optional[Dict[str, Any]] = None,
+        ) -> Dict[str, Any]:
+            body = self._c._payment_link_body(
+                title=title,
+                description=description,
+                redirect_url=redirect_url,
+                active=active,
+                metadata=metadata,
+            )
+            return self._c._patch(f"/api/v1/payment-links/{link_id}", body)
+
+        def delete(self, link_id: str) -> None:
+            """Deactivate (soft-delete) a payment link."""
+            self._c._delete(f"/api/v1/payment-links/{link_id}")
+
+    @property
+    def payment_links(self) -> "_PaymentLinks":
+        return self._PaymentLinks(self)
+
+    # ── merchants ─────────────────────────────────────────────────────────────
+
+    class _Merchants:
+        def __init__(self, client: "FluxaPay") -> None:
+            self._c = client
+
+        def me(self) -> Dict[str, Any]:
+            """Return the authenticated merchant's profile."""
+            return _merchant_from_response(self._c._get("/api/v1/merchants/me"))
+
+        def update_webhook(self, webhook_url: str) -> Dict[str, Any]:
+            return self._c._patch("/api/v1/merchants/me/webhook", {"webhook_url": webhook_url})
+
+    @property
+    def merchants(self) -> "_Merchants":
+        return self._Merchants(self)
 
     # ── settlements ───────────────────────────────────────────────────────────
 
@@ -538,7 +779,7 @@ class FluxaPay(_PaymentsMixin, _SettlementsMixin, _InvoicesMixin, _RefundsMixin)
 # ── Asynchronous client ───────────────────────────────────────────────────────
 
 
-class AsyncFluxaPay(_PaymentsMixin, _SettlementsMixin, _InvoicesMixin, _RefundsMixin):
+class AsyncFluxaPay(_PaymentsMixin, _SettlementsMixin, _InvoicesMixin, _RefundsMixin, _PaymentLinksMixin):
     """Async FluxaPay API client (requires ``httpx`` with async support).
 
     Example::
@@ -558,15 +799,22 @@ class AsyncFluxaPay(_PaymentsMixin, _SettlementsMixin, _InvoicesMixin, _RefundsM
         asyncio.run(main())
     """
 
-    def __init__(self, api_key: str, base_url: str = _DEFAULT_BASE_URL) -> None:
+    def __init__(
+        self,
+        api_key: str,
+        base_url: str = _DEFAULT_BASE_URL,
+        *,
+        timeout: float = 30.0,
+        headers: Optional[Dict[str, str]] = None,
+    ) -> None:
         if not api_key:
             raise ValueError("api_key is required")
         self._api_key = api_key
         self._base_url = base_url.rstrip("/")
         self._http = httpx.AsyncClient(
             base_url=self._base_url,
-            headers=_headers(api_key),
-            timeout=30.0,
+            headers=_headers(api_key, headers),
+            timeout=timeout,
         )
 
     async def aclose(self) -> None:
@@ -583,8 +831,8 @@ class AsyncFluxaPay(_PaymentsMixin, _SettlementsMixin, _InvoicesMixin, _RefundsM
         _raise_for(r)
         return r.json()
 
-    async def _post(self, path: str, body: Dict) -> Any:
-        r = await self._http.post(path, json=body)
+    async def _post(self, path: str, body: Dict, headers: Optional[Dict[str, str]] = None) -> Any:
+        r = await self._http.post(path, json=body, headers=headers)
         _raise_for(r)
         return r.json()
 
@@ -592,6 +840,11 @@ class AsyncFluxaPay(_PaymentsMixin, _SettlementsMixin, _InvoicesMixin, _RefundsM
         r = await self._http.patch(path, json=body)
         _raise_for(r)
         return r.json()
+
+    async def _delete(self, path: str) -> Any:
+        r = await self._http.delete(path)
+        _raise_for(r)
+        return _json_or_none(r)
 
     # ── payments ──────────────────────────────────────────────────────────────
 
@@ -721,7 +974,7 @@ class AsyncFluxaPay(_PaymentsMixin, _SettlementsMixin, _InvoicesMixin, _RefundsM
                 reason=reason,
                 idempotency_key=idempotency_key,
             )
-            return await self._c._post("/api/v1/refunds", body)
+            return await self._c._post("/api/v1/refunds", body, headers=self._c._refund_headers(idempotency_key))
 
         async def get(self, refund_id: str) -> Dict[str, Any]:
             return await self._c._get(f"/api/v1/refunds/{refund_id}")
@@ -741,6 +994,91 @@ class AsyncFluxaPay(_PaymentsMixin, _SettlementsMixin, _InvoicesMixin, _RefundsM
     @property
     def refunds(self) -> "_AsyncRefunds":
         return self._AsyncRefunds(self)
+
+    # ── payment links ─────────────────────────────────────────────────────────
+
+    class _AsyncPaymentLinks:
+        def __init__(self, client: "AsyncFluxaPay") -> None:
+            self._c = client
+
+        async def create(
+            self,
+            title: str,
+            currency: str,
+            amount: Optional[float] = None,
+            description: Optional[str] = None,
+            redirect_url: Optional[str] = None,
+            expiry: Optional[str] = None,
+            metadata: Optional[Dict[str, Any]] = None,
+            customer_id: Optional[str] = None,
+        ) -> Dict[str, Any]:
+            """Create a reusable payment link. Omit ``amount`` for an open-amount link."""
+            body = self._c._payment_link_body(
+                title=title,
+                currency=currency,
+                amount=amount,
+                description=description,
+                redirect_url=redirect_url,
+                expiry=expiry,
+                metadata=metadata,
+                customer_id=customer_id,
+            )
+            return await self._c._post("/api/v1/payment-links", body)
+
+        async def get(self, link_id: str) -> Dict[str, Any]:
+            return await self._c._get(f"/api/v1/payment-links/{link_id}")
+
+        async def list(
+            self,
+            page: Optional[int] = None,
+            limit: Optional[int] = None,
+            active: Optional[bool] = None,
+        ) -> Dict[str, Any]:
+            params = self._c._payment_link_list_params(page, limit, active)
+            return await self._c._get("/api/v1/payment-links", params=params)
+
+        async def update(
+            self,
+            link_id: str,
+            title: Optional[str] = None,
+            description: Optional[str] = None,
+            redirect_url: Optional[str] = None,
+            active: Optional[bool] = None,
+            metadata: Optional[Dict[str, Any]] = None,
+        ) -> Dict[str, Any]:
+            body = self._c._payment_link_body(
+                title=title,
+                description=description,
+                redirect_url=redirect_url,
+                active=active,
+                metadata=metadata,
+            )
+            return await self._c._patch(f"/api/v1/payment-links/{link_id}", body)
+
+        async def delete(self, link_id: str) -> None:
+            """Deactivate (soft-delete) a payment link."""
+            await self._c._delete(f"/api/v1/payment-links/{link_id}")
+
+    @property
+    def payment_links(self) -> "_AsyncPaymentLinks":
+        return self._AsyncPaymentLinks(self)
+
+    # ── merchants ─────────────────────────────────────────────────────────────
+
+    class _AsyncMerchants:
+        def __init__(self, client: "AsyncFluxaPay") -> None:
+            self._c = client
+
+        async def me(self) -> Dict[str, Any]:
+            """Return the authenticated merchant's profile."""
+            return _merchant_from_response(await self._c._get("/api/v1/merchants/me"))
+
+        async def update_webhook(self, webhook_url: str) -> Dict[str, Any]:
+            return await self._c._patch("/api/v1/merchants/me/webhook", {"webhook_url": webhook_url})
+
+    @property
+    def merchants(self) -> "_AsyncMerchants":
+        return self._AsyncMerchants(self)
 
     # ── settlements ───────────────────────────────────────────────────────────
 
