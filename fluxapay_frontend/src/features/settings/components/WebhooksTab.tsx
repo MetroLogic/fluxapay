@@ -9,6 +9,7 @@ import { DOCS_URLS } from "@/lib/docs";
 import { isValidHttpsWebhookUrl } from "@/lib/webhookUrl";
 import { CheckCircle2, Webhook } from "lucide-react";
 import { Spinner } from "./Spinner";
+import { WebhookLogsSection } from "./WebhookLogsSection";
 import type { OnDirtyChange, SaveState } from "./types";
 
 interface Props {
@@ -58,6 +59,7 @@ export function WebhooksTab({ initialWebhookUrl, onDirtyChange }: Props) {
   const saved = save.status === "saved";
 
   return (
+    <div className="space-y-6">
     <div className="space-y-4 p-6 rounded-2xl border bg-muted/20">
       <div className="flex items-center gap-2 text-primary font-semibold mb-4">
         <Webhook className="h-5 w-5" />
@@ -105,6 +107,10 @@ export function WebhooksTab({ initialWebhookUrl, onDirtyChange }: Props) {
           </div>
         )}
       </div>
+    </div>
+
+    {/* #1256 — delivery history with per-event inspection and redelivery */}
+    <WebhookLogsSection />
     </div>
   );
 }

@@ -3,11 +3,17 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Invoice, LineItem } from "./types";
 import { Button } from "@/components/Button";
-import { ChevronUp, ChevronDown, RefreshCw } from "lucide-react";
+import { ChevronUp, ChevronDown, Eye, RefreshCw } from "lucide-react";
+import toast from "react-hot-toast";
 import { useFxRate } from "@/hooks/useFxRate";
+import { api } from "@/lib/api";
+import { InvoicePreviewModal } from "./InvoicePreviewModal";
+import { type InvoicePreviewData, merchantFromProfile } from "./invoicePreview";
+
+type InvoicePayload = Omit<Invoice, "id" | "invoice_number" | "payment_link" | "created_at">;
 
 interface InvoiceFormProps {
-  onSubmit: (invoice: Omit<Invoice, "id" | "invoice_number" | "payment_link" | "created_at">) => void;
+  onSubmit: (invoice: InvoicePayload) => void | Promise<void>;
   onCancel: () => void;
 }
 
@@ -105,8 +111,14 @@ export const InvoiceForm = ({ onSubmit, onCancel }: InvoiceFormProps) => {
   const [dueDate, setDueDate] = useState(draft?.dueDate ?? "");
   const [notes, setNotes] = useState(draft?.notes ?? "");
   const [lineItems, setLineItems] = useState<LineItem[]>(draft?.lineItems ?? [emptyLineItem()]);
+  const [taxRate, setTaxRate] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [hasDraft, setHasDraft] = useState(!!draft);
+
+  // Invoice preview (#1254)
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [merchant, setMerchant] = useState<InvoicePreviewData["merchant"] | null>(null);
+  const [sending, setSending] = useState(false);
 
   const { rateData, isLoading: isRateLoading, mutate: refreshRate } = useFxRate(currency);
 
@@ -164,7 +176,9 @@ export const InvoiceForm = ({ onSubmit, onCancel }: InvoiceFormProps) => {
   );
 
   const decimalPlaces = getDecimalPlaces(currency);
-  const displayTotal = isCrypto(currency) ? convertedTotal : fiatTotal;
+  const taxPercent = Number(taxRate) > 0 ? Number(taxRate) : 0;
+  const subtotal = isCrypto(currency) ? convertedTotal : fiatTotal;
+  const displayTotal = subtotal * (1 + taxPercent / 100);
 
   const validate = () => {
     const errs: Record<string, string> = {};
@@ -172,6 +186,8 @@ export const InvoiceForm = ({ onSubmit, onCancel }: InvoiceFormProps) => {
     if (!customerEmail.trim() || !/\S+@\S+\.\S+/.test(customerEmail))
       errs.customerEmail = "Valid email is required";
     if (!dueDate) errs.dueDate = "Due date is required";
+    if (taxRate !== "" && (!(Number(taxRate) >= 0) || Number(taxRate) > 100))
+      errs.taxRate = "Tax rate must be between 0 and 100";
     lineItems.forEach((item, i) => {
       if (!item.description.trim())
         errs[`desc_${i}`] = "Description required";
@@ -184,11 +200,7 @@ export const InvoiceForm = ({ onSubmit, onCancel }: InvoiceFormProps) => {
     return Object.keys(errs).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!validate()) return;
-    clearDraft();
-    onSubmit({
+  const buildPayload = (): InvoicePayload => ({
       customer_name: customerName,
       customer_email: customerEmail,
       line_items: lineItems.map((item) => ({
@@ -202,8 +214,71 @@ export const InvoiceForm = ({ onSubmit, onCancel }: InvoiceFormProps) => {
       currency,
       due_date: new Date(dueDate).toISOString(),
       notes: notes || undefined,
+      tax_rate: taxPercent > 0 ? taxPercent : undefined,
       status: "unpaid",
-    });
+  });
+
+  const submit = async () => {
+    if (!validate()) return false;
+    setSending(true);
+    try {
+      await onSubmit(buildPayload());
+      clearDraft();
+      return true;
+    } catch {
+      // The parent already reported the error; keep the form (and preview)
+      // open so nothing the merchant typed is lost.
+      return false;
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    void submit();
+  };
+
+  const openPreview = () => {
+    if (!validate()) {
+      toast.error("Fix the highlighted fields to preview the invoice");
+      return;
+    }
+    setPreviewOpen(true);
+    if (merchant) return;
+    void api.merchant
+      .getMe()
+      .then((res) => {
+        const details = "error" in res ? null : merchantFromProfile(res.data);
+        if (!details) {
+          toast.error("Couldn't load your business details; showing a placeholder name.");
+        }
+        setMerchant(details ?? { businessName: "Your business" });
+      })
+      .catch(() => {
+        toast.error("Couldn't load your business details; showing a placeholder name.");
+        setMerchant({ businessName: "Your business" });
+      });
+  };
+
+  const previewData: InvoicePreviewData | null = (() => {
+    if (!previewOpen || !merchant) return null;
+    const payload = buildPayload();
+    return {
+      merchant,
+      customerName: payload.customer_name,
+      customerEmail: payload.customer_email,
+      currency: payload.currency,
+      dueDate: dueDate,
+      notes: payload.notes,
+      lineItems: payload.line_items,
+      taxRate: taxPercent,
+    };
+  })();
+
+  const handleSendFromPreview = async () => {
+    const ok = await submit();
+    if (ok) setPreviewOpen(false);
   };
 
   const handleCancel = () => {
@@ -311,6 +386,24 @@ export const InvoiceForm = ({ onSubmit, onCancel }: InvoiceFormProps) => {
             onChange={(e) => setDueDate(e.target.value)}
           />
           {errors.dueDate && <p className={errorClass}>{errors.dueDate}</p>}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label className={labelClass} htmlFor="invoice-tax-rate">Tax rate (%)</label>
+          <input
+            id="invoice-tax-rate"
+            type="number"
+            min={0}
+            max={100}
+            step="0.01"
+            className={inputClass}
+            value={taxRate}
+            onChange={(e) => setTaxRate(e.target.value)}
+            placeholder="0"
+          />
+          {errors.taxRate && <p className={errorClass}>{errors.taxRate}</p>}
         </div>
       </div>
 
@@ -432,6 +525,21 @@ export const InvoiceForm = ({ onSubmit, onCancel }: InvoiceFormProps) => {
 
       {/* Total */}
       <div className="rounded-lg border bg-muted/30 px-4 py-3 space-y-1">
+        {taxPercent > 0 && (
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span>Subtotal + {taxPercent}% tax</span>
+            <span>
+              {subtotal.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: decimalPlaces,
+              })}{" "}
+              + {(subtotal * (taxPercent / 100)).toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: decimalPlaces,
+              })}
+            </span>
+          </div>
+        )}
         <div className="flex items-center justify-between">
           <span className="text-sm text-muted-foreground">Total</span>
           <span className="text-lg font-bold">
@@ -468,14 +576,26 @@ export const InvoiceForm = ({ onSubmit, onCancel }: InvoiceFormProps) => {
         />
       </div>
 
-      <div className="flex gap-3 pt-2">
+      <div className="flex flex-col gap-3 pt-2 sm:flex-row">
         <Button type="button" variant="secondary" className="flex-1" onClick={handleCancel}>
           Cancel
         </Button>
-        <Button type="submit" className="flex-1">
-          Create Invoice
+        <Button type="button" variant="outline" className="flex-1 gap-2" onClick={openPreview}>
+          <Eye className="h-4 w-4" aria-hidden="true" />
+          Preview Invoice
+        </Button>
+        <Button type="submit" className="flex-1" disabled={sending}>
+          {sending ? "Creating…" : "Create Invoice"}
         </Button>
       </div>
+
+      <InvoicePreviewModal
+        isOpen={previewOpen}
+        data={previewData}
+        sending={sending}
+        onEdit={() => setPreviewOpen(false)}
+        onSend={() => void handleSendFromPreview()}
+      />
     </form>
   );
 };

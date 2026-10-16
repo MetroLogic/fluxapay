@@ -101,27 +101,33 @@ function InvoicesContent() {
   const handleCreateInvoice = async (
     data: Omit<Invoice, "id" | "invoice_number" | "payment_link" | "created_at">,
   ) => {
+    let result: Awaited<ReturnType<typeof api.invoices.create>>;
     try {
-      await api.invoices.create({
+      result = await api.invoices.create({
         customer_name: data.customer_name,
         customer_email: data.customer_email,
         line_items: data.line_items,
         currency: data.currency,
         due_date: data.due_date,
         notes: data.notes,
+        tax_rate: data.tax_rate,
       });
-
-      toast.success("Invoice created successfully!");
-      setShowCreateModal(false);
-      setPage(1);
-      fetchInvoices();
     } catch (err) {
-      if (err instanceof ApiError) {
-        toast.error(err.message);
-      } else {
-        toast.error("Failed to create invoice");
-      }
+      toast.error(err instanceof ApiError ? err.message : "Failed to create invoice");
+      throw err;
     }
+
+    // fetchWithAuth reports API failures as `{ error }` rather than throwing.
+    if ("error" in result) {
+      toast.error(result.error.message || "Failed to create invoice");
+      // Rethrow so the form (and its preview) stays open with the details.
+      throw result.error;
+    }
+
+    toast.success("Invoice created successfully!");
+    setShowCreateModal(false);
+    setPage(1);
+    fetchInvoices();
   };
 
   return (

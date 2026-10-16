@@ -16,6 +16,8 @@ export interface Invoice {
   currency: string;
   due_date: string;
   notes?: string;
+  /** Tax percentage (0–100) applied to the subtotal. */
+  tax_rate?: number;
   status: InvoiceStatus;
   payment_link: string;
   created_at: string;
