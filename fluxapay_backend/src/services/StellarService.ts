@@ -7,6 +7,7 @@ import {
   Asset,
 } from "@stellar/stellar-sdk";
 import { HDWalletService } from "./HDWalletService";
+import { HorizonFailoverClient, parseHorizonUrls } from "./horizonFailover.service";
 import { getLogger, getMetricsCollector } from "../utils/logger";
 import {
   buildStellarApiError,
@@ -15,6 +16,8 @@ import {
 
 export class StellarService {
   private server: Horizon.Server;
+  /** Routes Horizon calls across STELLAR_HORIZON_URLS with failover (#1257). */
+  private horizon: HorizonFailoverClient;
   private networkPassphrase: string;
   private funderKeypair: Keypair;
   private hdWalletService: HDWalletService;
@@ -28,11 +31,13 @@ export class StellarService {
   private readonly feeBumpMultiplier: number;
 
   constructor() {
-    const horizonUrl =
-      process.env.STELLAR_HORIZON_URL || "https://horizon-testnet.stellar.org";
+    const horizonUrls = parseHorizonUrls();
     this.networkPassphrase =
       process.env.STELLAR_NETWORK_PASSPHRASE || Networks.TESTNET;
-    this.server = new Horizon.Server(horizonUrl);
+    this.server = new Horizon.Server(horizonUrls[0]);
+    // The primary server instance is shared so existing behaviour (and tests
+    // that stub it) are unchanged when only one endpoint is configured.
+    this.horizon = new HorizonFailoverClient(horizonUrls, { servers: [this.server] });
     this.baseFee = Number(process.env.STELLAR_BASE_FEE || "100");
     this.maxFee = Number(process.env.STELLAR_MAX_FEE || "2000");
     this.feeBumpMultiplier = Number(
@@ -75,7 +80,7 @@ export class StellarService {
    */
   public async checkAccountExists(publicKey: string): Promise<boolean> {
     try {
-      await this.server.loadAccount(publicKey);
+      await this.horizon.call((server) => server.loadAccount(publicKey), "loadAccount");
       return true;
     } catch (error: any) {
       if (error.response && error.response.status === 404) {
@@ -150,8 +155,10 @@ export class StellarService {
     feeOverride?: string,
   ): Promise<void> {
     // Load the funder account
-    const funderAccountResponse = await this.server.loadAccount(
-      this.funderKeypair.publicKey(),
+    const funderPublicKey = this.funderKeypair.publicKey();
+    const funderAccountResponse = await this.horizon.call(
+      (server) => server.loadAccount(funderPublicKey),
+      "loadAccount",
     );
 
     // Build the transaction
@@ -173,7 +180,9 @@ export class StellarService {
 
     // Submit the transaction
     try {
-      await this.server.submitTransaction(transaction);
+      // Signed transactions are identified by hash, so resubmitting one to a
+      // fallback node after a transport failure cannot double-apply it.
+      await this.horizon.call((server) => server.submitTransaction(transaction), "submitTransaction");
     } catch (error: any) {
       this.logger.error("Error creating account", {
         error: { message: error.message, response: error.response?.data },
@@ -193,7 +202,7 @@ export class StellarService {
     assetIssuer: string,
   ): Promise<boolean> {
     try {
-      const account = await this.server.loadAccount(publicKey);
+      const account = await this.horizon.call((server) => server.loadAccount(publicKey), "loadAccount");
       const balances = account.balances;
 
       for (const balance of balances) {
@@ -231,7 +240,11 @@ export class StellarService {
     feeOverride?: string,
   ): Promise<void> {
     const keypair = Keypair.fromSecret(secretKey);
-    const accountResponse = await this.server.loadAccount(keypair.publicKey());
+    const accountPublicKey = keypair.publicKey();
+    const accountResponse = await this.horizon.call(
+      (server) => server.loadAccount(accountPublicKey),
+      "loadAccount",
+    );
     const asset = new Asset(assetCode, assetIssuer);
 
     const transaction = new TransactionBuilder(accountResponse, {
@@ -249,7 +262,9 @@ export class StellarService {
     transaction.sign(keypair);
 
     try {
-      await this.server.submitTransaction(transaction);
+      // Signed transactions are identified by hash, so resubmitting one to a
+      // fallback node after a transport failure cannot double-apply it.
+      await this.horizon.call((server) => server.submitTransaction(transaction), "submitTransaction");
     } catch (error: any) {
       this.logger.error("Error adding trustline", {
         error: { message: error.message, response: error.response?.data },

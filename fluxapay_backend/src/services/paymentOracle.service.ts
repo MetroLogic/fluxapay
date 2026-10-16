@@ -23,7 +23,17 @@ import { getLogger, getMetricsCollector } from "../utils/logger";
 import { createAndDeliverWebhook } from "./webhook.service";
 import { markInvoicePaidForPaymentService } from "./invoice.service";
 import { analyzeDuplicatePayments, MatchedStellarPayment } from "../utils/duplicatePayment.util";
-import {parseHorizonMemo, resolveMemoMatchMode, validateMemoMatch } from "../utils/oracleMemo.util";
+import { parseHorizonMemo, resolveMemoMatchMode, type StellarMemo } from "../utils/oracleMemo.util";
+import {
+  authorizedUsdcIssuers,
+  checkDepositAsset,
+  expectedDepositMemos,
+  isUnderpaid,
+  matchDepositMemo,
+  type HorizonPaymentOperation,
+} from "../utils/depositVerification.util";
+import { recordUnallocatedDeposit } from "./unallocatedDeposit.service";
+import { HorizonFailoverClient, parseHorizonUrls } from "./horizonFailover.service";
 import { isSorobanVerificationEnabled } from "../utils/sorobanVerification.util";
 import { getSorobanHealthStatus } from "./SorobanService";
 import { redisClient } from "../middleware/redisIdempotency.middleware";
@@ -39,7 +49,8 @@ const metrics = getMetricsCollector();
 
 // ─── Configuration ───────────────────────────────────────────────────────────
 
-const HORIZON_URL = process.env.STELLAR_HORIZON_URL || "https://horizon-testnet.stellar.org";
+const HORIZON_URLS = parseHorizonUrls();
+const HORIZON_URL = HORIZON_URLS[0];
 const USDC_ISSUER = process.env.USDC_ISSUER_PUBLIC_KEY || "GBBD47IF6LWK7P7MDEVSCWT73IQIGCEZHR7OMXMBZQ3ZONN2T4U6W23Y";
 const POLLING_INTERVAL_MS = parseInt(process.env.ORACLE_POLLING_INTERVAL_MS || "30000", 10); // 30 seconds default
 const MAX_MISSED_POLLS = parseInt(process.env.ORACLE_MAX_MISSED_POLLS || "5", 10);
@@ -127,6 +138,7 @@ interface HorizonHealthCheck {
 
 class OracleState {
   private server: Horizon.Server;
+  private horizon: HorizonFailoverClient;
   private usdcAsset: Asset;
   private isRunning: boolean = false;
   private pollInterval: NodeJS.Timeout | null = null;
@@ -136,6 +148,9 @@ class OracleState {
 
   constructor() {
     this.server = new Horizon.Server(HORIZON_URL);
+    // #1257 — fail over across STELLAR_HORIZON_URLS; the primary instance is
+    // reused so a single-endpoint setup behaves exactly as before.
+    this.horizon = new HorizonFailoverClient(HORIZON_URLS, { servers: [this.server] });
     this.usdcAsset = new Asset("USDC", USDC_ISSUER);
     this.metrics = {
       pollsCompleted: 0,
@@ -158,6 +173,10 @@ class OracleState {
 
   getServer(): Horizon.Server {
     return this.server;
+  }
+
+  getHorizon(): HorizonFailoverClient {
+    return this.horizon;
   }
 
   getUsdcAsset(): Asset {
@@ -210,6 +229,41 @@ const oracleState = new OracleState();
 // ─── Core Oracle Functions ───────────────────────────────────────────────────
 
 /**
+ * On a shared deposit address, find the pending charge (other than
+ * `excludeId`) whose MEMO_TEXT / MEMO_ID matches `memo`, if any.
+ */
+async function findPendingPaymentForMemo(
+  address: string,
+  memo: StellarMemo,
+  excludeId: string,
+): Promise<string | null> {
+  if (memo.type === "none") return null;
+  try {
+    const candidates = await prisma.payment.findMany({
+      where: {
+        stellar_address: address,
+        id: { not: excludeId },
+        status: { in: ["pending", "partially_paid"] },
+      },
+      select: { id: true, metadata: true },
+      take: 500,
+    });
+    const owner = candidates.find(
+      (candidate: { id: string; metadata: unknown }) =>
+        matchDepositMemo(memo, expectedDepositMemos(candidate)) === "matched",
+    );
+    return owner?.id ?? null;
+  } catch (error) {
+    logger.warn("Could not look up memo owner for shared-address deposit", {
+      address,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    // Unknown owner: be conservative and do not flag.
+    return "unknown";
+  }
+}
+
+/**
  * Verifies a single payment by checking Horizon for incoming transactions
  */
 async function verifyPayment(payment: Payment): Promise<PaymentVerification> {
@@ -219,12 +273,12 @@ async function verifyPayment(payment: Payment): Promise<PaymentVerification> {
   }
 
   const expectedAmount = payment.amount;
-  const server = oracleState.getServer();
+  const horizon = oracleState.getHorizon();
   const usdcAsset = oracleState.getUsdcAsset();
 
   try {
     // Check account balance for USDC
-    const account = await server.loadAccount(address);
+    const account = await horizon.call((server) => server.loadAccount(address), "oracle.loadAccount");
     const usdcBalance = account.balances.find(
       (b: any) =>
         "asset_code" in b &&
@@ -233,102 +287,126 @@ async function verifyPayment(payment: Payment): Promise<PaymentVerification> {
     );
 
     // Build payments query with cursor support
-    let paymentsQuery = server
-      .payments()
-      .forAccount(address)
-      .order("desc")
-      .limit(10);
+    const transactions = await horizon.call((server) => {
+      let paymentsQuery = server
+        .payments()
+        .forAccount(address)
+        .order("desc")
+        .limit(10);
 
-    if (payment.last_paging_token) {
-      paymentsQuery = paymentsQuery.cursor(payment.last_paging_token);
-    }
-
-    const transactions = await paymentsQuery.call();
+      if (payment.last_paging_token) {
+        paymentsQuery = paymentsQuery.cursor(payment.last_paging_token);
+      }
+      return paymentsQuery.call();
+    }, "oracle.payments");
     let latestPagingToken = payment.last_paging_token;
     const matchedPayments: MatchedStellarPayment[] = [];
     let latestTxHash: string | undefined;
     let latestPayer: string | undefined;
+    const acceptedOperations: HorizonPaymentOperation[] = [];
 
-    // Collect all valid USDC payments to this address (not just the first)
+    // Collect every genuine, correctly-attributed USDC deposit (#1258).
     const memoMatchMode = resolveMemoMatchMode(address, {
       sharedDepositAddress: SHARED_DEPOSIT_ADDRESS,
       addressPoolEnabled: ENABLE_ADDRESS_POOL,
     });
+    const issuers = authorizedUsdcIssuers();
+    const expectedMemos = expectedDepositMemos(payment);
+    // On a dedicated address every deposit belongs to this charge.
+    const candidateForAddress = memoMatchMode === "none" ? payment.id : null;
 
-    // Process transactions to find valid USDC payments
     for (const record of transactions.records) {
       if (record.paging_token) {
         latestPagingToken = record.paging_token;
       }
 
-      if (record.type === "payment" || record.type === "create_account") {
-        const paymentRecord = record as any;
-
-        if (
-          paymentRecord.asset_type !== "native" &&
-          paymentRecord.asset_code === "USDC" &&
-          paymentRecord.asset_issuer === usdcAsset.issuer &&
-          paymentRecord.to === address
-        ) {
-          matchedPayments.push({
-            transactionHash: paymentRecord.transaction_hash,
-            amount: new Decimal(paymentRecord.amount),
-            payer: paymentRecord.from,
-            pagingToken: record.paging_token,
+      const op = record as unknown as HorizonPaymentOperation;
+      const asset = checkDepositAsset(op, address, issuers);
+      if (!asset.ok) {
+        if (asset.reason !== "not_a_deposit") {
+          // Counterfeit "USDC" or an unsupported asset: never credit it.
+          await recordUnallocatedDeposit({
+            operation: op,
+            destination: address,
+            reason: asset.reason,
+            candidatePaymentId: candidateForAddress,
+            details: { authorizedIssuers: issuers, observedPaymentId: payment.id },
           });
-          const txHash = paymentRecord.transaction_hash as string | undefined;
-          if (!txHash) {
+        }
+        continue;
+      }
+
+      const txHash = op.transaction_hash;
+      if (!txHash) {
+        continue;
+      }
+
+      if (memoMatchMode !== "none") {
+        let memo: StellarMemo = { type: "none" };
+        try {
+          const tx = await horizon.call(
+            (server) => server.transactions().transaction(txHash).call(),
+            "oracle.transaction",
+          );
+          memo = parseHorizonMemo({ memo_type: tx.memo_type, memo: tx.memo });
+        } catch (memoError: any) {
+          logger.warn("Failed to fetch transaction memo for payment attribution", {
+            paymentId: payment.id,
+            transactionHash: txHash,
+            error: memoError.message,
+          });
+          if (memoMatchMode === "required") {
+            // Retry on a later tick rather than mis-attributing the deposit.
             continue;
           }
+        }
 
-          let memoResult;
-          try {
-            const tx = await server.transactions().transaction(txHash).call();
-            const memo = parseHorizonMemo({
-              memo_type: tx.memo_type,
-              memo: tx.memo,
-            });
-            memoResult = validateMemoMatch(payment.id, memo, memoMatchMode);
-          } catch (memoError: any) {
-            logger.warn("Failed to fetch transaction memo for payment attribution", {
-              paymentId: payment.id,
-              transactionHash: txHash,
-              error: memoError.message,
-            });
-            if (memoMatchMode === "required") {
-              continue;
-            }
-            memoResult = validateMemoMatch(
-              payment.id,
-              { type: "none" },
-              memoMatchMode,
-            );
-          }
-
-          if (memoResult.rejected) {
-            logger.warn("Payment memo mismatch — skipping transaction", {
-              paymentId: payment.id,
-              expectedMemo: memoResult.expected,
-              receivedMemo: memoResult.received,
-              transactionHash: txHash,
-            });
-            continue;
-          }
-
-          if (memoMatchMode === "secondary" && !memoResult.matched && memoResult.received) {
-            logger.warn("Payment memo secondary verification failed", {
-              paymentId: payment.id,
-              expectedMemo: memoResult.expected,
-              receivedMemo: memoResult.received,
-              transactionHash: txHash,
+        const verdict = matchDepositMemo(memo, expectedMemos);
+        if (memoMatchMode === "required" && verdict !== "matched") {
+          // Shared hot wallet: the deposit may simply belong to another
+          // charge. Only flag it when no pending charge claims the memo.
+          const owner = await findPendingPaymentForMemo(address, memo, payment.id);
+          if (!owner) {
+            await recordUnallocatedDeposit({
+              operation: op,
+              destination: address,
+              reason: verdict === "missing" ? "missing_memo" : "invalid_memo",
+              memo,
+              details: { observedPaymentId: payment.id },
             });
           }
+          logger.warn("Payment memo mismatch — skipping transaction", {
+            paymentId: payment.id,
+            expectedMemoId: expectedMemos.id[0],
+            receivedMemo: memo.value ?? null,
+            memoType: memo.type,
+            transactionHash: txHash,
+          });
+          continue;
+        }
 
-          latestTxHash = txHash;
-          latestPayer = paymentRecord.from;
-          break;
+        if (memoMatchMode === "secondary" && verdict === "mismatch") {
+          logger.warn("Payment memo secondary verification failed", {
+            paymentId: payment.id,
+            expectedMemoId: expectedMemos.id[0],
+            receivedMemo: memo.value ?? null,
+            transactionHash: txHash,
+          });
         }
       }
+
+      // Only deposits that passed asset and memo checks are counted.
+      matchedPayments.push({
+        transactionHash: txHash,
+        amount: new Decimal(op.amount ?? "0"),
+        payer: op.from,
+        pagingToken: record.paging_token,
+      });
+      if (!latestTxHash) {
+        latestTxHash = txHash;
+        latestPayer = op.from;
+      }
+      acceptedOperations.push(op);
     }
 
     // Persist all matched transactions for reconciliation
@@ -387,6 +465,23 @@ async function verifyPayment(payment: Payment): Promise<PaymentVerification> {
       verified = true;
     } else if (actualAmount.gt(0)) {
       status = "partially_paid";
+    }
+
+    // #1258 — an underpaid charge goes to manual review (idempotent per
+    // operation), while the payment itself stays partially_paid so a top-up
+    // can still complete it.
+    if (isUnderpaid(actualAmount, expectedAmount) && acceptedOperations.length > 0) {
+      await recordUnallocatedDeposit({
+        operation: acceptedOperations[0],
+        destination: address,
+        reason: "underpaid",
+        candidatePaymentId: payment.id,
+        details: {
+          expectedAmount: expectedAmount.toString(),
+          receivedAmount: actualAmount.toString(),
+          shortfall: expectedAmount.minus(actualAmount).toString(),
+        },
+      });
     }
 
     return {
@@ -853,10 +948,12 @@ export function startPaymentOracle(): void {
     pollingIntervalMs: POLLING_INTERVAL_MS,
     batchSize: BATCH_SIZE,
     horizonUrl: HORIZON_URL,
+    horizonUrls: HORIZON_URLS,
     smartContractVerification: ENABLE_SMART_CONTRACT_VERIFICATION,
   });
 
   oracleState.setRunning(true);
+  oracleState.getHorizon().startHealthChecks();
 
   // Subscribe to the shared HorizonPoller — oracle no longer polls directly.
   // The poller emits one "payment:detected" event per discovered payment per tick.
@@ -906,6 +1003,7 @@ export function stopPaymentOracle(): void {
   }
 
   logger.info("Stopping payment oracle service");
+  oracleState.getHorizon().stopHealthChecks();
 
   const interval = oracleState.getPollInterval();
   if (interval) {
@@ -938,6 +1036,8 @@ export function getOracleHealth(): HorizonHealthCheck {
 
 export interface OracleHealthResponse extends HorizonHealthCheck {
   soroban: ReturnType<typeof getSorobanHealthStatus>;
+  /** Per-endpoint circuit state for STELLAR_HORIZON_URLS (#1257). */
+  horizonEndpoints: ReturnType<HorizonFailoverClient["getStatus"]>;
 }
 
 /**
@@ -947,6 +1047,7 @@ export function getOracleHealthWithSoroban(): OracleHealthResponse {
   return {
     ...oracleState.getHealthCheck(),
     soroban: getSorobanHealthStatus(),
+    horizonEndpoints: oracleState.getHorizon().getStatus(),
   };
 }
 

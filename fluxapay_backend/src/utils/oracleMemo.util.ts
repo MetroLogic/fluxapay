@@ -44,8 +44,10 @@ export function parseHorizonMemo(tx: HorizonTransactionMemo): StellarMemo {
   }
 
   if (type === "id") {
+    // MEMO_ID is a uint64; values beyond 2^53 would be rounded by Number, so
+    // keep those as the exact decimal string.
     const parsed = Number.parseInt(tx.memo, 10);
-    return { type, value: Number.isNaN(parsed) ? tx.memo : parsed };
+    return { type, value: Number.isSafeInteger(parsed) ? parsed : tx.memo };
   }
 
   if (type === "text") {

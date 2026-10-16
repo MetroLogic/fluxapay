@@ -63,6 +63,7 @@ model Merchant {
   refunds               Refund[]
   invoices              Invoice[]
   bankAccount           BankAccount?
+  payoutMethods         MerchantPayoutMethod[]
   merchantHDIndex       MerchantHDIndex?
   subscriptions         MerchantSubscription[]
   reconciliationRecords ReconciliationRecord[]
@@ -745,6 +746,8 @@ enum AuditActionType {
   merchant_profile_updated
   bank_account_updated
   api_key_rotated
+  api_key_created
+  api_key_revoked
   webhook_secret_rotated
   // Database backup lifecycle
   db_backup_started
@@ -1024,4 +1027,126 @@ model EmailSuppression {
   updated_at DateTime @updatedAt
 
   @@index([email])
+}
+
+// ─── Merchant payout methods (#1249) ────────────────────────────────────────
+
+enum PayoutMethodType {
+  bank_account
+}
+
+enum PayoutMethodStatus {
+  active
+  pending_verification
+  archived
+}
+
+/// A bank account (or other channel) a merchant's fiat settlements are paid
+/// out to. Account and routing numbers are AES-256-GCM encrypted at rest and
+/// only ever returned masked; `account_fingerprint` (HMAC) detects duplicates
+/// without decrypting.
+model MerchantPayoutMethod {
+  id                       String             @id @default(cuid())
+  merchant                 Merchant           @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  merchantId               String
+  type                     PayoutMethodType   @default(bank_account)
+  status                   PayoutMethodStatus @default(pending_verification)
+  country                  String
+  currency                 String
+  bank_name                String?
+  bank_code                String?
+  beneficiary_name         String
+  account_number_encrypted String
+  account_number_last4     String
+  account_fingerprint      String
+  routing_number_encrypted String?
+  routing_number_last4     String?
+  label                    String?
+  is_default               Boolean            @default(false)
+  archived_at              DateTime?
+  created_at               DateTime           @default(now())
+  updated_at               DateTime           @updatedAt
+
+  @@index([merchantId, status])
+  @@index([merchantId, account_fingerprint])
+}
+
+// ─── API key audit trail (#1250) ────────────────────────────────────────────
+
+enum ApiKeyAuditAction {
+  created
+  updated
+  rotated
+  revoked
+  regenerated
+}
+
+/// Append-only record of API key lifecycle events. Rows are never updated or
+/// deleted (a database trigger enforces this), and no key material beyond the
+/// public prefix and last four characters is ever stored.
+model ApiKeyAuditLog {
+  id            String            @id @default(cuid())
+  merchantId    String
+  actor_id      String
+  actor_type    String
+  action        ApiKeyAuditAction
+  api_key_id    String?
+  key_prefix    String
+  key_last_four String?
+  environment   String?
+  ip_address    String?
+  user_agent    String?
+  metadata      Json?
+  created_at    DateTime          @default(now())
+
+  @@index([merchantId, created_at(sort: Desc)])
+  @@index([api_key_id])
+}
+
+// ─── Unallocated deposits (#1258) ───────────────────────────────────────────
+
+enum UnallocatedDepositReason {
+  missing_memo
+  invalid_memo
+  spoofed_asset
+  unsupported_asset
+  underpaid
+}
+
+enum UnallocatedDepositStatus {
+  pending_review
+  resolved
+  refunded
+  ignored
+}
+
+/// Incoming transfers to a deposit address that could not be safely credited
+/// to a charge (bad/missing memo, counterfeit or unsupported asset, underpaid
+/// amount). Held for manual review instead of being silently dropped.
+model UnallocatedDeposit {
+  id                   String                   @id @default(cuid())
+  transaction_hash     String
+  operation_id         String
+  destination_address  String
+  source_address       String?
+  asset_type           String
+  asset_code           String?
+  asset_issuer         String?
+  amount               Decimal
+  memo_type            String?
+  memo                 String?
+  reason               UnallocatedDepositReason
+  candidate_payment_id String?
+  status               UnallocatedDepositStatus @default(pending_review)
+  details              Json?
+  reviewed_at          DateTime?
+  reviewed_by          String?
+  resolution_note      String?
+  created_at           DateTime                 @default(now())
+  updated_at           DateTime                 @updatedAt
+
+  @@unique([operation_id, reason])
+  @@index([status, created_at(sort: Desc)])
+  @@index([destination_address])
+  @@index([candidate_payment_id])
 }

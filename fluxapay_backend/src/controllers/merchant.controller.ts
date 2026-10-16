@@ -29,6 +29,7 @@ import {
 } from "../services/notificationPreferences.service";
 import { AuthRequest } from "../types/express";
 import { validateUserId } from "../helpers/request.helper";
+import { auditContextFromRequest } from "../services/apiKeyAudit.service";
 
 type SignupRequest = z.infer<typeof merchantSchema.signupSchema>;
 type LoginRequest = z.infer<typeof merchantSchema.loginSchema>;
@@ -113,7 +114,11 @@ export const updateMerchantWebhook = createController(
 
 export const rotateApiKey = createController(async (body: { gracePeriodHours?: number }, req: AuthRequest) => {
   const merchantId = await validateUserId(req);
-  return rotateApiKeyService({ merchantId, gracePeriodHours: body.gracePeriodHours });
+  return rotateApiKeyService({
+    merchantId,
+    gracePeriodHours: body.gracePeriodHours,
+    auditContext: auditContextFromRequest(req, merchantId),
+  });
 });
 
 export const rotateWebhookSecret = createController(
