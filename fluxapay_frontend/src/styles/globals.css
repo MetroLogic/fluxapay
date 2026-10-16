@@ -125,8 +125,44 @@
     }
   }
 
+  @keyframes checkout-pop {
+    0% {
+      transform: scale(0.6);
+      opacity: 0;
+    }
+
+    60% {
+      transform: scale(1.08);
+      opacity: 1;
+    }
+
+    100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+
+  @keyframes checkout-pulse-ring {
+    0% {
+      transform: scale(0.9);
+      opacity: 0.6;
+    }
+
+    70% {
+      transform: scale(1.7);
+      opacity: 0;
+    }
+
+    100% {
+      transform: scale(1.7);
+      opacity: 0;
+    }
+  }
+
   --animate-bounce-slow: bounce-slow 3s ease-in-out infinite;
   --animate-fade-in: fade-in 0.8s ease-out forwards;
+  --animate-checkout-pop: checkout-pop 0.45s ease-out both;
+  --animate-checkout-pulse-ring: checkout-pulse-ring 1.8s ease-out infinite;
 }
 
 :root {

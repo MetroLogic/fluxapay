@@ -248,7 +248,19 @@
       "close": "Close",
       "timerExpired": "Expired",
       "timerExpiredAria": "Payment timer expired",
-      "timeRemainingAria": "Time remaining: {minutes} minutes and {seconds} seconds"
+      "timeRemainingAria": "Time remaining: {minutes} minutes and {seconds} seconds",
+      "statusAwaiting": "Awaiting payment",
+      "statusAwaitingDescription": "Send the exact amount to the address below. We'll detect it automatically.",
+      "statusConfirming": "Payment detected — confirming",
+      "statusConfirmingDescription": "We've detected your payment on-chain and are waiting for confirmation.",
+      "statusUnderpaid": "Underpayment received",
+      "statusUnderpaidDescription": "We received less than the full amount. Send the remaining {amount} {currency} to complete your payment.",
+      "statusOverpaid": "Overpayment received",
+      "statusOverpaidDescription": "We received more than the requested amount. Your payment has been accepted.",
+      "statusUpdating": "Live updates enabled",
+      "statusPolling": "Checking for updates every few seconds",
+      "statusAnnouncement": "Payment status: {status}",
+      "redirectingIn": "Redirecting in {seconds}s…"
     }
   },
   "auth": {

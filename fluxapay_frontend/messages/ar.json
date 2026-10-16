@@ -248,7 +248,19 @@
       "close": "إغلاق",
       "timerExpired": "انتهت الصلاحية",
       "timerExpiredAria": "انتهت صلاحية مؤقت الدفع",
-      "timeRemainingAria": "الوقت المتبقي: {minutes} دقائق و {seconds} ثوانٍ"
+      "timeRemainingAria": "الوقت المتبقي: {minutes} دقائق و {seconds} ثوانٍ",
+      "statusAwaiting": "في انتظار الدفع",
+      "statusAwaitingDescription": "أرسل المبلغ الدقيق إلى العنوان أدناه. سنكتشفه تلقائيًا.",
+      "statusConfirming": "تم اكتشاف الدفع — جارٍ التأكيد",
+      "statusConfirmingDescription": "اكتشفنا دفعتك على السلسلة وننتظر التأكيد.",
+      "statusUnderpaid": "تم استلام دفعة ناقصة",
+      "statusUnderpaidDescription": "استلمنا أقل من المبلغ الكامل. أرسل {amount} {currency} المتبقية لإكمال دفعتك.",
+      "statusOverpaid": "تم استلام دفعة زائدة",
+      "statusOverpaidDescription": "استلمنا أكثر من المبلغ المطلوب. تم قبول دفعتك.",
+      "statusUpdating": "تم تفعيل التحديثات المباشرة",
+      "statusPolling": "التحقق من التحديثات كل بضع ثوانٍ",
+      "statusAnnouncement": "حالة الدفع: {status}",
+      "redirectingIn": "إعادة التوجيه خلال {seconds} ثانية…"
     }
   },
   "auth": {

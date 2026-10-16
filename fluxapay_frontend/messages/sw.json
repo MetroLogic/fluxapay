@@ -248,7 +248,19 @@
       "close": "Funga",
       "timerExpired": "Imeishia",
       "timerExpiredAria": "Muda wa malipo umeishia",
-      "timeRemainingAria": "Muda uliosalia: {minutes} dakika na {seconds} sekunde"
+      "timeRemainingAria": "Muda uliosalia: {minutes} dakika na {seconds} sekunde",
+      "statusAwaiting": "Inasubiri malipo",
+      "statusAwaitingDescription": "Tuma kiasi kamili kwa anwani iliyo hapa chini. Tutakigundua kiotomatiki.",
+      "statusConfirming": "Malipo yamegundulika — yanathibitishwa",
+      "statusConfirmingDescription": "Tumegundua malipo yako kwenye mnyororo na tunasubiri uthibitisho.",
+      "statusUnderpaid": "Malipo pungufu yamepokelewa",
+      "statusUnderpaidDescription": "Tulipokea chini ya kiasi kamili. Tuma {amount} {currency} iliyobaki ili kukamilisha malipo yako.",
+      "statusOverpaid": "Malipo ya ziada yamepokelewa",
+      "statusOverpaidDescription": "Tulipokea zaidi ya kiasi kilichoombwa. Malipo yako yamekubaliwa.",
+      "statusUpdating": "Masasisho ya moja kwa moja yamewashwa",
+      "statusPolling": "Inaangalia masasisho kila sekunde chache",
+      "statusAnnouncement": "Hali ya malipo: {status}",
+      "redirectingIn": "Inaelekeza tena baada ya sekunde {seconds}…"
     }
   },
   "auth": {
