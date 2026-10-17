@@ -1,4 +1,5 @@
 import PDFDocument from "pdfkit";
+import { PDFDocument as PDFLibDocument } from "pdf-lib";
 import { Readable } from "stream";
 import { Worker } from "worker_threads";
 import path from "path";
@@ -355,7 +356,7 @@ function formatDate(d: Date): string {
 }
 
 function formatAmount(amount: number, currency: string): string {
-    return `${Number(amount).toFixed(2)} ${currency.toUpperCase()}`;
+    return `${Number(amount).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency.toUpperCase()}`;
 }
 
 function statusBadgeColor(status: string): string {
@@ -374,3 +375,4 @@ function statusBadgeColor(status: string): string {
             return "#d97706"; // amber — pending
     }
 }
+

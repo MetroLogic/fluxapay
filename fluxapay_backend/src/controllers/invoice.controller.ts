@@ -129,6 +129,13 @@ export async function exportInvoice(req: AuthRequest, res: Response) {
 
     const result = await exportInvoiceService(merchantId, invoiceId, format);
 
+    if (result.format === "pdf" && result.status === "failed") {
+      return res.status(500).json({
+        code: ErrorCode.PDF_GENERATION_FAILED,
+        message: "Failed to generate PDF",
+      });
+    }
+
     res.setHeader("Content-Disposition", `attachment; filename="${result.filename}"`);
     res.setHeader("Content-Type", result.contentType);
     if (result.format === "pdf" && result.status === "accepted") {

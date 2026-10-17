@@ -531,12 +531,34 @@ export async function exportInvoiceService(
 
   // ── PDF ──────────────────────────────────────────────────────────────────
   if (format === "pdf") {
+    // Large amounts stored as integer minor units can exceed Number.MAX_SAFE_INTEGER
+    // once multiplied during PDF layout, producing Infinity/NaN and failing
+    // generation. Normalize to major units and reject unsafe values early.
+    const invoiceAmountMajor = Number(invoice.amount) / 100;
+    const paymentAmountMajor = payment ? Number(payment.amount) / 100 : null;
+    if (!Number.isFinite(invoiceAmountMajor) || !Number.isSafeInteger(Number(invoice.amount))) {
+      throw apiError(
+        422,
+        ErrorCode.VALIDATION_ERROR,
+        "Invoice amount is too large to render as PDF",
+      );
+    }
+    if (
+      payment &&
+      (!Number.isFinite(paymentAmountMajor) || !Number.isSafeInteger(Number(payment.amount)))
+    ) {
+      throw apiError(
+        422,
+        ErrorCode.VALIDATION_ERROR,
+        "Payment amount is too large to render as PDF",
+      );
+    }
     const filename = `invoice-${invoice.invoice_number}.pdf`;
     const job = startInvoicePdfGeneration(
       {
         invoice_number: invoice.invoice_number,
         id: invoice.id,
-        amount: Number(invoice.amount),
+        amount: invoiceAmountMajor,
         currency: invoice.currency,
         customer_email: invoice.customer_email,
         status: invoice.status,
@@ -550,7 +572,7 @@ export async function exportInvoiceService(
           ? {
             id: payment.id,
             status: payment.status,
-            amount: Number(payment.amount),
+            amount: paymentAmountMajor as number,
             currency: payment.currency,
           }
           : null,
