@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { Copy, Check } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { vibrateOnCopy } from './shareLink';
 
 interface CopyFieldProps {
   label: string;
@@ -31,6 +32,7 @@ export function CopyField({
     try {
       await navigator.clipboard.writeText(value);
       setCopied(true);
+      vibrateOnCopy();
       toast.success(`${label} copied to clipboard`);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
@@ -74,13 +76,21 @@ export function CopyField({
           aria-describedby={copied ? `${valueId}-copied` : undefined}
         >
           {copied ? (
-            <Check className="h-4 w-4 animate-in zoom-in" aria-hidden="true" />
+            <Check className="h-4 w-4 animate-in zoom-in text-green-500 duration-200" aria-hidden="true" />
           ) : (
             <Copy className="h-4 w-4" aria-hidden="true" />
           )}
           <span className="sr-only">{copied ? 'Copied' : buttonAriaLabel}</span>
         </button>
       </div>
+      {copied && (
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute -top-7 end-2 animate-in fade-in slide-in-from-bottom-1 rounded bg-slate-900 px-2 py-1 text-xs font-medium text-white"
+        >
+          Copied!
+        </span>
+      )}
       <span
         id={`${valueId}-copied`}
         role="status"

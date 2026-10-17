@@ -14,6 +14,7 @@ import { PaymentStatus } from '@/components/checkout/PaymentStatus';
 import { StellarPayButton } from '@/components/checkout/StellarPayButton';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { CopyField } from '@/components/checkout/CopyField';
+import { ShareLinkButton } from '@/components/checkout/ShareLinkButton';
 import {
   CheckoutBrandingShell,
   DEFAULT_ACCENT,
@@ -339,6 +340,12 @@ export default function CheckoutPage() {
             {/* Copy fields */}
             <div className="mb-8 space-y-4">
               <CopyField label="Payment Address" value={payment.address} truncate copyAriaLabel="Copy deposit address" fieldId="deposit-address" />
+              <ShareLinkButton
+                title="FluxaPay payment"
+                amount={payment.amount}
+                currency={payment.currency}
+                url={typeof window !== 'undefined' ? window.location.href : ''}
+              />
               {payment.memo && (
                 <CopyField
                   label={`Memo (${payment.memoType?.replace('MEMO_', '') || 'TEXT'})`}
