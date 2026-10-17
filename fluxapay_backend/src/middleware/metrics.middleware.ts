@@ -28,6 +28,10 @@ const PROMETHEUS_COUNTERS: Record<string, { promName: string; help: string }> = 
     promName: 'fluxapay_settlement_batch_total',
     help: 'Total number of settlement batches initiated, labelled by currency.',
   },
+  database_replica_fallback_total: {
+    promName: 'fluxapay_database_replica_fallback_total',
+    help: 'Total number of times read queries fall back to the primary database.',
+  },
 };
 
 /**

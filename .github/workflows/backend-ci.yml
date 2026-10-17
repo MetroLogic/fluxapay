@@ -95,6 +95,9 @@ jobs:
       - name: OpenAPI Validation
         run: npm run validate:openapi
 
+      - name: API Collection Synchronization
+        run: npm run check:api-collections
+
       - name: Route Coverage
         run: npm run check:route-coverage
 
