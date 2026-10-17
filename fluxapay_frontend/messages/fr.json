@@ -147,6 +147,33 @@
       "answer": "Oui, nous utilisons un cryptage de niveau bancaire, des portefeuilles multi-signatures et respectons les normes de sécurité internationales."
     }
   },
+  "customerFaq": {
+    "title": "Aide sur les paiements Stellar",
+    "subtitle": "Réponses sur les portefeuilles, les mémos de paiement, les montants et le suivi de votre paiement.",
+    "searchLabel": "Rechercher des questions sur les paiements",
+    "searchPlaceholder": "Rechercher dans la FAQ...",
+    "noResults": "Aucune question correspondante. Essayez une autre recherche.",
+    "wallets": {
+      "question": "Quels portefeuilles Stellar puis-je utiliser ?",
+      "answer": "Vous pouvez payer directement avec Freighter ou Albedo lorsqu'ils sont disponibles. Le sélecteur de portefeuille peut aussi proposer des portefeuilles mobiles compatibles, comme LOBSTR ou Solar, via WalletConnect. Vous pouvez également scanner le code QR ou copier l'adresse et payer depuis un autre portefeuille Stellar. Vérifiez que votre portefeuille utilise le même réseau Stellar et prend en charge l'actif indiqué sur cette page."
+    },
+    "memo": {
+      "question": "Pourquoi un mémo est-il requis pour certains paiements ?",
+      "answer": "Certaines adresses de paiement sont partagées par plusieurs clients. Le mémo identifie votre commande afin que le commerçant puisse attribuer correctement votre paiement. Si cette page indique que le mémo est requis, saisissez exactement la valeur affichée, y compris les zéros initiaux. Un mémo manquant ou incorrect peut retarder l'attribution et nécessiter une vérification par le commerçant."
+    },
+    "amountAsset": {
+      "question": "Que se passe-t-il si j'envoie le mauvais montant ou le mauvais actif ?",
+      "answer": "Un paiement insuffisant peut apparaître comme un paiement partiel avec le solde restant indiqué ; un trop-perçu peut être signalé séparément. Un autre actif peut ne pas être reconnu automatiquement. Contactez rapidement le commerçant et communiquez le hash de transaction, le montant, l'actif et le mémo. N'envoyez pas un autre paiement sans ses instructions."
+    },
+    "confirmation": {
+      "question": "Combien de temps faut-il pour confirmer un paiement ?",
+      "answer": "Les transactions Stellar sont généralement enregistrées en quelques secondes. FluxaPay vérifie automatiquement le statut, mais les retards du réseau ou de l'indexation peuvent prolonger le délai. Laissez cette page ouverte et attendez qu'elle indique « Confirmé » avant de réessayer."
+    },
+    "status": {
+      "question": "Comment vérifier le statut de mon paiement ?",
+      "answer": "Cette page met automatiquement votre statut à jour. Une fois le paiement confirmé, un message de confirmation et, si disponible, le hash de transaction Stellar s'affichent. S'il est toujours en attente après quelques minutes, vérifiez que la transaction a réussi sur le bon réseau et que l'adresse, l'actif, le montant et le mémo requis sont corrects. Contactez ensuite le commerçant avec le hash ; ne renvoyez pas le paiement tant que son statut est en attente."
+    }
+  },
   "footer": {
     "tagline": "L'avenir des paiements mondiaux",
     "product": "Produit",

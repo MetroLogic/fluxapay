@@ -147,6 +147,33 @@
       "answer": "Sí, usamos cifrado de nivel bancario, billeteras multifirma, y cumplimos con estándares de seguridad internacionales."
     }
   },
+  "customerFaq": {
+    "title": "Ayuda sobre pagos de Stellar",
+    "subtitle": "Respuestas sobre billeteras, memos de pago, importes y cómo consultar el estado del pago.",
+    "searchLabel": "Buscar preguntas sobre pagos",
+    "searchPlaceholder": "Buscar en las preguntas frecuentes...",
+    "noResults": "No hay preguntas coincidentes. Prueba con otra búsqueda.",
+    "wallets": {
+      "question": "¿Qué billeteras de Stellar puedo usar?",
+      "answer": "Puedes pagar directamente con Freighter o Albedo cuando estén disponibles. El selector de billeteras también puede ofrecer billeteras móviles compatibles, como LOBSTR o Solar, mediante WalletConnect. También puedes escanear el código QR o copiar la dirección y pagar desde otra billetera de Stellar. Asegúrate de que tu billetera use la misma red Stellar y admita el activo que aparece en esta página."
+    },
+    "memo": {
+      "question": "¿Por qué se requiere un memo para algunos pagos?",
+      "answer": "Algunos destinos de pago son compartidos por muchos clientes. El memo identifica tu pedido para que el comercio pueda asignar correctamente tu pago. Si esta página indica que el memo es obligatorio, incluye exactamente el valor mostrado, también los ceros iniciales. Si falta o es incorrecto, la acreditación puede retrasarse y el comercio tendrá que investigar."
+    },
+    "amountAsset": {
+      "question": "¿Qué ocurre si envío un importe o activo incorrecto?",
+      "answer": "Un pago insuficiente puede aparecer como parcial y mostrar el saldo pendiente; un pago excesivo puede marcarse por separado. Es posible que otro activo no se reconozca automáticamente. Ponte en contacto con el comercio cuanto antes y comparte el hash de la transacción, el importe, el activo y el memo. No envíes otro pago a menos que el comercio te lo indique."
+    },
+    "confirmation": {
+      "question": "¿Cuánto tarda la confirmación del pago?",
+      "answer": "Las transacciones de Stellar suelen registrarse en unos segundos. FluxaPay consulta el estado automáticamente, aunque los retrasos de la red o de la indexación pueden tardar más. Mantén esta página abierta y espera a que indique «Confirmado» antes de volver a intentarlo."
+    },
+    "status": {
+      "question": "¿Cómo puedo consultar el estado de mi pago?",
+      "answer": "Esta página actualiza el estado automáticamente. Cuando se confirme, mostrará un mensaje de confirmación y, si está disponible, el hash de la transacción de Stellar. Si sigue pendiente después de unos minutos, comprueba que la transacción se completó en la red correcta y que coinciden la dirección, el activo, el importe y el memo obligatorio. Después, contacta con el comercio y envíale el hash; no vuelvas a pagar mientras el estado esté pendiente."
+    }
+  },
   "footer": {
     "tagline": "El futuro de los pagos globales",
     "product": "Producto",

@@ -147,6 +147,33 @@
       "answer": "Ndiyo, tunatumia siri ya kiwango cha benki, akaunti zaidi ya saini, na tunakubaliana na viwango vya usalama vya ulimwengu."
     }
   },
+  "customerFaq": {
+    "title": "Msaada wa malipo ya Stellar",
+    "subtitle": "Majibu kuhusu pochi, memo za malipo, kiasi, na jinsi ya kuangalia hali ya malipo.",
+    "searchLabel": "Tafuta maswali ya malipo",
+    "searchPlaceholder": "Tafuta maswali yanayoulizwa mara kwa mara...",
+    "noResults": "Hakuna maswali yanayolingana. Jaribu utafutaji mwingine.",
+    "wallets": {
+      "question": "Ninaweza kutumia pochi gani za Stellar?",
+      "answer": "Unaweza kulipa moja kwa moja kwa Freighter au Albedo zinapopatikana. Kiteuzi cha pochi kinaweza pia kuonyesha pochi za simu zinazooana, kama LOBSTR au Solar, kupitia WalletConnect. Unaweza pia kuchanganua msimbo wa QR au kunakili anwani na kulipa kutoka kwa pochi nyingine ya Stellar. Hakikisha pochi yako iko kwenye mtandao uleule wa Stellar na inaunga mkono mali iliyoonyeshwa kwenye ukurasa huu."
+    },
+    "memo": {
+      "question": "Kwa nini memo inahitajika kwa baadhi ya malipo?",
+      "answer": "Baadhi ya anwani za malipo hutumiwa na wateja wengi. Memo hutambua agizo lako ili mfanyabiashara aweze kuhusisha malipo yako kwa usahihi. Ikiwa ukurasa huu unasema memo inahitajika, jumuisha thamani iliyoonyeshwa sawasawa, pamoja na sufuri za mwanzo. Memo ikikosekana au ikiwa si sahihi, kuhusisha malipo kunaweza kuchelewa na mfanyabiashara akahitaji kuchunguza."
+    },
+    "amountAsset": {
+      "question": "Nini kitatokea nikituma kiasi au mali isiyo sahihi?",
+      "answer": "Malipo pungufu yanaweza kuonekana kama malipo ya sehemu na salio lililobaki kuonyeshwa; malipo ya ziada yanaweza kuripotiwa kando. Huenda mali tofauti isitambuliwe kiotomatiki. Wasiliana na mfanyabiashara haraka na utume heshi ya muamala, kiasi, mali na memo. Usitume malipo mengine isipokuwa mfanyabiashara akuambie ufanye hivyo."
+    },
+    "confirmation": {
+      "question": "Uthibitishaji wa malipo huchukua muda gani?",
+      "answer": "Kwa kawaida miamala ya Stellar hurekodiwa ndani ya sekunde chache. FluxaPay hukagua hali ya malipo kiotomatiki, lakini ucheleweshaji wa mtandao au uorodheshaji unaweza kuchukua muda zaidi. Acha ukurasa huu wazi na usubiri uonyeshe Imethibitishwa kabla ya kujaribu tena."
+    },
+    "status": {
+      "question": "Ninawezaje kuangalia hali ya malipo yangu?",
+      "answer": "Ukurasa huu husasisha hali kiotomatiki. Malipo yakithibitishwa, utaona ujumbe wa uthibitisho na, ikipatikana, heshi ya muamala wa Stellar. Ikiwa bado inasubiri baada ya dakika chache, hakikisha muamala ulifaulu kwenye mtandao sahihi na anwani, mali, kiasi na memo inayohitajika vinafanana. Kisha wasiliana na mfanyabiashara ukitumia heshi ya muamala; usilipe tena hali ikiwa inasubiri."
+    }
+  },
   "footer": {
     "tagline": "Siku zijazo za fikira za ulimwengu",
     "product": "Bidhaa",

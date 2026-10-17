@@ -27,6 +27,7 @@ import { sanitizeRedirectUrl } from '@/lib/safeUrl';
 export default function CheckoutPage() {
   const t = useTranslations('payment');
   const tAuth = useTranslations('auth');
+  const tFooter = useTranslations('footer');
   const params = useParams();
   const searchParams = useSearchParams();
   const chargeId = params.charge_id as string;
@@ -409,6 +410,7 @@ export default function CheckoutPage() {
             <div className="mt-8 flex justify-center gap-6 border-t border-gray-100 pt-6 text-xs text-gray-500">
               <Link href="/terms" className="transition-colors hover:text-[color:var(--checkout-accent)]">{tAuth('terms')}</Link>
               <Link href="/privacy" className="transition-colors hover:text-[color:var(--checkout-accent)]">{tAuth('privacy')}</Link>
+              <Link href="/faq" className="transition-colors hover:text-[color:var(--checkout-accent)]">{tFooter('faqs')}</Link>
             </div>
           </div>
         </div>
