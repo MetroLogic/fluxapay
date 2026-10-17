@@ -60,7 +60,8 @@ export function CopyField({
       <div className="relative flex items-center overflow-hidden rounded-xl border border-gray-200 bg-gray-50 transition-all hover:border-slate-400">
         <div
           id={valueId}
-          className="flex-1 overflow-hidden px-4 py-3 font-mono text-sm text-gray-900"
+          dir="ltr"
+          className="flex-1 overflow-hidden px-4 py-3 text-start font-mono text-sm text-gray-900"
           aria-labelledby={`${valueId}-label`}
           aria-label={`${label}: ${value}`}
         >
@@ -71,7 +72,7 @@ export function CopyField({
         <button
           type="button"
           onClick={handleCopy}
-          className="flex h-full items-center justify-center border-l border-gray-200 px-4 py-3 text-gray-500 transition-colors hover:bg-slate-900 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--checkout-accent)]"
+          className="flex h-full items-center justify-center border-s border-gray-200 px-4 py-3 text-gray-500 transition-colors hover:bg-slate-900 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--checkout-accent)]"
           aria-label={buttonAriaLabel}
           aria-describedby={copied ? `${valueId}-copied` : undefined}
         >

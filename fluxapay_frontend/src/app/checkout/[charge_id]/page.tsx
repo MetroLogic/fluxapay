@@ -81,7 +81,7 @@ export default function CheckoutPage() {
       merchantName={payment?.merchantName}
       showBrandHeader={showBrandHeader}
     >
-      <div className="absolute right-4 top-4 z-10">
+      <div className="absolute end-4 top-4 z-10">
         <LanguageSwitcher />
       </div>
 
