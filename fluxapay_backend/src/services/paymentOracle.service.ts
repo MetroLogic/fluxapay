@@ -33,7 +33,6 @@ import {
   HorizonPaymentDetectedEvent,
 } from "./horizonPoller.service";
 import { eventBus, AppEvents } from "./EventService";
-import { createAutomaticExcessRefundService } from "./refund.service";
 
 const logger = getLogger("PaymentOracleService");
 const metrics = getMetricsCollector();
@@ -481,22 +480,6 @@ async function updatePaymentStatus(verification: PaymentVerification): Promise<v
     data: updateData,
     include: { merchant: true },
   });
-
-  if (verification.status === "overpaid") {
-    try {
-      await createAutomaticExcessRefundService({
-        merchantId: updatedPayment.merchantId,
-        paymentId: updatedPayment.id,
-        amountReceived: verification.actualAmount.toString(),
-        amountExpected: verification.expectedAmount.toString(),
-      });
-    } catch (refundError: any) {
-      logger.error("Automatic excess refund creation failed", {
-        paymentId: updatedPayment.id,
-        error: refundError.message,
-      });
-    }
-  }
 
   logger.info("Payment status updated", {
     paymentId: verification.paymentId,

@@ -30,7 +30,6 @@ import { idempotencyMiddleware } from "../middleware/idempotency.middleware";
 import { adminAuth } from "../middleware/adminAuth.middleware";
 import { updateSettlementScheduleSchema, bankAccountSchema, updateBankAccountSchema, updateNotificationPreferencesSchema } from "../schemas/merchant.schema";
 import { authRateLimit, merchantApiKeyRateLimit, merchantRateLimit } from "../middleware/rateLimit.middleware";
-import { requireBankAccount2FA } from "../middleware/bankAccount2fa.middleware";
 
 const router = Router();
 
@@ -640,7 +639,6 @@ router.patch(
 router.post(
   "/me/bank-account",
   authenticateApiKey, merchantApiKeyRateLimit(),
-  requireBankAccount2FA,
   validate(bankAccountSchema),
   addBankAccount,
 );
@@ -685,7 +683,6 @@ router.post(
 router.patch(
   "/me/bank-account",
   authenticateApiKey, merchantApiKeyRateLimit(),
-  requireBankAccount2FA,
   validate(updateBankAccountSchema),
   updateBankAccount,
 );
