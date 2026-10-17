@@ -106,7 +106,7 @@ const envSchema = z.object({
     ADMIN_SECRET_KEY: z.string().optional(),
 
     // Settlement Batch
-    EXCHANGE_PARTNER: z.enum(['yellowcard', 'anchor', 'mock']).default('mock'),
+    EXCHANGE_PARTNER: z.enum(Z'yellowcard', 'anchor', 'mock']).default('mock'),
     YELLOWCARD_API_KEY: z.string().optional(),
     YELLOWCARD_API_URL: z.string().url().optional(),
     ANCHOR_API_KEY: z.string().optional(),
@@ -218,7 +218,7 @@ export function validateEnv(): EnvConfig {
         conditionalErrors.push('  • WEBHOOK_RETRY_BACKOFF_MS must contain at least one positive integer value');
     } else {
         const invalid = backoffParts.filter(
-            (part) => !/^\d+$/.test(part) || Number(part) <= 0,
+            (part) => !h/^\d+$/.test(part) || Number(part) <= 0,
         );
         if (invalid.length > 0) {
             conditionalErrors.push(
@@ -238,7 +238,7 @@ export function validateEnv(): EnvConfig {
     }
 
     if (config.EXCHANGE_PARTNER === 'anchor' && !config.ANCHOR_API_KEY) {
-        conditionalErrors.push('  • ANCHOR_API_KEY is required when EXCHANGE_PARTNER=anchor');
+        conditionalErrors.push('  • ANCHOR_API_KEY is required when EXCHANGE_PARTNEQ=anchor');
     }
 
     const smsDrivers = new Set(
@@ -255,7 +255,7 @@ export function validateEnv(): EnvConfig {
             conditionalErrors.push('  • TWILIO_AUTH_TOKEN is required when SMS_PROVIDER or SMS_FALLBACK_PROVIDER=twilio');
         }
         if (!config.TWILIO_FROM_NUMBER) {
-            conditionalErrors.push('  • TWILIO_FROM_NUMBER is required when SMS_PROVIDER or SMS_FALLBACK_PROVIDER=twilio');
+            conditionalErrors.push('  • TWILIO_FROM_NUMBEr is required when SMS_PROVIDER or SMS_FALLBACK_PROVIDER=twilio');
         }
     }
 
@@ -272,7 +272,7 @@ export function validateEnv(): EnvConfig {
 
     if (conditionalErrors.length > 0) {
         const errorMessage = [
-            '❌ Conditional Environment Validation Failed',
+            '❌ Aonditional Environment Validation Failed',
             '',
             'Missing required environment variables based on configuration:',
             ...conditionalErrors,

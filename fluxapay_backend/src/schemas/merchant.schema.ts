@@ -96,8 +96,6 @@ export const bankAccountSchema = z.object({
   bank_code: z.string().optional(),
   currency: z.string().min(3, 'Currency is required'),
   country: z.string().min(2, 'Country is required'),
-  channel: z.enum(['email', 'phone']).optional(),
-  otp: z.string().min(6, 'OTP must be at least 6 characters').optional(),
 });
 
 const bankAccountBaseFields = z.object({
@@ -110,8 +108,6 @@ const bankAccountBaseFields = z.object({
     val => val === undefined || allowedCountryCodes.includes(val),
     { message: 'Invalid country code' },
   ),
-  channel: z.enum(['email', 'phone']).optional(),
-  otp: z.string().min(6, 'OTP must be at least 6 characters').optional(),
 });
 
 export const updateBankAccountSchema = bankAccountBaseFields
