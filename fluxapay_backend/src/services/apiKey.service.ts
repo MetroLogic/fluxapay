@@ -39,6 +39,23 @@ const KEY_LENGTH = 32;
 /** Grace period (ms) during which a rotated key remains valid */
 const ROTATION_GRACE_PERIOD_MS = 24 * 60 * 60 * 1000;
 
+/** Default expiry window for new merchant API keys (365 days). */
+export const DEFAULT_API_KEY_EXPIRY_DAYS = 365;
+export const API_KEY_EXPIRY_OPTIONS = [90, 180, 365] as const;
+
+export function normalizeApiKeyExpiryDays(expiryDays?: number | string | null): number {
+  if (expiryDays === undefined || expiryDays === null || expiryDays === "") {
+    return DEFAULT_API_KEY_EXPIRY_DAYS;
+  }
+
+  const parsed = Number(expiryDays);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new Error("API key expiration must be a positive number of days");
+  }
+
+  return parsed;
+}
+
 /**
  * Create audit log entry for API key operations
  */
@@ -82,6 +99,7 @@ export interface CreateApiKeyResult {
   environment: "live" | "test";
   last_four: string;
   created_at: Date;
+  expires_at: Date | null;
 }
 
 export interface ApiKeyDto {
@@ -176,7 +194,11 @@ export class ApiKeyService {
     name: string,
     environment: "live" | "test",
     actor: string,
+    expiryDays?: number | string,
   ): Promise<CreateApiKeyResult> {
+    const resolvedExpiryDays = normalizeApiKeyExpiryDays(expiryDays);
+    const expiresAt = new Date(Date.now() + resolvedExpiryDays * 24 * 60 * 60 * 1000);
+
     // Rate limit check
     const withinRateLimit = await this.checkRateLimit(merchantId);
     if (!withinRateLimit) {
@@ -203,6 +225,7 @@ export class ApiKeyService {
         key_last_four: lastFour,
         environment: environment === "live" ? "live" : "test",
         status: "active",
+        expires_at: expiresAt,
       },
     });
 
@@ -227,6 +250,7 @@ export class ApiKeyService {
       environment: apiKey.environment as "live" | "test",
       last_four: apiKey.key_last_four,
       created_at: apiKey.created_at,
+      expires_at: expiresAt,
     };
   }
 
@@ -405,7 +429,7 @@ export class ApiKeyService {
    *
    * Called during authentication.
    */
-  async validateAndUpdateUsage(keyHash: string): Promise<{ valid: boolean; merchantId?: string }> {
+  async validateAndUpdateUsage(keyHash: string): Promise<{ valid: boolean; merchantId?: string; expired?: boolean }> {
     const now = new Date();
     const apiKey = await (prisma as any).apiKey.findUnique({
       where: {
@@ -418,6 +442,13 @@ export class ApiKeyService {
     }
 
     if (apiKey.status !== "active" || (apiKey.expires_at && apiKey.expires_at <= now)) {
+      if (apiKey.expires_at && apiKey.expires_at <= now) {
+        await (prisma as any).apiKey.update({
+          where: { id: apiKey.id },
+          data: { status: "revoked" },
+        }).catch(() => undefined);
+        return { valid: false, merchantId: apiKey.merchantId, expired: true };
+      }
       return { valid: false };
     }
 
@@ -442,8 +473,20 @@ export class ApiKeyService {
     };
   }
 
+  private async markKeyExpired(keyId: string, merchantId?: string): Promise<void> {
+    const apiKeyClient = (prisma as any).apiKey;
+    if (!apiKeyClient || typeof apiKeyClient.update !== "function") {
+      return;
+    }
+
+    await apiKeyClient.update({
+      where: { id: keyId },
+      data: { status: "revoked" },
+    }).catch(() => undefined);
+  }
+
   /** Validate a raw API key, supporting both modern SHA-256 and legacy bcrypt hashes. */
-  async validateRawApiKey(key: string): Promise<{ valid: boolean; merchantId?: string }> {
+  async validateRawApiKey(key: string): Promise<{ valid: boolean; merchantId?: string; expired?: boolean }> {
     const now = new Date();
     const candidates = await (prisma as any).apiKey.findMany({
       where: {
@@ -463,6 +506,11 @@ export class ApiKeyService {
         continue;
       }
 
+      if (candidate.expires_at && candidate.expires_at <= now) {
+        await this.markKeyExpired(candidate.id, candidate.merchantId);
+        return { valid: false, merchantId: candidate.merchantId, expired: true };
+      }
+
       const updated = await (prisma as any).apiKey.updateMany({
         where: {
           id: candidate.id,
@@ -478,6 +526,109 @@ export class ApiKeyService {
     }
 
     return { valid: false };
+  }
+
+  async validateRotatedApiKey(key: string): Promise<{ valid: boolean; merchantId?: string; expired?: boolean }> {
+    const now = new Date();
+    const candidates = await (prisma as any).apiKey.findMany({
+      where: {
+        key_last_four: this.getLastFour(key),
+        status: { in: ["active", "rotated"] },
+        OR: [{ expires_at: null }, { expires_at: { gt: now } }],
+      },
+    });
+    const keyHash = this.hashKey(key);
+
+    for (const candidate of candidates) {
+      const matches = candidate.key_hash.startsWith("$2")
+        ? await import("../helpers/crypto.helper").then(({ compareKeys }) => compareKeys(key, candidate.key_hash))
+        : candidate.key_hash === keyHash;
+
+      if (!matches) {
+        continue;
+      }
+
+      if (candidate.expires_at && candidate.expires_at <= now) {
+        await this.markKeyExpired(candidate.id, candidate.merchantId);
+        return { valid: false, merchantId: candidate.merchantId, expired: true };
+      }
+
+      return { valid: true, merchantId: candidate.merchantId };
+    }
+
+    return { valid: false };
+  }
+
+  async runApiKeyExpiryWarningJob(): Promise<{ processed: number; notified: number; warnings: Array<{ merchantId: string; keyId: string; expires_at: string; days_remaining: number; window: "7d" | "30d" }> }> {
+    const now = new Date();
+    const threshold = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+
+    const apiKeys = await (prisma as any).apiKey.findMany({
+      where: {
+        status: "active",
+        expires_at: {
+          not: null,
+          gte: now,
+          lte: threshold,
+        },
+      },
+      include: {
+        merchant: {
+          select: {
+            id: true,
+            email: true,
+            business_name: true,
+          },
+        },
+      },
+    });
+
+    const warnings: Array<{ merchantId: string; keyId: string; expires_at: string; days_remaining: number; window: "7d" | "30d" }> = [];
+    let notified = 0;
+
+    for (const apiKey of apiKeys) {
+      const merchant = apiKey.merchant;
+      if (!merchant?.email) {
+        continue;
+      }
+
+      const expiresAt = new Date(apiKey.expires_at);
+      const daysRemaining = Math.max(0, Math.ceil((expiresAt.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)));
+      const window = daysRemaining <= 7 ? "7d" : "30d";
+
+      try {
+        const { sendApiKeyExpirationWarningEmail } = await import("./email.service");
+        await sendApiKeyExpirationWarningEmail(
+          merchant.email,
+          merchant.business_name || "Merchant",
+          {
+            key_id: apiKey.id,
+            key_name: apiKey.name,
+            expires_at: expiresAt.toISOString(),
+            days_remaining: daysRemaining,
+            severity: "warning",
+            window,
+          },
+        );
+        notified += 1;
+      } catch (error) {
+        console.error("API key expiry warning email failed:", error);
+      }
+
+      warnings.push({
+        merchantId: merchant.id,
+        keyId: apiKey.id,
+        expires_at: expiresAt.toISOString(),
+        days_remaining: daysRemaining,
+        window,
+      });
+    }
+
+    return {
+      processed: apiKeys.length,
+      notified,
+      warnings,
+    };
   }
 
   /**

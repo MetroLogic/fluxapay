@@ -138,8 +138,8 @@ describe("apiKeyAuth.middleware — test mode isolation", () => {
   });
 
   it("authenticates old and new keys concurrently during rotation", async () => {
-    const oldReq = { headers: { "x-api-key": skLiveKey } } as AuthRequest;
-    const newReq = { headers: { "x-api-key": skTestKey } } as AuthRequest;
+    const oldReq = { headers: { "x-api-key": skLiveKey } } as unknown as AuthRequest;
+    const newReq = { headers: { "x-api-key": skTestKey } } as unknown as AuthRequest;
     const oldNext = jest.fn();
     const newNext = jest.fn();
     mockApiKeyFindMany.mockImplementation(async ({ where }: { where: { key_last_four: string } }) => [
@@ -178,5 +178,26 @@ describe("apiKeyAuth.middleware — test mode isolation", () => {
 
     expect(mockNext).not.toHaveBeenCalled();
     expect(mockRes.status).toHaveBeenCalledWith(401);
+  });
+
+  it("returns API_KEY_EXPIRED when the matched key has already expired", async () => {
+    mockReq.headers = { "x-api-key": skLiveKey };
+    mockApiKeyFindMany.mockResolvedValueOnce([
+      {
+        id: "expired-key",
+        merchantId: "merchant_1",
+        key_hash: "$2b$test-hash",
+        expires_at: new Date(Date.now() - 60_000),
+      },
+    ]);
+    mockCompare.mockResolvedValueOnce(true);
+
+    await authenticateApiKey(mockReq as AuthRequest, mockRes as Response, mockNext as NextFunction);
+
+    expect(mockNext).not.toHaveBeenCalled();
+    expect(mockRes.status).toHaveBeenCalledWith(401);
+    expect(mockRes.json).toHaveBeenCalledWith(
+      expect.objectContaining({ code: "API_KEY_EXPIRED" }),
+    );
   });
 });

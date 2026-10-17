@@ -12,7 +12,8 @@ import { validateUserId } from "../helpers/request.helper";
 export const createApiKey = async (req: Request, res: Response) => {
   try {
     const merchantId = await validateUserId(req as AuthRequest);
-    const { name, environment } = req.body;
+    const { name, environment, expiration_days, expires_in_days } = req.body;
+    const requestedExpiryDays = expiration_days ?? expires_in_days;
 
     if (!name || typeof name !== "string") {
       return sendApiError(res, apiError(400, ErrorCode.MISSING_REQUIRED_FIELD, "name is required and must be a string"));
@@ -22,11 +23,16 @@ export const createApiKey = async (req: Request, res: Response) => {
       return sendApiError(res, apiError(400, ErrorCode.INVALID_ENVIRONMENT, "environment must be 'live' or 'test'"));
     }
 
+    if (requestedExpiryDays !== undefined && (typeof requestedExpiryDays !== "number" && typeof requestedExpiryDays !== "string")) {
+      return sendApiError(res, apiError(400, ErrorCode.INVALID_REQUEST_BODY, "expiration_days must be a positive number of days"));
+    }
+
     const result = await apiKeyService.createApiKey(
       merchantId,
       name,
       environment,
       merchantId, // actor is the merchant themselves
+      requestedExpiryDays,
     );
 
     res.status(201).json(result);
