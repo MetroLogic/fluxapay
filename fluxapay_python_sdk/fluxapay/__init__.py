@@ -680,12 +680,22 @@ class AsyncFluxaPay(_PaymentsMixin, _SettlementsMixin, _InvoicesMixin, _RefundsM
         )
 
     async def aclose(self) -> None:
+        """Close the underlying httpx.AsyncClient and release connection pool resources."""
         await self._http.aclose()
 
     async def __aenter__(self) -> "AsyncFluxaPay":
+        # Support re-entry: if the client was previously closed (e.g. via a
+        # prior ``async with`` block), recreate the httpx.AsyncClient so the
+        # context manager can be safely reused.
+        if self._http.is_closed:
+            self._http = httpx.AsyncClient(
+                base_url=self._base_url,
+                headers=_headers(self._api_key),
+                timeout=30.0,
+            )
         return self
 
-    async def __aexit__(self, *_: Any) -> None:
+    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         await self.aclose()
 
     async def _get(self, path: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
