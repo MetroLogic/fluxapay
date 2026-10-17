@@ -17,6 +17,7 @@ import { generateToken } from "../helpers/jwt.helper";
 import { merchantRegistryService } from "./merchantRegistry.service";
 import { generateApiKey, generateWebhookSecret, hashKey, getLastFour, ApiKeyMode } from "../helpers/crypto.helper";
 import * as crypto from "crypto";
+import { type AuditRequestContext, recordApiKeyEvent } from "./apiKeyAudit.service";
 import {
   logMerchantProfileUpdate,
   logBankAccountChange,
@@ -222,6 +223,10 @@ export async function regenerateApiKeyService(data: {
   merchantId: string;
   mode?: ApiKeyMode;
   gracePeriodHours?: number;
+  /** Who triggered this and from where (#1250 audit trail). */
+  auditContext?: AuditRequestContext;
+  /** Recorded action; `rotateApiKeyService` passes "rotated". */
+  auditAction?: "regenerated" | "rotated";
 }) {
   const { merchantId, mode = "live" } = data;
   const gracePeriodHours = getApiKeyRotationGracePeriodHours(data.gracePeriodHours);
@@ -231,11 +236,15 @@ export async function regenerateApiKeyService(data: {
   const apiKeyHashed = await hashKey(apiKey);
   const apiKeyLastFour = getLastFour(apiKey);
 
+  let previousLastFour: string | null = null;
+  let newKeyId: string | null = null;
+
   await prisma.$transaction(async (tx) => {
     const merchant = await tx.merchant.findUnique({
       where: { id: merchantId },
       select: { api_key_hashed: true, api_key_last_four: true },
     });
+    previousLastFour = merchant?.api_key_last_four ?? null;
 
     if (merchant?.api_key_hashed && merchant.api_key_last_four) {
       const existingKey = await tx.apiKey.findUnique({
@@ -270,7 +279,7 @@ export async function regenerateApiKeyService(data: {
       },
     });
 
-    await tx.apiKey.create({
+    const created = await tx.apiKey.create({
       data: {
         merchantId,
         name: "Primary API key",
@@ -279,10 +288,26 @@ export async function regenerateApiKeyService(data: {
         environment: mode,
       },
     });
+    newKeyId = created.id;
   });
 
   // Audit log: API key rotation
   logApiKeyRotation({ merchantId, lastFour: apiKeyLastFour }).catch(() => {});
+  await recordApiKeyEvent({
+    merchantId,
+    action: data.auditAction ?? "regenerated",
+    context: data.auditContext ?? { actorId: merchantId, actorType: "api_key" },
+    apiKeyId: newKeyId,
+    // safeKeyPrefix inside the audit service reduces this to e.g. "sk_live_".
+    keyPrefix: apiKey,
+    keyLastFour: apiKeyLastFour,
+    environment: mode,
+    metadata: {
+      previousKeyLastFour: previousLastFour,
+      previousKeyExpiresAt: expiresAt.toISOString(),
+      gracePeriodHours,
+    },
+  });
 
   return { message: "API key rotated", apiKey, expiresAt, gracePeriodHours };
 }
@@ -290,8 +315,9 @@ export async function regenerateApiKeyService(data: {
 export async function rotateApiKeyService(data: {
   merchantId: string;
   gracePeriodHours?: number;
+  auditContext?: AuditRequestContext;
 }) {
-  return regenerateApiKeyService(data);
+  return regenerateApiKeyService({ ...data, auditAction: "rotated" });
 }
 
 export async function updateMerchantProfileService(data: {

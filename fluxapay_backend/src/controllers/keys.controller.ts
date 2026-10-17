@@ -3,6 +3,7 @@ import { AuthRequest } from "../types/express";
 import { validateUserId } from "../helpers/request.helper";
 import { regenerateApiKeyService } from "../services/merchant.service";
 import { ApiKeyMode } from "../helpers/crypto.helper";
+import { auditContextFromRequest } from "../services/apiKeyAudit.service";
 
 export const regenerateApiKey = createController(
   async (body: { mode?: string; gracePeriodHours?: number }, req: AuthRequest) => {
@@ -13,6 +14,11 @@ export const regenerateApiKey = createController(
     const modeParam = body.mode;
     const mode: ApiKeyMode = modeParam === "test" ? "test" : "live";
 
-    return regenerateApiKeyService({ merchantId, mode, gracePeriodHours: body.gracePeriodHours });
+    return regenerateApiKeyService({
+      merchantId,
+      mode,
+      gracePeriodHours: body.gracePeriodHours,
+      auditContext: auditContextFromRequest(req, merchantId),
+    });
   },
 );

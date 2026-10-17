@@ -20,6 +20,11 @@ import crypto from "crypto";
 import { AuditActionType, AuditEntityType } from "../types/audit.types";
 
 import { prisma } from "../config/prisma";
+import {
+  type AuditRequestContext,
+  keyPrefixForEnvironment,
+  recordApiKeyEvent,
+} from "./apiKeyAudit.service";
 
 /** Maximum active keys per merchant */
 const MAX_ACTIVE_KEYS = 5;
@@ -176,6 +181,7 @@ export class ApiKeyService {
     name: string,
     environment: "live" | "test",
     actor: string,
+    context?: AuditRequestContext,
   ): Promise<CreateApiKeyResult> {
     // Rate limit check
     const withinRateLimit = await this.checkRateLimit(merchantId);
@@ -218,6 +224,18 @@ export class ApiKeyService {
         environment,
         lastFour,
       },
+    });
+
+    // #1250 — append-only key audit trail (never stores the key itself)
+    await recordApiKeyEvent({
+      merchantId,
+      action: "created",
+      context: context ?? { actorId: actor, actorType: "api_key" },
+      apiKeyId: apiKey.id,
+      keyPrefix: keyPrefixForEnvironment(environment),
+      keyLastFour: lastFour,
+      environment,
+      metadata: { name },
     });
 
     return {
@@ -268,6 +286,7 @@ export class ApiKeyService {
     merchantId: string,
     keyId: string,
     actor: string,
+    context?: AuditRequestContext,
   ): Promise<RotateApiKeyResult> {
     const existingKey = await (prisma as any).apiKey.findFirst({
       where: {
@@ -341,6 +360,22 @@ export class ApiKeyService {
       },
     });
 
+    await recordApiKeyEvent({
+      merchantId,
+      action: "rotated",
+      context: context ?? { actorId: actor, actorType: "api_key" },
+      apiKeyId: newKey.id,
+      keyPrefix: keyPrefixForEnvironment(environment),
+      keyLastFour: lastFour,
+      environment,
+      metadata: {
+        name: existingKey.name,
+        rotatedFromId: keyId,
+        previousKeyLastFour: existingKey.key_last_four,
+        previousKeyExpiresAt: previousKeyExpiresAt.toISOString(),
+      },
+    });
+
     return {
       id: newKey.id,
       name: newKey.name,
@@ -362,6 +397,7 @@ export class ApiKeyService {
     merchantId: string,
     keyId: string,
     actor: string,
+    context?: AuditRequestContext,
   ): Promise<void> {
     const apiKey = await (prisma as any).apiKey.findFirst({
       where: {
@@ -397,6 +433,17 @@ export class ApiKeyService {
         environment: apiKey.environment,
         lastFour: apiKey.key_last_four,
       },
+    });
+
+    await recordApiKeyEvent({
+      merchantId,
+      action: "revoked",
+      context: context ?? { actorId: actor, actorType: "api_key" },
+      apiKeyId: keyId,
+      keyPrefix: keyPrefixForEnvironment(apiKey.environment),
+      keyLastFour: apiKey.key_last_four,
+      environment: apiKey.environment,
+      metadata: { name: apiKey.name },
     });
   }
 

@@ -24,6 +24,8 @@ import {
   updateNotificationPreferencesController,
 } from "../controllers/merchant.controller";
 import { validate, validateQuery } from "../middleware/validation.middleware";
+import { getMerchantAuditLogs, adminGetMerchantAuditLogs } from "../controllers/apiKeyAudit.controller";
+import { getPayoutMethods, postPayoutMethod, deletePayoutMethod } from "../controllers/payoutMethod.controller";
 import * as merchantSchema from "../schemas/merchant.schema";
 import { authenticateApiKey } from "../middleware/apiKeyAuth.middleware";
 import { idempotencyMiddleware } from "../middleware/idempotency.middleware";
@@ -425,6 +427,160 @@ router.post(
  *       401:
  *         description: Unauthorized
  */
+/**
+ * @swagger
+ * /api/v1/merchants/payout-methods:
+ *   get:
+ *     operationId: listPayoutMethods
+ *     summary: List the merchant's payout methods
+ *     description: Bank accounts used for fiat settlement. Account and routing numbers are always masked.
+ *     tags: [Merchants]
+ *     security:
+ *       - apiKeyAuth: []
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: include_archived
+ *         description: Also return archived payout methods.
+ *         schema: { type: boolean }
+ *     responses:
+ *       200:
+ *         description: Payout methods
+ *       401:
+ *         description: Unauthorized
+ *   post:
+ *     operationId: createPayoutMethod
+ *     summary: Add a payout bank account
+ *     description: Validated against the settlement country's rules (NG, KE, GH, ZA, US, GB). Stored encrypted with status pending_verification.
+ *     tags: [Merchants]
+ *     security:
+ *       - apiKeyAuth: []
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [country, beneficiary_name, account_number]
+ *             properties:
+ *               country: { type: string, example: NG }
+ *               currency: { type: string, example: NGN }
+ *               beneficiary_name: { type: string, example: Acme Coffee Ltd }
+ *               account_number: { type: string, example: "0123456789" }
+ *               bank_code: { type: string, example: "058" }
+ *               routing_number: { type: string, description: Required for US accounts (ABA). }
+ *               bank_name: { type: string }
+ *               label: { type: string }
+ *               is_default: { type: boolean }
+ *     responses:
+ *       201:
+ *         description: Payout method created (masked)
+ *       400:
+ *         description: Validation failed
+ *       409:
+ *         description: Account already configured
+ *       422:
+ *         description: Payout method limit reached
+ */
+router.get("/payout-methods", authenticateApiKey, merchantApiKeyRateLimit(), getPayoutMethods);
+router.post("/payout-methods", authenticateApiKey, merchantApiKeyRateLimit(), postPayoutMethod);
+
+/**
+ * @swagger
+ * /api/v1/merchants/payout-methods/{id}:
+ *   delete:
+ *     operationId: deletePayoutMethod
+ *     summary: Archive a payout method
+ *     description: Soft-deletes the method (status archived) so settlement history keeps its reference.
+ *     tags: [Merchants]
+ *     security:
+ *       - apiKeyAuth: []
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         description: Unique identifier of the payout method.
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Archived payout method
+ *       404:
+ *         description: Not found for this merchant
+ *       409:
+ *         description: Already archived
+ */
+router.delete("/payout-methods/:id", authenticateApiKey, merchantApiKeyRateLimit(), deletePayoutMethod);
+
+/**
+ * @swagger
+ * /api/v1/merchants/audit-logs:
+ *   get:
+ *     operationId: getMerchantApiKeyAuditLogs
+ *     summary: API key audit trail for the authenticated merchant
+ *     description: Append-only record of API key creation, rotation, regeneration and revocation. Requires the account owner's dashboard (JWT) session; API keys cannot read it.
+ *     tags: [Merchants]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         description: Page number to return (1-indexed).
+ *         schema: { type: integer }
+ *       - in: query
+ *         name: limit
+ *         description: Maximum number of items to return per page (max 100).
+ *         schema: { type: integer }
+ *       - in: query
+ *         name: action
+ *         description: Filter by lifecycle action.
+ *         schema: { type: string, enum: [created, updated, rotated, revoked, regenerated] }
+ *       - in: query
+ *         name: api_key_id
+ *         description: Only entries for this API key.
+ *         schema: { type: string }
+ *       - in: query
+ *         name: date_from
+ *         description: Only entries at or after this time (ISO 8601).
+ *         schema: { type: string, format: date-time }
+ *       - in: query
+ *         name: date_to
+ *         description: Only entries at or before this time (ISO 8601).
+ *         schema: { type: string, format: date-time }
+ *     responses:
+ *       200:
+ *         description: Paginated audit entries (merchant, actor, action, IP, user agent, key prefix, last four, timestamp)
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Not the account owner's dashboard session
+ */
+router.get("/audit-logs", authenticateApiKey, merchantApiKeyRateLimit(), getMerchantAuditLogs);
+
+/**
+ * @swagger
+ * /api/v1/merchants/admin/{merchantId}/audit-logs:
+ *   get:
+ *     operationId: adminGetMerchantApiKeyAuditLogs
+ *     summary: API key audit trail for a merchant (Admin only)
+ *     tags: [Admin - Merchants]
+ *     security:
+ *       - adminSecret: []
+ *     parameters:
+ *       - in: path
+ *         name: merchantId
+ *         required: true
+ *         description: Unique identifier of the merchant.
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Paginated audit entries
+ *       401:
+ *         description: Unauthorized
+ */
+router.get("/admin/:merchantId/audit-logs", adminAuth, adminGetMerchantAuditLogs);
+
 router.get("/admin/list", adminAuth, adminListMerchants);
 
 /**
