@@ -13,6 +13,63 @@ import {
   getKycDetailsByMerchantIdService,
 } from "../services/kyc.service";
 
+const MAX_KYC_DOCUMENT_SIZE_BYTES = 10 * 1024 * 1024;
+
+const ALLOWED_KYC_MIME_TYPES = new Set([
+  "application/pdf",
+  "image/png",
+  "image/jpeg",
+]);
+
+/**
+ * Inspect a file buffer's magic bytes to determine its true MIME type.
+ * Returns null when the buffer does not match a supported signature.
+ */
+function detectMimeTypeFromMagicBytes(buffer: Buffer): string | null {
+  if (!buffer || buffer.length < 4) {
+    return null;
+  }
+
+  // PDF: %PDF-
+  if (
+    buffer.length >= 5 &&
+    buffer[0] === 0x25 &&
+    buffer[1] === 0x50 &&
+    buffer[2] === 0x44 &&
+    buffer[3] === 0x46 &&
+    buffer[4] === 0x2d
+  ) {
+    return "application/pdf";
+  }
+
+  // PNG: 89 50 4E 47 0D 0A 1A 0A
+  if (
+    buffer.length >= 8 &&
+    buffer[0] === 0x89 &&
+    buffer[1] === 0x50 &&
+    buffer[2] === 0x4e &&
+    buffer[3] === 0x47 &&
+    buffer[4] === 0x0d &&
+    buffer[5] === 0x0a &&
+    buffer[6] === 0x1a &&
+    buffer[7] === 0x0a
+  ) {
+    return "image/png";
+  }
+
+  // JPEG: FF D8 FF
+  if (
+    buffer.length >= 3 &&
+    buffer[0] === 0xff &&
+    buffer[1] === 0xd8 &&
+    buffer[2] === 0xff
+  ) {
+    return "image/jpeg";
+  }
+
+  return null;
+}
+
 /**
  * Submit KYC information
  */
@@ -40,14 +97,36 @@ export async function uploadKycDocument(req: AuthRequest, res: Response) {
       return sendApiError(res, apiError(400, ErrorCode.NO_FILE_UPLOADED, "No file uploaded"));
     }
 
+    const file = (req as unknown as any).file as {
+      buffer: Buffer;
+      originalname: string;
+      mimetype: string;
+      size: number;
+    };
+
+    if (typeof file.size === "number" && file.size > MAX_KYC_DOCUMENT_SIZE_BYTES) {
+      return sendApiError(
+        res,
+        apiError(400, ErrorCode.INVALID_FILE_TYPE, "File exceeds the 10MB size limit")
+      );
+    }
+
+    const detectedMimeType = detectMimeTypeFromMagicBytes(file.buffer);
+    if (!detectedMimeType || !ALLOWED_KYC_MIME_TYPES.has(detectedMimeType)) {
+      return sendApiError(
+        res,
+        apiError(400, ErrorCode.INVALID_FILE_TYPE, "Unsupported or corrupted file type")
+      );
+    }
+
     const result = await uploadKycDocumentService(
       merchantId,
       document_type as any,
       {
-        buffer: (req as unknown as any).file.buffer,
-        originalname: (req as unknown as any).file.originalname,
-        mimetype: (req as unknown as any).file.mimetype,
-        size: (req as unknown as any).file.size,
+        buffer: file.buffer,
+        originalname: file.originalname,
+        mimetype: detectedMimeType,
+        size: file.size,
       }
     );
     res.status(200).json(result);

@@ -96,6 +96,7 @@ Closes #
 - [ ] I have updated CHANGELOG.md (if applicable)
 - [ ] Branch is up-to-date with `main`
 - [ ] Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/) format
+- [ ] PR title follows [Conventional Commits](https://www.conventionalcommits.org/) format (e.g. `feat(scope): summary`)
 
 ## Screenshots (if applicable)
 

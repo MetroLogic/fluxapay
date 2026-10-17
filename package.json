@@ -7,7 +7,10 @@
     "test:smoke": "cd fluxapay_frontend && npm run test:e2e:smoke",
     "detect-route-drift": "node scripts/detect-route-drift.js",
     "ci:setup": "echo 'Setting up CI environment...' && docker-compose -f docker-compose.ci.yml up -d",
-    "ci:teardown": "docker-compose -f docker-compose.ci.yml down"
+    "ci:teardown": "docker-compose -f docker-compose.ci.yml down",
+    "secrets:scan": "node scripts/scan-secrets.js",
+    "secrets:scan:staged": "node scripts/scan-secrets.js --staged",
+    "prepare": "husky"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
@@ -16,6 +19,7 @@
   },
   "devDependencies": {
     "@types/yup": "^0.29.14",
+    "husky": "^9.1.7",
     "tailwindcss": "^4.2.1"
   },
   "packageManager": "pnpm@10.26.1+sha512.664074abc367d2c9324fdc18037097ce0a8f126034160f709928e9e9f95d98714347044e5c3164d65bd5da6c59c6be362b107546292a8eecb7999196e5ce58fa"

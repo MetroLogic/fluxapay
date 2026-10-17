@@ -1,16 +1,16 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { Loader2, XCircle, CheckCircle, AlertCircle, RefreshCw } from 'lucide-react';
+import { Loader2, XCircle, AlertCircle, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { usePaymentStatus } from '@/hooks/usePaymentStatus';
+import { usePaymentStatusStream } from '@/hooks/usePaymentStatusStream';
 import { TxHashLink } from '@/components/TxHashLink';
 import { PaymentQRCode } from '@/components/checkout/PaymentQRCode';
 import { PaymentTimer } from '@/components/checkout/PaymentTimer';
-import { PaymentStatus } from '@/components/checkout/PaymentStatus';
+import { PaymentStatusIndicator } from '@/components/checkout/PaymentStatusIndicator';
 import { StellarPayButton } from '@/components/checkout/StellarPayButton';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { CopyField } from '@/components/checkout/CopyField';
@@ -33,8 +33,8 @@ export default function CheckoutPage() {
   const searchParams = useSearchParams();
   const chargeId = params.charge_id as string;
 
-  const { payment, loading, error, isOffline, retryConnection, depositAddressUpdated, connectionType } =
-    usePaymentStatus(chargeId);
+  const { payment, loading, error, isOffline, retryConnection, depositAddressUpdated, connectionType, stage } =
+    usePaymentStatusStream(chargeId);
 
   // Notify the customer when the deposit address has changed (e.g. after timeout reset).
   useEffect(() => {
@@ -58,15 +58,26 @@ export default function CheckoutPage() {
   // Fiat equivalent (≈ 1:1 for USDC, could be fetched from API)
   const fiatAmount = payment ? payment.amount : 0;
 
-  // Auto-redirect when payment is confirmed
+  // Auto-redirect to the merchant's success URL once confirmed, with a brief
+  // visible countdown (#1252).
+  const successUrl = payment?.successUrl ?? null;
+  const [redirectSeconds, setRedirectSeconds] = useState(5);
   useEffect(() => {
-    if (payment?.status === 'confirmed' && payment.successUrl) {
-      const timer = setTimeout(() => {
-        window.location.href = sanitizeRedirectUrl(payment.successUrl);
-      }, 2000);
-      return () => clearTimeout(timer);
-    }
-  }, [payment?.status, payment?.successUrl]);
+    if (payment?.status !== 'confirmed' || !successUrl) return;
+    const target = sanitizeRedirectUrl(successUrl);
+    setRedirectSeconds(5);
+    const interval = setInterval(() => {
+      setRedirectSeconds((seconds) => {
+        if (seconds <= 1) {
+          clearInterval(interval);
+          window.location.href = target;
+          return 0;
+        }
+        return seconds - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [payment?.status, successUrl]);
 
   const handleExpire = () => {};
 
@@ -147,7 +158,13 @@ export default function CheckoutPage() {
       {!loading && payment && payment.status === 'confirmed' && (
         <div className="flex flex-1 items-center justify-center p-4" role="status" aria-live="polite">
           <div className="w-full max-w-2xl rounded-2xl bg-white p-8 text-center shadow-xl">
-            <CheckCircle aria-hidden="true" className="mx-auto mb-6 h-20 w-20 animate-pulse text-green-500" />
+            <div className="mb-6">
+              <PaymentStatusIndicator
+                stage={stage}
+                connectionType={connectionType}
+                currency={payment.currency}
+              />
+            </div>
             <h1 className="mb-4 text-3xl font-bold text-gray-900">{t('checkout.confirmed')}</h1>
             <p className="mb-2 text-lg text-gray-600">{t('checkout.confirmedDescription')}</p>
             {payment.transactionHash && (
@@ -155,6 +172,11 @@ export default function CheckoutPage() {
                 <p className="text-xs font-medium text-green-800">Transaction Hash</p>
                 <TxHashLink txHash={payment.transactionHash} truncateStart={10} truncateEnd={6} showCopy />
               </div>
+            )}
+            {payment.successUrl && (
+              <p className="mb-3 text-sm text-gray-500" role="status" aria-live="polite">
+                {t('checkout.redirectingIn', { seconds: redirectSeconds })}
+              </p>
             )}
             <p className="text-sm text-gray-500">{t('checkout.redirecting')}</p>
           </div>
@@ -165,8 +187,10 @@ export default function CheckoutPage() {
       {!loading && payment && payment.status === 'expired' && (
         <div className="flex flex-1 items-center justify-center p-4" role="alert">
           <div className="w-full max-w-2xl rounded-2xl bg-white p-8 text-center shadow-xl">
-            <XCircle aria-hidden="true" className="mx-auto mb-6 h-20 w-20 text-red-500" />
-            <h1 className="mb-4 text-3xl font-bold text-gray-900">{t('checkout.expired')}</h1>
+            <div className="mb-6">
+              <PaymentStatusIndicator stage={stage} connectionType={connectionType} />
+            </div>
+            <h1 className="mb-4 text-3xl font-bold text-gray-900">{t('expired')}</h1>
             <p className="mb-2 text-lg text-gray-600">{t('checkout.expiredDescription')}</p>
             <p className="mb-6 text-sm text-gray-500">{t('checkout.requestNew')}</p>
             <button
@@ -193,7 +217,9 @@ export default function CheckoutPage() {
       {!loading && payment && payment.status === 'failed' && (
         <div className="flex flex-1 items-center justify-center p-4" role="alert">
           <div className="w-full max-w-2xl rounded-2xl bg-white p-8 text-center shadow-xl">
-            <XCircle aria-hidden="true" className="mx-auto mb-6 h-20 w-20 text-red-500" />
+            <div className="mb-6">
+              <PaymentStatusIndicator stage={stage} connectionType={connectionType} />
+            </div>
             <h1 className="mb-4 text-3xl font-bold text-gray-900">{t('failed')}</h1>
             <p className="mb-2 text-lg text-gray-600">{t('checkout.failedDescription')}</p>
             <p className="mb-6 text-sm text-gray-500">{t('checkout.tryAgainOrSupport')}</p>
@@ -221,7 +247,14 @@ export default function CheckoutPage() {
       {!loading && payment && payment.status === 'partially_paid' && (
         <div className="flex flex-1 items-center justify-center p-4" role="alert">
           <div className="w-full max-w-2xl rounded-2xl bg-white p-8 text-center shadow-xl">
-            <AlertCircle aria-hidden="true" className="mx-auto mb-6 h-20 w-20 text-orange-500" />
+            <div className="mb-6">
+              <PaymentStatusIndicator
+                stage={stage}
+                connectionType={connectionType}
+                shortfall={shortfall}
+                currency={payment.currency}
+              />
+            </div>
             <h1 className="mb-4 text-3xl font-bold text-gray-900">{t('checkout.partialReceived')}</h1>
             <p className="mb-2 text-lg text-gray-600">
               {t('checkout.partialDescription', {
@@ -266,7 +299,14 @@ export default function CheckoutPage() {
       {!loading && payment && payment.status === 'overpaid' && (
         <div className="flex flex-1 items-center justify-center p-4" role="alert">
           <div className="w-full max-w-2xl rounded-2xl bg-white p-8 text-center shadow-xl">
-            <AlertCircle aria-hidden="true" className="mx-auto mb-6 h-20 w-20 text-blue-500" />
+            <div className="mb-6">
+              <PaymentStatusIndicator
+                stage={stage}
+                connectionType={connectionType}
+                shortfall={payment.paidAmount ?? 0}
+                currency={payment.currency}
+              />
+            </div>
             <h1 className="mb-4 text-3xl font-bold text-gray-900">{t('checkout.overpaymentReceived')}</h1>
             <p className="mb-2 text-lg text-gray-600">
               {t('checkout.overpaymentDescription', {
@@ -410,7 +450,12 @@ export default function CheckoutPage() {
             </div>
 
             <div className="flex justify-center">
-              <PaymentStatus status="pending" />
+              <PaymentStatusIndicator
+                stage={stage}
+                connectionType={connectionType}
+                shortfall={shortfall}
+                currency={payment.currency}
+              />
             </div>
 
             {/* Footer */}

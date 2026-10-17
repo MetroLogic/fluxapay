@@ -5,6 +5,7 @@ Contributions are welcome! Please read this document for information on how to c
 ## Table of Contents
 - [Getting Started](#getting-started)
 - [Development Environment Setup](#development-environment-setup)
+- [Secret Handling & Scanning](#secret-handling--scanning)
 - [Branch Naming Convention](#branch-naming-convention)
 - [Commit Message Format](#commit-message-format)
 - [Pull Request Process](#pull-request-process)
@@ -77,6 +78,38 @@ The backend API will be available at `http://localhost:3000`.
 ### Running Tests
 
 See [Running Tests Locally](#running-tests-locally) section below.
+
+## Secret Handling & Scanning
+
+Never commit real credentials. This includes Stellar private seeds (`S...`), FluxaPay live API keys (`fp_live_...`), database URLs with embedded passwords, and JWT signing secrets.
+
+### What is scanned
+
+A pre-commit hook scans staged files for sensitive token patterns before every commit. The same rules run in CI on every pull request, so a secret that slips past the hook will still be blocked before merge. The patterns include:
+
+- Stellar private seeds: `S` followed by 55 base32 characters
+- FluxaPay live tokens: `fp_live_` followed by an alphanumeric key
+- Database URLs containing credentials: `postgres://user:pass@host`
+- JWT secrets assigned in code or config
+
+### If the hook flags a secret
+
+1. **Unstage the file** so the secret is not part of the commit:
+   ```bash
+   git restore --staged path/to/file
+   ```
+2. **Remove the secret** from the file and replace it with an environment variable reference (e.g. `process.env.STELLAR_SECRET_KEY`).
+3. **Re-stage** the cleaned file and commit again:
+   ```bash
+   git add path/to/file
+   git commit
+   ```
+
+If a real secret was already committed or pushed, treat it as compromised: rotate the credential immediately and notify a maintainer. Do not attempt to rewrite history on your own.
+
+### Local configuration
+
+Keep real values in `.env` (which is git-ignored). Commit only placeholder values in `.env.example`.
 
 ## Branch Naming Convention
 
@@ -292,5 +325,4 @@ To restore from a backup:
 ### Emergency Rollback
 If a deployed migration breaks production:
 1. Revert the commit in Git and push to main. This prevents further faulty deployments.
-2. If schema changes were destructive, follow the **Restore Process** above using the automated backup taken just prior to the migration.
-3. If changes were additive but broken, apply a hotfix to manually drop or revert the additive changes through a new migration script (`prisma migrate dev --create-only`).
+2. If schema changes were destructive, f
