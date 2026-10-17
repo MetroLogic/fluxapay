@@ -4,6 +4,8 @@ import json
 import hashlib
 import hmac
 import time
+from datetime import datetime, timezone
+from decimal import Decimal
 from unittest.mock import patch
 
 import pytest
@@ -17,6 +19,10 @@ from fluxapay import (
     Payment,
     PaymentStatus,
     Invoice,
+    CustomerResponse,
+    PaymentLinkResponse,
+    PaymentResponse,
+    RefundResponse,
     verify_webhook_signature,
 )
 
@@ -75,6 +81,59 @@ def test_payments_get():
     client = FluxaPay(api_key=API_KEY)
     payment = client.payments.get("pay_123")
     assert payment.checkout_url == PAYMENT_FIXTURE["checkout_url"]
+
+
+def test_response_models_parse_values_and_preserve_dict_access():
+    payment = PaymentResponse.model_validate(PAYMENT_FIXTURE)
+    assert payment.amount == Decimal("49.99")
+    assert payment.created_at == datetime(2024, 1, 1, tzinfo=timezone.utc)
+    assert payment["id"] == "pay_123"
+    assert payment.to_dict()["amount"] == Decimal("49.99")
+
+    customer = CustomerResponse.model_validate({"id": "cus_1", "email": "buyer@example.com"})
+    link = PaymentLinkResponse.model_validate({
+        "id": "plink_1",
+        "slug": "monthly-support",
+        "title": "Monthly support",
+        "amount": "12.50",
+        "currency": "USD",
+        "expiry": "2024-02-01T00:00:00Z",
+        "customer": customer.to_dict(),
+        "created_at": "2024-01-01T00:00:00Z",
+    })
+    assert link.amount == Decimal("12.50")
+    assert link.expiry == datetime(2024, 2, 1, tzinfo=timezone.utc)
+    assert isinstance(link.customer, CustomerResponse)
+
+    refund = RefundResponse.model_validate({
+        "id": "ref_123",
+        "payment_id": "pay_123",
+        "amount": "25.00",
+        "currency": "USD",
+        "status": "pending",
+        "created_at": "2024-01-02T00:00:00Z",
+    })
+    assert refund.amount == Decimal("25.00")
+    assert refund.created_at == datetime(2024, 1, 2, tzinfo=timezone.utc)
+    assert refund.get("missing") is None
+
+
+def test_response_models_accept_backend_field_names():
+    payment = PaymentResponse.model_validate({
+        **PAYMENT_FIXTURE,
+        "createdAt": PAYMENT_FIXTURE["created_at"],
+        "expiration": PAYMENT_FIXTURE["expires_at"],
+        "customerId": "cus_1",
+    })
+    assert payment.customer_id == "cus_1"
+
+    refund = RefundResponse.model_validate({
+        "id": "ref_123",
+        "paymentId": "pay_123",
+        "amount": "25.00",
+        "status": "pending",
+    })
+    assert refund.payment_id == "pay_123"
 
 
 @respx.mock
