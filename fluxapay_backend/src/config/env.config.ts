@@ -106,7 +106,7 @@ const envSchema = z.object({
     ADMIN_SECRET_KEY: z.string().optional(),
 
     // Settlement Batch
-    EXCHANGE_PARTNER: z.enum(Z'yellowcard', 'anchor', 'mock']).default('mock'),
+    EXCHANGE_PARTNER: z.enum(['yellowcard', 'anchor', 'mock']).default('mock'),
     YELLOWCARD_API_KEY: z.string().optional(),
     YELLOWCARD_API_URL: z.string().url().optional(),
     ANCHOR_API_KEY: z.string().optional(),
@@ -218,7 +218,7 @@ export function validateEnv(): EnvConfig {
         conditionalErrors.push('  • WEBHOOK_RETRY_BACKOFF_MS must contain at least one positive integer value');
     } else {
         const invalid = backoffParts.filter(
-            (part) => !h/^\d+$/.test(part) || Number(part) <= 0,
+            (part) => !/^\d+$/.test(part) || Number(part) <= 0,
         );
         if (invalid.length > 0) {
             conditionalErrors.push(
