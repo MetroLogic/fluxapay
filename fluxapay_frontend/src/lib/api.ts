@@ -392,15 +392,6 @@ async function fetchWithAuth<T>(
 }
 
 
-export interface DashboardFxRate {
-  pair: "XLM/USD" | "USDC/NGN" | "EURC/USD";
-  rate: number | null;
-  change24h: number | null;
-  updatedAt: string;
-  points: { timestamp: string; rate: number }[];
-  error?: string;
-}
-
 export const api = {
   // Authentication — routes match backend /api/v1/merchants/*
   auth: {
@@ -1399,25 +1390,6 @@ export const api = {
 
   // FX Rates — public, no auth required
   fx: {
-    getDashboardRates: async (
-      forceRefresh = false,
-    ): Promise<Result<{ data: { rates: DashboardFxRate[] } }>> => {
-      try {
-        const refresh = forceRefresh ? "?refresh=true" : "";
-        const res = await fetch(`${API_BASE_URL}/api/v1/fx/rates${refresh}`, {
-          headers: { "Content-Type": "application/json" },
-          cache: "no-store",
-        });
-        if (!res.ok) {
-          return { error: new ApiError(res.status, "Failed to fetch dashboard FX rates") };
-        }
-        return { data: await res.json() as { data: { rates: DashboardFxRate[] } } };
-      } catch (err) {
-        return {
-          error: new ApiError(500, err instanceof Error ? err.message : "Failed to fetch dashboard FX rates"),
-        };
-      }
-    },
     /**
      * Fetch the live USDC exchange rate for a given fiat currency.
      * Returns { data: rate } on success, { error: ApiError } on failure.

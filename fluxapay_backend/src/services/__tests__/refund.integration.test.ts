@@ -8,11 +8,7 @@ process.env.MASTER_VAULT_SECRET_KEY = "SA5V5N44OEQ5FDE3WIF5M7BHLD6NRLJ72S2VPEI5M
 process.env.HD_WALLET_MASTER_SEED = "test-seed-xyz";
 process.env.KMS_PROVIDER = "local";
 
-import {
-  createAutomaticExcessRefundService,
-  createRefundService,
-  updateRefundStatusService,
-} from '../refund.service';
+import { createRefundService, updateRefundStatusService } from '../refund.service';
 import { PrismaClient } from '../../generated/client/client';
 
 const prisma = new PrismaClient();
@@ -104,72 +100,6 @@ describeWithDatabase('Refund Service - Integration Tests', () => {
       });
 
       expect(completedResult.data.status).toBe('completed');
-    });
-
-    it('creates one pending refund for overpayment above the Stellar fee threshold', async () => {
-      const payment = await prisma.payment.create({
-        data: {
-          id: 'int-test-overpaid-payment',
-          merchantId: 'int-test-merchant',
-          amount: 100,
-          paid_amount: 150,
-          currency: 'USDC',
-          customer_email: 'customer@example.com',
-          metadata: {},
-          expiration: new Date(Date.now() + 86400000),
-          status: 'overpaid',
-          checkout_url: 'https://example.com/checkout',
-          payer_address: 'GABC123',
-        },
-      });
-
-      const firstRefund = await createAutomaticExcessRefundService({
-        merchantId: 'int-test-merchant',
-        paymentId: payment.id,
-        amountReceived: 150,
-        amountExpected: 100,
-      });
-      const secondRefund = await createAutomaticExcessRefundService({
-        merchantId: 'int-test-merchant',
-        paymentId: payment.id,
-        amountReceived: 150,
-        amountExpected: 100,
-      });
-
-      expect(firstRefund && Number(firstRefund.amount)).toBe(50);
-      expect(firstRefund?.status).toBe('pending');
-      expect(secondRefund?.id).toBe(firstRefund?.id);
-      expect(
-        await prisma.refund.count({ where: { paymentId: payment.id } }),
-      ).toBe(1);
-    });
-
-    it('does not create an excess refund at or below the Stellar fee threshold', async () => {
-      const payment = await prisma.payment.create({
-        data: {
-          id: 'int-test-small-overpayment',
-          merchantId: 'int-test-merchant',
-          amount: 100,
-          paid_amount: 100.0001,
-          currency: 'USDC',
-          customer_email: 'customer@example.com',
-          metadata: {},
-          expiration: new Date(Date.now() + 86400000),
-          status: 'overpaid',
-          checkout_url: 'https://example.com/checkout',
-          payer_address: 'GABC123',
-        },
-      });
-
-      const refund = await createAutomaticExcessRefundService({
-        merchantId: 'int-test-merchant',
-        paymentId: payment.id,
-        amountReceived: 100.0001,
-        amountExpected: 100,
-      });
-
-      expect(refund).toBeNull();
-      expect(await prisma.refund.count({ where: { paymentId: payment.id } })).toBe(0);
     });
 
     it('should handle multiple partial refunds and track cumulative amount', async () => {
