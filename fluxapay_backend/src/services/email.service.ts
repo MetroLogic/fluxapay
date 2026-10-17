@@ -3,6 +3,7 @@ import { isDevEnv } from "../helpers/env.helper";
 import { isEmailSuppressed } from "./emailSuppression.service";
 import { getLogger } from "../utils/logger";
 import { getEmailProvider } from "../email/emailProvider.factory";
+import { renderPaymentReceipt } from "../email/templates/paymentReceipt.renderer";
 dotenv.config();
 
 const logger = (getLogger("EmailService") ?? { warn: () => {} }) as { warn: (msg: string, meta?: unknown) => void };
@@ -245,6 +246,8 @@ export interface PaymentConfirmationDetails {
   merchant_reference?: string;
   explorer_link: string;
   timestamp: string;
+  /** Preferred locale (e.g. "es", "pt-BR"). Unsupported/missing falls back to the English template. */
+  locale?: string;
 }
 
 export async function sendPaymentConfirmationEmail(
@@ -254,6 +257,27 @@ export async function sendPaymentConfirmationEmail(
 ) {
   try {
     await sendIfNotSuppressed(to, async () => {
+    if (details.locale && !/^en([-_]|$)/i.test(details.locale)) {
+      const rendered = renderPaymentReceipt(
+        {
+          name: businessName,
+          amount: details.amount,
+          currency: details.currency,
+          paymentId: details.payment_id,
+          merchantReference: details.merchant_reference,
+          explorerLink: details.explorer_link,
+          timestamp: details.timestamp,
+        },
+        details.locale,
+      );
+      await getEmailProvider().sendEmail({
+        from: process.env.MAIL_FROM || "noreply@fluxapay.com",
+        to,
+        subject: rendered.subject,
+        html: rendered.html + buildUnsubscribeFooter(to),
+      });
+      return;
+    }
     await getEmailProvider().sendEmail({
       from: process.env.MAIL_FROM || "noreply@fluxapay.com",
       to,
