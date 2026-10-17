@@ -19,6 +19,7 @@ import { Select } from "@/components/Select";
 import { TxHashLink } from "@/components/TxHashLink";
 import { getStellarExpertTxUrl } from "@/lib/stellar";
 import type { RefundRecord, RefundReason } from "../refunds/types";
+import { describePaymentFailure } from "./paymentFailure";
 import { QRCodeCanvas } from "qrcode.react";
 import toast from "react-hot-toast";
 
@@ -453,7 +454,7 @@ export const PaymentDetails = ({
               <div>
                 <p className="text-sm font-medium">Payment Failed</p>
                 <p className="text-xs text-muted-foreground">
-                  Transaction was rejected or faulted
+                  {describePaymentFailure(payment)}
                 </p>
               </div>
             </div>
