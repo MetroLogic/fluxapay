@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 import type { PaymentLink } from "@/lib/links";
 import { QRCodeSVG } from "qrcode.react";
 import toast from "react-hot-toast";
+import { FeeBreakdownPreview } from "./FeeBreakdownPreview";
 
 export function PaymentLinksPage() {
   const [links, setLinks] = useState<PaymentLink[]>([]);
@@ -180,6 +181,9 @@ export function PaymentLinksPage() {
           <option value="USD">USD</option>
           <option value="EUR">EUR</option>
           <option value="GBP">GBP</option>
+          <option value="NGN">NGN</option>
+          <option value="KES">KES</option>
+          <option value="GHS">GHS</option>
         </select>
         <input
           type="text"
@@ -211,6 +215,13 @@ export function PaymentLinksPage() {
           <Link2 className="h-4 w-4" aria-hidden="true" />
           {creating ? "Creating…" : "Create Link"}
         </button>
+
+        {/* Fee breakdown preview — spans full width beneath the form fields */}
+        {amount && currency && (
+          <div className="col-span-1 sm:col-span-2 xl:col-span-4">
+            <FeeBreakdownPreview amountRaw={amount} currency={currency} />
+          </div>
+        )}
       </form>
 
       {/* Stats summary */}
