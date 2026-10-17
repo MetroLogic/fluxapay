@@ -9,7 +9,159 @@ import {
 import { prisma } from "../config/prisma";
 import { createAndDeliverWebhook } from "./webhook.service";
 import { PaymentStatus, getRefundableStatuses } from "../types/payment";
+import { StellarRefundService } from "./refund.stellar.service";
+import { Decimal } from "@prisma/client/runtime/library";
 
+const AUTOMATIC_OVERPAYMENT_REASON = "automatic_overpayment";
+const MINIMUM_AUTOMATIC_REFUND =
+  Number(process.env.STELLAR_MAX_FEE || "2000") / 10_000_000;
+
+export function calculateExcessRefundAmount(
+  amountReceived: number | string,
+  amountExpected: number | string,
+  feeThreshold = Number(process.env.STELLAR_MAX_FEE || "2000") / 10_000_000,
+): number | null {
+  try {
+    const excess = new Decimal(amountReceived).minus(amountExpected);
+    return excess.greaterThan(feeThreshold) ? excess.toNumber() : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function createAutomaticExcessRefundService(params: {
+  merchantId: string;
+  paymentId: string;
+  amountReceived: number | string;
+  amountExpected: number | string;
+}) {
+  const { merchantId, paymentId, amountReceived, amountExpected } = params;
+  const excessAmount = calculateExcessRefundAmount(amountReceived, amountExpected);
+  if (excessAmount === null) return null;
+
+  return prisma.$transaction(
+    async (tx: Prisma.TransactionClient) => {
+      await tx.$queryRaw`
+        SELECT id FROM "Payment"
+        WHERE id = ${paymentId} AND "merchantId" = ${merchantId}
+        FOR UPDATE
+      `;
+
+      const payment = await tx.payment.findFirst({
+        where: { id: paymentId, merchantId },
+        select: { payer_address: true, currency: true },
+      });
+      if (!payment?.payer_address) return null;
+
+      const activeRefunds = await tx.refund.findMany({
+        where: {
+          paymentId,
+          reason: AUTOMATIC_OVERPAYMENT_REASON,
+          status: { in: ["pending", "processing", "completed"] },
+        },
+      });
+      const failedRefund = await tx.refund.findFirst({
+        where: {
+          paymentId,
+          reason: AUTOMATIC_OVERPAYMENT_REASON,
+          status: "failed",
+        },
+      });
+      if (failedRefund) return null;
+
+      const committedAmount = activeRefunds
+        .filter((refund) => refund.status !== "pending")
+        .reduce((sum, refund) => sum + Number(refund.amount), 0);
+      const pendingRefund = activeRefunds.find((refund) => refund.status === "pending");
+      const remainingExcess = excessAmount - committedAmount;
+
+      if (pendingRefund) {
+        if (remainingExcess > 0 && Number(pendingRefund.amount) !== remainingExcess) {
+          return tx.refund.update({
+            where: { id: pendingRefund.id },
+            data: { amount: remainingExcess },
+          });
+        }
+        return pendingRefund;
+      }
+      if (activeRefunds.some((refund) => refund.status === "processing")) return null;
+      if (remainingExcess <= MINIMUM_AUTOMATIC_REFUND) {
+        return null;
+      }
+
+      return tx.refund.create({
+        data: {
+          merchantId,
+          paymentId,
+          amount: remainingExcess,
+          currency: payment.currency,
+          reason: AUTOMATIC_OVERPAYMENT_REASON,
+          status: "pending",
+        },
+      });
+    },
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+  );
+}
+
+export async function executeAutomaticExcessRefundService(params: {
+  merchantId: string;
+  paymentId: string;
+}) {
+  const { merchantId, paymentId } = params;
+  const refund = await prisma.refund.findFirst({
+    where: {
+      merchantId,
+      paymentId,
+      reason: AUTOMATIC_OVERPAYMENT_REASON,
+      status: "pending",
+    },
+    include: { payment: true },
+    orderBy: { created_at: "desc" },
+  });
+
+  if (!refund) {
+    throw apiError(404, ErrorCode.REFUND_NOT_FOUND, "No pending excess refund found for this payment");
+  }
+  if (!refund.payment.payer_address) {
+    throw apiError(400, ErrorCode.VALIDATION_ERROR, "Payment has no customer Stellar return address");
+  }
+
+  const claimed = await prisma.refund.updateMany({
+    where: { id: refund.id, status: "pending" },
+    data: { status: "processing" },
+  });
+  if (claimed.count !== 1) {
+    throw apiError(409, ErrorCode.VALIDATION_ERROR, "Excess refund is already being processed");
+  }
+
+  let execution;
+  try {
+    execution = await new StellarRefundService().executeRefund({
+      refundId: refund.id,
+      merchantId,
+      paymentId,
+      customerAddress: refund.payment.payer_address,
+      amount: Number(refund.amount).toFixed(7),
+      currency: refund.currency,
+    });
+  } catch (error: any) {
+    await updateRefundStatusService({
+      merchantId,
+      refund_id: refund.id,
+      status: "failed",
+      failed_reason: error?.message || "Stellar refund execution failed",
+    });
+    throw error;
+  }
+
+  const result = await updateRefundStatusService({
+    merchantId,
+    refund_id: refund.id,
+    status: "completed",
+  });
+  return { ...result, transaction_hash: execution.transactionHash };
+}
 
 /**
  * Validates that a payment can be refunded

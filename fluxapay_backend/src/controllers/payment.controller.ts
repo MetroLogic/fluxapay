@@ -446,8 +446,20 @@ export const confirmPayment = async (req: Request, res: Response) => {
       return res.json({ status: payment.status });
     }
 
- main
+    if (!tx_hash) {
+      return sendApiError(
+        res,
+        apiError(400, ErrorCode.VALIDATION_ERROR, "tx_hash is required to confirm a payment"),
+      );
     }
+
+    await prisma.payment.update({
+      where: { id: payment_id },
+      data: {
+        status: PaymentStatus.CONFIRMED,
+        transaction_hash: tx_hash,
+      },
+    });
 
     eventBus.emit(AppEvents.PAYMENT_CONFIRMED, { paymentId: payment_id });
 

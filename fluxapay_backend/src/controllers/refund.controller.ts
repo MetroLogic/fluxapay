@@ -5,6 +5,7 @@ import { validateUserId } from "../helpers/request.helper";
 import { AuthRequest } from "../types/express";
 import {
   createRefundService,
+  executeAutomaticExcessRefundService,
   getRefundByIdService,
   listRefundsService,
   updateRefundStatusService,
@@ -30,6 +31,17 @@ export async function createRefund(req: AuthRequest, res: Response) {
     res
       .status(err.status || 500)
       .json({ message: err.message || "Server error" });
+  }
+}
+
+export async function refundExcessPayment(req: AuthRequest, res: Response) {
+  try {
+    const merchantId = await validateUserId(req);
+    const paymentId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    const result = await executeAutomaticExcessRefundService({ merchantId, paymentId });
+    res.status(200).json(result);
+  } catch (err: any) {
+    res.status(err.status || 500).json({ message: err.message || "Server error" });
   }
 }
 

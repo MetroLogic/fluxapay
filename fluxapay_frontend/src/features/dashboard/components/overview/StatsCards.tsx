@@ -4,7 +4,6 @@ import { ArrowUpRight, ArrowDownRight, DollarSign, Activity, CreditCard, Clock, 
 import { cn } from "@/lib/utils";
 import { useDashboardDateRange } from "@/features/dashboard/context/DashboardDateRangeContext";
 import { useDashboardStats } from "@/hooks/useDashboardStats";
-import { FxRateBadge } from "./FxRateBadge";
 
 interface StatCardProps {
     title: string;
@@ -116,10 +115,6 @@ export const StatsCards = () => {
                 highlight
                 className="flex-1"
             />
-            <div className="flex justify-end">
-                {/* Fallback to NGN as an example, but ideally use merchant's currency */}
-                <FxRateBadge currency="NGN" />
-            </div>
         </div>
         {/* Fiat settled */}
             <StatCard

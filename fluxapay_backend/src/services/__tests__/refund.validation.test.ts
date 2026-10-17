@@ -40,7 +40,7 @@ jest.mock('../webhook.service', () => ({
   createAndDeliverWebhook: jest.fn().mockResolvedValue(undefined),
 }));
 
-import { createRefundService } from '../refund.service';
+import { calculateExcessRefundAmount, createRefundService } from '../refund.service';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -105,6 +105,17 @@ function setupTransaction(payment: object | null, existingRefunds: object[] = []
 describe('Refund Service - Validation', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+  });
+
+  describe('Automatic excess refund threshold', () => {
+    it('returns the excess when it is greater than the maximum Stellar fee', () => {
+      expect(calculateExcessRefundAmount(100.001, 100, 0.0002)).toBeCloseTo(0.001);
+    });
+
+    it('does not refund an excess equal to or below the fee threshold', () => {
+      expect(calculateExcessRefundAmount(100.0002, 100, 0.0002)).toBeNull();
+      expect(calculateExcessRefundAmount(100.0001, 100, 0.0002)).toBeNull();
+    });
   });
 
   // ── Payment Ownership ──────────────────────────────────────────────────────

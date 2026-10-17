@@ -21,6 +21,7 @@ import { idempotencyMiddleware } from '../middleware/idempotency.middleware';
 import { simpleRateLimit } from "../middleware/simpleRateLimit.middleware";
 import { kycGateMiddleware } from '../middleware/kycGate.middleware';
 import { validatePagination } from '../validators/pagination.validator';
+import { refundExcessPayment } from '../controllers/refund.controller';
 
 const router = Router();
 
@@ -334,6 +335,14 @@ router.get('/export', authenticateApiKey, merchantApiKeyRateLimit(), exportPayme
  *         description: Payment not found
  */
 router.get('/:id', authenticateApiKey, merchantApiKeyRateLimit(), getPaymentById);
+
+/** Execute the pending automated refund for a payment's overpaid amount. */
+router.post(
+  '/:id/refund-excess',
+  authenticateApiKey,
+  merchantApiKeyRateLimit(),
+  refundExcessPayment,
+);
 
 /**
  * @swagger

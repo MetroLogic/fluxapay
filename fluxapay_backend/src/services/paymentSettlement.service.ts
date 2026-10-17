@@ -27,6 +27,7 @@ import { createAndDeliverWebhook } from "./webhook.service";
 import { eventBus, AppEvents } from "./EventService";
 import { sendSettlementFailureAlert } from "./settlementAlert.service";
 import { getLogger } from "../utils/logger";
+import { resolveMerchantSettlementFeePercent } from "./transactionFee.service";
 
 const logger = getLogger();
 
@@ -188,10 +189,12 @@ export class PaymentSettlementService {
         };
       }
 
-      // 4. Get merchant-specific fee percentage
-      const feePercent = (payment.merchant as any).settlement_fee_percent
-        ? Number((payment.merchant as any).settlement_fee_percent)
-        : DEFAULT_FEE_PERCENT;
+      // 4. Get the effective fee percentage for the merchant, honoring the
+      // active subscription plan tier before falling back to merchant config.
+      const feePercent = await resolveMerchantSettlementFeePercent(
+        merchantId,
+        payment.merchant as any,
+      );
 
       // 5. Fetch FX rate from exchange partner
       const partner = getExchangePartner();

@@ -22,12 +22,13 @@ import { getExchangePartner } from "./exchange.service";
 import { createAndDeliverWebhook } from "./webhook.service";
 import { logSettlementBatch, updateSettlementBatchCompletion } from "./audit.service";
 import { sendSettlementFailureAlert } from "./settlementAlert.service";
+import { resolveMerchantSettlementFeePercent } from "./transactionFee.service";
 
 
 /** Fee percentage charged by FluxaPay (default 2%). Configurable via env. */
 function getSettlementFeePercent(): number {
   const configured = parseFloat(process.env.SETTLEMENT_FEE_PERCENT ?? "2");
-  return Number.isFinite(configured) ? configured : 2;
+  return Number.isFinite(configured) && configured >= 0 ? configured : 2;
 }
 
 /** Hard limit: maximum payments per merchant per batch call (prevents OOM). */
@@ -307,8 +308,9 @@ async function settleSinglePayment(
         const quote = await partner.getQuote(totalUsdc, settlementCurrency);
         const fiatGross = quote.fiat_gross;
         const exchangeRate = quote.exchange_rate;
+        const feePercent = await resolveMerchantSettlementFeePercent(merchant.id, merchant as any);
         const feeAmount = parseFloat(
-            ((fiatGross * getSettlementFeePercent()) / 100).toFixed(2),
+            ((fiatGross * feePercent) / 100).toFixed(2),
         );
         const netAmount = parseFloat((fiatGross - feeAmount).toFixed(2));
 
@@ -339,7 +341,7 @@ async function settleSinglePayment(
                         usdc_amount: totalUsdc,
                         exchange_rate: exchangeRate,
                         fiat_gross: fiatGross,
-                        fee_percent: getSettlementFeePercent(),
+                        fee_percent: feePercent,
                         fee_amount: feeAmount,
                         net_amount: netAmount,
                         payment_count: 1,
