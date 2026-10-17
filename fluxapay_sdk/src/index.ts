@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { fetchWithTelemetry, getTransport, registerTransport, type TransportOptions } from './telemetry';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -15,6 +16,12 @@ export interface FluxaPayConfig {
    * Defaults to 3. Set to 0 to disable retries.
    */
   retries?: number;
+  /** Request timeout in ms (default 15000, 0 disables). Throws FluxaPayTimeoutError. */
+  timeoutMs?: number;
+  /** Hook invoked before each request. */
+  onRequest?: TransportOptions['onRequest'];
+  /** Hook invoked after each response with duration in ms. */
+  onResponse?: TransportOptions['onResponse'];
 }
 
 export interface CreatePaymentParams {
@@ -374,7 +381,7 @@ async function request<T>(
   while (true) {
     let res: Response;
     try {
-      res = await fetch(url, options);
+      res = await fetchWithTelemetry(url, options, getTransport(baseUrl, apiKey));
     } catch (error) {
       if (!canRetry || retriesMade >= retryLimit) throw error;
       await new Promise((resolve) => setTimeout(resolve, retryDelay(retriesMade)));
@@ -440,6 +447,11 @@ export class FluxaPay {
     this.apiKey = config.apiKey;
     this.baseUrl = (config.baseUrl ?? DEFAULT_BASE_URL).replace(/\/$/, '');
     this.retries = config.retries ?? 3;
+    registerTransport(this.baseUrl, this.apiKey, {
+      timeoutMs: config.timeoutMs,
+      onRequest: config.onRequest,
+      onResponse: config.onResponse,
+    });
   }
 
   // ── payments ───────────────────────────────────────────────────────────────
@@ -730,6 +742,8 @@ export class FluxaPay {
 }
 
 export default FluxaPay;
+export * from './telemetry';
+export * from './batchPaymentLinks';
 
 /**
  * Auto-paging iterator for list methods that support pagination.
