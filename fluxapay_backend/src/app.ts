@@ -194,6 +194,7 @@ app.use("/api/v1/reports/reconciliation", dailyReconciliationRoutes);
 app.use("/api/v1/refunds", refundRoutes);
 app.use("/api/v1/admin/address-pool", adminRateLimit(), addressPoolRoutes);
 app.use("/api/v1/fx-rates", fxRoutes);
+app.use("/api/v1/fx", fxRoutes);
 app.use("/api/v1/keys", keysRoutes);
 app.use("/api/v1/api-keys", apiKeyRoutes);
 app.use("/api/v1/dashboard", merchantRateLimit(), dashboardRoutes);

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getFxRates, getCachedFxRates } from "../controllers/fx.controller";
+import { getFxRates, getCachedFxRates, getDashboardFxRatesHandler } from "../controllers/fx.controller";
 
 const router = Router();
 
@@ -33,5 +33,7 @@ router.get("/", getFxRates);
  *         description: Cached FX rates retrieved successfully
  */
 router.get("/cached", getCachedFxRates);
+
+router.get("/rates", getDashboardFxRatesHandler);
 
 export default router;
