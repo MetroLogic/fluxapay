@@ -1,0 +1,38 @@
+# FluxaPay Backend - distroless production image (deps -> builder -> runner).
+# Build:  docker build -f Dockerfile.distroless -t fluxapay-backend:distroless .
+# Runner has no shell/package manager and runs as nonroot (uid 65532).
+# Prisma needs the debian-openssl-3.0.x engine, so build stages use Debian slim.
+ARG NODE_VERSION=20-bookworm-slim
+
+FROM node:${NODE_VERSION} AS deps
+RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY package*.json ./
+COPY prisma ./prisma/
+RUN npm ci
+
+FROM node:${NODE_VERSION} AS builder
+RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+RUN npx prisma generate && npm run build
+RUN mkdir -p dist/generated/client && \
+    cp src/generated/client/*.node dist/generated/client/ 2>/dev/null || true
+RUN npm prune --omit=dev
+
+FROM gcr.io/distroless/nodejs20-debian12:nonroot AS runner
+WORKDIR /app
+ENV NODE_ENV=production PORT=3000
+COPY --from=builder --chown=nonroot:nonroot /app/dist ./dist
+COPY --from=builder --chown=nonroot:nonroot /app/node_modules ./node_modules
+COPY --from=builder --chown=nonroot:nonroot /app/prisma ./prisma
+COPY --from=builder --chown=nonroot:nonroot /app/package.json ./package.json
+USER nonroot:nonroot
+EXPOSE 3000
+# No curl in distroless: probe /health with node itself.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+  CMD ["/nodejs/bin/node", "-e", "fetch('http://localhost:'+(process.env.PORT||3000)+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+CMD ["dist/index.js"]
