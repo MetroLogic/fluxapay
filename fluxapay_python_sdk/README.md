@@ -33,6 +33,10 @@ with FluxaPay(api_key="sk_live_...") as client:
 
 ### Asynchronous
 
+The `AsyncFluxaPay` client supports `async with` for clean connection pool
+lifecycle management. The underlying `httpx.AsyncClient` is automatically
+opened on entry and closed on exit, preventing resource leaks.
+
 ```python
 import asyncio
 from fluxapay import AsyncFluxaPay
@@ -51,6 +55,36 @@ async def main():
 
 asyncio.run(main())
 ```
+
+The client can also be re-used across multiple `async with` blocks. After the
+first block exits and closes the connection pool, re-entering via a second
+`async with` automatically re-creates the HTTP client:
+
+```python
+client = AsyncFluxaPay(api_key="sk_live_...")
+
+# First usage — opens and closes the connection pool
+async with client:
+    await client.payments.create(...)
+
+# Second usage — re-creates the connection pool on entry
+async with client:
+    await client.payments.create(...)
+```
+
+If you prefer not to use the context manager, call `aclose()` manually to
+release the connection pool:
+
+```python
+client = AsyncFluxaPay(api_key="sk_live_...")
+try:
+    payment = await client.payments.create(...)
+finally:
+    await client.aclose()
+```
+
+See `examples/async_usage.py` for complete runnable examples, including FastAPI
+integration patterns.
 
 ### Webhook Verification
 
