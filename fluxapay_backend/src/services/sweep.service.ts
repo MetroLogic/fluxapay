@@ -23,6 +23,11 @@ import {
   getSweepMinBalanceUsdc,
 } from "../config/sweep.config";
 import { KMSFactory } from "./kms";
+import {
+  evaluateSweepProfitability,
+  getEstimatedSweepFeeUsdc,
+  getSweepDeferWindowMs,
+} from "./sweepProfitability";
 
 
 export interface SweepOptions {
@@ -128,6 +133,39 @@ export class SweepService {
    * Identify eligible payments: confirmed/overpaid/paid, not swept, has derived
    * address, and not already flagged for manual review after exhausting retries.
    */
+  /**
+   * Profitability check: defers sweeping when (balance - estimated fee) is below
+   * the admin-configured `min_sweep_profitability_usdc`, until the balance grows
+   * or the defer window (SWEEP_DEFER_WINDOW_HOURS) expires. Records metrics.
+   */
+  public async shouldSweepAddress(
+    depositBalance: number,
+    createdAt?: Date | null,
+  ): Promise<{ sweep: boolean; reason?: string }> {
+    let minProfitability = 0;
+    try {
+      const { getAdminConfig } = await import("./adminConfig.service");
+      minProfitability = Number((await getAdminConfig()).min_sweep_profitability_usdc);
+    } catch {
+      minProfitability = 0;
+    }
+    if (!Number.isFinite(minProfitability)) minProfitability = 0;
+    const decision = evaluateSweepProfitability({
+      depositBalance,
+      estimatedFee: getEstimatedSweepFeeUsdc(),
+      minProfitability,
+      ageMs: createdAt ? Date.now() - new Date(createdAt).getTime() : undefined,
+      windowMs: getSweepDeferWindowMs(),
+    });
+    if (!decision.sweep) {
+      this.metrics.increment("stellar.sweep.deferred", { reason: decision.reason as string });
+      this.logger.info("Sweep deferred", { reason: decision.reason, depositBalance, net: decision.net });
+      return { sweep: false, reason: decision.reason };
+    }
+    this.metrics.increment("stellar.sweep.executed");
+    return { sweep: true };
+  }
+
   private async getUnsweptPaidPayments(limit: number) {
     return prisma.payment.findMany({
       where: {
@@ -513,6 +551,20 @@ export class SweepService {
             const skipEntry = {
               paymentId: p.id,
               reason: `Balance ${accountUsdcAmount.toFixed(7)} USDC below minimum threshold ${minBalanceUsdc}`,
+            };
+            skipped.push(skipEntry);
+            if (dryRun) decisions.push({ ...skipEntry, action: "skip" });
+            return;
+          }
+
+          const profitability = await this.shouldSweepAddress(
+            accountUsdcAmount,
+            (p as { createdAt?: Date | null }).createdAt,
+          );
+          if (!profitability.sweep) {
+            const skipEntry = {
+              paymentId: p.id,
+              reason: profitability.reason as string,
             };
             skipped.push(skipEntry);
             if (dryRun) decisions.push({ ...skipEntry, action: "skip" });

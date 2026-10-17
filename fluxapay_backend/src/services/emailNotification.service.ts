@@ -70,6 +70,8 @@ async function handlePaymentConfirmed(payment: any) {
       merchant_reference: payment.merchant_reference || undefined,
       explorer_link: explorerLink,
       timestamp: payment.updated_at || payment.created_at,
+      // Customer locale from checkout session metadata (Accept-Language is resolved at checkout)
+      locale: payment.metadata?.locale || payment.customer_locale || undefined,
     };
 
     await sendPaymentConfirmationEmail(
