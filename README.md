@@ -44,7 +44,7 @@ Fluxapay solves this by enabling *USDC-in → fiat-out* payments with a merchant
   - Fetch payment status
   - Issue refunds (where supported)
   - Manage customers & metadata
-•⁠  ⁠*Webhooks* (signed per-merchant with timestamped HMAC; see docs)
+•⁠  ⁠*Webhooks* (signed per-merchant with timestamped HMAC; see the [local webhook testing guide](docs/guides/local-webhook-testing.md))
   - ⁠ payment.created ⁠, ⁠ payment.pending ⁠, ⁠ payment.confirmed ⁠, ⁠ payment.failed ⁠, ⁠ payment.settled ⁠
 
 ### No-Code / Low-Code
