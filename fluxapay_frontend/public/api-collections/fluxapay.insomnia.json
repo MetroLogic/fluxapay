@@ -1,0 +1,3723 @@
+{
+  "_type": "export",
+  "__export_format": 4,
+  "__export_source": "fluxapay-openapi-generator",
+  "resources": [
+    {
+      "_id": "wrk_fluxapay_api",
+      "_type": "workspace",
+      "name": "Fluxapay API",
+      "description": "Generated from the FluxaPay OpenAPI specification.",
+      "scope": "collection"
+    },
+    {
+      "_id": "env_fluxapay_base",
+      "_type": "environment",
+      "parentId": "wrk_fluxapay_api",
+      "name": "Base Environment",
+      "data": {
+        "baseUrl": "http://localhost:3000",
+        "apiKey": "",
+        "merchantId": "",
+        "paymentId": "",
+        "id": "",
+        "alert_id": "",
+        "settlement_id": "",
+        "invoice_id": "",
+        "jobId": "",
+        "slug": "",
+        "refund_id": "",
+        "date": "",
+        "log_id": ""
+      },
+      "dataPropertyOrder": {
+        "&": [
+          "baseUrl",
+          "apiKey",
+          "merchantId",
+          "paymentId",
+          "id",
+          "alert_id",
+          "settlement_id",
+          "invoice_id",
+          "jobId",
+          "slug",
+          "refund_id",
+          "date",
+          "log_id"
+        ]
+      },
+      "color": null,
+      "isPrivate": false,
+      "metaSortKey": 0
+    },
+    {
+      "_id": "fld_0_Address_Pool_-_Admin",
+      "_type": "request_group",
+      "parentId": "wrk_fluxapay_api",
+      "name": "Address Pool - Admin",
+      "description": "",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": 0
+    },
+    {
+      "_id": "req_3__api_v1_admin_address-pool_get",
+      "_type": "request",
+      "parentId": "fld_0_Address_Pool_-_Admin",
+      "name": "Retrieve address pool statistics",
+      "description": "Retrieve address pool statistics.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/admin/address-pool",
+      "headers": [
+        {
+          "name": "x-admin-secret",
+          "value": "{{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "req_4__api_v1_admin_address-pool_stats_get",
+      "_type": "request",
+      "parentId": "fld_0_Address_Pool_-_Admin",
+      "name": "Retrieve address pool statistics (alias)",
+      "description": "Retrieve address pool statistics (alias).",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/admin/address-pool/stats",
+      "headers": [
+        {
+          "name": "x-admin-secret",
+          "value": "{{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "fld_1_Admin",
+      "_type": "request_group",
+      "parentId": "wrk_fluxapay_api",
+      "name": "Admin",
+      "description": "",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": -1
+    },
+    {
+      "_id": "req_0__admin_oracle_health_get",
+      "_type": "request",
+      "parentId": "fld_1_Admin",
+      "name": "Get oracle health status",
+      "description": "Get oracle health status.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/admin/oracle/health",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "req_1__admin_oracle_metrics_get",
+      "_type": "request",
+      "parentId": "fld_1_Admin",
+      "name": "Get oracle performance metrics",
+      "description": "Get oracle performance metrics.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/admin/oracle/metrics",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "req_2__admin_oracle_verify__paymentId__post",
+      "_type": "request",
+      "parentId": "fld_1_Admin",
+      "name": "Manually verify a payment",
+      "description": "Manually verify a payment.",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/admin/oracle/verify/{{ _.paymentId }}",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "req_20__api_v1_admin_usage_get",
+      "_type": "request",
+      "parentId": "fld_1_Admin",
+      "name": "Query merchant usage for billing (admin)",
+      "description": "Query merchant usage for billing (admin).",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/admin/usage",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.apiKey }}"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "merchant_id",
+          "value": "string",
+          "disabled": true
+        },
+        {
+          "name": "over_limit",
+          "value": "true",
+          "disabled": true
+        },
+        {
+          "name": "page",
+          "value": "1",
+          "disabled": true
+        },
+        {
+          "name": "limit",
+          "value": "1",
+          "disabled": true
+        }
+      ]
+    },
+    {
+      "_id": "fld_2_Admin_-_Audit",
+      "_type": "request_group",
+      "parentId": "wrk_fluxapay_api",
+      "name": "Admin - Audit",
+      "description": "",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": -2
+    },
+    {
+      "_id": "req_5__api_v1_admin_audit-logs_get",
+      "_type": "request",
+      "parentId": "fld_2_Admin_-_Audit",
+      "name": "Query audit logs with filters (Admin only)",
+      "description": "Query audit logs with filters (Admin only).",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/admin/audit-logs",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.apiKey }}"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "userId",
+          "value": "string",
+          "disabled": true
+        },
+        {
+          "name": "action",
+          "value": "string",
+          "disabled": true
+        }
+      ]
+    },
+    {
+      "_id": "req_6__api_v1_admin_audit-logs__id__get",
+      "_type": "request",
+      "parentId": "fld_2_Admin_-_Audit",
+      "name": "Get specific audit log by ID (Admin only)",
+      "description": "Get specific audit log by ID (Admin only).",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/admin/audit-logs/{{ _.id }}",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "fld_3_Admin_-_Config",
+      "_type": "request_group",
+      "parentId": "wrk_fluxapay_api",
+      "name": "Admin - Config",
+      "description": "",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": -3
+    },
+    {
+      "_id": "req_7__api_v1_admin_config_get",
+      "_type": "request",
+      "parentId": "fld_3_Admin_-_Config",
+      "name": "Get admin system configuration",
+      "description": "Get admin system configuration.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/admin/config",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "req_8__api_v1_admin_config_patch",
+      "_type": "request",
+      "parentId": "fld_3_Admin_-_Config",
+      "name": "Update admin system configuration (audited)",
+      "description": "Update admin system configuration (audited).",
+      "method": "PATCH",
+      "url": "{{ _.baseUrl }}/api/v1/admin/config",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "fld_4_Admin_-_Merchants",
+      "_type": "request_group",
+      "parentId": "wrk_fluxapay_api",
+      "name": "Admin - Merchants",
+      "description": "",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": -4
+    },
+    {
+      "_id": "req_56__api_v1_merchants_admin__merchantId__get",
+      "_type": "request",
+      "parentId": "fld_4_Admin_-_Merchants",
+      "name": "Get merchant details by ID (Admin only)",
+      "description": "Get merchant details by ID (Admin only).",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/merchants/admin/{{ _.merchantId }}",
+      "headers": [
+        {
+          "name": "x-admin-secret",
+          "value": "{{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "req_59__api_v1_merchants_admin__merchantId__status_patch",
+      "_type": "request",
+      "parentId": "fld_4_Admin_-_Merchants",
+      "name": "Update merchant account status (Admin only)",
+      "description": "Update merchant account status (Admin only).",
+      "method": "PATCH",
+      "url": "{{ _.baseUrl }}/api/v1/merchants/admin/{{ _.merchantId }}/status",
+      "headers": [
+        {
+          "name": "x-admin-secret",
+          "value": "{{ _.apiKey }}"
+        },
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"status\": \"pending\"\n}"
+      }
+    },
+    {
+      "_id": "req_60__api_v1_merchants_admin__merchantId__webhook_patch",
+      "_type": "request",
+      "parentId": "fld_4_Admin_-_Merchants",
+      "name": "Update merchant webhook URL (Admin only)",
+      "description": "Update merchant webhook URL (Admin only).",
+      "method": "PATCH",
+      "url": "{{ _.baseUrl }}/api/v1/merchants/admin/{{ _.merchantId }}/webhook",
+      "headers": [
+        {
+          "name": "x-admin-secret",
+          "value": "{{ _.apiKey }}"
+        },
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"webhook_url\": \"string\"\n}"
+      }
+    },
+    {
+      "_id": "req_61__api_v1_merchants_admin_bulk-status_post",
+      "_type": "request",
+      "parentId": "fld_4_Admin_-_Merchants",
+      "name": "Bulk suspend or activate merchants (Admin only)",
+      "description": "Bulk suspend or activate merchants (Admin only).",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/v1/merchants/admin/bulk-status",
+      "headers": [
+        {
+          "name": "x-admin-secret",
+          "value": "{{ _.apiKey }}"
+        },
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"merchantIds\": [\n    \"string\"\n  ],\n  \"status\": \"active\",\n  \"reason\": \"string\"\n}"
+      }
+    },
+    {
+      "_id": "req_62__api_v1_merchants_admin_list_get",
+      "_type": "request",
+      "parentId": "fld_4_Admin_-_Merchants",
+      "name": "List all merchants (Admin only)",
+      "description": "List all merchants (Admin only).",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/merchants/admin/list",
+      "headers": [
+        {
+          "name": "x-admin-secret",
+          "value": "{{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "fld_5_Admin_-_Payments",
+      "_type": "request_group",
+      "parentId": "wrk_fluxapay_api",
+      "name": "Admin - Payments",
+      "description": "",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": -5
+    },
+    {
+      "_id": "req_9__api_v1_admin_payments_get",
+      "_type": "request",
+      "parentId": "fld_5_Admin_-_Payments",
+      "name": "Query payments across all merchants with filters (Admin only)",
+      "description": "Query payments across all merchants with filters (Admin only).",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/admin/payments",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.apiKey }}"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "page",
+          "value": "1",
+          "disabled": true
+        },
+        {
+          "name": "limit",
+          "value": "1",
+          "disabled": true
+        },
+        {
+          "name": "status",
+          "value": "string",
+          "disabled": true
+        },
+        {
+          "name": "currency",
+          "value": "string",
+          "disabled": true
+        },
+        {
+          "name": "search",
+          "value": "string",
+          "disabled": true
+        }
+      ]
+    },
+    {
+      "_id": "fld_6_Admin_-_Settlement",
+      "_type": "request_group",
+      "parentId": "wrk_fluxapay_api",
+      "name": "Admin - Settlement",
+      "description": "",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": -6
+    },
+    {
+      "_id": "req_14__api_v1_admin_settlement_run_post",
+      "_type": "request",
+      "parentId": "fld_6_Admin_-_Settlement",
+      "name": "Manually trigger a settlement batch run",
+      "description": "Manually trigger a settlement batch run.",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/v1/admin/settlement/run",
+      "headers": [
+        {
+          "name": "x-admin-secret",
+          "value": "{{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "req_15__api_v1_admin_settlement_status_get",
+      "_type": "request",
+      "parentId": "fld_6_Admin_-_Settlement",
+      "name": "Settlement system status",
+      "description": "Settlement system status.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/admin/settlement/status",
+      "headers": [
+        {
+          "name": "x-admin-secret",
+          "value": "{{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "fld_7_Admin_-_Settlements",
+      "_type": "request_group",
+      "parentId": "wrk_fluxapay_api",
+      "name": "Admin - Settlements",
+      "description": "",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": -7
+    },
+    {
+      "_id": "req_16__api_v1_admin_settlements__settlement_id__payout-payload_get",
+      "_type": "request",
+      "parentId": "fld_7_Admin_-_Settlements",
+      "name": "Get raw payout partner payload for a settlement (Admin only)",
+      "description": "Get raw payout partner payload for a settlement (Admin only).",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/admin/settlements/{{ _.settlement_id }}/payout-payload",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "fld_8_Admin_-_Sweep",
+      "_type": "request_group",
+      "parentId": "wrk_fluxapay_api",
+      "name": "Admin - Sweep",
+      "description": "",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": -8
+    },
+    {
+      "_id": "req_17__api_v1_admin_sweep_preview_get",
+      "_type": "request",
+      "parentId": "fld_8_Admin_-_Sweep",
+      "name": "Preview eligible payments before a sweep",
+      "description": "Lists paid, unswept payments that the next sweep can process.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/admin/sweep/preview",
+      "headers": [
+        {
+          "name": "x-admin-secret",
+          "value": "{{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "req_18__api_v1_admin_sweep_run_post",
+      "_type": "request",
+      "parentId": "fld_8_Admin_-_Sweep",
+      "name": "Manually trigger a sweep of paid payments",
+      "description": "Manually trigger a sweep of paid payments.",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/v1/admin/sweep/run",
+      "headers": [
+        {
+          "name": "x-admin-secret",
+          "value": "{{ _.apiKey }}"
+        },
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"limit\": 1,\n  \"dry_run\": true\n}"
+      }
+    },
+    {
+      "_id": "fld_9_Admin_-_System",
+      "_type": "request_group",
+      "parentId": "wrk_fluxapay_api",
+      "name": "Admin - System",
+      "description": "",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": -9
+    },
+    {
+      "_id": "req_19__api_v1_admin_system_status_get",
+      "_type": "request",
+      "parentId": "fld_9_Admin_-_System",
+      "name": "Admin system status",
+      "description": "Admin system status.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/admin/system/status",
+      "headers": [
+        {
+          "name": "x-admin-secret",
+          "value": "{{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "fld_10_Admin_-_Users",
+      "_type": "request_group",
+      "parentId": "wrk_fluxapay_api",
+      "name": "Admin - Users",
+      "description": "",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": -10
+    },
+    {
+      "_id": "req_21__api_v1_admin_users_get",
+      "_type": "request",
+      "parentId": "fld_10_Admin_-_Users",
+      "name": "List internal operator accounts with search and filters (Admin only)",
+      "description": "List internal operator accounts with search and filters (Admin only).",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/admin/users",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.apiKey }}"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "page",
+          "value": "1",
+          "disabled": true
+        },
+        {
+          "name": "limit",
+          "value": "1",
+          "disabled": true
+        },
+        {
+          "name": "search",
+          "value": "string",
+          "disabled": true
+        },
+        {
+          "name": "role",
+          "value": "support",
+          "disabled": true
+        },
+        {
+          "name": "is_active",
+          "value": "true",
+          "disabled": true
+        }
+      ]
+    },
+    {
+      "_id": "fld_11_API",
+      "_type": "request_group",
+      "parentId": "wrk_fluxapay_api",
+      "name": "API",
+      "description": "",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": -11
+    },
+    {
+      "_id": "req_149__health_get",
+      "_type": "request",
+      "parentId": "fld_11_API",
+      "name": "Shallow health check",
+      "description": "Returns process liveness for load balancer probes. No authentication required.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/health",
+      "headers": [],
+      "parameters": []
+    },
+    {
+      "_id": "req_150__health_ready_get",
+      "_type": "request",
+      "parentId": "fld_11_API",
+      "name": "Deep readiness check",
+      "description": "Verifies database, Redis, Stellar Horizon, and enabled Soroban RPC connectivity. No authentication required.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/health/ready",
+      "headers": [],
+      "parameters": []
+    },
+    {
+      "_id": "fld_12_API_Keys",
+      "_type": "request_group",
+      "parentId": "wrk_fluxapay_api",
+      "name": "API Keys",
+      "description": "",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": -12
+    },
+    {
+      "_id": "req_22__api_v1_api-keys_get",
+      "_type": "request",
+      "parentId": "fld_12_API_Keys",
+      "name": "List API keys",
+      "description": "List API keys.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/api-keys",
+      "headers": [
+        {
+          "name": "x-api-key",
+          "value": "{{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "req_23__api_v1_api-keys_post",
+      "_type": "request",
+      "parentId": "fld_12_API_Keys",
+      "name": "Create a new API key",
+      "description": "Create a new API key.",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/v1/api-keys",
+      "headers": [
+        {
+          "name": "x-api-key",
+          "value": "{{ _.apiKey }}"
+        },
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"name\": \"Production key\",\n  \"environment\": \"live\"\n}"
+      }
+    },
+    {
+      "_id": "req_24__api_v1_api-keys__id__delete",
+      "_type": "request",
+      "parentId": "fld_12_API_Keys",
+      "name": "Revoke an API key",
+      "description": "Revoke an API key.",
+      "method": "DELETE",
+      "url": "{{ _.baseUrl }}/api/v1/api-keys/{{ _.id }}",
+      "headers": [
+        {
+          "name": "x-api-key",
+          "value": "{{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "fld_13_Authentication",
+      "_type": "request_group",
+      "parentId": "wrk_fluxapay_api",
+      "name": "Authentication",
+      "description": "",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": -13
+    },
+    {
+      "_id": "req_25__api_v1_auth_check-lockout_post",
+      "_type": "request",
+      "parentId": "fld_13_Authentication",
+      "name": "Check if an account is currently locked",
+      "description": "Check if an account is currently locked.",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/v1/auth/check-lockout",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"email\": \"user@example.com\"\n}"
+      }
+    },
+    {
+      "_id": "req_26__api_v1_auth_login_post",
+      "_type": "request",
+      "parentId": "fld_13_Authentication",
+      "name": "Login with email and password",
+      "description": "Login with email and password.",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/v1/auth/login",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"string\"\n}"
+      }
+    },
+    {
+      "_id": "req_27__api_v1_auth_logout_post",
+      "_type": "request",
+      "parentId": "fld_13_Authentication",
+      "name": "Logout by invalidating the current refresh token",
+      "description": "Logout by invalidating the current refresh token.",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/v1/auth/logout",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"refresh_token\": \"string\"\n}"
+      }
+    },
+    {
+      "_id": "req_28__api_v1_auth_logout-all_post",
+      "_type": "request",
+      "parentId": "fld_13_Authentication",
+      "name": "Logout from all devices by invalidating all refresh tokens",
+      "description": "Logout from all devices by invalidating all refresh tokens.",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/v1/auth/logout-all",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "req_29__api_v1_auth_refresh_post",
+      "_type": "request",
+      "parentId": "fld_13_Authentication",
+      "name": "Refresh access token using refresh token",
+      "description": "Refresh access token using refresh token.",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/v1/auth/refresh",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"refresh_token\": \"string\"\n}"
+      }
+    },
+    {
+      "_id": "fld_14_Charges",
+      "_type": "request_group",
+      "parentId": "wrk_fluxapay_api",
+      "name": "Charges",
+      "description": "",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": -14
+    },
+    {
+      "_id": "req_30__api_v1_charges_post",
+      "_type": "request",
+      "parentId": "fld_14_Charges",
+      "name": "Create an idempotent charge",
+      "description": "Create an idempotent charge.",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/v1/charges",
+      "headers": [
+        {
+          "name": "x-api-key",
+          "value": "{{ _.apiKey }}"
+        },
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        },
+        {
+          "name": "Idempotency-Key",
+          "value": "string"
+        }
+      ],
+      "parameters": [],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"amount\": 120.5,\n  \"currency\": \"USDC\",\n  \"customer_email\": \"buyer@example.com\",\n  \"customer_id\": \"clxyz123customer\",\n  \"note\": \"Order #1234 - Support Ticket #567\",\n  \"metadata\": {\n    \"order_id\": \"ord_001\",\n    \"webhook_url\": \"https://merchant.tld/webhooks\"\n  }\n}"
+      }
+    },
+    {
+      "_id": "req_31__api_v1_charges__id__refunds_get",
+      "_type": "request",
+      "parentId": "fld_14_Charges",
+      "name": "List refunds for a charge",
+      "description": "List refunds for a charge.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/charges/{{ _.id }}/refunds",
+      "headers": [
+        {
+          "name": "x-api-key",
+          "value": "{{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "req_32__api_v1_charges__id__refunds_post",
+      "_type": "request",
+      "parentId": "fld_14_Charges",
+      "name": "Create a refund for a charge",
+      "description": "Create a refund for a charge.",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/v1/charges/{{ _.id }}/refunds",
+      "headers": [
+        {
+          "name": "x-api-key",
+          "value": "{{ _.apiKey }}"
+        },
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"amount\": 1,\n  \"reason\": \"string\"\n}"
+      }
+    },
+    {
+      "_id": "fld_15_Customers",
+      "_type": "request_group",
+      "parentId": "wrk_fluxapay_api",
+      "name": "Customers",
+      "description": "",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": -15
+    },
+    {
+      "_id": "req_144__customers_get",
+      "_type": "request",
+      "parentId": "fld_15_Customers",
+      "name": "List customers for the authenticated merchant",
+      "description": "List customers for the authenticated merchant.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/customers",
+      "headers": [
+        {
+          "name": "x-api-key",
+          "value": "{{ _.apiKey }}"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "page",
+          "value": "1",
+          "disabled": true
+        },
+        {
+          "name": "limit",
+          "value": "1",
+          "disabled": true
+        },
+        {
+          "name": "search",
+          "value": "string",
+          "disabled": true
+        },
+        {
+          "name": "created_after",
+          "value": "2026-01-01T00:00:00Z",
+          "disabled": true
+        },
+        {
+          "name": "created_before",
+          "value": "2026-01-01T00:00:00Z",
+          "disabled": true
+        }
+      ]
+    },
+    {
+      "_id": "req_145__customers_post",
+      "_type": "request",
+      "parentId": "fld_15_Customers",
+      "name": "Create a customer",
+      "description": "Create a customer.",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/customers",
+      "headers": [
+        {
+          "name": "x-api-key",
+          "value": "{{ _.apiKey }}"
+        },
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"email\": \"user@example.com\",\n  \"name\": \"string\",\n  \"phone\": \"string\",\n  \"stellar_address\": \"string\",\n  \"metadata\": {}\n}"
+      }
+    },
+    {
+      "_id": "req_146__customers__id__delete",
+      "_type": "request",
+      "parentId": "fld_15_Customers",
+      "name": "Delete a customer",
+      "description": "Delete a customer.",
+      "method": "DELETE",
+      "url": "{{ _.baseUrl }}/customers/{{ _.id }}",
+      "headers": [
+        {
+          "name": "x-api-key",
+          "value": "{{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "req_147__customers__id__get",
+      "_type": "request",
+      "parentId": "fld_15_Customers",
+      "name": "Get a customer by ID",
+      "description": "Get a customer by ID.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/customers/{{ _.id }}",
+      "headers": [
+        {
+          "name": "x-api-key",
+          "value": "{{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "req_148__customers__id__patch",
+      "_type": "request",
+      "parentId": "fld_15_Customers",
+      "name": "Update a customer",
+      "description": "Update a customer.",
+      "method": "PATCH",
+      "url": "{{ _.baseUrl }}/customers/{{ _.id }}",
+      "headers": [
+        {
+          "name": "x-api-key",
+          "value": "{{ _.apiKey }}"
+        },
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"email\": \"user@example.com\",\n  \"name\": \"string\",\n  \"phone\": \"string\",\n  \"stellar_address\": \"string\",\n  \"metadata\": {}\n}"
+      }
+    },
+    {
+      "_id": "fld_16_Dashboard",
+      "_type": "request_group",
+      "parentId": "wrk_fluxapay_api",
+      "name": "Dashboard",
+      "description": "",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": -16
+    },
+    {
+      "_id": "req_33__api_v1_dashboard_audit-logs_get",
+      "_type": "request",
+      "parentId": "fld_16_Dashboard",
+      "name": "Get audit logs for the authenticated merchant (read-only)",
+      "description": "Get audit logs for the authenticated merchant (read-only).",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/dashboard/audit-logs",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.apiKey }}"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "page",
+          "value": "1",
+          "disabled": true
+        },
+        {
+          "name": "limit",
+          "value": "20",
+          "disabled": true
+        },
+        {
+          "name": "action_type",
+          "value": "merchant_profile_updated",
+          "disabled": true
+        },
+        {
+          "name": "date_from",
+          "value": "2026-01-01T00:00:00Z",
+          "disabled": true
+        },
+        {
+          "name": "date_to",
+          "value": "2026-01-01T00:00:00Z",
+          "disabled": true
+        }
+      ]
+    },
+    {
+      "_id": "req_34__api_v1_dashboard_events_get",
+      "_type": "request",
+      "parentId": "fld_16_Dashboard",
+      "name": "Subscribe to real-time dashboard updates (Server-Sent Events)",
+      "description": "Subscribe to real-time dashboard updates (Server-Sent Events).",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/dashboard/events",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "req_35__api_v1_dashboard_overview_activity_get",
+      "_type": "request",
+      "parentId": "fld_16_Dashboard",
+      "name": "Get dashboard activity",
+      "description": "Get dashboard activity.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/dashboard/overview/activity",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "req_36__api_v1_dashboard_overview_charts_get",
+      "_type": "request",
+      "parentId": "fld_16_Dashboard",
+      "name": "Get dashboard analytics",
+      "description": "Get dashboard analytics.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/dashboard/overview/charts",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "req_37__api_v1_dashboard_overview_daily-volume_get",
+      "_type": "request",
+      "parentId": "fld_16_Dashboard",
+      "name": "Get daily transaction volume for the past 30 days",
+      "description": "Get daily transaction volume for the past 30 days.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/dashboard/overview/daily-volume",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "req_38__api_v1_dashboard_overview_metrics_get",
+      "_type": "request",
+      "parentId": "fld_16_Dashboard",
+      "name": "Get dashboard summary metrics",
+      "description": "Get dashboard summary metrics.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/dashboard/overview/metrics",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "req_39__api_v1_dashboard_refunds_stream_get",
+      "_type": "request",
+      "parentId": "fld_16_Dashboard",
+      "name": "Subscribe to real-time refund status updates (Server-Sent Events)",
+      "description": "Subscribe to real-time refund status updates (Server-Sent Events).",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/dashboard/refunds/stream",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "fld_17_Email",
+      "_type": "request_group",
+      "parentId": "wrk_fluxapay_api",
+      "name": "Email",
+      "description": "",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": -17
+    },
+    {
+      "_id": "req_40__api_v1_email_unsubscribe_get",
+      "_type": "request",
+      "parentId": "fld_17_Email",
+      "name": "Unsubscribe from email notifications",
+      "description": "Unsubscribe from email notifications.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/email/unsubscribe",
+      "headers": [],
+      "parameters": []
+    },
+    {
+      "_id": "req_41__api_v1_email_webhook_post",
+      "_type": "request",
+      "parentId": "fld_17_Email",
+      "name": "Handle inbound email provider webhook events",
+      "description": "Handle inbound email provider webhook events.",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/v1/email/webhook",
+      "headers": [],
+      "parameters": []
+    },
+    {
+      "_id": "fld_18_Escrow",
+      "_type": "request_group",
+      "parentId": "wrk_fluxapay_api",
+      "name": "Escrow",
+      "description": "",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": -18
+    },
+    {
+      "_id": "req_105__api_v1_payments__id__escrow_initialize_post",
+      "_type": "request",
+      "parentId": "fld_18_Escrow",
+      "name": "Initialize escrow contract for a payment",
+      "description": "Initialize escrow contract for a payment.",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/v1/payments/{{ _.id }}/escrow/initialize",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.apiKey }}"
+        },
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"payment_id\": \"string\",\n  \"amount\": \"string\",\n  \"currency\": \"string\",\n  \"merchant_public_key\": \"string\"\n}"
+      }
+    },
+    {
+      "_id": "req_106__api_v1_payments__id__escrow_refund_post",
+      "_type": "request",
+      "parentId": "fld_18_Escrow",
+      "name": "Refund funds from escrow contract",
+      "description": "Refund funds from escrow contract.",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/v1/payments/{{ _.id }}/escrow/refund",
+      "headers": [
+        {
+          "name": "x-admin-secret",
+          "value": "{{ _.apiKey }}"
+        },
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"reason\": \"string\",\n  \"initiated_by\": \"admin\"\n}"
+      }
+    },
+    {
+      "_id": "req_107__api_v1_payments__id__escrow_release_post",
+      "_type": "request",
+      "parentId": "fld_18_Escrow",
+      "name": "Release funds from escrow contract",
+      "description": "Release funds from escrow contract.",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/v1/payments/{{ _.id }}/escrow/release",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "fld_19_FX_Rates",
+      "_type": "request_group",
+      "parentId": "wrk_fluxapay_api",
+      "name": "FX Rates",
+      "description": "",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": -19
+    },
+    {
+      "_id": "req_42__api_v1_fx-rates_get",
+      "_type": "request",
+      "parentId": "fld_19_FX_Rates",
+      "name": "Get live FX rates to USDC",
+      "description": "Get live FX rates to USDC.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/fx-rates",
+      "headers": [],
+      "parameters": [
+        {
+          "name": "currency",
+          "value": "USD",
+          "disabled": true
+        }
+      ]
+    },
+    {
+      "_id": "req_43__api_v1_fx-rates_cached_get",
+      "_type": "request",
+      "parentId": "fld_19_FX_Rates",
+      "name": "Get all cached FX rates (USDC to fiat)",
+      "description": "Get all cached FX rates (USDC to fiat).",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/fx-rates/cached",
+      "headers": [],
+      "parameters": []
+    },
+    {
+      "_id": "fld_20_Invoices",
+      "_type": "request_group",
+      "parentId": "wrk_fluxapay_api",
+      "name": "Invoices",
+      "description": "",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": -20
+    },
+    {
+      "_id": "req_44__api_v1_invoices_get",
+      "_type": "request",
+      "parentId": "fld_20_Invoices",
+      "name": "List merchant invoices",
+      "description": "List merchant invoices.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/invoices",
+      "headers": [
+        {
+          "name": "x-api-key",
+          "value": "{{ _.apiKey }}"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "page",
+          "value": "1",
+          "disabled": true
+        },
+        {
+          "name": "limit",
+          "value": "10",
+          "disabled": true
+        },
+        {
+          "name": "status",
+          "value": "pending",
+          "disabled": true
+        },
+        {
+          "name": "search",
+          "value": "string",
+          "disabled": true
+        }
+      ]
+    },
+    {
+      "_id": "req_45__api_v1_invoices_post",
+      "_type": "request",
+      "parentId": "fld_20_Invoices",
+      "name": "Create invoice and linked payment intent",
+      "description": "Create invoice and linked payment intent.",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/v1/invoices",
+      "headers": [
+        {
+          "name": "x-api-key",
+          "value": "{{ _.apiKey }}"
+        },
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        },
+        {
+          "name": "Idempotency-Key",
+          "value": "string",
+          "disabled": true
+        }
+      ],
+      "parameters": [],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"amount\": 150,\n  \"currency\": \"USDC\",\n  \"customer_email\": \"customer@example.com\",\n  \"due_date\": \"2026-05-31T23:59:59Z\",\n  \"metadata\": {}\n}"
+      }
+    },
+    {
+      "_id": "req_46__api_v1_invoices__invoice_id__get",
+      "_type": "request",
+      "parentId": "fld_20_Invoices",
+      "name": "Get invoice by ID",
+      "description": "Get invoice by ID.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/invoices/{{ _.invoice_id }}",
+      "headers": [
+        {
+          "name": "x-api-key",
+          "value": "{{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "req_47__api_v1_invoices__invoice_id__export_get",
+      "_type": "request",
+      "parentId": "fld_20_Invoices",
+      "name": "Export invoice as PDF, CSV, or JSON",
+      "description": "Export invoice as PDF, CSV, or JSON.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/invoices/{{ _.invoice_id }}/export",
+      "headers": [
+        {
+          "name": "x-api-key",
+          "value": "{{ _.apiKey }}"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "format",
+          "value": "pdf",
+          "disabled": true
+        }
+      ]
+    },
+    {
+      "_id": "req_48__api_v1_invoices__invoice_id__export_post",
+      "_type": "request",
+      "parentId": "fld_20_Invoices",
+      "name": "Start an async invoice export job",
+      "description": "Start an async invoice export job.",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/v1/invoices/{{ _.invoice_id }}/export",
+      "headers": [
+        {
+          "name": "x-api-key",
+          "value": "{{ _.apiKey }}"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "format",
+          "value": "pdf",
+          "disabled": true
+        }
+      ]
+    },
+    {
+      "_id": "req_49__api_v1_invoices__invoice_id__export__jobId__download_get",
+      "_type": "request",
+      "parentId": "fld_20_Invoices",
+      "name": "Download a completed async invoice export",
+      "description": "Download a completed async invoice export.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/invoices/{{ _.invoice_id }}/export/{{ _.jobId }}/download",
+      "headers": [
+        {
+          "name": "x-api-key",
+          "value": "{{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "req_50__api_v1_invoices__invoice_id__export__jobId__status_get",
+      "_type": "request",
+      "parentId": "fld_20_Invoices",
+      "name": "Get async invoice export job status",
+      "description": "Get async invoice export job status.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/invoices/{{ _.invoice_id }}/export/{{ _.jobId }}/status",
+      "headers": [
+        {
+          "name": "x-api-key",
+          "value": "{{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "req_51__api_v1_invoices__invoice_id__send_post",
+      "_type": "request",
+      "parentId": "fld_20_Invoices",
+      "name": "Send invoice to customer via email",
+      "description": "Send invoice to customer via email.",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/v1/invoices/{{ _.invoice_id }}/send",
+      "headers": [
+        {
+          "name": "x-api-key",
+          "value": "{{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "req_52__api_v1_invoices__invoice_id__status_patch",
+      "_type": "request",
+      "parentId": "fld_20_Invoices",
+      "name": "Update invoice status",
+      "description": "Update invoice status.",
+      "method": "PATCH",
+      "url": "{{ _.baseUrl }}/api/v1/invoices/{{ _.invoice_id }}/status",
+      "headers": [
+        {
+          "name": "x-api-key",
+          "value": "{{ _.apiKey }}"
+        },
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"status\": \"pending\"\n}"
+      }
+    },
+    {
+      "_id": "req_53__api_v1_invoices__invoice_id__void_post",
+      "_type": "request",
+      "parentId": "fld_20_Invoices",
+      "name": "Void an unpaid invoice",
+      "description": "Void an unpaid invoice.",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/v1/invoices/{{ _.invoice_id }}/void",
+      "headers": [
+        {
+          "name": "x-api-key",
+          "value": "{{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "req_54__api_v1_invoices_exports__jobId__get",
+      "_type": "request",
+      "parentId": "fld_20_Invoices",
+      "name": "Get invoice export job status by job id",
+      "description": "Get invoice export job status by job id.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/invoices/exports/{{ _.jobId }}",
+      "headers": [
+        {
+          "name": "x-api-key",
+          "value": "{{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "fld_21_Keys",
+      "_type": "request_group",
+      "parentId": "wrk_fluxapay_api",
+      "name": "Keys",
+      "description": "",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": -21
+    },
+    {
+      "_id": "req_55__api_v1_keys_regenerate_post",
+      "_type": "request",
+      "parentId": "fld_21_Keys",
+      "name": "Regenerate merchant API key",
+      "description": "Regenerate merchant API key.",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/v1/keys/regenerate",
+      "headers": [
+        {
+          "name": "x-api-key",
+          "value": "{{ _.apiKey }}"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "mode",
+          "value": "live",
+          "disabled": true
+        }
+      ]
+    },
+    {
+      "_id": "fld_22_KYC",
+      "_type": "request_group",
+      "parentId": "wrk_fluxapay_api",
+      "name": "KYC",
+      "description": "",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": -22
+    },
+    {
+      "_id": "req_71__api_v1_merchants_kyc_post",
+      "_type": "request",
+      "parentId": "fld_22_KYC",
+      "name": "Submit KYC information",
+      "description": "Submit merchant KYC details for verification. This is the first step in the KYC process.",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/v1/merchants/kyc",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.apiKey }}"
+        },
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"business_type\": \"individual\",\n  \"legal_business_name\": \"string\",\n  \"business_registration_number\": \"string\",\n  \"country_of_registration\": \"string\",\n  \"business_address\": \"string\",\n  \"director_full_name\": \"string\",\n  \"director_email\": \"user@example.com\",\n  \"director_phone\": \"string\",\n  \"government_id_type\": \"passport\",\n  \"government_id_number\": \"string\"\n}"
+      }
+    },
+    {
+      "_id": "req_75__api_v1_merchants_kyc_documents_post",
+      "_type": "request",
+      "parentId": "fld_22_KYC",
+      "name": "Upload KYC document",
+      "description": "Upload a document for KYC verification. Supported types are government_id, proof_of_business_registration, and proof_of_address.",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/v1/merchants/kyc/documents",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.apiKey }}"
+        }
+      ],
+      "parameters": [],
+      "body": {
+        "mimeType": "multipart/form-data",
+        "params": [
+          {
+            "name": "document_type",
+            "value": "government_id",
+            "type": "text"
+          },
+          {
+            "name": "file",
+            "value": "",
+            "type": "file",
+            "fileName": ""
+          }
+        ]
+      }
+    },
+    {
+      "_id": "req_76__api_v1_merchants_kyc_status_get",
+      "_type": "request",
+      "parentId": "fld_22_KYC",
+      "name": "Get KYC status",
+      "description": "Get the current KYC status and submitted information for the logged-in merchant",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/merchants/kyc/status",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "fld_23_KYC_Admin",
+      "_type": "request_group",
+      "parentId": "wrk_fluxapay_api",
+      "name": "KYC Admin",
+      "description": "",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": -23
+    },
+    {
+      "_id": "req_72__api_v1_merchants_kyc_admin__merchantId__get",
+      "_type": "request",
+      "parentId": "fld_23_KYC_Admin",
+      "name": "Get KYC details by merchant ID (Admin)",
+      "description": "Retrieve detailed KYC information for a specific merchant. Admin only endpoint.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/merchants/kyc/admin/{{ _.merchantId }}",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "req_73__api_v1_merchants_kyc_admin__merchantId__status_patch",
+      "_type": "request",
+      "parentId": "fld_23_KYC_Admin",
+      "name": "Update KYC status (Admin)",
+      "description": "Approve or reject a merchant's KYC submission. Admin only endpoint.",
+      "method": "PATCH",
+      "url": "{{ _.baseUrl }}/api/v1/merchants/kyc/admin/{{ _.merchantId }}/status",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.apiKey }}"
+        },
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"status\": \"approved\",\n  \"rejection_reason\": \"string\"\n}"
+      }
+    },
+    {
+      "_id": "req_74__api_v1_merchants_kyc_admin_submissions_get",
+      "_type": "request",
+      "parentId": "fld_23_KYC_Admin",
+      "name": "Get all KYC submissions (Admin)",
+      "description": "Retrieve all KYC submissions with optional filtering by status. Admin only endpoint.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/merchants/kyc/admin/submissions",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.apiKey }}"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "status",
+          "value": "not_submitted",
+          "disabled": true
+        },
+        {
+          "name": "page",
+          "value": "1",
+          "disabled": true
+        },
+        {
+          "name": "limit",
+          "value": "10",
+          "disabled": true
+        }
+      ]
+    },
+    {
+      "_id": "fld_24_Merchants",
+      "_type": "request_group",
+      "parentId": "wrk_fluxapay_api",
+      "name": "Merchants",
+      "description": "",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": -24
+    },
+    {
+      "_id": "req_57__api_v1_merchants_admin__merchantId__anonymize_post",
+      "_type": "request",
+      "parentId": "fld_24_Merchants",
+      "name": "Execute PII anonymization for a merchant (compliance)",
+      "description": "Execute PII anonymization for a merchant (compliance).",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/v1/merchants/admin/{{ _.merchantId }}/anonymize",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "req_58__api_v1_merchants_admin__merchantId__deletion-request_post",
+      "_type": "request",
+      "parentId": "fld_24_Merchants",
+      "name": "Operator-initiated deletion request for a merchant",
+      "description": "Operator-initiated deletion request for a merchant.",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/v1/merchants/admin/{{ _.merchantId }}/deletion-request",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "req_63__api_v1_merchants_export_post",
+      "_type": "request",
+      "parentId": "fld_24_Merchants",
+      "name": "Request a data export for the authenticated merchant",
+      "description": "Request a data export for the authenticated merchant.",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/v1/merchants/export",
+      "headers": [
+        {
+          "name": "x-api-key",
+          "value": "{{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "req_64__api_v1_merchants_export__jobId__get",
+      "_type": "request",
+      "parentId": "fld_24_Merchants",
+      "name": "Get data export job status",
+      "description": "Get data export job status.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/merchants/export/{{ _.jobId }}",
+      "headers": [
+        {
+          "name": "x-api-key",
+          "value": "{{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "req_65__api_v1_merchants_export__jobId__download_get",
+      "_type": "request",
+      "parentId": "fld_24_Merchants",
+      "name": "Download completed export payload",
+      "description": "Download completed export payload.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/merchants/export/{{ _.jobId }}/download",
+      "headers": [
+        {
+          "name": "x-api-key",
+          "value": "{{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "req_66__api_v1_merchants_export_admin__merchantId__post",
+      "_type": "request",
+      "parentId": "fld_24_Merchants",
+      "name": "Operator-triggered data export for a merchant",
+      "description": "Operator-triggered data export for a merchant.",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/v1/merchants/export/admin/{{ _.merchantId }}",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "req_67__api_v1_merchants_export_admin__merchantId___jobId__download_get",
+      "_type": "request",
+      "parentId": "fld_24_Merchants",
+      "name": "Operator download of merchant export artifact",
+      "description": "Operator download of merchant export artifact.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/merchants/export/admin/{{ _.merchantId }}/{{ _.jobId }}/download",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "req_68__api_v1_merchants_forgot-password_post",
+      "_type": "request",
+      "parentId": "fld_24_Merchants",
+      "name": "Request a password reset link",
+      "description": "Request a password reset link.",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/v1/merchants/forgot-password",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"email\": \"user@example.com\"\n}"
+      }
+    },
+    {
+      "_id": "req_69__api_v1_merchants_keys_rotate-api-key_post",
+      "_type": "request",
+      "parentId": "fld_24_Merchants",
+      "name": "Rotate merchant API key",
+      "description": "Rotate merchant API key.",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/v1/merchants/keys/rotate-api-key",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.apiKey }}"
+        },
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"gracePeriodHours\": 1\n}"
+      }
+    },
+    {
+      "_id": "req_70__api_v1_merchants_keys_rotate-webhook-secret_post",
+      "_type": "request",
+      "parentId": "fld_24_Merchants",
+      "name": "Rotate merchant webhook secret",
+      "description": "Rotate merchant webhook secret.",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/v1/merchants/keys/rotate-webhook-secret",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "req_77__api_v1_merchants_login_post",
+      "_type": "request",
+      "parentId": "fld_24_Merchants",
+      "name": "Login a merchant",
+      "description": "Login a merchant.",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/v1/merchants/login",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"email\": \"string\",\n  \"password\": \"string\"\n}"
+      }
+    },
+    {
+      "_id": "req_78__api_v1_merchants_me_get",
+      "_type": "request",
+      "parentId": "fld_24_Merchants",
+      "name": "Get the currently logged-in merchant",
+      "description": "Get the currently logged-in merchant.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/merchants/me",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "req_79__api_v1_merchants_me_patch",
+      "_type": "request",
+      "parentId": "fld_24_Merchants",
+      "name": "Update merchant profile",
+      "description": "Update merchant profile.",
+      "method": "PATCH",
+      "url": "{{ _.baseUrl }}/api/v1/merchants/me",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.apiKey }}"
+        },
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"business_name\": \"string\",\n  \"email\": \"string\"\n}"
+      }
+    },
+    {
+      "_id": "req_80__api_v1_merchants_me_bank-account_patch",
+      "_type": "request",
+      "parentId": "fld_24_Merchants",
+      "name": "Update existing bank account details",
+      "description": "Update existing bank account details.",
+      "method": "PATCH",
+      "url": "{{ _.baseUrl }}/api/v1/merchants/me/bank-account",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.apiKey }}"
+        },
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"account_name\": \"string\",\n  \"account_number\": \"string\",\n  \"bank_name\": \"string\",\n  \"bank_code\": \"string\",\n  \"currency\": \"string\",\n  \"country\": \"string\"\n}"
+      }
+    },
+    {
+      "_id": "req_81__api_v1_merchants_me_bank-account_post",
+      "_type": "request",
+      "parentId": "fld_24_Merchants",
+      "name": "Add or update merchant bank account",
+      "description": "Add or update merchant bank account.",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/v1/merchants/me/bank-account",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.apiKey }}"
+        },
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"account_name\": \"string\",\n  \"account_number\": \"string\",\n  \"bank_name\": \"string\",\n  \"bank_code\": \"string\",\n  \"currency\": \"string\",\n  \"country\": \"string\"\n}"
+      }
+    },
+    {
+      "_id": "req_82__api_v1_merchants_me_deletion-request_get",
+      "_type": "request",
+      "parentId": "fld_24_Merchants",
+      "name": "Get current deletion request status",
+      "description": "Get current deletion request status.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/merchants/me/deletion-request",
+      "headers": [
+        {
+          "name": "x-api-key",
+          "value": "{{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "req_83__api_v1_merchants_me_deletion-request_post",
+      "_type": "request",
+      "parentId": "fld_24_Merchants",
+      "name": "Request account deletion (merchant self-service)",
+      "description": "Request account deletion (merchant self-service).",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/v1/merchants/me/deletion-request",
+      "headers": [
+        {
+          "name": "x-api-key",
+          "value": "{{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "req_84__api_v1_merchants_me_notification-preferences_get",
+      "_type": "request",
+      "parentId": "fld_24_Merchants",
+      "name": "Get merchant notification preferences",
+      "description": "Get merchant notification preferences.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/merchants/me/notification-preferences",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "req_85__api_v1_merchants_me_notification-preferences_patch",
+      "_type": "request",
+      "parentId": "fld_24_Merchants",
+      "name": "Update merchant notification preferences",
+      "description": "Update merchant notification preferences.",
+      "method": "PATCH",
+      "url": "{{ _.baseUrl }}/api/v1/merchants/me/notification-preferences",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.apiKey }}"
+        },
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"payment_expiry_reminder\": true,\n  \"reminder_minutes_before\": 1,\n  \"notify_on_payment\": true\n}"
+      }
+    },
+    {
+      "_id": "req_86__api_v1_merchants_me_settlement-schedule_patch",
+      "_type": "request",
+      "parentId": "fld_24_Merchants",
+      "name": "Update merchant settlement schedule",
+      "description": "Update merchant settlement schedule.",
+      "method": "PATCH",
+      "url": "{{ _.baseUrl }}/api/v1/merchants/me/settlement-schedule",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.apiKey }}"
+        },
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"settlement_schedule\": \"daily\",\n  \"settlement_day\": 1\n}"
+      }
+    },
+    {
+      "_id": "req_87__api_v1_merchants_me_usage_get",
+      "_type": "request",
+      "parentId": "fld_24_Merchants",
+      "name": "Get current billing period usage vs plan limits",
+      "description": "Get current billing period usage vs plan limits.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/merchants/me/usage",
+      "headers": [
+        {
+          "name": "x-api-key",
+          "value": "{{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "req_88__api_v1_merchants_me_webhook_patch",
+      "_type": "request",
+      "parentId": "fld_24_Merchants",
+      "name": "Update merchant webhook URL",
+      "description": "Update merchant webhook URL.",
+      "method": "PATCH",
+      "url": "{{ _.baseUrl }}/api/v1/merchants/me/webhook",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.apiKey }}"
+        },
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"webhook_url\": \"string\"\n}"
+      }
+    },
+    {
+      "_id": "req_89__api_v1_merchants_resend-otp_post",
+      "_type": "request",
+      "parentId": "fld_24_Merchants",
+      "name": "Resend OTP",
+      "description": "Resend OTP.",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/v1/merchants/resend-otp",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"merchantId\": \"string\",\n  \"channel\": \"email\"\n}"
+      }
+    },
+    {
+      "_id": "req_90__api_v1_merchants_reset-password_post",
+      "_type": "request",
+      "parentId": "fld_24_Merchants",
+      "name": "Reset password using a single-use reset token",
+      "description": "Reset password using a single-use reset token.",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/v1/merchants/reset-password",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"token\": \"string\",\n  \"password\": \"string\"\n}"
+      }
+    },
+    {
+      "_id": "req_91__api_v1_merchants_signup_post",
+      "_type": "request",
+      "parentId": "fld_24_Merchants",
+      "name": "Register a new merchant",
+      "description": "Register a new merchant.",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/v1/merchants/signup",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"business_name\": \"string\",\n  \"email\": \"string\",\n  \"phone_number\": \"string\",\n  \"country\": \"string\",\n  \"settlement_currency\": \"string\",\n  \"password\": \"string\"\n}"
+      }
+    },
+    {
+      "_id": "req_92__api_v1_merchants_validate-reset-token_get",
+      "_type": "request",
+      "parentId": "fld_24_Merchants",
+      "name": "Check whether a password reset token is currently valid (does not consume it)",
+      "description": "Check whether a password reset token is currently valid (does not consume it).",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/merchants/validate-reset-token",
+      "headers": [],
+      "parameters": [
+        {
+          "name": "token",
+          "value": "string",
+          "disabled": false
+        }
+      ]
+    },
+    {
+      "_id": "req_93__api_v1_merchants_verify-otp_post",
+      "_type": "request",
+      "parentId": "fld_24_Merchants",
+      "name": "Verify OTP for merchant activation",
+      "description": "Verify OTP for merchant activation.",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/v1/merchants/verify-otp",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"merchantId\": \"string\",\n  \"channel\": \"email\",\n  \"otp\": \"string\"\n}"
+      }
+    },
+    {
+      "_id": "fld_25_Password",
+      "_type": "request_group",
+      "parentId": "wrk_fluxapay_api",
+      "name": "Password",
+      "description": "",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": -25
+    },
+    {
+      "_id": "req_151__password_forgot-password_post",
+      "_type": "request",
+      "parentId": "fld_25_Password",
+      "name": "Request a password reset",
+      "description": "Request a password reset.",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/password/forgot-password",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"email\": \"user@example.com\"\n}"
+      }
+    },
+    {
+      "_id": "req_152__password_reset-password_post",
+      "_type": "request",
+      "parentId": "fld_25_Password",
+      "name": "Reset password with valid token",
+      "description": "Reset password with valid token.",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/password/reset-password",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"token\": \"string\",\n  \"newPassword\": \"string\"\n}"
+      }
+    },
+    {
+      "_id": "req_153__password_validate-reset-token_post",
+      "_type": "request",
+      "parentId": "fld_25_Password",
+      "name": "Validate a password reset token",
+      "description": "Validate a password reset token.",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/password/validate-reset-token",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"token\": \"string\"\n}"
+      }
+    },
+    {
+      "_id": "fld_26_Payment_Links",
+      "_type": "request_group",
+      "parentId": "wrk_fluxapay_api",
+      "name": "Payment Links",
+      "description": "",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": -26
+    },
+    {
+      "_id": "req_94__api_v1_payment-links_get",
+      "_type": "request",
+      "parentId": "fld_26_Payment_Links",
+      "name": "List payment links",
+      "description": "List payment links.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/payment-links",
+      "headers": [
+        {
+          "name": "x-api-key",
+          "value": "{{ _.apiKey }}"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "page",
+          "value": "1",
+          "disabled": true
+        },
+        {
+          "name": "limit",
+          "value": "1",
+          "disabled": true
+        },
+        {
+          "name": "active",
+          "value": "true",
+          "disabled": true
+        }
+      ]
+    },
+    {
+      "_id": "req_95__api_v1_payment-links_post",
+      "_type": "request",
+      "parentId": "fld_26_Payment_Links",
+      "name": "Create a payment link",
+      "description": "Create a payment link.",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/v1/payment-links",
+      "headers": [
+        {
+          "name": "x-api-key",
+          "value": "{{ _.apiKey }}"
+        },
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"title\": \"Consultation Fee\",\n  \"description\": \"1-hour consultation session\",\n  \"amount\": 100,\n  \"currency\": \"USD\",\n  \"redirect_url\": \"https://example.com/success\",\n  \"expiry\": \"2026-12-31T23:59:59Z\",\n  \"metadata\": {},\n  \"customer_id\": \"cust_123abc\"\n}"
+      }
+    },
+    {
+      "_id": "req_96__api_v1_payment-links__id__delete",
+      "_type": "request",
+      "parentId": "fld_26_Payment_Links",
+      "name": "Deactivate a payment link",
+      "description": "Deactivate a payment link.",
+      "method": "DELETE",
+      "url": "{{ _.baseUrl }}/api/v1/payment-links/{{ _.id }}",
+      "headers": [
+        {
+          "name": "x-api-key",
+          "value": "{{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "req_97__api_v1_payment-links__id__get",
+      "_type": "request",
+      "parentId": "fld_26_Payment_Links",
+      "name": "Get a payment link by ID",
+      "description": "Get a payment link by ID.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/payment-links/{{ _.id }}",
+      "headers": [
+        {
+          "name": "x-api-key",
+          "value": "{{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "req_98__api_v1_payment-links__id__patch",
+      "_type": "request",
+      "parentId": "fld_26_Payment_Links",
+      "name": "Update a payment link",
+      "description": "Update a payment link.",
+      "method": "PATCH",
+      "url": "{{ _.baseUrl }}/api/v1/payment-links/{{ _.id }}",
+      "headers": [
+        {
+          "name": "x-api-key",
+          "value": "{{ _.apiKey }}"
+        },
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"title\": \"string\",\n  \"description\": \"string\",\n  \"redirect_url\": \"https://example.com\",\n  \"active\": true,\n  \"metadata\": {}\n}"
+      }
+    },
+    {
+      "_id": "req_99__api_v1_payment-links_resolve__slug__get",
+      "_type": "request",
+      "parentId": "fld_26_Payment_Links",
+      "name": "Resolve a payment link by slug (public)",
+      "description": "Returns payment link details. Returns 410 Gone if expired or inactive.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/payment-links/resolve/{{ _.slug }}",
+      "headers": [],
+      "parameters": []
+    },
+    {
+      "_id": "req_100__api_v1_payment-links_resolve__slug__charge_post",
+      "_type": "request",
+      "parentId": "fld_26_Payment_Links",
+      "name": "Create a charge from a payment link (public)",
+      "description": "Creates a payment from a payment link. Returns 410 Gone if the link is expired or inactive.",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/v1/payment-links/resolve/{{ _.slug }}/charge",
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"amount\": 1,\n  \"customer_email\": \"string\"\n}"
+      }
+    },
+    {
+      "_id": "fld_27_Payments",
+      "_type": "request_group",
+      "parentId": "wrk_fluxapay_api",
+      "name": "Payments",
+      "description": "",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": -27
+    },
+    {
+      "_id": "req_101__api_v1_payments_get",
+      "_type": "request",
+      "parentId": "fld_27_Payments",
+      "name": "List payments for the authenticated merchant",
+      "description": "List payments for the authenticated merchant.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/payments",
+      "headers": [
+        {
+          "name": "x-api-key",
+          "value": "{{ _.apiKey }}"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "page",
+          "value": "1",
+          "disabled": true
+        },
+        {
+          "name": "limit",
+          "value": "1",
+          "disabled": true
+        },
+        {
+          "name": "status",
+          "value": "string",
+          "disabled": true
+        },
+        {
+          "name": "currency",
+          "value": "string",
+          "disabled": true
+        },
+        {
+          "name": "search",
+          "value": "string",
+          "disabled": true
+        },
+        {
+          "name": "date_from",
+          "value": "2026-01-01T00:00:00Z",
+          "disabled": true
+        },
+        {
+          "name": "date_to",
+          "value": "2026-01-01T00:00:00Z",
+          "disabled": true
+        }
+      ]
+    },
+    {
+      "_id": "req_102__api_v1_payments_post",
+      "_type": "request",
+      "parentId": "fld_27_Payments",
+      "name": "Create payment intent",
+      "description": "Create payment intent.",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/v1/payments",
+      "headers": [
+        {
+          "name": "x-api-key",
+          "value": "{{ _.apiKey }}"
+        },
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        },
+        {
+          "name": "Idempotency-Key",
+          "value": "string",
+          "disabled": true
+        }
+      ],
+      "parameters": [],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"amount\": 120.5,\n  \"currency\": \"USDC\",\n  \"customer_email\": \"buyer@example.com\",\n  \"customer_id\": \"clxyz123customer\",\n  \"note\": \"Order #1234 - Support Ticket #567\",\n  \"metadata\": {\n    \"order_id\": \"ord_001\",\n    \"webhook_url\": \"https://merchant.tld/webhooks\"\n  }\n}"
+      }
+    },
+    {
+      "_id": "req_103__api_v1_payments__id__get",
+      "_type": "request",
+      "parentId": "fld_27_Payments",
+      "name": "Get a single payment by ID",
+      "description": "Get a single payment by ID.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/payments/{{ _.id }}",
+      "headers": [
+        {
+          "name": "x-api-key",
+          "value": "{{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "req_104__api_v1_payments__id__patch",
+      "_type": "request",
+      "parentId": "fld_27_Payments",
+      "name": "Update payment internal note or metadata",
+      "description": "Update payment internal note or metadata.",
+      "method": "PATCH",
+      "url": "{{ _.baseUrl }}/api/v1/payments/{{ _.id }}",
+      "headers": [
+        {
+          "name": "x-api-key",
+          "value": "{{ _.apiKey }}"
+        },
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"note\": \"string\"\n}"
+      }
+    },
+    {
+      "_id": "req_108__api_v1_payments__id__settlement_get",
+      "_type": "request",
+      "parentId": "fld_27_Payments",
+      "name": "Get settlement details for a payment",
+      "description": "Get settlement details for a payment.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/payments/{{ _.id }}/settlement",
+      "headers": [
+        {
+          "name": "x-api-key",
+          "value": "{{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "req_109__api_v1_payments__id__status_get",
+      "_type": "request",
+      "parentId": "fld_27_Payments",
+      "name": "Publicly accessible view of a payment's status",
+      "description": "Safe public DTO with minimal fields. No authentication required. Rate-limited by IP and payment ID.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/payments/{{ _.id }}/status",
+      "headers": [],
+      "parameters": []
+    },
+    {
+      "_id": "req_110__api_v1_payments__id__stream_get",
+      "_type": "request",
+      "parentId": "fld_27_Payments",
+      "name": "SSE stream for real-time payment updates",
+      "description": "Server-Sent Events stream for real-time payment status updates. No authentication required. Rate-limited by IP.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/payments/{{ _.id }}/stream",
+      "headers": [],
+      "parameters": []
+    },
+    {
+      "_id": "req_111__api_v1_payments_checkout__id__get",
+      "_type": "request",
+      "parentId": "fld_27_Payments",
+      "name": "Public hosted checkout payment details",
+      "description": "Public hosted checkout payment details.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/payments/checkout/{{ _.id }}",
+      "headers": [],
+      "parameters": []
+    },
+    {
+      "_id": "req_112__api_v1_payments_checkout__id__status_get",
+      "_type": "request",
+      "parentId": "fld_27_Payments",
+      "name": "Public checkout payment status",
+      "description": "Public checkout payment status.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/payments/checkout/{{ _.id }}/status",
+      "headers": [],
+      "parameters": []
+    },
+    {
+      "_id": "req_113__api_v1_payments_checkout__id__stream_get",
+      "_type": "request",
+      "parentId": "fld_27_Payments",
+      "name": "Checkout SSE placeholder (returns not implemented)",
+      "description": "Checkout SSE placeholder (returns not implemented).",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/payments/checkout/{{ _.id }}/stream",
+      "headers": [],
+      "parameters": []
+    },
+    {
+      "_id": "req_114__api_v1_payments_export_get",
+      "_type": "request",
+      "parentId": "fld_27_Payments",
+      "name": "Export the transaction history as a CSV file",
+      "description": "Streams a CSV of every payment matching the supplied filters. Rows are written to the response in batches, so exports of large histories do not time out and are not buffered in memory. Rows are ordered chronologically (oldest first).\n",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/payments/export",
+      "headers": [
+        {
+          "name": "x-api-key",
+          "value": "{{ _.apiKey }}"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "date_from",
+          "value": "string",
+          "disabled": true
+        },
+        {
+          "name": "date_to",
+          "value": "string",
+          "disabled": true
+        },
+        {
+          "name": "status",
+          "value": "string",
+          "disabled": true
+        },
+        {
+          "name": "currency",
+          "value": "string",
+          "disabled": true
+        },
+        {
+          "name": "search",
+          "value": "string",
+          "disabled": true
+        },
+        {
+          "name": "amount_min",
+          "value": "1",
+          "disabled": true
+        },
+        {
+          "name": "amount_max",
+          "value": "1",
+          "disabled": true
+        }
+      ]
+    },
+    {
+      "_id": "fld_28_Reconciliation",
+      "_type": "request_group",
+      "parentId": "wrk_fluxapay_api",
+      "name": "Reconciliation",
+      "description": "",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": -28
+    },
+    {
+      "_id": "req_10__api_v1_admin_reconciliation_alerts_get",
+      "_type": "request",
+      "parentId": "fld_28_Reconciliation",
+      "name": "List discrepancy alerts for admin UI",
+      "description": "List discrepancy alerts for admin UI.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/admin/reconciliation/alerts",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.apiKey }}"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "merchant_id",
+          "value": "string",
+          "disabled": true
+        },
+        {
+          "name": "is_resolved",
+          "value": "true",
+          "disabled": true
+        },
+        {
+          "name": "page",
+          "value": "1",
+          "disabled": true
+        },
+        {
+          "name": "limit",
+          "value": "1",
+          "disabled": true
+        }
+      ]
+    },
+    {
+      "_id": "req_11__api_v1_admin_reconciliation_alerts__alert_id__resolve_patch",
+      "_type": "request",
+      "parentId": "fld_28_Reconciliation",
+      "name": "Resolve or reopen discrepancy alert",
+      "description": "Resolve or reopen discrepancy alert.",
+      "method": "PATCH",
+      "url": "{{ _.baseUrl }}/api/v1/admin/reconciliation/alerts/{{ _.alert_id }}/resolve",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.apiKey }}"
+        },
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"is_resolved\": true\n}"
+      }
+    },
+    {
+      "_id": "req_12__api_v1_admin_reconciliation_summary_get",
+      "_type": "request",
+      "parentId": "fld_28_Reconciliation",
+      "name": "Get reconciliation period summary and detect discrepancies",
+      "description": "Get reconciliation period summary and detect discrepancies.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/admin/reconciliation/summary",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.apiKey }}"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "merchant_id",
+          "value": "string",
+          "disabled": true
+        },
+        {
+          "name": "period_start",
+          "value": "2026-01-01T00:00:00Z",
+          "disabled": false
+        },
+        {
+          "name": "period_end",
+          "value": "2026-01-01T00:00:00Z",
+          "disabled": false
+        }
+      ]
+    },
+    {
+      "_id": "req_13__api_v1_admin_reconciliation_thresholds_post",
+      "_type": "request",
+      "parentId": "fld_28_Reconciliation",
+      "name": "Create or update discrepancy threshold configuration",
+      "description": "Create or update discrepancy threshold configuration.",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/v1/admin/reconciliation/thresholds",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.apiKey }}"
+        },
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"merchant_id\": \"cm123abc\",\n  \"amount_threshold\": 100,\n  \"percent_threshold\": 2.5,\n  \"is_active\": true\n}"
+      }
+    },
+    {
+      "_id": "fld_29_Reconciliation_Reports",
+      "_type": "request_group",
+      "parentId": "wrk_fluxapay_api",
+      "name": "Reconciliation Reports",
+      "description": "",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": -29
+    },
+    {
+      "_id": "req_117__api_v1_reports_reconciliation_get",
+      "_type": "request",
+      "parentId": "fld_29_Reconciliation_Reports",
+      "name": "List daily reconciliation reports",
+      "description": "List daily reconciliation reports.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/reports/reconciliation",
+      "headers": [
+        {
+          "name": "x-api-key",
+          "value": "{{ _.apiKey }}"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "page",
+          "value": "1",
+          "disabled": true
+        },
+        {
+          "name": "limit",
+          "value": "1",
+          "disabled": true
+        },
+        {
+          "name": "start_date",
+          "value": "2026-01-01T00:00:00Z",
+          "disabled": true
+        },
+        {
+          "name": "end_date",
+          "value": "2026-01-01T00:00:00Z",
+          "disabled": true
+        }
+      ]
+    },
+    {
+      "_id": "req_118__api_v1_reports_reconciliation_post",
+      "_type": "request",
+      "parentId": "fld_29_Reconciliation_Reports",
+      "name": "Generate daily reconciliation report",
+      "description": "Generate daily reconciliation report.",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/v1/reports/reconciliation",
+      "headers": [
+        {
+          "name": "x-api-key",
+          "value": "{{ _.apiKey }}"
+        },
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"date\": \"2026-01-01T00:00:00Z\"\n}"
+      }
+    },
+    {
+      "_id": "req_119__api_v1_reports_reconciliation__date__get",
+      "_type": "request",
+      "parentId": "fld_29_Reconciliation_Reports",
+      "name": "Get daily reconciliation report for a specific date",
+      "description": "Get daily reconciliation report for a specific date.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/reports/reconciliation/{{ _.date }}",
+      "headers": [
+        {
+          "name": "x-api-key",
+          "value": "{{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "req_120__api_v1_reports_reconciliation__date__csv_get",
+      "_type": "request",
+      "parentId": "fld_29_Reconciliation_Reports",
+      "name": "Download reconciliation report as CSV",
+      "description": "Download reconciliation report as CSV.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/reports/reconciliation/{{ _.date }}/csv",
+      "headers": [
+        {
+          "name": "x-api-key",
+          "value": "{{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "req_121__api_v1_reports_reconciliation__date__email_post",
+      "_type": "request",
+      "parentId": "fld_29_Reconciliation_Reports",
+      "name": "Email reconciliation report to merchant",
+      "description": "Email reconciliation report to merchant.",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/v1/reports/reconciliation/{{ _.date }}/email",
+      "headers": [
+        {
+          "name": "x-api-key",
+          "value": "{{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "fld_30_Refunds",
+      "_type": "request_group",
+      "parentId": "wrk_fluxapay_api",
+      "name": "Refunds",
+      "description": "",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": -30
+    },
+    {
+      "_id": "req_115__api_v1_refunds__refund_id__get",
+      "_type": "request",
+      "parentId": "fld_30_Refunds",
+      "name": "Get a merchant-owned refund",
+      "description": "Returns a refund only when it belongs to the authenticated merchant.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/refunds/{{ _.refund_id }}",
+      "headers": [
+        {
+          "name": "x-api-key",
+          "value": "{{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "req_116__api_v1_refunds__refund_id__status_patch",
+      "_type": "request",
+      "parentId": "fld_30_Refunds",
+      "name": "Update refund status and emit webhook",
+      "description": "Update refund status and emit webhook.",
+      "method": "PATCH",
+      "url": "{{ _.baseUrl }}/api/v1/refunds/{{ _.refund_id }}/status",
+      "headers": [
+        {
+          "name": "x-api-key",
+          "value": "{{ _.apiKey }}"
+        },
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"status\": \"completed\",\n  \"failed_reason\": \"Settlement window expired\"\n}"
+      }
+    },
+    {
+      "_id": "fld_31_Settlements",
+      "_type": "request_group",
+      "parentId": "wrk_fluxapay_api",
+      "name": "Settlements",
+      "description": "",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": -31
+    },
+    {
+      "_id": "req_122__api_v1_settlements_get",
+      "_type": "request",
+      "parentId": "fld_31_Settlements",
+      "name": "List settlements",
+      "description": "List settlements.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/settlements",
+      "headers": [
+        {
+          "name": "x-api-key",
+          "value": "{{ _.apiKey }}"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "page",
+          "value": "1",
+          "disabled": true
+        },
+        {
+          "name": "limit",
+          "value": "1",
+          "disabled": true
+        },
+        {
+          "name": "status",
+          "value": "pending",
+          "disabled": true
+        },
+        {
+          "name": "currency",
+          "value": "string",
+          "disabled": true
+        },
+        {
+          "name": "date_from",
+          "value": "string",
+          "disabled": true
+        },
+        {
+          "name": "date_to",
+          "value": "string",
+          "disabled": true
+        }
+      ]
+    },
+    {
+      "_id": "req_123__api_v1_settlements__settlement_id__get",
+      "_type": "request",
+      "parentId": "fld_31_Settlements",
+      "name": "Get settlement details",
+      "description": "Get settlement details.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/settlements/{{ _.settlement_id }}",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "req_124__api_v1_settlements__settlement_id__export_get",
+      "_type": "request",
+      "parentId": "fld_31_Settlements",
+      "name": "Export settlement report",
+      "description": "Export settlement report.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/settlements/{{ _.settlement_id }}/export",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.apiKey }}"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "format",
+          "value": "pdf",
+          "disabled": true
+        }
+      ]
+    },
+    {
+      "_id": "req_125__api_v1_settlements_batch_get",
+      "_type": "request",
+      "parentId": "fld_31_Settlements",
+      "name": "Get settlement batch summary by scheduled date",
+      "description": "Get settlement batch summary by scheduled date.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/settlements/batch",
+      "headers": [
+        {
+          "name": "x-api-key",
+          "value": "{{ _.apiKey }}"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "date_from",
+          "value": "2026-01-01T00:00:00Z",
+          "disabled": true
+        },
+        {
+          "name": "date_to",
+          "value": "2026-01-01T00:00:00Z",
+          "disabled": true
+        }
+      ]
+    },
+    {
+      "_id": "req_126__api_v1_settlements_export_get",
+      "_type": "request",
+      "parentId": "fld_31_Settlements",
+      "name": "Export settlement reports in a date range",
+      "description": "Export settlement reports in a date range.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/settlements/export",
+      "headers": [
+        {
+          "name": "x-api-key",
+          "value": "{{ _.apiKey }}"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "date_from",
+          "value": "string",
+          "disabled": true
+        },
+        {
+          "name": "date_to",
+          "value": "string",
+          "disabled": true
+        },
+        {
+          "name": "format",
+          "value": "csv",
+          "disabled": true
+        }
+      ]
+    },
+    {
+      "_id": "req_127__api_v1_settlements_summary_get",
+      "_type": "request",
+      "parentId": "fld_31_Settlements",
+      "name": "Get settlement summary",
+      "description": "Get settlement summary.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/settlements/summary",
+      "headers": [
+        {
+          "name": "x-api-key",
+          "value": "{{ _.apiKey }}"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "month",
+          "value": "string",
+          "disabled": true
+        },
+        {
+          "name": "year",
+          "value": "string",
+          "disabled": true
+        }
+      ]
+    },
+    {
+      "_id": "fld_32_Webhooks",
+      "_type": "request_group",
+      "parentId": "wrk_fluxapay_api",
+      "name": "Webhooks",
+      "description": "",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": -32
+    },
+    {
+      "_id": "req_133__api_v1_webhooks_deliveries_get",
+      "_type": "request",
+      "parentId": "fld_32_Webhooks",
+      "name": "Get webhook delivery logs (alias for logs)",
+      "description": "Get webhook delivery logs (alias for logs).",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/webhooks/deliveries",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.apiKey }}"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "event_type",
+          "value": "string",
+          "disabled": true
+        },
+        {
+          "name": "status",
+          "value": "string",
+          "disabled": true
+        },
+        {
+          "name": "page",
+          "value": "1",
+          "disabled": true
+        },
+        {
+          "name": "limit",
+          "value": "1",
+          "disabled": true
+        }
+      ]
+    },
+    {
+      "_id": "req_134__api_v1_webhooks_deliveries__log_id__get",
+      "_type": "request",
+      "parentId": "fld_32_Webhooks",
+      "name": "Get webhook delivery details (alias for logs)",
+      "description": "Get webhook delivery details (alias for logs).",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/webhooks/deliveries/{{ _.log_id }}",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "req_135__api_v1_webhooks_deliveries__log_id__attempts_get",
+      "_type": "request",
+      "parentId": "fld_32_Webhooks",
+      "name": "Get delivery attempt history (alias for logs/attempts)",
+      "description": "Get delivery attempt history (alias for logs/attempts).",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/webhooks/deliveries/{{ _.log_id }}/attempts",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "req_136__api_v1_webhooks_deliveries__log_id__retry_post",
+      "_type": "request",
+      "parentId": "fld_32_Webhooks",
+      "name": "Retry a failed webhook delivery (alias for logs/retry)",
+      "description": "Retry a failed webhook delivery (alias for logs/retry).",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/v1/webhooks/deliveries/{{ _.log_id }}/retry",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "req_137__api_v1_webhooks_deliveries_export_get",
+      "_type": "request",
+      "parentId": "fld_32_Webhooks",
+      "name": "Export webhook delivery logs as CSV (alias for logs/export)",
+      "description": "Export webhook delivery logs as CSV (alias for logs/export).",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/webhooks/deliveries/export",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.apiKey }}"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "event_type",
+          "value": "string",
+          "disabled": true
+        },
+        {
+          "name": "status",
+          "value": "string",
+          "disabled": true
+        }
+      ]
+    },
+    {
+      "_id": "req_138__api_v1_webhooks_logs_get",
+      "_type": "request",
+      "parentId": "fld_32_Webhooks",
+      "name": "Get webhook logs list",
+      "description": "Get webhook logs list.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/webhooks/logs",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.apiKey }}"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "event_type",
+          "value": "payment.created",
+          "disabled": true
+        },
+        {
+          "name": "status",
+          "value": "pending",
+          "disabled": true
+        },
+        {
+          "name": "date_from",
+          "value": "2026-01-01T00:00:00Z",
+          "disabled": true
+        },
+        {
+          "name": "date_to",
+          "value": "2026-01-01T00:00:00Z",
+          "disabled": true
+        },
+        {
+          "name": "search",
+          "value": "string",
+          "disabled": true
+        },
+        {
+          "name": "page",
+          "value": "1",
+          "disabled": true
+        },
+        {
+          "name": "limit",
+          "value": "10",
+          "disabled": true
+        }
+      ]
+    },
+    {
+      "_id": "req_139__api_v1_webhooks_logs__log_id__get",
+      "_type": "request",
+      "parentId": "fld_32_Webhooks",
+      "name": "Get webhook log details",
+      "description": "Get webhook log details.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/webhooks/logs/{{ _.log_id }}",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "req_140__api_v1_webhooks_logs__log_id__attempts_get",
+      "_type": "request",
+      "parentId": "fld_32_Webhooks",
+      "name": "Get delivery attempt history for a webhook event",
+      "description": "Get delivery attempt history for a webhook event.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/webhooks/logs/{{ _.log_id }}/attempts",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "req_141__api_v1_webhooks_logs__log_id__retry_post",
+      "_type": "request",
+      "parentId": "fld_32_Webhooks",
+      "name": "Retry a failed webhook",
+      "description": "Retry a failed webhook.",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/v1/webhooks/logs/{{ _.log_id }}/retry",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "req_142__api_v1_webhooks_logs_export_get",
+      "_type": "request",
+      "parentId": "fld_32_Webhooks",
+      "name": "Export webhook logs as CSV",
+      "description": "Export webhook logs as CSV.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/webhooks/logs/export",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.apiKey }}"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "event_type",
+          "value": "string",
+          "disabled": true
+        },
+        {
+          "name": "status",
+          "value": "string",
+          "disabled": true
+        },
+        {
+          "name": "date_from",
+          "value": "string",
+          "disabled": true
+        },
+        {
+          "name": "date_to",
+          "value": "string",
+          "disabled": true
+        },
+        {
+          "name": "search",
+          "value": "string",
+          "disabled": true
+        }
+      ]
+    },
+    {
+      "_id": "req_143__api_v1_webhooks_test_post",
+      "_type": "request",
+      "parentId": "fld_32_Webhooks",
+      "name": "Send a test webhook",
+      "description": "Send a test webhook.",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/v1/webhooks/test",
+      "headers": [
+        {
+          "name": "Authorization",
+          "value": "Bearer {{ _.apiKey }}"
+        },
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "parameters": [],
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"event_type\": \"payment.created\",\n  \"endpoint_url\": \"https://example.com\",\n  \"payload_override\": {}\n}"
+      }
+    },
+    {
+      "_id": "fld_33_Webhooks_-_Admin",
+      "_type": "request_group",
+      "parentId": "wrk_fluxapay_api",
+      "name": "Webhooks - Admin",
+      "description": "",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": -33
+    },
+    {
+      "_id": "req_132__api_v1_webhooks_admin_retry-config_get",
+      "_type": "request",
+      "parentId": "fld_33_Webhooks_-_Admin",
+      "name": "Get webhook retry backoff configuration",
+      "description": "Get webhook retry backoff configuration.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/webhooks/admin/retry-config",
+      "headers": [
+        {
+          "name": "x-admin-secret",
+          "value": "{{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "fld_34_Webhooks___Admin",
+      "_type": "request_group",
+      "parentId": "wrk_fluxapay_api",
+      "name": "Webhooks — Admin",
+      "description": "",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": -34
+    },
+    {
+      "_id": "req_128__api_v1_webhooks_admin_dead-letter-queue_get",
+      "_type": "request",
+      "parentId": "fld_34_Webhooks___Admin",
+      "name": "List permanently failed webhooks (DLQ)",
+      "description": "List permanently failed webhooks (DLQ).",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/webhooks/admin/dead-letter-queue",
+      "headers": [
+        {
+          "name": "x-admin-secret",
+          "value": "{{ _.apiKey }}"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "merchant_id",
+          "value": "string",
+          "disabled": true
+        },
+        {
+          "name": "date_from",
+          "value": "2026-01-01T00:00:00Z",
+          "disabled": true
+        },
+        {
+          "name": "date_to",
+          "value": "2026-01-01T00:00:00Z",
+          "disabled": true
+        },
+        {
+          "name": "page",
+          "value": "1",
+          "disabled": true
+        },
+        {
+          "name": "limit",
+          "value": "10",
+          "disabled": true
+        }
+      ]
+    },
+    {
+      "_id": "req_129__api_v1_webhooks_admin_dead-letter-queue__log_id__requeue_post",
+      "_type": "request",
+      "parentId": "fld_34_Webhooks___Admin",
+      "name": "Requeue a permanently failed webhook for redelivery",
+      "description": "Requeue a permanently failed webhook for redelivery.",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/v1/webhooks/admin/dead-letter-queue/{{ _.log_id }}/requeue",
+      "headers": [
+        {
+          "name": "x-admin-secret",
+          "value": "{{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    },
+    {
+      "_id": "req_130__api_v1_webhooks_admin_logs_get",
+      "_type": "request",
+      "parentId": "fld_34_Webhooks___Admin",
+      "name": "Get webhook logs list across all merchants",
+      "description": "Get webhook logs list across all merchants.",
+      "method": "GET",
+      "url": "{{ _.baseUrl }}/api/v1/webhooks/admin/logs",
+      "headers": [
+        {
+          "name": "x-admin-secret",
+          "value": "{{ _.apiKey }}"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "merchant_id",
+          "value": "string",
+          "disabled": true
+        },
+        {
+          "name": "event_type",
+          "value": "string",
+          "disabled": true
+        },
+        {
+          "name": "status",
+          "value": "string",
+          "disabled": true
+        },
+        {
+          "name": "date_from",
+          "value": "2026-01-01T00:00:00Z",
+          "disabled": true
+        },
+        {
+          "name": "date_to",
+          "value": "2026-01-01T00:00:00Z",
+          "disabled": true
+        },
+        {
+          "name": "search",
+          "value": "string",
+          "disabled": true
+        },
+        {
+          "name": "page",
+          "value": "1",
+          "disabled": true
+        },
+        {
+          "name": "limit",
+          "value": "10",
+          "disabled": true
+        }
+      ]
+    },
+    {
+      "_id": "req_131__api_v1_webhooks_admin_logs__log_id__retry_post",
+      "_type": "request",
+      "parentId": "fld_34_Webhooks___Admin",
+      "name": "Retry a webhook across any merchant",
+      "description": "Retry a webhook across any merchant.",
+      "method": "POST",
+      "url": "{{ _.baseUrl }}/api/v1/webhooks/admin/logs/{{ _.log_id }}/retry",
+      "headers": [
+        {
+          "name": "x-admin-secret",
+          "value": "{{ _.apiKey }}"
+        }
+      ],
+      "parameters": []
+    }
+  ]
+}

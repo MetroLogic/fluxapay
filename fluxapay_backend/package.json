@@ -12,6 +12,8 @@
     "test:integration": "jest --runInBand --testPathPattern=src/__tests__/integration",
     "test:contract": "jest --runInBand src/__tests__/contract",
     "validate:openapi": "ts-node scripts/validate-openapi-spec.ts",
+    "generate:api-collections": "node -r ts-node/register ../scripts/generate-api-collections.ts",
+    "check:api-collections": "node -r ts-node/register ../scripts/generate-api-collections.ts --check",
     "check:route-coverage": "ts-node scripts/check-route-coverage.ts",
     "check:route-coverage:ci": "ts-node scripts/check-route-coverage.ts --ci"
   },
