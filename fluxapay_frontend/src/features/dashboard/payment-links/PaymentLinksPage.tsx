@@ -28,6 +28,8 @@ export function PaymentLinksPage() {
   const [description, setDescription] = useState("");
   const [expiry, setExpiry] = useState("");
   const [maxUses, setMaxUses] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const [showQR, setShowQR] = useState<PaymentLink | null>(null);
@@ -40,11 +42,13 @@ export function PaymentLinksPage() {
     setLoading(true);
     setLoadError(null);
     try {
-      const res = await fetch("/api/links");
+      const res = await fetch("/api/v1/payment-links");
       if (!res.ok) throw new Error("Failed to load payment links");
       setLinks(await res.json());
-    } catch (e) {
-      setLoadError(e instanceof Error ? e.message : "Failed to load payment links");
+    } catch (error) {
+      setLoadError(
+        error instanceof Error ? error.message : "Failed to load payment links",
+      );
       setLinks([]);
     } finally {
       setLoading(false);
@@ -59,7 +63,7 @@ export function PaymentLinksPage() {
     e.preventDefault();
     if (!label || !amount) return;
     setCreating(true);
-    const res = await fetch("/api/links", {
+    const res = await fetch("/api/v1/payment-links", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -85,12 +89,12 @@ export function PaymentLinksPage() {
 
   async function handleDelete(id: string) {
     if (!confirm("Delete this payment link?")) return;
-    await fetch(`/api/links/${id}`, { method: "DELETE" });
+    await fetch(`/api/v1/payment-links/${id}`, { method: "DELETE" });
     void load();
   }
 
   async function handleToggle(id: string) {
-    await fetch(`/api/links/${id}`, { method: "PATCH" });
+    await fetch(`/api/v1/payment-links/${id}`, { method: "PATCH" });
     void load();
   }
 
@@ -125,7 +129,7 @@ export function PaymentLinksPage() {
 
   async function handleSaveEdit() {
     if (!editingLink) return;
-    await fetch(`/api/links/${editingLink.id}`, {
+    await fetch(`/api/v1/payment-links/${editingLink.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
