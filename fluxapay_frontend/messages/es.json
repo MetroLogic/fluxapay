@@ -275,7 +275,19 @@
       "close": "Cerrar",
       "timerExpired": "Expirado",
       "timerExpiredAria": "El temporizador de pago expiró",
-      "timeRemainingAria": "Tiempo restante: {minutes} minutos y {seconds} segundos"
+      "timeRemainingAria": "Tiempo restante: {minutes} minutos y {seconds} segundos",
+      "statusAwaiting": "Esperando el pago",
+      "statusAwaitingDescription": "Envía el importe exacto a la dirección de abajo. Lo detectaremos automáticamente.",
+      "statusConfirming": "Pago detectado — confirmando",
+      "statusConfirmingDescription": "Hemos detectado tu pago en la cadena de bloques y estamos esperando la confirmación.",
+      "statusUnderpaid": "Pago insuficiente recibido",
+      "statusUnderpaidDescription": "Recibimos menos del importe total. Envía los {amount} {currency} restantes para completar tu pago.",
+      "statusOverpaid": "Pago excedente recibido",
+      "statusOverpaidDescription": "Recibimos más del importe solicitado. Tu pago ha sido aceptado.",
+      "statusUpdating": "Actualizaciones en vivo activadas",
+      "statusPolling": "Comprobando actualizaciones cada pocos segundos",
+      "statusAnnouncement": "Estado del pago: {status}",
+      "redirectingIn": "Redirigiendo en {seconds}s…"
     }
   },
   "auth": {
