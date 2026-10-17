@@ -4,6 +4,7 @@ import { useCallback, useState } from 'react';
 import { RevenueByCountryChart } from '@/features/analytics/components/RevenueByCountryChart';
 import { PaymentMethodsChart } from '@/features/analytics/components/PaymentMethodsChart';
 import { RevenueTrendsChart } from '@/features/analytics/components/RevenueTrendsChart';
+import { RevenueComparisonSection } from '@/features/analytics/components/RevenueComparisonSection';
 import { useDashboardAnalytics } from '@/hooks/useDashboardAnalytics';
 import { useDashboardDateRange, DashboardDateRangeProvider } from '@/features/dashboard/context/DashboardDateRangeContext';
 import { DateRangePicker } from '@/features/dashboard/components/overview/DateRangePicker';
@@ -223,6 +224,12 @@ function AnalyticsContent() {
                         : <PaymentMethodsChart data={paymentDistribution} />}
                 </div>
             </div>
+
+            <RevenueComparisonSection
+                from={dateRange.from}
+                to={dateRange.to}
+                current={{ summary, revenueTrends }}
+            />
 
             {/* Revenue by Country */}
             <div className="rounded-xl border bg-card p-6 shadow-sm">

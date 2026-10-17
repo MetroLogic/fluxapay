@@ -320,6 +320,20 @@ model KYCDocument {
   updated_at    DateTime     @updatedAt
 }
 
+model SanctionsScreening {
+  id          String    @id @default(cuid())
+  merchantId  String
+  kycId       String
+  provider    String
+  status      String // CLEAR | SANCTIONS_REVIEW_REQUIRED | FALSE_POSITIVE
+  matches     Json?
+  resolved_by String?
+  resolved_at DateTime?
+  created_at  DateTime  @default(now())
+
+  @@index([merchantId, created_at])
+}
+
 model WebhookLog {
   id              String                @id @default(cuid())
   merchant        Merchant              @relation(fields: [merchantId], references: [id])

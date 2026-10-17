@@ -8,6 +8,7 @@ import {
 } from "../utils/checkout-branding.util";
 import { countryMap } from "../utils/country-map.util";
 import bcrypt from "bcrypt";
+import { assertSafeWebhookUrl } from "../utils/webhookUrlSsrf.util";
 import { createOtp, verifyOtp as verifyOtpService } from "./otp.service";
 import { sendOtpEmail } from "./email.service";
 import { sendMerchantOtpSms } from "./smsOtp.service";
@@ -335,6 +336,7 @@ export async function updateMerchantWebhookService(data: {
   webhook_url: string;
 }) {
   const { merchantId, webhook_url } = data;
+  await assertSafeWebhookUrl(webhook_url);
   await prisma.merchant.update({
     where: { id: merchantId },
     data: { webhook_url },
