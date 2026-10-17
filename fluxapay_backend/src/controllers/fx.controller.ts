@@ -7,13 +7,16 @@ import { getAllCachedFxRates } from "../services/exchange.service";
 export async function getFxRates(req: Request, res: Response) {
   try {
     const currency = (req.query.currency as string) || "USD";
-    const rate = await FxService.getUSDCExchangeRate(currency);
+    const { rate, stale } = await FxService.getUSDCExchangeRateWithMeta(currency);
 
     res.status(200).json({
       data: {
         base_currency: currency.toUpperCase(),
         target_currency: "USDC",
         rate: rate,
+        // True when served from a stale cache or the hardcoded fallback, so
+        // clients (e.g. the checkout FX preview, #1255) can flag the estimate.
+        stale,
       },
     });
   } catch (error: any) {

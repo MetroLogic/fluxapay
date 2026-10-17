@@ -18,7 +18,7 @@ import {
   CheckoutBrandingShell,
   DEFAULT_ACCENT,
 } from '@/components/checkout/CheckoutBrandingShell';
-import { FiatEquivalent } from '@/components/checkout/FiatEquivalent';
+import { FxConversionPreview } from '@/components/checkout/FxConversionPreview';
 import { CopyField } from '@/components/checkout/CopyField';
 import { sanitizeRedirectUrl } from '@/lib/safeUrl';
 
@@ -387,7 +387,7 @@ export default function CheckoutPage() {
               <p className="text-3xl font-bold text-gray-900 sm:text-4xl">
                 {payment.amount} {payment.currency}
               </p>
-              <FiatEquivalent usdcAmount={payment.amount} />
+              <FxConversionPreview usdcAmount={payment.amount} />
               {payment.description && (
                 <p className="mt-2 text-sm text-gray-500">{payment.description}</p>
               )}

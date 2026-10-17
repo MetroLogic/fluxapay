@@ -35,7 +35,9 @@ export function FiatEquivalent({ usdcAmount, fiatCurrency = 'USD' }: FiatEquival
       if ('error' in result) return;
 
       const rateData = result.data;
-      const equivalent = usdcAmount * rateData.rate;
+      // `rate` is USDC per 1 unit of fiat, so fiat = USDC / rate.
+      if (!(rateData.rate > 0)) return;
+      const equivalent = usdcAmount / rateData.rate;
       const noDecimals = ['JPY', 'KRW', 'VND', 'CLP', 'ISK'];
       const fractionDigits = noDecimals.includes(fiatCurrency.toUpperCase()) ? 0 : 2;
 

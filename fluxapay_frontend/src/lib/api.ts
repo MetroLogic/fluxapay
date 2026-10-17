@@ -1119,6 +1119,8 @@ export const api = {
       currency: string;
       due_date: string;
       notes?: string;
+      /** Tax percentage (0–100); the backend computes tax and total. */
+      tax_rate?: number;
     }) =>
       fetchWithAuth<Record<string, unknown>>("/api/v1/invoices", {
         method: "POST",

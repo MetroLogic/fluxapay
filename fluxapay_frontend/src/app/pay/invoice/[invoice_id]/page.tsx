@@ -7,7 +7,7 @@ import { CheckoutBrandingShell, DEFAULT_ACCENT } from '@/components/checkout/Che
 import { PaymentQRCode } from '@/components/checkout/PaymentQRCode';
 import { PaymentTimer } from '@/components/checkout/PaymentTimer';
 import { StellarPayButton } from '@/components/checkout/StellarPayButton';
-import { FiatEquivalent } from '@/components/checkout/FiatEquivalent';
+import { FxConversionPreview } from '@/components/checkout/FxConversionPreview';
 import { api } from '@/lib/api';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
@@ -195,7 +195,7 @@ export default function InvoicePaymentPage() {
                   <p className="text-3xl font-bold" style={{ color: 'var(--checkout-accent)' }}>
                     {invoice.total_amount.toLocaleString(undefined, { minimumFractionDigits: 2 })} {invoice.currency}
                   </p>
-                  <FiatEquivalent usdcAmount={invoice.total_amount} />
+                  <FxConversionPreview usdcAmount={invoice.total_amount} />
                 </div>
               </div>
 

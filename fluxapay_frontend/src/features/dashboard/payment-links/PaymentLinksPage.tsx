@@ -15,8 +15,9 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { PaymentLink } from "@/lib/links";
-import { QRCodeSVG } from "qrcode.react";
 import toast from "react-hot-toast";
+import { copyText } from "@/lib/clipboard";
+import { PaymentLinkQRModal } from "./PaymentLinkQRModal";
 
 export function PaymentLinksPage() {
   const [links, setLinks] = useState<PaymentLink[]>([]);
@@ -31,6 +32,7 @@ export function PaymentLinksPage() {
   const [creating, setCreating] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const [showQR, setShowQR] = useState<PaymentLink | null>(null);
+  const [qrJustCreated, setQrJustCreated] = useState(false);
   const [editingLink, setEditingLink] = useState<PaymentLink | null>(null);
   const [editDescription, setEditDescription] = useState("");
   const [editExpiry, setEditExpiry] = useState("");
@@ -79,6 +81,7 @@ export function PaymentLinksPage() {
     setExpiry("");
     setMaxUses("");
     setCreating(false);
+    setQrJustCreated(true);
     setShowQR(newLink);
     void load();
   }
@@ -94,11 +97,18 @@ export function PaymentLinksPage() {
     void load();
   }
 
-  function copyLink(slug: string) {
-    const url = `${window.location.origin}/api/links/${slug}/click`;
-    navigator.clipboard.writeText(url);
+  function linkUrl(slug: string) {
+    return `${window.location.origin}/api/links/${slug}/click`;
+  }
+
+  async function copyLink(slug: string) {
+    const ok = await copyText(linkUrl(slug));
+    if (!ok) {
+      toast.error("Couldn't copy automatically — open the QR view to copy the link.");
+      return;
+    }
     setCopied(slug);
-    toast.success("Link copied to clipboard");
+    toast.success("Copied to clipboard!");
     setTimeout(() => setCopied(null), 2000);
   }
 
@@ -107,7 +117,7 @@ export function PaymentLinksPage() {
     if (navigator.share) {
       void navigator.share({ title: label, url });
     } else {
-      copyLink(slug);
+      void copyLink(slug);
     }
   }
 
@@ -239,46 +249,20 @@ export function PaymentLinksPage() {
         </div>
       )}
 
-      {/* QR Code Modal */}
+      {/* QR Code Modal (#1253) */}
       {showQR && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="w-full max-w-sm rounded-lg bg-white p-4 sm:p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold">Payment Link Created</h3>
-              <button
-                onClick={() => setShowQR(null)}
-                className="p-1 hover:bg-gray-100 rounded"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="flex flex-col items-center gap-4">
-              <div className="bg-white p-4 rounded-lg border">
-                <QRCodeSVG
-                  value={`${window.location.origin}/api/links/${showQR.slug}/click`}
-                  size={200}
-                />
-              </div>
-              <div className="w-full">
-                <p className="text-sm text-gray-600 mb-1">Shareable URL:</p>
-                <div className="flex min-w-0 gap-2">
-                  <input
-                    type="text"
-                    readOnly
-                    value={`${window.location.origin}/api/links/${showQR.slug}/click`}
-                    className="w-full min-w-0 rounded border bg-gray-50 px-3 py-2 text-sm"
-                  />
-                  <button
-                    onClick={() => copyLink(showQR.slug)}
-                    className="shrink-0 rounded bg-primary px-3 py-2 text-white hover:bg-primary/90"
-                  >
-                    Copy
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <PaymentLinkQRModal
+          isOpen
+          onClose={() => {
+            setShowQR(null);
+            setQrJustCreated(false);
+          }}
+          url={linkUrl(showQR.slug)}
+          label={showQR.label}
+          slug={showQR.slug}
+          amountText={`$${showQR.amount.toFixed(2)} ${showQR.currency}`}
+          justCreated={qrJustCreated}
+        />
       )}
 
       {/* Edit Modal */}
@@ -423,7 +407,7 @@ export function PaymentLinksPage() {
                 <button onClick={() => shareLink(link.slug, link.label)} aria-label={`Share link for ${link.label}`} title="Share link" className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
                   <ExternalLink className="h-4 w-4" />
                 </button>
-                <button onClick={() => setShowQR(link)} aria-label={`Show QR code for ${link.label}`} title="Show QR code" className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+                <button onClick={() => { setQrJustCreated(false); setShowQR(link); }} aria-label={`Show QR code for ${link.label}`} title="Show QR code" className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
                   <QrCode className="h-4 w-4" />
                 </button>
                 <button onClick={() => openEditModal(link)} aria-label={`Edit ${link.label}`} title="Edit" className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
