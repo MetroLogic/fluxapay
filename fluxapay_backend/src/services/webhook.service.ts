@@ -6,9 +6,9 @@ import crypto from "crypto";
 import { webhookEventTypes } from "../schemas/webhook.schema";
 import { normalizeEventName, toLegacyEventName } from "../utils/webhook-event-mapping.util";
 import { trackWebhookDelivery } from "../middleware/metrics.middleware";
+import { getWebhookBackoffConfig, computeJitteredBackoffMs } from "../utils/webhookBackoff";
 
-const MAX_AUTOMATIC_WEBHOOK_RETRIES = 3;
-const WEBHOOK_RETRY_BASE_DELAY_MS = 60_000;
+const MAX_AUTOMATIC_WEBHOOK_RETRIES = getWebhookBackoffConfig().maxRetries;
 
 /** Get webhook timestamp tolerance from environment (in seconds, default 5 minutes) */
 function getWebhookTimestampToleranceSeconds(): number {
@@ -428,7 +428,12 @@ export async function retryWebhookService(params: RetryWebhookParams) {
     },
   });
 
-  const delayMs = WEBHOOK_RETRY_BASE_DELAY_MS * 2 ** newRetryCount;
+  const delayMs = computeJitteredBackoffMs(newRetryCount);
+  if (newStatus === "retrying") {
+    console.log(
+      `[WebhookRetry] log=${log.id} attempt=${newRetryCount}/${retryLimit} next_backoff_ms=${delayMs}`,
+    );
+  }
   const nextRetryAt = newStatus === "retrying"
     ? new Date(Date.now() + delayMs)
     : null;
