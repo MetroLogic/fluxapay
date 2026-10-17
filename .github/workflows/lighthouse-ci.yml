@@ -5,6 +5,13 @@ on:
     branches:
       - main
       - develop
+    paths:
+      - "fluxapay_frontend/**"
+      - ".github/workflows/lighthouse-ci.yml"
+
+permissions:
+  contents: read
+  pull-requests: write
 
 jobs:
   lighthouse:
@@ -25,31 +32,36 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: './fluxapay_frontend/package-lock.json'
+          cache: 'pnpm'
+          cache-dependency-path: './fluxapay_frontend/pnpm-lock.yaml'
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Build Next.js app
-        run: npm run build
+        run: pnpm build
         env:
           # Disable Sentry source map upload for CI
           NEXT_SKIP_ENV_VALIDATION: true
 
       - name: Start Next.js app
-        run: npm run start &
+        run: pnpm start &
         env:
           NODE_ENV: production
 
       - name: Wait for app to be ready
         run: |
           for i in {1..30}; do
-            if curl -f http://localhost:3075 > /dev/null 2>&1; then
+            if curl -f http://localhost:3075/en/login > /dev/null 2>&1; then
               echo "App is ready"
               exit 0
             fi
@@ -59,13 +71,67 @@ jobs:
           echo "App failed to start"
           exit 1
 
+      - name: Seed dashboard auth in Lighthouse browser profile
+        run: node scripts/prepare-lighthouse-profile.mjs
+
       - name: Run Lighthouse CI
+        id: lighthouse
         uses: treosh/lighthouse-ci-action@v10
         with:
           configPath: './fluxapay_frontend/lighthouserc.json'
           uploadArtifacts: true
           temporaryPublicStorage: true
           runs: 3
+
+      - name: Comment audit scores on pull request
+        if: always() && github.event.pull_request.head.repo.full_name == github.repository
+        uses: actions/github-script@v7
+        env:
+          LIGHTHOUSE_OUTCOME: ${{ steps.lighthouse.outcome }}
+        with:
+          script: |
+            const fs = require('fs');
+            const path = 'fluxapay_frontend/.lighthouseci/manifest.json';
+            const marker = '<!-- lighthouse-ci-score-summary -->';
+            const thresholds = { performance: 80, accessibility: 90, 'best-practices': 90 };
+            let body = `${marker}\n## Lighthouse audit\n`;
+
+            if (fs.existsSync(path)) {
+              const manifest = JSON.parse(fs.readFileSync(path, 'utf8'));
+              const runs = manifest.filter((entry) => entry.isRepresentativeRun && entry.summary);
+              if (runs.length) {
+                body += '\n| Page | Performance | Accessibility | Best Practices |\n| --- | ---: | ---: | ---: |\n';
+                for (const run of runs) {
+                  const score = (name) => Math.round((run.summary[name] ?? 0) * 100);
+                  body += `| ${run.url} | ${score('performance')}% | ${score('accessibility')}% | ${score('best-practices')}% |\n`;
+                }
+                const failures = runs.flatMap((run) =>
+                  Object.entries(thresholds)
+                    .filter(([name, minimum]) => (run.summary[name] ?? 0) * 100 < minimum)
+                    .map(([name, minimum]) => `${run.url}: ${name} below ${minimum}%`),
+                );
+                body += failures.length
+                  ? `\n**Thresholds not met:** ${failures.join('; ')}.\n`
+                  : '\nAll configured score thresholds were met.\n';
+              } else {
+                body += '\nLighthouse did not produce representative score results. Check the workflow run for details.\n';
+              }
+            } else {
+              body += '\nLighthouse did not produce a report. Check the workflow run for build or audit errors.\n';
+            }
+
+            body += `\nWorkflow result: **${process.env.LIGHTHOUSE_OUTCOME || 'unknown'}**.`;
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner, repo, issue_number, per_page: 100,
+            });
+            const previous = comments.find((comment) => comment.body?.includes(marker));
+            if (previous) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: previous.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }
 
       - name: Upload Lighthouse results
         if: always()
@@ -74,3 +140,4 @@ jobs:
           name: lighthouse-results
           path: './fluxapay_frontend/.lighthouseci/'
           retention-days: 30
+          if-no-files-found: warn

@@ -18,4 +18,5 @@ export interface AuthRequest extends Request {
    */
   isTestMode?: boolean;
   requestId?: string;
+  correlationId?: string;
 }

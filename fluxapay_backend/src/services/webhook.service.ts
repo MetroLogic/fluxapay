@@ -5,6 +5,7 @@ import { prisma } from "../config/prisma";
 import crypto from "crypto";
 import { webhookEventTypes } from "../schemas/webhook.schema";
 import { normalizeEventName, toLegacyEventName } from "../utils/webhook-event-mapping.util";
+import { getCorrelationId } from "../utils/requestContext";
 import { trackWebhookDelivery } from "../middleware/metrics.middleware";
 
 const MAX_AUTOMATIC_WEBHOOK_RETRIES = 3;
@@ -101,6 +102,7 @@ export class WebhookDispatcher {
           'Content-Type': 'application/json',
           'X-FluxaPay-Signature': signature,
           'X-FluxaPay-Timestamp': timestamp,
+          ...(getCorrelationId() ? { 'X-Correlation-ID': getCorrelationId() } : {}),
         },
         body: payload,
       });
@@ -803,6 +805,7 @@ export async function deliverWebhook(
         "Content-Type": "application/json",
         "X-FluxaPay-Signature": signature,
         "X-FluxaPay-Timestamp": timestamp,
+        ...(getCorrelationId() ? { "X-Correlation-ID": getCorrelationId() } : {}),
       },
       body,
       signal: controller.signal,
