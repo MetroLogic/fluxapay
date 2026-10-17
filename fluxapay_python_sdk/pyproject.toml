@@ -32,6 +32,9 @@ dev = [
     "respx>=0.21",
 ]
 
+[project.scripts]
+fluxapay = "fluxapay.cli:main"
+
 [project.urls]
 Homepage = "https://github.com/MetroLogic/fluxapay"
 Repository = "https://github.com/MetroLogic/fluxapay"
