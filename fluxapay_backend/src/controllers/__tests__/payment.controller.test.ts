@@ -374,7 +374,9 @@ function makeCheckoutPayment(overrides: Partial<Parameters<typeof buildPublicChe
 
 describe("buildPublicCheckoutDto — DTO shape and PII safety", () => {
   it("should include all whitelisted public fields", () => {
-    const dto = buildPublicCheckoutDto(makeCheckoutPayment());
+    const dto = buildPublicCheckoutDto(
+      makeCheckoutPayment({ metadata: { order_id: "order-123" } }),
+    );
 
     expect(dto).toMatchObject({
       id: "pay_test_123",
@@ -386,6 +388,7 @@ describe("buildPublicCheckoutDto — DTO shape and PII safety", () => {
       cancelUrl: "https://merchant.com/cancel",
       merchantName: "Test Store",
       description: "Test payment",
+      metadata: { order_id: "order-123" },
       checkoutLogoUrl: "https://cdn.example.com/logo.png",
     });
     expect(typeof dto.expiresAt).toBe("string");

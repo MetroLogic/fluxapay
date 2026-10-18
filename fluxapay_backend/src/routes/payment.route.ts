@@ -14,7 +14,9 @@ import {
   getPublicCheckoutPaymentStatus,
   getPaymentSettlement,
 } from '../controllers/payment.controller';
-import { validatePayment, validateUpdatePayment } from '../validators/payment.validator';
+import { validateUpdatePayment } from '../validators/payment.validator';
+import { createPaymentSchema } from '../schemas/payment.schema';
+import { validate } from '../middleware/validation.middleware';
 import { authenticateApiKey } from '../middleware/apiKeyAuth.middleware';
 import { merchantApiKeyRateLimit } from '../middleware/rateLimit.middleware';
 import { idempotencyMiddleware } from '../middleware/idempotency.middleware';
@@ -217,7 +219,7 @@ router.get('/checkout/:id/stream', (_req, res) => {
 router.get('/checkout/:id/status', getPublicCheckoutPaymentStatus);
 router.get('/checkout/:id', getPublicCheckoutPayment);
 
-router.post('/', authenticateApiKey, kycGateMiddleware, merchantApiKeyRateLimit(), idempotencyMiddleware, validatePayment, createPayment);
+router.post('/', authenticateApiKey, kycGateMiddleware, merchantApiKeyRateLimit(), idempotencyMiddleware, validate(createPaymentSchema), createPayment);
 
 /**
  * @swagger

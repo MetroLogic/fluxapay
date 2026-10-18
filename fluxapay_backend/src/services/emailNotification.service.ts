@@ -6,7 +6,11 @@
  */
 
 import { eventBus, AppEvents } from './EventService';
-import { sendPaymentConfirmationEmail, PaymentConfirmationDetails } from './email.service';
+import {
+  sendPaymentConfirmationEmail,
+  PaymentConfirmationDetails,
+  sendPartialPaymentEmail,
+} from './email.service';
 import { PrismaClient } from '../generated/client/client';
 
 import { prisma } from "../config/prisma";
@@ -17,8 +21,35 @@ import { prisma } from "../config/prisma";
 export function initializeEmailNotifications() {
   // Listen for payment confirmation events
   eventBus.on(AppEvents.PAYMENT_CONFIRMED, handlePaymentConfirmed);
+  eventBus.on(AppEvents.PAYMENT_PARTIAL_RECEIVED, handlePartialPaymentReceived);
 
   console.log('[EmailNotification] Email notification service initialized');
+}
+
+async function handlePartialPaymentReceived(payment: any) {
+  if (!payment.customer_email) {
+    console.warn(`[EmailNotification] No customer email for partial payment ${payment.id}`);
+    return;
+  }
+
+  try {
+    await sendPartialPaymentEmail(
+      payment.customer_email,
+      payment.merchant?.business_name || "the merchant",
+      {
+        payment_id: payment.id,
+        expected_amount: payment.amount.toString(),
+        amount_received: payment.amountReceived.toString(),
+        remaining_balance: payment.remainingBalance.toString(),
+        currency: payment.currency,
+      },
+    );
+  } catch (error) {
+    console.error(
+      `[EmailNotification] Failed to send partial payment email for payment ${payment.id}:`,
+      error,
+    );
+  }
 }
 
 /**

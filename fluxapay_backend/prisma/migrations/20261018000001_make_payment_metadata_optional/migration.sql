@@ -1,0 +1,2 @@
+ALTER TABLE "Payment"
+ALTER COLUMN "metadata" DROP NOT NULL;

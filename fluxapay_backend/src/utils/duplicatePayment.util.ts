@@ -15,6 +15,36 @@ export interface DuplicatePaymentAnalysis {
   surplusAmount: Decimal;
 }
 
+export interface PaymentReceiptProgress {
+  amountReceived: Decimal;
+  remainingBalance: Decimal;
+  status: "pending" | "partially_paid" | "confirmed" | "overpaid";
+  verified: boolean;
+}
+
+export function calculatePaymentReceiptProgress(
+  expectedAmount: Decimal,
+  amountReceived: Decimal,
+): PaymentReceiptProgress {
+  const remainingBalance = expectedAmount.minus(amountReceived);
+
+  if (amountReceived.gte(expectedAmount)) {
+    return {
+      amountReceived,
+      remainingBalance: new Decimal(0),
+      status: amountReceived.gt(expectedAmount) ? "overpaid" : "confirmed",
+      verified: true,
+    };
+  }
+
+  return {
+    amountReceived,
+    remainingBalance,
+    status: amountReceived.gt(0) ? "partially_paid" : "pending",
+    verified: false,
+  };
+}
+
 /**
  * Analyze matched on-chain receipts for duplicate payment detection.
  */
@@ -30,7 +60,7 @@ export function analyzeDuplicatePayments(
   const transactionHashes = matchedPayments.map((tx) => tx.transactionHash);
 
   return {
-    hasDuplicate: matchedPayments.length > 1,
+    hasDuplicate: matchedPayments.length > 1 && surplusAmount.gt(0),
     transactionHashes,
     totalReceived,
     expectedAmount,

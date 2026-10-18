@@ -336,6 +336,48 @@ export async function sendPaymentConfirmationEmail(
   }
 }
 
+export interface PartialPaymentDetails {
+  payment_id: string;
+  expected_amount: string;
+  amount_received: string;
+  remaining_balance: string;
+  currency: string;
+}
+
+export async function sendPartialPaymentEmail(
+  to: string,
+  businessName: string,
+  details: PartialPaymentDetails,
+) {
+  try {
+    await sendIfNotSuppressed(to, async () => {
+      await getEmailProvider().sendEmail({
+        from: process.env.MAIL_FROM || "noreply@fluxapay.com",
+        to,
+        subject: `Payment incomplete - ${escapeHtml(details.remaining_balance)} ${escapeHtml(details.currency)} remaining`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2>Payment Partially Received</h2>
+            <p>Your payment to ${escapeHtml(businessName)} is incomplete.</p>
+            <div style="background: #fff8e1; border-left: 4px solid #f59e0b; padding: 16px; border-radius: 4px; margin: 16px 0;">
+              <p><strong>Invoice amount:</strong> ${escapeHtml(details.expected_amount)} ${escapeHtml(details.currency)}</p>
+              <p><strong>Amount received:</strong> ${escapeHtml(details.amount_received)} ${escapeHtml(details.currency)}</p>
+              <p><strong>Remaining balance:</strong> ${escapeHtml(details.remaining_balance)} ${escapeHtml(details.currency)}</p>
+              <p><strong>Payment ID:</strong> <span style="font-family: monospace;">${escapeHtml(details.payment_id)}</span></p>
+            </div>
+            <p>Please send the remaining balance before the payment session expires.</p>
+            <p>— The FluxaPay Team</p>
+            ${buildUnsubscribeFooter(to)}
+          </div>
+        `,
+      });
+    });
+  } catch (err) {
+    if (isDevEnv()) console.error("Error sending partial payment email:", err);
+    throw err;
+  }
+}
+
 export async function sendInvoiceEmail(
   to: string,
   invoiceNumber: string,

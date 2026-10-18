@@ -1,12 +1,12 @@
 /**
  * paymentExpiry.service.ts
  *
- * Scheduled job: find all payments with status=pending and expiration < now,
- * transition them to "expired", and fire a payment_failed webhook per product spec.
+ * Scheduled job: find all active payments past expiration,
+ * transition them to "expired", and fire a payment.expired webhook.
  *
  * Idempotency:
- *  - Uses a CronLock row (job_name="payment_expiry") to prevent concurrent runs.
- *  - Each payment is updated with a WHERE clause that guards status="pending",
+ *  - Uses a conditional CronLock lease to prevent concurrent runs.
+ *  - Each payment is updated with a WHERE clause that guards its active status,
  *    so re-runs on already-expired rows are no-ops.
  *  - Webhook delivery uses a stable event_id (payment_id + ":expired") so
  *    createAndDeliverWebhook skips re-delivery if already sent.
@@ -33,47 +33,34 @@ const LOCK_TTL_MS = 5 * 60 * 1000; // 5 minutes — matches default cron interva
  * The TTL ensures that if the lock holder crashes, the lock will auto-expire
  * and allow another instance to acquire it after the TTL window.
  * 
- * Crash resilience:
- *  - If process crashes while holding lock, DB row persists but expires_at < now
- *  - Next instance to run will detect expired lock and take over
- *  - Lock is re-read after upsert to prevent race condition (two instances think they own it)
+ * The conditional upsert makes acquisition atomic across worker instances.
  */
 async function acquireLock(lockedBy: string, ttlSeconds: number): Promise<boolean> {
   if (!Number.isInteger(ttlSeconds) || ttlSeconds <= 0) {
     throw new Error(`Invalid TTL: ${ttlSeconds}. Must be positive integer (seconds).`);
   }
 
-  const ttlMs = ttlSeconds * 1000;
   const now = new Date();
   try {
-    await prisma.cronLock.upsert({
-      where: { job_name: LOCK_NAME },
-      create: {
-        job_name: LOCK_NAME,
-        locked_at: now,
-        expires_at: new Date(now.getTime() + ttlMs),
-        locked_by: lockedBy,
-      },
-      update: {
-        // Only take the lock if the existing one has expired
-        locked_at: now,
-        expires_at: new Date(now.getTime() + ttlMs),
-        locked_by: lockedBy,
-      },
-    });
-
-    // Re-read to confirm we own it (handles race between two instances)
-    const lock = await prisma.cronLock.findUnique({ where: { job_name: LOCK_NAME } });
-    return lock?.locked_by === lockedBy && lock.expires_at > now;
+    const expiresAt = new Date(now.getTime() + ttlSeconds * 1000);
+    const acquired = await prisma.$executeRaw`
+      INSERT INTO "CronLock" (job_name, locked_at, expires_at, locked_by)
+      VALUES (${LOCK_NAME}, ${now}, ${expiresAt}, ${lockedBy})
+      ON CONFLICT (job_name) DO UPDATE
+        SET locked_at = ${now}, expires_at = ${expiresAt}, locked_by = ${lockedBy}
+        WHERE "CronLock".expires_at < ${now}
+    `;
+    return acquired === 1;
   } catch {
     return false;
   }
 }
 
-async function releaseLock(): Promise<void> {
-  await prisma.cronLock
-    .delete({ where: { job_name: LOCK_NAME } })
-    .catch(() => {/* already gone — fine */});
+async function releaseLock(lockedBy: string): Promise<void> {
+  await prisma.$executeRaw`
+    DELETE FROM "CronLock"
+    WHERE job_name = ${LOCK_NAME} AND locked_by = ${lockedBy}
+  `.catch(() => {/* already gone — fine */});
 }
 
 export interface PaymentExpiryResult {
@@ -98,10 +85,12 @@ export async function runPaymentExpiryJob(): Promise<PaymentExpiryResult> {
   try {
     const now = new Date();
 
-    // Find all pending payments past their expiration in one query
+    const activeStatuses = [PaymentStatus.PENDING, PaymentStatus.PARTIALLY_PAID];
+
+    // Find pending and partially paid payments past their expiration in one query
     const expiredPayments = await prisma.payment.findMany({
       where: {
-        status: PaymentStatus.PENDING,
+        status: { in: activeStatuses },
         expiration: { lt: now },
       },
       select: {
@@ -124,9 +113,9 @@ export async function runPaymentExpiryJob(): Promise<PaymentExpiryResult> {
     console.log(`[PaymentExpiry] Found ${expiredPayments.length} expired payment(s). Processing...`);
 
     for (const payment of expiredPayments) {
-      // Idempotent update: only transitions rows still in "pending"
+      // Idempotent update: only transitions rows still active
       const updated = await prisma.payment.updateMany({
-        where: { id: payment.id, status: PaymentStatus.PENDING },
+        where: { id: payment.id, status: { in: activeStatuses } },
         data: { status: PaymentStatus.EXPIRED },
       });
 
@@ -173,7 +162,7 @@ export async function runPaymentExpiryJob(): Promise<PaymentExpiryResult> {
       `${result.webhookErrors.length} webhook error(s).`,
     );
   } finally {
-    await releaseLock();
+    await releaseLock(lockedBy);
   }
 
   return result;

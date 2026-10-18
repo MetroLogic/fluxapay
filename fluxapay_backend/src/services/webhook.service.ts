@@ -87,6 +87,7 @@ export class WebhookDispatcher {
         currency: payment.currency,
         status: payment.status,
         transaction_hash: payment.transaction_hash,
+        metadata: payment.metadata ?? {},
       }
     });
 
@@ -1149,6 +1150,20 @@ async function deliverWebhookEvent(
     return existing;
   }
 
+  const linkedPaymentId =
+    paymentId ??
+    payload.payment_id ??
+    payload.charge_id ??
+    payload.data?.payment_id ??
+    payload.data?.charge_id;
+  const linkedPayment =
+    typeof linkedPaymentId === "string"
+      ? await prisma.payment.findUnique({
+          where: { id: linkedPaymentId },
+          select: { metadata: true },
+        })
+      : null;
+
   // Embed event_id and timestamp in the outgoing payload so merchants can
   // deduplicate and apply replay-protection on their side.
   const deliveryTimestamp = new Date().toISOString();
@@ -1157,6 +1172,7 @@ async function deliverWebhookEvent(
     event_id: resolvedEventId,
     timestamp: deliveryTimestamp,
     ...payload,
+    ...(linkedPayment && { metadata: linkedPayment.metadata ?? {} }),
   };
 
   // Atomic claim: the unique index on event_id is the source of truth for

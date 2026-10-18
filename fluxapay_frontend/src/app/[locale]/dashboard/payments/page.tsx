@@ -218,6 +218,20 @@ function PaymentsContent() {
     setDrawerPayment(null);
   }, []);
 
+  const handleRefundSuccess = useCallback(
+    (paymentId: string, status: "partially_refunded" | "refunded") => {
+      setPayments((current) =>
+        current.map((payment) =>
+          payment.id === paymentId ? { ...payment, status } : payment,
+        ),
+      );
+      setDrawerPayment((current) =>
+        current?.id === paymentId ? { ...current, status } : current,
+      );
+    },
+    [],
+  );
+
   const handleExport = (format: MerchantExportFormat) => {
     if (format === "csv") {
       setIsExportModalOpen(true);
@@ -443,6 +457,7 @@ function PaymentsContent() {
         payment={drawerPayment}
         isOpen={isDrawerOpen}
         onClose={handleCloseDrawer}
+        onRefundSuccess={handleRefundSuccess}
       />
 
       <ExportTransactionsModal

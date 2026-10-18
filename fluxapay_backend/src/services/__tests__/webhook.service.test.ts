@@ -14,10 +14,11 @@ jest.mock("../../generated/client/client", () => {
   const webhookCount = jest.fn();
   const retryAttemptCreate = jest.fn();
   const paymentUpdate = jest.fn();
+  const paymentFindUnique = jest.fn();
   return {
     PrismaClient: jest.fn(() => ({
       merchant: { findUnique },
-      payment: { update: paymentUpdate },
+      payment: { update: paymentUpdate, findUnique: paymentFindUnique },
       webhookLog: {
         create: webhookCreate,
         update: webhookUpdate,
@@ -38,6 +39,7 @@ const mockMerchant = {
   findUnique: mockPrismaInstance.merchant.findUnique as jest.Mock,
   payment: {
     update: mockPrismaInstance.payment.update as jest.Mock,
+    findUnique: mockPrismaInstance.payment.findUnique as jest.Mock,
   },
   webhookLog: mockPrismaInstance.webhookLog as {
     create: jest.Mock;
@@ -55,6 +57,7 @@ const originalFetch = global.fetch;
 describe("webhook.service", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockMerchant.payment.findUnique.mockResolvedValue(null);
   });
 
   afterAll(() => {
@@ -192,6 +195,37 @@ describe("webhook.service", () => {
 
     const sentBody = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
     expect(sentBody.event_id).toBe(stableEventId);
+  });
+
+  it("includes persisted payment metadata in payment webhook payloads", async () => {
+    mockMerchant.findUnique.mockResolvedValueOnce({
+      id: "metadata-merchant",
+      webhook_url: "https://example.com/hook",
+      webhook_secret: "metadata-secret",
+    });
+    mockMerchant.webhookLog.findUnique.mockResolvedValueOnce(null);
+    mockMerchant.payment.findUnique.mockResolvedValueOnce({
+      metadata: { order_id: "order-123", customer_reference: 42 },
+    });
+    mockMerchant.webhookLog.create.mockResolvedValue({ id: "metadata-log" });
+    mockMerchant.webhookLog.update.mockResolvedValue({});
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: () => Promise.resolve("OK"),
+    });
+
+    await createAndDeliverWebhook(
+      "metadata-merchant",
+      "payment_confirmed" as any,
+      { payment_id: "payment-metadata-123", status: "confirmed" },
+    );
+
+    const sentBody = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+    expect(sentBody.metadata).toEqual({
+      order_id: "order-123",
+      customer_reference: 42,
+    });
   });
 
   it("should skip delivery and return existing log when event_id already delivered", async () => {
@@ -382,6 +416,7 @@ describe("WebhookDispatcher.sendPaymentWebhook", () => {
       amount: 100,
       currency: "USDC",
       transaction_hash: "tx_hash_123",
+      metadata: { order_id: "order-123" },
     } as any;
 
     const merchant = {
@@ -399,6 +434,7 @@ describe("WebhookDispatcher.sendPaymentWebhook", () => {
 
     // Verify signature was generated with merchant-specific secret
     const sentBody = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+    expect(sentBody.data.metadata).toEqual({ order_id: "order-123" });
     const ts = capturedHeaders["X-FluxaPay-Timestamp"] as string;
     const expectedSig = generateWebhookSignature(sentBody, merchantSecret, ts);
     expect(capturedHeaders["X-FluxaPay-Signature"]).toBe(expectedSig);

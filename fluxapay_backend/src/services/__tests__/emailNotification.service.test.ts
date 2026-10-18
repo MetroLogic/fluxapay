@@ -29,6 +29,7 @@ jest.mock("../../config/prisma", () => ({
 
 jest.mock("../../services/email.service", () => ({
   sendPaymentConfirmationEmail: jest.fn().mockResolvedValue(undefined),
+  sendPartialPaymentEmail: jest.fn().mockResolvedValue(undefined),
 }));
 
 // Capture the handler so the listener can be driven directly. Using a jest.fn()
@@ -41,6 +42,7 @@ jest.mock("../../services/EventService", () => ({
     PAYMENT_UPDATED: "payment.updated",
     PAYMENT_EXPIRED: "payment.expired",
     PAYMENT_PARTIALLY_PAID: "payment.partially_paid",
+    PAYMENT_PARTIAL_RECEIVED: "payment.partial_received",
     PAYMENT_OVERPAID: "payment.overpaid",
   },
   eventBus: { on: (...args: unknown[]) => mockEventOn(...args) },
@@ -49,7 +51,10 @@ jest.mock("../../services/EventService", () => ({
 // ── Imports (after mocks) ─────────────────────────────────────────────────────
 
 import { initializeEmailNotifications } from "../../services/emailNotification.service";
-import { sendPaymentConfirmationEmail } from "../../services/email.service";
+import {
+  sendPaymentConfirmationEmail,
+  sendPartialPaymentEmail,
+} from "../../services/email.service";
 import { AppEvents } from "../../services/EventService";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -95,6 +100,15 @@ function registerHandler(): PaymentHandler {
   return call[1] as PaymentHandler;
 }
 
+function registerPartialPaymentHandler(): PaymentHandler {
+  initializeEmailNotifications();
+  const call = mockEventOn.mock.calls.find(
+    ([event]) => event === AppEvents.PAYMENT_PARTIAL_RECEIVED,
+  );
+  if (!call) throw new Error("handler was not registered for PAYMENT_PARTIAL_RECEIVED");
+  return call[1] as PaymentHandler;
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
   mockMerchantFindUnique.mockResolvedValue(optedInMerchant());
@@ -118,7 +132,44 @@ describe("initializeEmailNotifications", () => {
     initializeEmailNotifications();
 
     const events = mockEventOn.mock.calls.map(([event]) => event);
-    expect(events).toEqual([AppEvents.PAYMENT_CONFIRMED]);
+    expect(events).toEqual([
+      AppEvents.PAYMENT_CONFIRMED,
+      AppEvents.PAYMENT_PARTIAL_RECEIVED,
+    ]);
+  });
+});
+
+describe("handlePartialPaymentReceived", () => {
+  it("emails the customer with the remaining balance", async () => {
+    const handler = registerPartialPaymentHandler();
+    const payment = makePayment({
+      customer_email: "customer@example.com",
+      amountReceived: { toString: () => "15" },
+      remainingBalance: { toString: () => "10" },
+      merchant: { business_name: "Acme Trading" },
+    });
+
+    await handler(payment);
+
+    expect(sendPartialPaymentEmail).toHaveBeenCalledWith(
+      "customer@example.com",
+      "Acme Trading",
+      {
+        payment_id: "pay_123",
+        expected_amount: "25.0000000",
+        amount_received: "15",
+        remaining_balance: "10",
+        currency: "USDC",
+      },
+    );
+  });
+
+  it("does not send when the payment has no customer email", async () => {
+    const handler = registerPartialPaymentHandler();
+
+    await handler(makePayment({ customer_email: null }));
+
+    expect(sendPartialPaymentEmail).not.toHaveBeenCalled();
   });
 });
 

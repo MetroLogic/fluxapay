@@ -28,6 +28,7 @@ FluxaPay sends the following canonical event names in the `event` field:
 | `payment.created` | A payment is created |
 | `payment.pending` | A payment is awaiting funds |
 | `payment.confirmed` | An on-chain payment is confirmed |
+| `payment.partial_received` | An incoming deposit leaves an outstanding payment balance |
 | `payment.failed` | A payment fails |
 | `payment.expired` | A payment expires before completion |
 | `payment.expiring_soon` | A pending payment is nearing expiration |
@@ -48,6 +49,7 @@ Older integrations may still specify these legacy event names; FluxaPay maps the
 |-------------|---------------|
 | `payment_completed` | `payment.settled` |
 | `payment_confirmed` | `payment.confirmed` |
+| `payment_partial_received` | `payment.partial_received` |
 | `payment_failed` | `payment.failed` |
 | `payment_expired` | `payment.expired` |
 | `payment_expiring_soon` | `payment.expiring_soon` |
@@ -64,6 +66,8 @@ Older integrations may still specify these legacy event names; FluxaPay maps the
 ## Event Payloads
 
 Each delivery includes `event`, `event_id`, and `timestamp`. The remaining fields depend on the event and are sent at the top level; some existing payment events group their event-specific fields under `data`. Amounts are decimal strings in live payment events.
+
+Payment event payloads also include the payment's `metadata` object, when present, so merchants can correlate webhook events with the customer-provided references attached during payment creation.
 
 For example, a confirmed payment may look like:
 
@@ -86,6 +90,7 @@ For example, a confirmed payment may look like:
 |--------------|-----------------------|
 | `payment.created`, `payment.pending`, `payment.failed` | `payment_id`, `amount`, `currency`, `status`; `customer_email` and `failure_reason` may also be present |
 | `payment.confirmed` | `payment_id`, `amount`, `amount_received`, `currency`, `status`, `transaction_hash`, `payer_address` |
+| `payment.partial_received` | `payment_id`, `amount_expected`, `amount_received`, `remaining_balance`, `currency`, `status`, `transaction_hash`, `payer_address` |
 | `payment.expired` | `data.charge_id`, `data.merchant_id`, `data.amount`, `data.currency`, `data.expired_at` |
 | `payment.expiring_soon` | `payment_id`, `checkout_url`, `expires_at`, `minutes_remaining` |
 | `payment.settled` | `payment_id`, `merchant_id`, `settlement_id`, `settlement`, `settled_at` |

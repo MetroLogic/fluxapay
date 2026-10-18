@@ -15,7 +15,7 @@ const envSchema = z.object({
     BASE_URL: z.string().url().default('http://localhost:3000'),
     PAY_CHECKOUT_BASE: z.string().url().optional(),
     PAYMENT_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(5),
-    PAYMENT_METADATA_MAX_BYTES: z.coerce.number().int().positive().default(16384),
+    PAYMENT_METADATA_MAX_BYTES: z.coerce.number().int().positive().default(2048),
     PAYMENT_METADATA_MAX_DEPTH: z.coerce.number().int().positive().default(5),
     /** Maximum JSON request body size accepted by express.json(). Default: "1mb". */
     REQUEST_BODY_SIZE_LIMIT: z.string().default("1mb"),

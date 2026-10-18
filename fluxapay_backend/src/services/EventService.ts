@@ -9,6 +9,7 @@ export enum AppEvents {
     PAYMENT_UPDATED = "payment.updated",
     PAYMENT_EXPIRED = "payment.expired",
     PAYMENT_PARTIALLY_PAID = "payment.partially_paid",
+    PAYMENT_PARTIAL_RECEIVED = "payment.partial_received",
     PAYMENT_OVERPAID = "payment.overpaid",
     DASHTBOARD_REFRESH = "dashboard.refresh",
     REFUND_CREATED = "refund.created",

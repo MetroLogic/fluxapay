@@ -1,12 +1,12 @@
 import { Router } from "express";
 import { createPayment } from "../controllers/payment.controller";
-import { validatePayment } from "../validators/payment.validator";
 import { authenticateApiKey } from "../middleware/apiKeyAuth.middleware";
 import { merchantApiKeyRateLimit } from "../middleware/rateLimit.middleware";
 import { redisIdempotencyMiddleware } from "../middleware/redisIdempotency.middleware";
 import { createRefund, listRefunds } from "../controllers/refund.controller";
 import { validate, validateQuery } from "../middleware/validation.middleware";
 import { createRefundSchema, listRefundsQuerySchema } from "../schemas/refund.schema";
+import { createPaymentSchema } from "../schemas/payment.schema";
 
 const router = Router();
 
@@ -49,7 +49,7 @@ router.post(
   authenticateApiKey,
   merchantApiKeyRateLimit(),
   redisIdempotencyMiddleware,
-  validatePayment,
+  validate(createPaymentSchema),
   createPayment
 );
 

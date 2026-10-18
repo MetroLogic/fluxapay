@@ -14,7 +14,7 @@ transition, and which downstream actions follow.
 | Status               | Description                                                                                           |
 |----------------------|-------------------------------------------------------------------------------------------------------|
 | `pending`            | Payment created; awaiting USDC deposit from the customer.                                             |
-| `partially_paid`     | A deposit has been received but it is less than the required USDC amount.                             |
+| `partially_paid`     | Cumulative deposits are below the required USDC amount; the remaining balance can be paid before expiry. |
 | `confirmed`          | Full USDC amount received and verified on-chain. Settlement processing begins.                        |
 | `overpaid`           | More USDC than required was received. Excess handling is per merchant configuration.                  |
 | `expired`            | Payment window (15 min default) elapsed without sufficient funds received.                            |
@@ -92,7 +92,7 @@ Polling and SSE connections close once a terminal state is reached.
 | → `failed`                | `payment.failed`              |
 | → `completed`             | `payment.settled`             |
 | → `expired`               | `payment.expired`             |
-| → `partially_paid`        | `payment.partially_paid`      |
+| Partial deposit received  | `payment.partial_received`    |
 | → `overpaid`              | `payment.overpaid` *(if configured)* |
 
 ---
