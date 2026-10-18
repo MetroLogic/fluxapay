@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Payment, WebhookLogEntry, StatusHistoryEntry } from "./types";
+import type { Payment, WebhookLogEntry, StatusHistoryEntry } from "./types";
 import { Badge } from "@/components/Badge";
 import { Button } from "@/components/Button";
 import { TxHashLink } from "@/components/TxHashLink";
@@ -20,15 +20,21 @@ import {
   LayoutDashboard,
   ChevronDown,
   ChevronUp,
+  RotateCcw,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
+import { RefundModal } from "./RefundModal";
 
 interface PaymentDrawerProps {
   payment: Payment | null;
   isOpen: boolean;
   onClose: () => void;
+  onRefundSuccess: (
+    paymentId: string,
+    status: "partially_refunded" | "refunded",
+  ) => void;
 }
 
 function StatusBadgeInline({ status }: { status: string }) {
@@ -53,6 +59,10 @@ function StatusBadgeInline({ status }: { status: string }) {
       return <Badge variant="error">Failed</Badge>;
     case "expired":
       return <Badge variant="secondary">Expired</Badge>;
+    case "partially_refunded":
+      return <Badge variant="warning">Partially Refunded</Badge>;
+    case "refunded":
+      return <Badge variant="secondary">Refunded</Badge>;
     default:
       return <Badge>{status}</Badge>;
   }
@@ -173,11 +183,17 @@ function WebhookLogRow({ log }: { log: WebhookLogEntry }) {
   );
 }
 
-export function PaymentDrawer({ payment, isOpen, onClose }: PaymentDrawerProps) {
+export function PaymentDrawer({
+  payment,
+  isOpen,
+  onClose,
+  onRefundSuccess,
+}: PaymentDrawerProps) {
   const router = useRouter();
   const [webhookLogs, setWebhookLogs] = useState<WebhookLogEntry[]>([]);
   const [webhookLoading, setWebhookLoading] = useState(false);
   const [statusHistory, setStatusHistory] = useState<StatusHistoryEntry[]>([]);
+  const [isRefundModalOpen, setIsRefundModalOpen] = useState(false);
 
   const copyToClipboard = useCallback(async (text: string) => {
     try {
@@ -244,15 +260,21 @@ export function PaymentDrawer({ payment, isOpen, onClose }: PaymentDrawerProps) 
   // Close on Escape
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape" && !isRefundModalOpen) onClose();
     };
     if (isOpen) {
       document.addEventListener("keydown", handleEscape);
       return () => document.removeEventListener("keydown", handleEscape);
     }
-  }, [isOpen, onClose]);
+  }, [isOpen, isRefundModalOpen, onClose]);
 
   if (!isOpen || !payment) return null;
+
+  const canIssueRefund =
+    ["confirmed", "overpaid", "paid", "completed", "partially_refunded"].includes(
+      payment.status,
+    ) &&
+    (payment.currency === "USDC" || payment.currency === "XLM");
 
   const fiatDisplay =
     payment.fiatEquivalent != null && payment.fiatCurrency
@@ -474,6 +496,16 @@ export function PaymentDrawer({ payment, isOpen, onClose }: PaymentDrawerProps) 
 
           {/* View Detailed Page */}
           <div className="pt-2">
+            {canIssueRefund && (
+              <Button
+                className="mb-3 w-full gap-2"
+                variant="outline"
+                onClick={() => setIsRefundModalOpen(true)}
+              >
+                <RotateCcw className="h-4 w-4" />
+                Issue Refund
+              </Button>
+            )}
             <Button
               className="w-full gap-2"
               variant="default"
@@ -489,6 +521,12 @@ export function PaymentDrawer({ payment, isOpen, onClose }: PaymentDrawerProps) 
           </div>
         </div>
       </aside>
+      <RefundModal
+        isOpen={isRefundModalOpen}
+        payment={payment}
+        onClose={() => setIsRefundModalOpen(false)}
+        onSuccess={(status) => onRefundSuccess(payment.id, status)}
+      />
     </>
   );
 }
