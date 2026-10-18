@@ -22,7 +22,11 @@ import { paymentContractService } from "./paymentContract.service";
 import { getLogger, getMetricsCollector } from "../utils/logger";
 import { createAndDeliverWebhook } from "./webhook.service";
 import { markInvoicePaidForPaymentService } from "./invoice.service";
-import { analyzeDuplicatePayments, MatchedStellarPayment } from "../utils/duplicatePayment.util";
+import {
+  analyzeDuplicatePayments,
+  calculatePaymentReceiptProgress,
+  MatchedStellarPayment,
+} from "../utils/duplicatePayment.util";
 import {parseHorizonMemo, resolveMemoMatchMode, validateMemoMatch } from "../utils/oracleMemo.util";
 import { isSorobanVerificationEnabled } from "../utils/sorobanVerification.util";
 import { getSorobanHealthStatus } from "./SorobanService";
@@ -100,6 +104,7 @@ interface PaymentVerification {
    */
   previousStatus: string;
   matchedPayments: MatchedStellarPayment[];
+  newlyReceivedPayments: MatchedStellarPayment[];
   hasDuplicatePayment: boolean;
   surplusAmount: Decimal;
 }
@@ -245,6 +250,7 @@ async function verifyPayment(payment: Payment): Promise<PaymentVerification> {
 
     const transactions = await paymentsQuery.call();
     let latestPagingToken = payment.last_paging_token;
+    let hasPagingToken = false;
     const matchedPayments: MatchedStellarPayment[] = [];
     let latestTxHash: string | undefined;
     let latestPayer: string | undefined;
@@ -257,8 +263,9 @@ async function verifyPayment(payment: Payment): Promise<PaymentVerification> {
 
     // Process transactions to find valid USDC payments
     for (const record of transactions.records) {
-      if (record.paging_token) {
+      if (record.paging_token && !hasPagingToken) {
         latestPagingToken = record.paging_token;
+        hasPagingToken = true;
       }
 
       if (record.type === "payment" || record.type === "create_account") {
@@ -270,12 +277,6 @@ async function verifyPayment(payment: Payment): Promise<PaymentVerification> {
           paymentRecord.asset_issuer === usdcAsset.issuer &&
           paymentRecord.to === address
         ) {
-          matchedPayments.push({
-            transactionHash: paymentRecord.transaction_hash,
-            amount: new Decimal(paymentRecord.amount),
-            payer: paymentRecord.from,
-            pagingToken: record.paging_token,
-          });
           const txHash = paymentRecord.transaction_hash as string | undefined;
           if (!txHash) {
             continue;
@@ -324,34 +325,66 @@ async function verifyPayment(payment: Payment): Promise<PaymentVerification> {
             });
           }
 
-          latestTxHash = txHash;
-          latestPayer = paymentRecord.from;
-          break;
+          matchedPayments.push({
+            transactionHash: txHash,
+            amount: new Decimal(paymentRecord.amount),
+            payer: paymentRecord.from,
+            pagingToken: record.paging_token,
+          });
+          if (!latestTxHash) {
+            latestTxHash = txHash;
+            latestPayer = paymentRecord.from;
+          }
         }
       }
     }
 
-    // Persist all matched transactions for reconciliation
-    for (const matched of matchedPayments) {
-      await prisma.paymentReceivedTransaction.upsert({
-        where: {
-          paymentId_transaction_hash: {
+    const existingReceipts = matchedPayments.length > 0
+      ? await prisma.paymentReceivedTransaction.findMany({
+          where: {
             paymentId: payment.id,
-            transaction_hash: matched.transactionHash,
+            transaction_hash: {
+              in: matchedPayments.map((matched) => matched.transactionHash),
+            },
           },
-        },
-        create: {
+          select: { transaction_hash: true },
+        })
+      : [];
+    const existingHashes = new Set(existingReceipts.map((receipt) => receipt.transaction_hash));
+    let newlyReceivedPayments: MatchedStellarPayment[] = [];
+
+    if (matchedPayments.length > 0) {
+      const inserted = await prisma.paymentReceivedTransaction.createMany({
+        data: matchedPayments.map((matched) => ({
           paymentId: payment.id,
           transaction_hash: matched.transactionHash,
           amount: matched.amount,
           payer_address: matched.payer,
-        },
-        update: {},
+        })),
+        skipDuplicates: true,
       });
+      if (inserted.count > 0) {
+        newlyReceivedPayments = matchedPayments.filter(
+          (matched) => !existingHashes.has(matched.transactionHash),
+        );
+      }
     }
 
-    const duplicateAnalysis = analyzeDuplicatePayments(expectedAmount, matchedPayments);
-    const latestTx = matchedPayments[0];
+    const receiptRows = await prisma.paymentReceivedTransaction.findMany({
+      where: { paymentId: payment.id },
+      select: {
+        transaction_hash: true,
+        amount: true,
+        payer_address: true,
+      },
+    });
+    const allReceivedPayments: MatchedStellarPayment[] = receiptRows.map((receipt) => ({
+      transactionHash: receipt.transaction_hash,
+      amount: receipt.amount,
+      payer: receipt.payer_address ?? undefined,
+    }));
+    const duplicateAnalysis = analyzeDuplicatePayments(expectedAmount, allReceivedPayments);
+    const latestTx = matchedPayments[0] ?? allReceivedPayments[0];
     if (!latestTxHash) {
       latestTxHash = latestTx?.transactionHash;
     }
@@ -359,11 +392,17 @@ async function verifyPayment(payment: Payment): Promise<PaymentVerification> {
       latestPayer = latestTx?.payer;
     }
 
-    const actualAmount = duplicateAnalysis.totalReceived.gt(0)
-      ? duplicateAnalysis.totalReceived
-      : usdcBalance
-        ? new Decimal(usdcBalance.balance)
-        : new Decimal(0);
+    let actualAmount = duplicateAnalysis.totalReceived;
+    if (actualAmount.eq(0)) {
+      if (payment.amountReceived.gt(0)) {
+        actualAmount = payment.amountReceived;
+      } else if (payment.paid_amount?.gt(0)) {
+        actualAmount = payment.paid_amount;
+      } else if (usdcBalance) {
+        actualAmount = new Decimal(usdcBalance.balance);
+      }
+    }
+    const progress = calculatePaymentReceiptProgress(expectedAmount, actualAmount);
 
     // Update paging token
     if (latestPagingToken !== payment.last_paging_token) {
@@ -375,19 +414,8 @@ async function verifyPayment(payment: Payment): Promise<PaymentVerification> {
 
     // Determine payment status based on amount comparison
     const previousStatus = payment.status;
-    let status = payment.status;
-    let verified = false;
-
-    if (actualAmount.gte(expectedAmount)) {
-      if (actualAmount.gt(expectedAmount)) {
-        status = "overpaid";
-      } else {
-        status = "confirmed";
-      }
-      verified = true;
-    } else if (actualAmount.gt(0)) {
-      status = "partially_paid";
-    }
+    const status = progress.status === "pending" ? payment.status : progress.status;
+    const verified = progress.verified;
 
     return {
       paymentId: payment.id,
@@ -401,7 +429,8 @@ async function verifyPayment(payment: Payment): Promise<PaymentVerification> {
       verified,
       status,
       previousStatus,
-      matchedPayments,
+      matchedPayments: allReceivedPayments,
+      newlyReceivedPayments,
       hasDuplicatePayment: duplicateAnalysis.hasDuplicate,
       surplusAmount: duplicateAnalysis.surplusAmount,
     };
@@ -461,9 +490,14 @@ async function verifyPaymentOnChain(
  * Updates payment status in database and triggers webhooks
  */
 async function updatePaymentStatus(verification: PaymentVerification): Promise<void> {
+  const progress = calculatePaymentReceiptProgress(
+    verification.expectedAmount,
+    verification.actualAmount,
+  );
   const updateData: any = {
     status: verification.status,
     paid_amount: verification.actualAmount,
+    amountReceived: verification.actualAmount,
   };
 
   if (verification.transactionHash) {
@@ -487,6 +521,46 @@ async function updatePaymentStatus(verification: PaymentVerification): Promise<v
     actualAmount: verification.actualAmount.toString(),
     expectedAmount: verification.expectedAmount.toString(),
   });
+
+  if (
+    verification.status === "partially_paid" &&
+    verification.newlyReceivedPayments.length > 0
+  ) {
+    const partialPayment = {
+      ...updatedPayment,
+      amountReceived: verification.actualAmount,
+      remainingBalance: progress.remainingBalance,
+    };
+    eventBus.emit(AppEvents.PAYMENT_PARTIAL_RECEIVED, partialPayment);
+
+    for (const received of verification.newlyReceivedPayments) {
+      try {
+        await createAndDeliverWebhook(
+          updatedPayment.merchantId,
+          "payment_partial_received",
+          {
+            payment_id: updatedPayment.id,
+            amount_expected: verification.expectedAmount.toString(),
+            amount_received: verification.actualAmount.toString(),
+            remaining_balance: progress.remainingBalance.toString(),
+            currency: updatedPayment.currency,
+            status: verification.status,
+            transaction_hash: received.transactionHash,
+            payer_address: received.payer,
+          },
+          updatedPayment.id,
+          undefined,
+          `${updatedPayment.id}:partial_received:${received.transactionHash}`,
+        );
+      } catch (webhookError: any) {
+        logger.error("Partial payment webhook delivery failed", {
+          paymentId: verification.paymentId,
+          transactionHash: received.transactionHash,
+          error: webhookError.message,
+        });
+      }
+    }
+  }
 
   /**
    * True only when this verification actually moved the payment into a

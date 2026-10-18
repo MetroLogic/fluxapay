@@ -84,7 +84,9 @@ const PENDING_PAYMENT = {
 };
 
 function setupLock(owned = true) {
-  mockExecuteRaw.mockResolvedValueOnce(owned ? 1 : 0);
+  mockExecuteRaw
+    .mockResolvedValueOnce(owned ? 1 : 0)
+    .mockResolvedValue(undefined);
 }
 
 describe("runPaymentExpiryJob — webhook emission (issue #655)", () => {
@@ -162,7 +164,7 @@ describe("runPaymentExpiryJob — webhook emission (issue #655)", () => {
       return [PENDING_PAYMENT];
     });
     mockPaymentUpdateMany.mockImplementation(async ({ where, data }) => {
-      if (currentStatus !== where.status) {
+      if (!where.status.in.includes(currentStatus)) {
         return { count: 0 };
       }
       currentStatus = data.status;
@@ -177,6 +179,35 @@ describe("runPaymentExpiryJob — webhook emission (issue #655)", () => {
     expect(eventBus.emit).not.toHaveBeenCalledWith(
       AppEvents.PAYMENT_EXPIRED,
       expect.anything(),
+    );
+  });
+
+  it("expires a partially paid payment when its session window ends", async () => {
+    setupLock();
+    mockPaymentFindMany.mockResolvedValue([{
+      ...PENDING_PAYMENT,
+      id: "pay_partial_expiry",
+    }]);
+    mockPaymentUpdateMany.mockResolvedValue({ count: 1 });
+    mockCreateAndDeliverWebhook.mockResolvedValue({ id: "wh_log_partial_expiry" });
+
+    const result = await runPaymentExpiryJob();
+
+    expect(result.expired).toBe(1);
+    expect(mockPaymentFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          status: { in: ["pending", "partially_paid"] },
+        }),
+      }),
+    );
+    expect(mockPaymentUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: "pay_partial_expiry",
+          status: { in: ["pending", "partially_paid"] },
+        },
+      }),
     );
   });
 

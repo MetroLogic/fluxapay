@@ -10,6 +10,7 @@ export const webhookEventTypes = [
   'payment.expired',
   'payment.expiring_soon',
   'payment.settled',
+  'payment.partial_received',
   'payment.duplicate_received',
   // Refund events
   'refund.created',
@@ -28,6 +29,7 @@ export const webhookEventTypes = [
   'payment_failed',
   'payment_expired',
   'payment_expiring_soon',
+  'payment_partial_received',
   'payment_pending',
   'refund_completed',
   'refund_failed',

@@ -1,12 +1,12 @@
 /**
  * paymentExpiry.service.ts
  *
- * Scheduled job: find all payments with status=pending and expiration < now,
+ * Scheduled job: find all active payments past expiration,
  * transition them to "expired", and fire a payment.expired webhook.
  *
  * Idempotency:
  *  - Uses a conditional CronLock lease to prevent concurrent runs.
- *  - Each payment is updated with a WHERE clause that guards status="pending",
+ *  - Each payment is updated with a WHERE clause that guards its active status,
  *    so re-runs on already-expired rows are no-ops.
  *  - Webhook delivery uses a stable event_id (payment_id + ":expired") so
  *    createAndDeliverWebhook skips re-delivery if already sent.
@@ -85,10 +85,12 @@ export async function runPaymentExpiryJob(): Promise<PaymentExpiryResult> {
   try {
     const now = new Date();
 
-    // Find all pending payments past their expiration in one query
+    const activeStatuses = [PaymentStatus.PENDING, PaymentStatus.PARTIALLY_PAID];
+
+    // Find pending and partially paid payments past their expiration in one query
     const expiredPayments = await prisma.payment.findMany({
       where: {
-        status: PaymentStatus.PENDING,
+        status: { in: activeStatuses },
         expiration: { lt: now },
       },
       select: {
@@ -111,9 +113,9 @@ export async function runPaymentExpiryJob(): Promise<PaymentExpiryResult> {
     console.log(`[PaymentExpiry] Found ${expiredPayments.length} expired payment(s). Processing...`);
 
     for (const payment of expiredPayments) {
-      // Idempotent update: only transitions rows still in "pending"
+      // Idempotent update: only transitions rows still active
       const updated = await prisma.payment.updateMany({
-        where: { id: payment.id, status: PaymentStatus.PENDING },
+        where: { id: payment.id, status: { in: activeStatuses } },
         data: { status: PaymentStatus.EXPIRED },
       });
 

@@ -392,6 +392,7 @@ model Payment {
   expiration         DateTime
   status             PaymentStatus   @default(pending)
   paid_amount        Decimal?        @default(0)
+  amountReceived     Decimal          @default(0)
   last_seen_at       DateTime?
   checkout_url       String
   success_url        String?
@@ -682,6 +683,7 @@ enum WebhookEventType {
   payment_pending
   payment_expired
   payment_partially_paid
+  payment_partial_received
   payment_overpaid
   payment_settled
   refund_completed
