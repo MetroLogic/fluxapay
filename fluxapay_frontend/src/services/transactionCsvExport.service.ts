@@ -21,13 +21,23 @@ export interface TransactionExportFilters {
   amountMax?: string;
 }
 
-export type DateRangePreset = "all" | "7d" | "30d" | "90d" | "month" | "custom";
+export type DateRangePreset =
+  | "all"
+  | "today"
+  | "7d"
+  | "30d"
+  | "90d"
+  | "month"
+  | "ytd"
+  | "custom";
 
 export const DATE_RANGE_PRESETS: ReadonlyArray<{ value: DateRangePreset; label: string }> = [
+  { value: "today", label: "Today" },
   { value: "7d", label: "Last 7 days" },
   { value: "30d", label: "Last 30 days" },
   { value: "90d", label: "Last 90 days" },
   { value: "month", label: "This month" },
+  { value: "ytd", label: "Year to date" },
   { value: "all", label: "All time" },
   { value: "custom", label: "Custom" },
 ];
@@ -51,8 +61,12 @@ export function resolveDateRangePreset(
   const to = toDateInputValue(now);
 
   if (preset === "all") return { from: "", to: "" };
+  if (preset === "today") return { from: to, to };
   if (preset === "month") {
     return { from: toDateInputValue(new Date(now.getFullYear(), now.getMonth(), 1)), to };
+  }
+  if (preset === "ytd") {
+    return { from: toDateInputValue(new Date(now.getFullYear(), 0, 1)), to };
   }
   if (preset === "custom") return { from: "", to: "" };
 

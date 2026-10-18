@@ -275,7 +275,19 @@
       "close": "Fermer",
       "timerExpired": "Expiré",
       "timerExpiredAria": "Le délai de paiement a expiré",
-      "timeRemainingAria": "Temps restant : {minutes} minutes et {seconds} secondes"
+      "timeRemainingAria": "Temps restant : {minutes} minutes et {seconds} secondes",
+      "statusAwaiting": "En attente du paiement",
+      "statusAwaitingDescription": "Envoyez le montant exact à l'adresse ci-dessous. Nous le détecterons automatiquement.",
+      "statusConfirming": "Paiement détecté — confirmation",
+      "statusConfirmingDescription": "Nous avons détecté votre paiement sur la blockchain et attendons la confirmation.",
+      "statusUnderpaid": "Paiement insuffisant reçu",
+      "statusUnderpaidDescription": "Nous avons reçu moins que le montant total. Envoyez les {amount} {currency} restants pour finaliser votre paiement.",
+      "statusOverpaid": "Paiement excédentaire reçu",
+      "statusOverpaidDescription": "Nous avons reçu plus que le montant demandé. Votre paiement a été accepté.",
+      "statusUpdating": "Mises à jour en direct activées",
+      "statusPolling": "Vérification des mises à jour toutes les quelques secondes",
+      "statusAnnouncement": "Statut du paiement : {status}",
+      "redirectingIn": "Redirection dans {seconds} s…"
     }
   },
   "auth": {

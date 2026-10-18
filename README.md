@@ -164,3 +164,8 @@ We welcome contributions! Please read our [Contributing Guide](CONTRIBUTING.md) 
 - Setting up your development environment
 
 Join our community: https://t.me/+m23gN14007w0ZmQ0
+
+## Handsoff notes
+
+<!-- handsoff-issue-1310 -->
+- #1310: Implement automated database soft-delete cleanup worker for expired records

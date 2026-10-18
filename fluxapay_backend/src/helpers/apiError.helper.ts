@@ -8,63 +8,59 @@ export interface ApiErrorPayload {
   retryAfterSeconds?: number;
   details?: Record<string, unknown>;
   errors?: unknown[];
-  [key: string]: unknown;
 }
 
+/** Build a throwable API error object for use in services/controllers. */
 export function apiError(
   status: number,
-  code: ErrorCodeType | string = ErrorCode.INTERNAL_ERROR,
+  code: ErrorCodeType,
   message: string,
-  extras: Record<string, unknown> = {},
+  extras?: Pick<ApiErrorPayload, "retryAfterSeconds" | "details" | "errors">,
 ): ApiErrorPayload {
-  const resolvedCode = Object.values(ErrorCode).includes(code as ErrorCodeType)
-    ? (code as ErrorCodeType)
-    : ErrorCode.INTERNAL_ERROR;
-
-  const payload: ApiErrorPayload = {
-    status,
-    code: resolvedCode,
-    message,
-    ...extras,
-  };
-
-  if (typeof (extras as { retryAfterSeconds?: number }).retryAfterSeconds === "number") {
-    payload.retryAfterSeconds = (extras as { retryAfterSeconds?: number }).retryAfterSeconds;
-  }
-
-  return payload;
+  return { status, code, message, ...extras };
 }
 
-export function sendApiError(
-  res: Response,
-  payload: Partial<ApiErrorPayload> | { status?: number; code?: string; message?: string },
-): Response {
-  const status = typeof payload?.status === "number" ? payload.status : 500;
-  const code = payload?.code ?? ErrorCode.INTERNAL_ERROR;
-  const message = payload?.message ?? "Internal server error";
-  const retryAfterSeconds =
-    (payload as Partial<ApiErrorPayload>)?.retryAfterSeconds ??
-    (payload as Partial<ApiErrorPayload>)?.retry_after_seconds;
-
-  const response: Record<string, unknown> = {
-    code,
-    message,
-  };
-
-  for (const [key, value] of Object.entries(payload ?? {})) {
-    if (key === "status" || key === "code" || key === "message" || key === "retryAfterSeconds" || key === "retry_after_seconds") {
-      continue;
-    }
-    if (value !== undefined) {
-      response[key] = value;
-    }
+/** Normalize any thrown value into a structured API error payload. */
+export function resolveApiError(err: unknown): ApiErrorPayload {
+  if (err && typeof err === "object") {
+    const e = err as Partial<ApiErrorPayload> & {
+      message?: string;
+      status?: number;
+      code?: ErrorCodeType;
+    };
+    const status = e.status ?? 500;
+    const message = e.message ?? "Server error";
+    const code = e.code ?? ErrorCode.INTERNAL_ERROR;
+    return {
+      status,
+      code,
+      message,
+      ...(e.retryAfterSeconds != null
+        ? { retryAfterSeconds: e.retryAfterSeconds }
+        : {}),
+      ...(e.details ? { details: e.details } : {}),
+      ...(e.errors ? { errors: e.errors } : {}),
+    };
   }
+  return apiError(500, ErrorCode.INTERNAL_ERROR, "Server error");
+}
 
-  if (typeof retryAfterSeconds === "number") {
-    response.retry_after_seconds = retryAfterSeconds;
+/** Send a standardized JSON error response with required `code` field. */
+export function sendApiError(res: Response, err: unknown): Response {
+  const { status, code, message, retryAfterSeconds, details, errors } =
+    resolveApiError(err);
+
+  if ((status === 429 || status === 503) && retryAfterSeconds != null) {
     res.setHeader("Retry-After", String(retryAfterSeconds));
   }
 
-  res.status(status).json(response);
-  return res;
+  return res.status(status).json({
+    code,
+    message,
+    ...(details ? { details } : {}),
+    ...(errors ? { errors } : {}),
+    ...((status === 429 || status === 503) && retryAfterSeconds != null
+      ? { retry_after_seconds: retryAfterSeconds }
+      : {}),
+  });
 }
