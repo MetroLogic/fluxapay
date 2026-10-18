@@ -59,6 +59,7 @@ import { PrismaClient } from '../../generated/client/client';
 import { PaymentService } from '../payment.service';
 import { manualVerifyPayment } from '../paymentOracle.service';
 import { paymentSettlementService } from '../paymentSettlement.service';
+import { runPaymentExpiryJob } from '../paymentExpiry.service';
 import { eventBus, AppEvents } from '../EventService';
 
 const prisma = new PrismaClient();
@@ -264,5 +265,49 @@ describe('Payment Lifecycle - End-to-End Integration Test', () => {
       );
       expect(receivedSig).toBe(expectedSig);
     }
+  });
+
+  it('expires overdue pending payments and keeps unexpired pending payments active', async () => {
+    const overduePayment = await PaymentService.createPayment({
+      amount: 25,
+      currency: 'USD',
+      customer_email: 'overdue@example.com',
+      merchantId,
+      expires_in_seconds: 3600,
+    });
+    const activePayment = await PaymentService.createPayment({
+      amount: 40,
+      currency: 'USD',
+      customer_email: 'active@example.com',
+      merchantId,
+      expires_in_seconds: 3600,
+    });
+
+    await prisma.payment.update({
+      where: { id: overduePayment.id },
+      data: { expiration: new Date(Date.now() - 60_000) },
+    });
+    await prisma.cronLock.deleteMany({ where: { job_name: 'payment_expiry' } });
+    mockFetch.mockClear();
+
+    const result = await runPaymentExpiryJob();
+
+    expect(result).toMatchObject({ processed: 1, expired: 1, webhookErrors: [] });
+    const [expired, stillPending] = await Promise.all([
+      prisma.payment.findUnique({ where: { id: overduePayment.id } }),
+      prisma.payment.findUnique({ where: { id: activePayment.id } }),
+    ]);
+    expect(expired?.status).toBe('expired');
+    expect(stillPending?.status).toBe('pending');
+
+    const expiryWebhook = await prisma.webhookLog.findFirst({
+      where: {
+        merchantId,
+        payment_id: overduePayment.id,
+        event_type: 'payment_expired',
+      },
+    });
+    expect(expiryWebhook).not.toBeNull();
+    expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 });

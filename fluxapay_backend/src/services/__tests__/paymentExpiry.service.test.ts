@@ -17,19 +17,13 @@ import { AppEvents, eventBus } from "../EventService";
 jest.mock("../../generated/client/client", () => {
   const paymentFindMany = jest.fn();
   const paymentUpdateMany = jest.fn();
-  const cronLockUpsert = jest.fn();
-  const cronLockFindUnique = jest.fn();
-  const cronLockDelete = jest.fn();
+  const executeRaw = jest.fn();
   return {
     PrismaClient: jest.fn(() => ({
+      $executeRaw: executeRaw,
       payment: {
         findMany: paymentFindMany,
         updateMany: paymentUpdateMany,
-      },
-      cronLock: {
-        upsert: cronLockUpsert,
-        findUnique: cronLockFindUnique,
-        delete: cronLockDelete,
       },
     })),
   };
@@ -39,11 +33,9 @@ import { PrismaClient } from "../../generated/client/client";
 // Grab mock fn references from the singleton instance created when the module loaded
 const MockedPrisma = PrismaClient as jest.MockedClass<typeof PrismaClient>;
 const _prismaInstance = MockedPrisma.mock.results[0]!.value;
+const mockExecuteRaw = _prismaInstance.$executeRaw as jest.Mock;
 const mockPaymentFindMany = _prismaInstance.payment.findMany as jest.Mock;
 const mockPaymentUpdateMany = _prismaInstance.payment.updateMany as jest.Mock;
-const mockCronLockUpsert = _prismaInstance.cronLock.upsert as jest.Mock;
-const mockCronLockFindUnique = _prismaInstance.cronLock.findUnique as jest.Mock;
-const mockCronLockDelete = _prismaInstance.cronLock.delete as jest.Mock;
 
 // ─── Mock webhook.service ─────────────────────────────────────────────────────
 const mockCreateAndDeliverWebhook = jest.fn();
@@ -92,16 +84,7 @@ const PENDING_PAYMENT = {
 };
 
 function setupLock(owned = true) {
-  mockCronLockUpsert.mockResolvedValue({});
-  mockCronLockFindUnique.mockResolvedValue(
-    owned
-      ? {
-          locked_by: `${process.env.HOSTNAME ?? "app"}:${process.pid}`,
-          expires_at: new Date(Date.now() + 300_000),
-        }
-      : { locked_by: "other-instance:9999", expires_at: new Date(Date.now() + 300_000) }
-  );
-  mockCronLockDelete.mockResolvedValue({});
+  mockExecuteRaw.mockResolvedValueOnce(owned ? 1 : 0);
 }
 
 describe("runPaymentExpiryJob — webhook emission (issue #655)", () => {
@@ -245,6 +228,10 @@ describe("runPaymentExpiryJob — webhook emission (issue #655)", () => {
 
     const result = await runPaymentExpiryJob();
 
+    expect(mockExecuteRaw).toHaveBeenCalledTimes(1);
+    expect(mockExecuteRaw.mock.calls[0][0].join("?")).toContain(
+      'WHERE "CronLock".expires_at < ?',
+    );
     expect(result.processed).toBe(0);
     expect(result.expired).toBe(0);
     expect(mockPaymentFindMany).not.toHaveBeenCalled();
@@ -283,6 +270,8 @@ describe("runPaymentExpiryJob — webhook emission (issue #655)", () => {
       }),
     );
     expect(releaseAddress).toHaveBeenCalledWith(PENDING_PAYMENT.id);
+  });
+
   it("releases the distributed lock even when an unhandled exception occurs mid-job (#1071)", async () => {
     setupLock();
     // Simulate an unexpected failure partway through the job — e.g. a DB
@@ -293,6 +282,8 @@ describe("runPaymentExpiryJob — webhook emission (issue #655)", () => {
 
     // The lock must still be released (via the `finally` block) so the job
     // isn't stuck until the lock's TTL expires.
-    expect(mockCronLockDelete).toHaveBeenCalledWith({ where: { job_name: "payment_expiry" } });
+    expect(mockExecuteRaw).toHaveBeenCalledTimes(2);
+    expect(mockExecuteRaw.mock.calls[1][0].join("?")).toContain("DELETE FROM \"CronLock\"");
+    expect(mockExecuteRaw.mock.calls[1][2]).toBe(`${process.env.HOSTNAME ?? "app"}:${process.pid}`);
   });
 });
