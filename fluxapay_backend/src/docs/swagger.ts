@@ -88,7 +88,7 @@ const options: swaggerJsdoc.Options = {
                 },
                 CreatePaymentRequest: {
                     type: 'object',
-                    required: ['amount', 'currency', 'customer_email', 'metadata'],
+                    required: ['amount', 'currency', 'customer_email'],
                     properties: {
                         amount: { type: 'number', example: 120.5 },
                         currency: { type: 'string', example: 'USDC' },
@@ -107,7 +107,8 @@ const options: swaggerJsdoc.Options = {
                         metadata: {
                             type: 'object',
                             additionalProperties: true,
-                            example: { order_id: 'ord_001', webhook_url: 'https://merchant.tld/webhooks' },
+                            description: 'Optional customer metadata object. Its JSON-encoded size must not exceed 2048 bytes.',
+                            example: { order_id: 'ord_001', customer_reference: 'cust_123' },
                         },
                     },
                 },

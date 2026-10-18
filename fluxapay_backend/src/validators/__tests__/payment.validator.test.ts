@@ -3,9 +3,10 @@
  * Validates https URL enforcement, max-length constraints, and description limits.
  */
 
-import express, { Request, Response, NextFunction } from "express";
+import express, { Request, Response } from "express";
 import request from "supertest";
-import { validatePayment } from "../payment.validator";
+import { validate } from "../../middleware/validation.middleware";
+import { createPaymentSchema } from "../../schemas/payment.schema";
 
 // Minimal Express app that runs the validator chain then returns errors or 200.
 function makeApp() {
@@ -13,7 +14,7 @@ function makeApp() {
   app.use(express.json());
   app.post(
     "/payments",
-    ...validatePayment,
+    validate(createPaymentSchema),
     (_req: Request, res: Response) => {
       res.status(200).json({ ok: true });
     }
@@ -47,7 +48,7 @@ describe("validatePayment — success_url / cancel_url validation (Issue #443)",
     expect(res.status).toBe(400);
     expect(res.body.errors).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ path: "success_url" }),
+        expect.objectContaining({ field: "success_url" }),
       ])
     );
   });
@@ -60,7 +61,7 @@ describe("validatePayment — success_url / cancel_url validation (Issue #443)",
     expect(res.status).toBe(400);
     expect(res.body.errors).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ path: "cancel_url" }),
+        expect.objectContaining({ field: "cancel_url" }),
       ])
     );
   });
@@ -73,7 +74,7 @@ describe("validatePayment — success_url / cancel_url validation (Issue #443)",
     expect(res.status).toBe(400);
     expect(res.body.errors).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ path: "success_url" }),
+        expect.objectContaining({ field: "success_url" }),
       ])
     );
   });
@@ -87,7 +88,7 @@ describe("validatePayment — success_url / cancel_url validation (Issue #443)",
     expect(res.status).toBe(400);
     expect(res.body.errors).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ path: "success_url" }),
+        expect.objectContaining({ field: "success_url" }),
       ])
     );
   });
@@ -101,7 +102,7 @@ describe("validatePayment — success_url / cancel_url validation (Issue #443)",
     expect(res.status).toBe(400);
     expect(res.body.errors).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ path: "cancel_url" }),
+        expect.objectContaining({ field: "cancel_url" }),
       ])
     );
   });
@@ -131,7 +132,7 @@ describe("validatePayment — description validation (Issue #443)", () => {
     expect(res.status).toBe(400);
     expect(res.body.errors).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ path: "description" }),
+        expect.objectContaining({ field: "description" }),
       ])
     );
   });
@@ -147,5 +148,92 @@ describe("validatePayment — description validation (Issue #443)", () => {
   it("should allow omitting description (optional field)", async () => {
     const res = await request(app).post("/payments").send(VALID_BODY);
     expect(res.status).toBe(200);
+  });
+});
+
+describe("createPaymentSchema — metadata validation", () => {
+  const app = makeApp();
+
+  it("accepts an optional JSON metadata object", async () => {
+    const res = await request(app).post("/payments").send({
+      ...VALID_BODY,
+      metadata: {
+        order_id: "order-123",
+        customer: { reference: 42, tags: ["priority", "online"] },
+        opted_in: true,
+        note: null,
+      },
+    });
+    expect(res.status).toBe(200);
+  });
+
+  it.each(["not-an-object", [], null])("rejects metadata with invalid top-level type %p", async (metadata) => {
+    const res = await request(app).post("/payments").send({
+      ...VALID_BODY,
+      metadata,
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects non-JSON metadata values", () => {
+    const result = createPaymentSchema.safeParse({
+      ...VALID_BODY,
+      metadata: { value: BigInt(1) },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects metadata beyond the configured nesting depth", async () => {
+    const metadata = {
+      level1: {
+        level2: {
+          level3: {
+            level4: {
+              level5: "value",
+            },
+          },
+        },
+      },
+    };
+    const res = await request(app).post("/payments").send({
+      ...VALID_BODY,
+      metadata,
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field: "metadata",
+          message: expect.stringContaining("depth exceeds maximum"),
+        }),
+      ]),
+    );
+  });
+
+  it("accepts metadata exactly at the 2 KB JSON-encoded size limit", async () => {
+    const overhead = Buffer.byteLength(JSON.stringify({ value: "" }), "utf8");
+    const metadata = { value: "x".repeat(2048 - overhead) };
+    const res = await request(app).post("/payments").send({
+      ...VALID_BODY,
+      metadata,
+    });
+    expect(res.status).toBe(200);
+  });
+
+  it("rejects metadata exceeding the 2 KB JSON-encoded size limit", async () => {
+    const metadata = { value: "x".repeat(2048) };
+    const res = await request(app).post("/payments").send({
+      ...VALID_BODY,
+      metadata,
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field: "metadata",
+          message: expect.stringContaining("2048 bytes"),
+        }),
+      ]),
+    );
   });
 });

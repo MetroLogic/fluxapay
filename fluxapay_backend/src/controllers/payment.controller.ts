@@ -553,8 +553,8 @@ function memoFromMetadata(metadata: unknown): {
  *
  * Strict whitelist of fields safe to expose to unauthenticated payers.
  * Fields intentionally absent: merchantId, customerId, customer_email,
- * merchant API keys, internal DB indices, encrypted_key_data, metadata (raw),
- * payment_index, derivation_path, order_id.
+ * merchant API keys, internal DB indices, encrypted_key_data, payment_index,
+ * derivation_path, order_id.
  */
 export interface PublicCheckoutDto {
   id: string;
@@ -567,6 +567,7 @@ export interface PublicCheckoutDto {
   cancelUrl?: string;
   merchantName: string;
   description?: string;
+  metadata: unknown;
   checkoutLogoUrl?: string;
   checkoutAccentColor?: string;
   memo?: string;
@@ -609,6 +610,7 @@ export function buildPublicCheckoutDto(payment: {
     expiresAt: payment.expiration.toISOString(),
     status: payment.status,
     merchantName: payment.merchant.business_name,
+    metadata: payment.metadata ?? {},
   };
 
   if (payment.success_url != null) dto.successUrl = payment.success_url;

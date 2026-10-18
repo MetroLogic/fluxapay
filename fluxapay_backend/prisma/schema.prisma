@@ -388,7 +388,7 @@ model Payment {
   customer_email     String
   description        String?
   note               String?
-  metadata           Json
+  metadata           Json?
   expiration         DateTime
   status             PaymentStatus   @default(pending)
   paid_amount        Decimal?        @default(0)

@@ -67,6 +67,8 @@ Older integrations may still specify these legacy event names; FluxaPay maps the
 
 Each delivery includes `event`, `event_id`, and `timestamp`. The remaining fields depend on the event and are sent at the top level; some existing payment events group their event-specific fields under `data`. Amounts are decimal strings in live payment events.
 
+Payment event payloads also include the payment's `metadata` object, when present, so merchants can correlate webhook events with the customer-provided references attached during payment creation.
+
 For example, a confirmed payment may look like:
 
 ```json

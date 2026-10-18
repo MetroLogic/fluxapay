@@ -155,7 +155,7 @@ For reverse proxy deployments, see:
 
 Create payment metadata is now protected with configurable abuse controls:
 
-- `PAYMENT_METADATA_MAX_BYTES` (default: `16384`)
+- `PAYMENT_METADATA_MAX_BYTES` (default: `2048`, maximum: `2048`)
 - `PAYMENT_METADATA_MAX_DEPTH` (default: `5`)
 
 User-provided string fields in metadata are sanitized to strip HTML/script content before storage.

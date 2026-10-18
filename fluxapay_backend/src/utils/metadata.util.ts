@@ -1,8 +1,40 @@
 import sanitizeHtml from "sanitize-html";
 
-export const DEFAULT_METADATA_MAX_BYTES = 16 * 1024;
+export const MAX_PAYMENT_METADATA_BYTES = 2 * 1024;
+export const DEFAULT_METADATA_MAX_BYTES = MAX_PAYMENT_METADATA_BYTES;
 export const DEFAULT_METADATA_MAX_DEPTH = 5;
 export const DEFAULT_METADATA_MAX_KEYS = 50;
+
+export function getMetadataMaxDepth(): number {
+  return toPositiveInt(
+    process.env.PAYMENT_METADATA_MAX_DEPTH,
+    DEFAULT_METADATA_MAX_DEPTH,
+  );
+}
+
+export function hasMetadataDepthBeyondLimit(
+  value: unknown,
+  maxDepth: number,
+  depth = 1,
+): boolean {
+  if (depth > maxDepth) {
+    return true;
+  }
+
+  if (Array.isArray(value)) {
+    return value.some((item) =>
+      hasMetadataDepthBeyondLimit(item, maxDepth, depth + 1),
+    );
+  }
+
+  if (value && typeof value === "object") {
+    return Object.values(value as Record<string, unknown>).some((nestedValue) =>
+      hasMetadataDepthBeyondLimit(nestedValue, maxDepth, depth + 1),
+    );
+  }
+
+  return false;
+}
 
 export class MetadataValidationError extends Error {
   public readonly status = 400;
@@ -23,23 +55,10 @@ function toPositiveInt(value: string | undefined, fallback: number): number {
 }
 
 function assertDepth(value: unknown, maxDepth: number, depth = 1): void {
-  if (depth > maxDepth) {
+  if (hasMetadataDepthBeyondLimit(value, maxDepth, depth)) {
     throw new MetadataValidationError(
       `Metadata depth exceeds maximum of ${maxDepth}`,
     );
-  }
-
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      assertDepth(item, maxDepth, depth + 1);
-    }
-    return;
-  }
-
-  if (value && typeof value === "object") {
-    for (const nestedValue of Object.values(value as Record<string, unknown>)) {
-      assertDepth(nestedValue, maxDepth, depth + 1);
-    }
   }
 }
 
@@ -81,14 +100,11 @@ export function validateAndSanitizeMetadata(
     throw new MetadataValidationError("Metadata must be a JSON object");
   }
 
-  const maxBytes = toPositiveInt(
-    process.env.PAYMENT_METADATA_MAX_BYTES,
-    DEFAULT_METADATA_MAX_BYTES,
+  const maxBytes = Math.min(
+    toPositiveInt(process.env.PAYMENT_METADATA_MAX_BYTES, DEFAULT_METADATA_MAX_BYTES),
+    MAX_PAYMENT_METADATA_BYTES,
   );
-  const maxDepth = toPositiveInt(
-    process.env.PAYMENT_METADATA_MAX_DEPTH,
-    DEFAULT_METADATA_MAX_DEPTH,
-  );
+  const maxDepth = getMetadataMaxDepth();
   const maxKeys =
     options?.maxKeys ??
     toPositiveInt(process.env.PAYMENT_METADATA_MAX_KEYS, DEFAULT_METADATA_MAX_KEYS);
