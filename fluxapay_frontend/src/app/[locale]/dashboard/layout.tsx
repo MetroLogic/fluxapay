@@ -1,5 +1,6 @@
 import { DashboardShell } from "@/features/dashboard/layout/DashboardShell";
 import { AuthGuard } from "@/components/AuthGuard";
+import { SessionTimeoutProvider } from "@/features/auth/SessionTimeoutProvider";
 import { Metadata } from "next";
 import { Suspense } from "react";
 
@@ -20,9 +21,11 @@ export default function DashboardLayout({
 }) {
   return (
     <Suspense fallback={null}>
-      <AuthGuard>
-        <DashboardShell>{children}</DashboardShell>
-      </AuthGuard>
+      <SessionTimeoutProvider>
+        <AuthGuard>
+          <DashboardShell>{children}</DashboardShell>
+        </AuthGuard>
+      </SessionTimeoutProvider>
     </Suspense>
   );
 }

@@ -20,6 +20,7 @@ import crypto from "crypto";
 import { AuditActionType, AuditEntityType } from "../types/audit.types";
 
 import { prisma } from "../config/prisma";
+import { invalidateApiKeyCacheForMerchant } from "../utils/apiKeyCache.util";
 
 /** Maximum active keys per merchant */
 const MAX_ACTIVE_KEYS = 5;
@@ -243,6 +244,8 @@ export class ApiKeyService {
       },
     });
 
+    await invalidateApiKeyCacheForMerchant(merchantId);
+
     return {
       id: apiKey.id,
       name: apiKey.name,
@@ -365,6 +368,8 @@ export class ApiKeyService {
       },
     });
 
+    await invalidateApiKeyCacheForMerchant(merchantId);
+
     return {
       id: newKey.id,
       name: newKey.name,
@@ -422,6 +427,8 @@ export class ApiKeyService {
         lastFour: apiKey.key_last_four,
       },
     });
+
+    await invalidateApiKeyCacheForMerchant(merchantId);
   }
 
   /**
@@ -629,6 +636,57 @@ export class ApiKeyService {
       notified,
       warnings,
     };
+  }
+
+  /**
+   * Validate a rotated API key that is still in its grace period.
+   * A rotated key remains valid after being marked revoked until expires_at.
+   */
+  async validateRotatedApiKey(key: string): Promise<{ valid: boolean; merchantId?: string }> {
+    const now = new Date();
+    const candidates = await (prisma as any).apiKey.findMany({
+      where: {
+        key_last_four: this.getLastFour(key),
+        OR: [
+          { status: "active", expires_at: null },
+          { status: "active", expires_at: { gt: now } },
+          { status: "revoked", expires_at: { gt: now } },
+        ],
+      },
+    });
+
+    const keyHash = this.hashKey(key);
+
+    for (const candidate of candidates) {
+      const matches = candidate.key_hash.startsWith("$2")
+        ? await import("../helpers/crypto.helper").then(({ compareKeys }) => compareKeys(key, candidate.key_hash))
+        : candidate.key_hash === keyHash;
+
+      if (!matches) {
+        continue;
+      }
+
+      if (candidate.status === "revoked" && candidate.expires_at && candidate.expires_at > now) {
+        return { valid: true, merchantId: candidate.merchantId };
+      }
+
+      if (candidate.status === "active" && (!candidate.expires_at || candidate.expires_at > now)) {
+        const updated = await (prisma as any).apiKey.updateMany({
+          where: {
+            id: candidate.id,
+            status: "active",
+            OR: [{ expires_at: null }, { expires_at: { gt: now } }],
+          },
+          data: { last_used_at: new Date() },
+        });
+
+        if (updated.count === 1) {
+          return { valid: true, merchantId: candidate.merchantId };
+        }
+      }
+    }
+
+    return { valid: false };
   }
 
   /**

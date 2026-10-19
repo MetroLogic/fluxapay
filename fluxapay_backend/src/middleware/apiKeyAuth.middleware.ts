@@ -8,6 +8,7 @@ import { compareKeys } from "../helpers/crypto.helper";
 import { apiKeyService } from "../services/apiKey.service";
 import jwt, { JwtPayload } from "jsonwebtoken";
 import { getEnvConfig } from "../config/env.config";
+import { getCachedApiKeyLookup, setCachedApiKeyLookup } from "../utils/apiKeyCache.util";
 
 
 /**
@@ -69,6 +70,13 @@ export async function authenticateApiKey(
         key.startsWith("sk_live_") || key.startsWith("sk_test_") || key.startsWith("fpk_test_");
     if (isApiKey) {
         try {
+            const cachedLookup = await getCachedApiKeyLookup(key);
+            if (cachedLookup) {
+                authReq.merchantId = cachedLookup.merchantId;
+                authReq.isTestMode = cachedLookup.isTestMode;
+                return next();
+            }
+
             const lastFour = key.slice(-4);
 
             // Find merchants with matching last four to narrow down search
@@ -81,6 +89,7 @@ export async function authenticateApiKey(
                 if (merchant.api_key_hashed && await compareKeys(key, merchant.api_key_hashed)) {
                     authReq.merchantId = merchant.id;
                     authReq.isTestMode = isTestApiKey(key);
+                    await setCachedApiKeyLookup(key, merchant.id, authReq.isTestMode);
                     return next();
                 }
             }
@@ -92,6 +101,7 @@ export async function authenticateApiKey(
             if (storedKey.valid && storedKey.merchantId) {
                 authReq.merchantId = storedKey.merchantId;
                 authReq.isTestMode = isTestApiKey(key);
+                await setCachedApiKeyLookup(key, storedKey.merchantId, authReq.isTestMode);
                 return next();
             }
 
@@ -104,6 +114,7 @@ export async function authenticateApiKey(
             if (rotatedKey.valid && rotatedKey.merchantId) {
                 authReq.merchantId = rotatedKey.merchantId;
                 authReq.isTestMode = isTestApiKey(key);
+                await setCachedApiKeyLookup(key, rotatedKey.merchantId, authReq.isTestMode);
                 return next();
             }
 

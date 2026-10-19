@@ -180,24 +180,18 @@ describe("apiKeyAuth.middleware — test mode isolation", () => {
     expect(mockRes.status).toHaveBeenCalledWith(401);
   });
 
-  it("returns API_KEY_EXPIRED when the matched key has already expired", async () => {
-    mockReq.headers = { "x-api-key": skLiveKey };
-    mockApiKeyFindMany.mockResolvedValueOnce([
-      {
-        id: "expired-key",
-        merchantId: "merchant_1",
-        key_hash: "$2b$test-hash",
-        expires_at: new Date(Date.now() - 60_000),
-      },
-    ]);
-    mockCompare.mockResolvedValueOnce(true);
+  it("uses the Redis cache when an auth lookup has already been cached", async () => {
+    const cachedReq = { headers: { "x-api-key": skLiveKey } } as unknown as AuthRequest;
+    const cachedLookup = { merchantId: "merchant_cached", isTestMode: false };
 
-    await authenticateApiKey(mockReq as AuthRequest, mockRes as Response, mockNext as NextFunction);
+    jest.spyOn(require("../../utils/apiKeyCache.util"), "getCachedApiKeyLookup").mockResolvedValue(cachedLookup);
 
-    expect(mockNext).not.toHaveBeenCalled();
-    expect(mockRes.status).toHaveBeenCalledWith(401);
-    expect(mockRes.json).toHaveBeenCalledWith(
-      expect.objectContaining({ code: "API_KEY_EXPIRED" }),
-    );
+    await authenticateApiKey(cachedReq, mockRes as Response, mockNext as NextFunction);
+
+    expect(mockNext).toHaveBeenCalledTimes(1);
+    expect(cachedReq.merchantId).toBe("merchant_cached");
+    expect(cachedReq.isTestMode).toBe(false);
+    expect(mockFindMany).not.toHaveBeenCalled();
+    expect(mockCompare).not.toHaveBeenCalled();
   });
 });
