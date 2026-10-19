@@ -114,8 +114,8 @@ export function NotificationsCenter({ compact = false }: NotificationsCenterProp
                   className={cn(
                     "text-xs px-2.5 py-1 rounded-full transition-colors",
                     categoryFilter === filter
-                      ? "bg-slate-900 text-white"
-                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-muted-foreground hover:bg-accent"
                   )}
                 >
                   {filter === "all"
