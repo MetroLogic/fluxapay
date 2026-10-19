@@ -133,6 +133,7 @@ function makePayment(overrides: Record<string, unknown> = {}) {
     cancel_url: null,
     paymentLinkId: null,
     settlementId: null,
+    settlement: null,
     settlement_ref: null,
     settlement_fiat_amount: null,
     settlement_fiat_currency: null,
@@ -299,6 +300,17 @@ describe("paymentToCsvCells", () => {
     expect(at("customer_email")).toBe("buyer@example.com");
     expect(at("customer_name")).toBe("Ada Buyer");
     expect(at("transaction_hash")).toBe("abc123");
+  });
+
+  it("exports the actual settlement fee and leaves unsettled fees empty", () => {
+    const settledCells = paymentToCsvCells(
+      makePayment({ settlement: { fees: { toString: () => "1.875" } } }) as unknown as PaymentExportRow,
+    );
+    const unsettledCells = paymentToCsvCells(makePayment() as unknown as PaymentExportRow);
+    const feeIndex = PAYMENT_CSV_COLUMNS.indexOf("fees");
+
+    expect(settledCells[feeIndex]).toBe("1.875");
+    expect(unsettledCells[feeIndex]).toBe("");
   });
 
   it("serialises metadata as JSON and renders nulls as empty cells", () => {

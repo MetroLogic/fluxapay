@@ -1,5 +1,11 @@
 import { PrismaClient } from "../generated/client/client";
 import { getLogger, getMetricsCollector } from "../utils/logger";
+import {
+  getPrimaryConnectionPoolLimit,
+  getReplicaConnectionPoolLimit,
+  readDatabasePoolSnapshot,
+  type DatabasePoolSnapshot,
+} from "../utils/prismaPoolMetrics";
 
 const READ_OPERATIONS = new Set([
   "findUnique",
@@ -124,7 +130,7 @@ const globalForPrisma = globalThis as typeof globalThis & {
 };
 
 const primaryUrl = process.env.DATABASE_URL;
-const primaryPoolLimit = process.env.NODE_ENV === "production" ? 10 : 5;
+const primaryPoolLimit = getPrimaryConnectionPoolLimit();
 const primary = globalForPrisma.prisma ?? new PrismaClient(
   primaryUrl
     ? { datasources: { db: { url: withConnectionLimit(primaryUrl, primaryPoolLimit) } } }
@@ -137,18 +143,33 @@ if (!process.env.NODE_ENV || process.env.NODE_ENV !== "production") {
 
 const replicaUrl = process.env.DATABASE_REPLICA_URL;
 let prisma = primary;
+let replicaClient: PrismaClient | undefined;
+let replicaPoolLimit: number | undefined;
 
 if (replicaUrl) {
-  const replicaPoolLimit = Number.parseInt(process.env.DATABASE_REPLICA_CONNECTION_LIMIT ?? "5", 10);
-  const replica = globalForPrisma.replicaPrisma ?? new PrismaClient({
+  replicaPoolLimit = getReplicaConnectionPoolLimit();
+  replicaClient = globalForPrisma.replicaPrisma ?? new PrismaClient({
     datasources: {
       db: { url: withConnectionLimit(replicaUrl, replicaPoolLimit) },
     },
   });
   if (!process.env.NODE_ENV || process.env.NODE_ENV !== "production") {
-    globalForPrisma.replicaPrisma = replica;
+    globalForPrisma.replicaPrisma = replicaClient;
   }
-  prisma = createReadReplicaClient(primary, replica).client;
+  prisma = createReadReplicaClient(primary, replicaClient).client;
 }
 
 export { prisma };
+
+export async function getDatabasePoolSnapshots(): Promise<DatabasePoolSnapshot[]> {
+  const clients = [
+    { name: "primary", client: primary, limit: primaryPoolLimit },
+    ...(replicaClient && replicaPoolLimit
+      ? [{ name: "replica", client: replicaClient, limit: replicaPoolLimit }]
+      : []),
+  ];
+  const snapshots = await Promise.all(
+    clients.map(({ name, client, limit }) => readDatabasePoolSnapshot(client, name, limit)),
+  );
+  return snapshots.filter((snapshot): snapshot is DatabasePoolSnapshot => snapshot !== undefined);
+}

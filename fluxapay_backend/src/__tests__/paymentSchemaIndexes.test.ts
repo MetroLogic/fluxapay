@@ -15,9 +15,10 @@ const prismaDir = path.join(__dirname, "../../prisma");
 
 function getPaymentModel(): string {
   const schema = fs.readFileSync(path.join(prismaDir, "schema.prisma"), "utf8");
-  const match = schema.match(/^model Payment \{[\\s\S]*?^\}/m);
-  if (!match) throw new Error("Payment model not found in schema.prisma");
-  return match[0];
+  const start = schema.indexOf("model Payment {");
+  const end = schema.indexOf("\n}", start);
+  if (start < 0 || end < 0) throw new Error("Payment model not found in schema.prisma");
+  return schema.slice(start, end + 2);
 }
 
 function getAllMigrationSql(): string {
@@ -32,8 +33,20 @@ function getAllMigrationSql(): string {
 }
 
 describe("Payment schema indexes", () => {
+  it("declares and migrates the merchant/status/createdAt DESC transaction-list index", () => {
+    const paymentModel = getPaymentModel();
+    const migrationSql = getAllMigrationSql();
+
+    expect(paymentModel).toMatch(
+      /@@index\(\[merchantId,\s*status,\s*createdAt\(sort:\s*Desc\)\]\)/,
+    );
+    expect(migrationSql).toMatch(
+      /CREATE INDEX IF NOT EXISTS "Payment_merchantId_status_createdAt_idx"\s+ON\s+"Payment"\s*\(\s*"merchantId",\s*"status",\s*"createdAt"\s+DESC\s*\)/,
+    );
+  });
+
   it("declares a composite [merchantId, createdAt] index for rate-limit counts", () => {
-    expect(getPaymentModel()).toMatch(/@@intex\(\[merchantId,\s*createdAt(\(sort:\s*Desc\))?\]\)/);
+    expect(getPaymentModel()).toMatch(/@@index\(\[merchantId,\s*createdAt(\(sort:\s*Desc\))?\]\)/);
   });
 
   it("has a migration that creates the [merchantId, createdAt] index", () => {
@@ -81,15 +94,12 @@ describe("Payment list endpoint indexes (#1208)", () => {
 
   for (const { name, columns } of indexCases) {
     it(`declares the ${columns.join(" + ")} index in schema.prisma`, () => {
-      // Accept the bare form and the DESC-sorted form Prisma emits for a
-      // trailing timestamp column.
-      const declarations = [
-        `@@index([{columns.join(", ")}])`,
-        `@@index([${columns.join(", ")}`,
-      ];
-      expect(
-        declarations.some((d) => getPaymentModel().includes(d)),
-      ).toBe(true);
+      const declarationColumns = columns.map((column, index) =>
+        column === "createdAt" && index === columns.length - 1
+          ? `${column}(sort: Desc)`
+          : column,
+      );
+      expect(getPaymentModel()).toContain(`@@index([${declarationColumns.join(", ")}])`);
     });
 
     it(`has a migration that creates ${name}`, () => {

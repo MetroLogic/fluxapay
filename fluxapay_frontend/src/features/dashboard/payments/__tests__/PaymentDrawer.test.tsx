@@ -1,30 +1,42 @@
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { vi } from "vitest";
 import { PaymentDrawer } from "../PaymentDrawer";
 import { useRouter } from "next/navigation";
+import type { Payment } from "../types";
+
+const { getPaymentById } = vi.hoisted(() => ({ getPaymentById: vi.fn() }));
 
 // Mock next/navigation
-jest.mock("next/navigation", () => ({
-  useRouter: jest.fn(),
+vi.mock("next/navigation", () => ({
+  useRouter: vi.fn(),
 }));
 
 // Mock the API
-jest.mock("@/lib/api", () => ({
+vi.mock("@/lib/api", () => ({
   api: {
     webhooks: {
-      logs: jest.fn().mockResolvedValue({ data: [] }),
+      logs: vi.fn().mockResolvedValue({ data: [] }),
     },
+    payments: { getById: getPaymentById },
   },
 }));
 
+vi.mock("qrcode.react", () => ({
+  QRCodeCanvas: (props: React.CanvasHTMLAttributes<HTMLCanvasElement>) => <canvas {...props} />,
+}));
+
+vi.mock("react-hot-toast", () => ({
+  default: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }),
+}));
+
 describe("PaymentDrawer", () => {
-  const mockPush = jest.fn();
-  const mockOnClose = jest.fn();
+  const mockPush = vi.fn();
+  const mockOnClose = vi.fn();
 
   beforeEach(() => {
-    (useRouter as jest.Mock).mockReturnValue({
-      push: mockPush,
-    });
-    jest.clearAllMocks();
+    vi.mocked(useRouter).mockReturnValue({ push: mockPush } as ReturnType<typeof useRouter>);
+    getPaymentById.mockReset();
+    vi.clearAllMocks();
   });
 
   const mockPayment = {
@@ -35,7 +47,7 @@ describe("PaymentDrawer", () => {
     createdAt: new Date().toISOString(),
     customerEmail: "test@example.com",
     customerName: "Test User",
-  } as unknown as import("../types").Payment;
+  } as unknown as Payment;
 
   it("renders the drawer when open", () => {
     render(<PaymentDrawer payment={mockPayment} isOpen={true} onClose={mockOnClose} />);
@@ -60,5 +72,21 @@ describe("PaymentDrawer", () => {
     
     expect(mockOnClose).toHaveBeenCalledTimes(1);
     expect(mockPush).toHaveBeenCalledWith(`/dashboard/payments/${mockPayment.id}`);
+  });
+
+  it("announces receipt generation failures accessibly", async () => {
+    const completedPayment = {
+      ...mockPayment,
+      status: "completed",
+      txHash: "stellar-hash",
+    } as unknown as Payment;
+    getPaymentById.mockRejectedValueOnce(new Error("Payment details unavailable"));
+
+    render(<PaymentDrawer payment={completedPayment} isOpen onClose={mockOnClose} />);
+    fireEvent.click(screen.getByRole("button", { name: "Download Receipt" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent("Payment details unavailable"),
+    );
   });
 });

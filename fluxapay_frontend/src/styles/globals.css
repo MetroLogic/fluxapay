@@ -166,6 +166,7 @@
 }
 
 :root {
+  color-scheme: light;
   --color-error: #B62619;
   --color-black: #2E3539;
   --color-grey: #6C747D;
@@ -207,6 +208,7 @@
 }
 
 .dark {
+  color-scheme: dark;
   --color-error: #B62619;
   --color-black: #2E3539;
   --color-grey: #6C747D;

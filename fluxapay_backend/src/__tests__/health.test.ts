@@ -18,8 +18,10 @@ import {
   setRedisClientForTests,
 } from "../sms/otpSmsRateLimiter";
 import { resetFxCircuitBreakerForTests } from "../services/fx.service";
+import { resetPoolSaturationWarningsForTests } from "../utils/prismaPoolMetrics";
 
 const originalSorobanVerification = process.env.ENABLE_SOROBAN_VERIFICATION;
+const originalDatabaseUrl = process.env.DATABASE_URL;
 
 function restoreSorobanVerificationSetting(): void {
   if (originalSorobanVerification === undefined) {
@@ -46,16 +48,24 @@ describe("health.service", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    delete (prisma as unknown as { $metrics?: unknown }).$metrics;
     process.env.ENABLE_SOROBAN_VERIFICATION = "false";
     resetRedisClientForTests();
     resetFxCircuitBreakerForTests();
+    resetPoolSaturationWarningsForTests();
     global.fetch = jest.fn();
   });
 
   afterEach(() => {
     restoreSorobanVerificationSetting();
+    if (originalDatabaseUrl === undefined) {
+      delete process.env.DATABASE_URL;
+    } else {
+      process.env.DATABASE_URL = originalDatabaseUrl;
+    }
     resetRedisClientForTests();
     resetFxCircuitBreakerForTests();
+    resetPoolSaturationWarningsForTests();
     jest.restoreAllMocks();
   });
 
@@ -203,6 +213,42 @@ describe("health.service", () => {
       expect(result.dependencies.redis.status).toBe("up");
       expect(result.dependencies.horizon.status).toBe("up");
       expect(result.dependencies.soroban.status).toBe("disabled");
+    });
+
+    it("degrades readiness and warns when the Prisma pool exceeds 80% utilization", async () => {
+      process.env.DATABASE_URL = "postgresql://localhost/fluxapay?connection_limit=10";
+      (prisma.$queryRaw as jest.Mock).mockResolvedValue([{ "?column?": 1 }]);
+      (prisma as unknown as { $metrics: { json: jest.Mock } }).$metrics = {
+        json: jest.fn().mockResolvedValue({
+          gauges: [
+            { key: "prisma_pool_connections_busy", value: 9 },
+            { key: "prisma_pool_connections_idle", value: 1 },
+          ],
+          histograms: [
+            {
+              key: "prisma_pool_connections_wait_histogram_ms",
+              value: { count: 4, sum: 20 },
+            },
+          ],
+        }),
+      };
+      setRedisClientForTests({
+        ping: jest.fn().mockResolvedValue("PONG"),
+      } as unknown as ReturnType<typeof getRedisClient>);
+      (global.fetch as jest.Mock).mockResolvedValue({ ok: true, status: 200 });
+      const warn = jest.spyOn(console, "warn").mockImplementation(() => undefined);
+
+      const result = await getReadiness(prisma);
+
+      expect(result.status).toBe("degraded");
+      expect(result.dependencies.database.pool).toEqual(expect.objectContaining({
+        activeConnections: 9,
+        idleConnections: 1,
+        utilization: 0.9,
+        queueWaitDurationMs: 5,
+        status: "degraded",
+      }));
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining("above 80%"));
     });
   });
 });

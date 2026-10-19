@@ -4,6 +4,7 @@ import { Request, Response } from "express";
 import { apiKeyService } from "../services/apiKey.service";
 import { AuthRequest } from "../types/express";
 import { validateUserId } from "../helpers/request.helper";
+import { invalidateApiKeyCacheForMerchant } from "../utils/apiKeyCache.util";
 
 /**
  * POST /v1/api-keys
@@ -12,7 +13,8 @@ import { validateUserId } from "../helpers/request.helper";
 export const createApiKey = async (req: Request, res: Response) => {
   try {
     const merchantId = await validateUserId(req as AuthRequest);
-    const { name, environment } = req.body;
+    const { name, environment, expiration_days, expires_in_days } = req.body;
+    const requestedExpiryDays = expiration_days ?? expires_in_days;
 
     if (!name || typeof name !== "string") {
       return sendApiError(res, apiError(400, ErrorCode.MISSING_REQUIRED_FIELD, "name is required and must be a string"));
@@ -22,16 +24,27 @@ export const createApiKey = async (req: Request, res: Response) => {
       return sendApiError(res, apiError(400, ErrorCode.INVALID_ENVIRONMENT, "environment must be 'live' or 'test'"));
     }
 
+    if (requestedExpiryDays !== undefined && (typeof requestedExpiryDays !== "number" && typeof requestedExpiryDays !== "string")) {
+      return sendApiError(res, apiError(400, ErrorCode.INVALID_REQUEST_BODY, "expiration_days must be a positive number of days"));
+    }
+
     const result = await apiKeyService.createApiKey(
       merchantId,
       name,
       environment,
       merchantId, // actor is the merchant themselves
+      requestedExpiryDays,
     );
 
     res.status(201).json(result);
   } catch (error: unknown) {
     if (error instanceof Error) {
+      if (error.message.includes("permission") || error.message.includes("CIDR") || error.message.includes("IP allowlist")) {
+        return sendApiError(
+          res,
+          apiError(400, ErrorCode.VALIDATION_ERROR, error.message),
+        );
+      }
       if (error.message.includes("Rate limit exceeded")) {
         return sendApiError(
           res,
@@ -77,6 +90,7 @@ export const revokeApiKey = async (req: Request, res: Response) => {
     const keyId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
 
     await apiKeyService.revokeApiKey(merchantId, keyId, merchantId);
+    await invalidateApiKeyCacheForMerchant(merchantId);
 
     res.status(204).send();
   } catch (error: unknown) {
@@ -103,6 +117,7 @@ export const rotateApiKey = async (req: Request, res: Response) => {
     const keyId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
 
     const result = await apiKeyService.rotateApiKey(merchantId, keyId, merchantId);
+    await invalidateApiKeyCacheForMerchant(merchantId);
 
     res.status(200).json(result);
   } catch (error: unknown) {

@@ -655,7 +655,12 @@ export const api = {
       fetchWithAuth<Record<string, unknown>>("/api/v1/keys/regenerate", {
         method: "POST",
       }),
-    createKey: (data: { name: string; environment: "live" | "test" }) =>
+    createKey: (data: {
+      name: string;
+      environment: "live" | "test";
+      permissions: string[];
+      ip_allowlist: string[];
+    }) =>
       fetchWithAuth<Record<string, unknown>>("/api/v1/api-keys", {
         method: "POST",
         body: JSON.stringify(data),

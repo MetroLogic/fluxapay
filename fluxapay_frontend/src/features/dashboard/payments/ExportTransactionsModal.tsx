@@ -16,6 +16,11 @@ import {
   type DateRangePreset,
   type TransactionExportFilters,
 } from "@/services/transactionCsvExport.service";
+import {
+  TRANSACTION_EXPORT_COLUMNS,
+  type TransactionCsvFormat,
+  type TransactionExportColumn,
+} from "@/utils/transactionCsv";
 
 interface ExportTransactionsModalProps {
   isOpen: boolean;
@@ -47,8 +52,7 @@ const CURRENCY_OPTIONS = [
 
 /**
  * Date-range aware CSV export dialog for the transaction history (#1216).
- * Rows are streamed by the server, so even a multi-year range downloads
- * without a background job.
+ * Rows stream from the server; the browser then applies the selected columns.
  */
 export function ExportTransactionsModal({
   isOpen,
@@ -63,6 +67,10 @@ export function ExportTransactionsModal({
   const [search, setSearch] = useState("");
   const [amountMin, setAmountMin] = useState("");
   const [amountMax, setAmountMax] = useState("");
+  const [selectedColumns, setSelectedColumns] = useState<TransactionExportColumn[]>(
+    TRANSACTION_EXPORT_COLUMNS.map((column) => column.key),
+  );
+  const [format, setFormat] = useState<TransactionCsvFormat>("csv");
   const [isExporting, setIsExporting] = useState(false);
 
   // Re-seed the form from the page filters each time the dialog opens. The
@@ -89,6 +97,8 @@ export function ExportTransactionsModal({
     setSearch(initialSearch ?? "");
     setAmountMin(initialAmountMin ?? "");
     setAmountMax(initialAmountMax ?? "");
+    setSelectedColumns(TRANSACTION_EXPORT_COLUMNS.map((column) => column.key));
+    setFormat("csv");
     setPreset(from || to ? "custom" : "all");
   }, [
     isOpen,
@@ -145,6 +155,8 @@ export function ExportTransactionsModal({
           amountMax,
         },
         {
+          columns: selectedColumns,
+          format,
           onProgress: (elapsedMs) => {
             toast.loading(
               `Preparing your CSV export... (${Math.floor(elapsedMs / 1000)}s)`,
@@ -179,15 +191,17 @@ export function ExportTransactionsModal({
     currency,
     dateFrom,
     dateTo,
+    format,
     onClose,
     rangeError,
     search,
+    selectedColumns,
     status,
   ]);
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Export transactions (CSV)">
-      <div className="space-y-5">
+      <div className="max-h-[calc(100dvh-12rem)] space-y-5 overflow-y-auto pr-1">
         <p className="text-sm text-muted-foreground">
           Download every transaction in the selected range for accounting and
           reconciliation. Large exports stream straight to your browser, so
@@ -241,6 +255,55 @@ export function ExportTransactionsModal({
           >
             {rangeError ?? describeDateRange(dateFrom, dateTo)}
           </p>
+        </div>
+
+        <fieldset className="space-y-2" aria-describedby="export-columns-help">
+          <legend className="text-sm font-medium">Columns</legend>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {TRANSACTION_EXPORT_COLUMNS.map((column) => (
+              <label
+                key={column.key}
+                htmlFor={`export-column-${column.key}`}
+                className="flex min-h-10 items-center gap-2 rounded-md border border-border px-3 py-2 text-sm"
+              >
+                <input
+                  id={`export-column-${column.key}`}
+                  type="checkbox"
+                  checked={selectedColumns.includes(column.key)}
+                  onChange={(event) => {
+                    const checked = event.currentTarget.checked;
+                    setSelectedColumns((current) =>
+                      checked
+                        ? [...current, column.key]
+                        : current.filter((key) => key !== column.key),
+                    );
+                  }}
+                  className="h-4 w-4 accent-primary"
+                />
+                {column.label}
+              </label>
+            ))}
+          </div>
+          <p id="export-columns-help" className="text-xs text-muted-foreground" aria-live="polite">
+            {selectedColumns.length === 0
+              ? "Select at least one column to export."
+              : `${selectedColumns.length} of ${TRANSACTION_EXPORT_COLUMNS.length} columns selected.`}
+          </p>
+        </fieldset>
+
+        <div className="space-y-2">
+          <label htmlFor="export-format" className="text-sm font-medium">
+            File format
+          </label>
+          <Select
+            id="export-format"
+            className="w-full"
+            value={format}
+            onChange={(event) => setFormat(event.target.value as TransactionCsvFormat)}
+          >
+            <option value="csv">CSV (RFC 4180)</option>
+            <option value="excel">Excel-compatible CSV</option>
+          </Select>
         </div>
 
         <div className="space-y-2">
@@ -328,7 +391,7 @@ export function ExportTransactionsModal({
           <Button
             className="gap-2"
             onClick={handleExport}
-            disabled={isExporting || Boolean(rangeError)}
+            disabled={isExporting || Boolean(rangeError) || selectedColumns.length === 0}
             data-testid="confirm-export-csv"
           >
             <Download className="h-4 w-4" />

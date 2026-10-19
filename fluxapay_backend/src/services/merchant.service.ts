@@ -16,6 +16,7 @@ import { isDevEnv } from "../helpers/env.helper";
 import { generateToken } from "../helpers/jwt.helper";
 import { merchantRegistryService } from "./merchantRegistry.service";
 import { generateApiKey, generateWebhookSecret, hashKey, getLastFour, ApiKeyMode } from "../helpers/crypto.helper";
+import { invalidateApiKeyCacheForMerchant } from "../utils/apiKeyCache.util";
 import * as crypto from "crypto";
 import {
   logMerchantProfileUpdate,
@@ -280,6 +281,8 @@ export async function regenerateApiKeyService(data: {
       },
     });
   });
+
+  await invalidateApiKeyCacheForMerchant(merchantId);
 
   // Audit log: API key rotation
   logApiKeyRotation({ merchantId, lastFour: apiKeyLastFour }).catch(() => {});
