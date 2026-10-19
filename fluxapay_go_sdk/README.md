@@ -29,13 +29,15 @@ func main() {
         Currency:      "USD",
         CustomerEmail: "buyer@example.com",
         OrderID:       "order_123",
-    })
+    }, fluxapay.WithIdempotencyKey("order_123-payment"))
     if err != nil {
         panic(err)
     }
     fmt.Println(payment.CheckoutURL)
 }
 ```
+
+Pass `fluxapay.WithIdempotencyKey(key)` to a create method to send an `Idempotency-Key` header. Payment and refund parameter structs also support an `IdempotencyKey` field; the key is sent only as a header, not in the request JSON body. The same request option is supported by invoice creation.
 
 ## Webhook Verification
 
