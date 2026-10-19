@@ -5,6 +5,8 @@ export const DEFAULT_TIMEOUT_MS = 15000;
 export interface TransportOptions {
   /** Per-request timeout in ms (default 15000). 0 disables. */
   timeoutMs?: number;
+  /** Fetch-compatible transport override. */
+  fetch?: typeof fetch;
   /** Called right before each outbound request. */
   onRequest?: (req: { url: string; method: string; headers: Record<string, string> }) => void;
   /** Called after each response with elapsed time. */
@@ -53,7 +55,7 @@ export async function fetchWithTelemetry(
       : undefined;
   const started = Date.now();
   try {
-    const res = await fetch(url, { ...init, signal: controller.signal });
+    const res = await (opts.fetch ?? globalThis.fetch)(url, { ...init, signal: controller.signal });
     opts.onResponse?.(res, Date.now() - started);
     return res;
   } catch (err) {
