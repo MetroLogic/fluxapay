@@ -2,13 +2,14 @@ import { Router } from "express";
 import { createPayment } from "../controllers/payment.controller";
 import { validatePayment } from "../validators/payment.validator";
 import { authenticateApiKey } from "../middleware/apiKeyAuth.middleware";
-import { merchantApiKeyRateLimit } from "../middleware/rateLimit.middleware";
+import { chargesRateLimit } from "../middleware/slidingWindowRateLimit.middleware";
 import { redisIdempotencyMiddleware } from "../middleware/redisIdempotency.middleware";
 import { createRefund, listRefunds } from "../controllers/refund.controller";
 import { validate, validateQuery } from "../middleware/validation.middleware";
 import { createRefundSchema, listRefundsQuerySchema } from "../schemas/refund.schema";
 
 const router = Router();
+const chargesLimiter = chargesRateLimit();
 
 /**
  * @swagger
@@ -47,7 +48,7 @@ const router = Router();
 router.post(
   "/",
   authenticateApiKey,
-  merchantApiKeyRateLimit(),
+  chargesLimiter,
   redisIdempotencyMiddleware,
   validatePayment,
   createPayment
@@ -85,7 +86,7 @@ router.post(
 router.post(
   "/:id/refunds",
   authenticateApiKey,
-  merchantApiKeyRateLimit(),
+  chargesLimiter,
   redisIdempotencyMiddleware,
   (req, res, next) => {
     req.body.payment_id = req.params.id;
@@ -116,7 +117,7 @@ router.post(
 router.get(
   "/:id/refunds",
   authenticateApiKey,
-  merchantApiKeyRateLimit(),
+  chargesLimiter,
   validateQuery(listRefundsQuerySchema),
   listRefunds
 );

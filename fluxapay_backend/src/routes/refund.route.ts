@@ -41,20 +41,20 @@ const router = Router();
  *     security:
  *       - apiKeyAuth: []
  *     parameters:
- *       - in query
+ *       - in: query
  *         name: page
  *         schema:
  *           type: integer
- *       - in query
+ *       - in: query
  *         name: limit
  *         schema:
  *           type: integer
- *       - in query
+ *       - in: query
  *         name: status
  *         schema:
  *           type: string
- *            enum: [pending, processing, completed, failed]
- *       - in query
+ *           enum: [pending, processing, completed, failed]
+ *       - in: query
  *         name: payment_id
  *         schema:
  *           type: string
