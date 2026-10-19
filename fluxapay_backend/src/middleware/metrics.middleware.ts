@@ -110,7 +110,10 @@ function serializeLabels(labels: Record<string, string>): string {
  * Families without any recorded sample are omitted so the output stays stable
  * as counters spin up.
  */
-export function renderPrometheusMetrics(events: MetricEvent[]): string {
+export function renderPrometheusMetrics(
+  events: MetricEvent[],
+  poolSnapshots: DatabasePoolSnapshot[] = [],
+): string {
   // family name -> help
   const helpByName: Record<string, string> = {};
   for (const mapping of Object.values(PROMETHEUS_COUNTERS)) {
@@ -147,7 +150,8 @@ export function renderPrometheusMetrics(events: MetricEvent[]): string {
     lines.push(`${sample.name}${sample.labels} ${sample.value}`);
   }
 
-  return `${lines.join('\n')}\n`;
+  const businessMetrics = `${lines.join('\n')}\n`;
+  return businessMetrics + renderDatabasePoolMetrics(poolSnapshots);
 }
 
 /**
@@ -172,6 +176,8 @@ export function metricsMiddleware(req: Request, res: Response, next: NextFunctio
     }).catch(next);
   });
 }
+
+export const metricsMiddleware = createMetricsMiddleware();
 
 /**
  * Business Metrics Helper Functions

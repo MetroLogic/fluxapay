@@ -20,6 +20,13 @@ import {
 import { api } from "@/lib/api";
 import { DOCS_URLS } from "@/lib/docs";
 import { CopyButton } from "@/components/CopyButton";
+import { parseCidrAllowlist } from "@/utils/ipCidr";
+import {
+  API_KEY_PERMISSION_OPTIONS,
+  FULL_ACCESS_API_KEY_PERMISSIONS,
+  READ_ONLY_API_KEY_PERMISSIONS,
+  type ApiKeyPermission,
+} from "@/utils/apiKeyPermissions";
 
 type Lang = "curl" | "js" | "python";
 type Endpoint = "create" | "fetch" | "list" | "webhook";
@@ -46,6 +53,8 @@ type ApiKeyRecord = {
   status: "active" | "revoked";
   created_at: string;
   expires_at: string | null;
+  permissions: ApiKeyPermission[];
+  ip_allowlist: string[];
 };
 
 type ApiKeyEntry = ApiKeyRecord & { masked: string };
@@ -53,6 +62,8 @@ type ApiKeyEntry = ApiKeyRecord & { masked: string };
 function mapApiKeyRecords(records: ApiKeyRecord[]): ApiKeyEntry[] {
   return records.map((record) => ({
     ...record,
+    permissions: record.permissions ?? READ_ONLY_API_KEY_PERMISSIONS,
+    ip_allowlist: record.ip_allowlist ?? [],
     masked: `${record.prefix}_${record.environment}_****${record.last_four}`,
   }));
 }
@@ -448,7 +459,15 @@ function CreateApiKeyModal({
 }: {
   isOpen: boolean;
   onClose: () => void;
-  onCreateSuccess: (key: { id: string; name: string; masked: string; secret: string; environment: "live" | "test" }) => void;
+  onCreateSuccess: (key: {
+    id: string;
+    name: string;
+    masked: string;
+    secret: string;
+    environment: "live" | "test";
+    permissions: ApiKeyPermission[];
+    ip_allowlist: string[];
+  }) => void;
   existingNames: Set<string>;
 }) {
   const [name, setName] = useState("");
@@ -456,6 +475,9 @@ function CreateApiKeyModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [createdSecret, setCreatedSecret] = useState<string | null>(null);
+  const [accessPreset, setAccessPreset] = useState<"read-only" | "full-access" | "custom">("read-only");
+  const [permissions, setPermissions] = useState<ApiKeyPermission[]>(READ_ONLY_API_KEY_PERMISSIONS);
+  const [ipAllowlistText, setIpAllowlistText] = useState("");
   const dialogRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
@@ -466,8 +488,26 @@ function CreateApiKeyModal({
       setEnvironment("test");
       setError(null);
       setCreatedSecret(null);
+      setAccessPreset("read-only");
+      setPermissions(READ_ONLY_API_KEY_PERMISSIONS);
+      setIpAllowlistText("");
     }
   }, [isOpen]);
+
+  let ipAllowlist: string[] | null;
+  try {
+    ipAllowlist = parseCidrAllowlist(ipAllowlistText);
+  } catch {
+    ipAllowlist = null;
+  }
+  const cidrError = ipAllowlist === null
+    ? "Enter valid IPv4 or IPv6 CIDR blocks, separated by commas or new lines."
+    : null;
+
+  const applyPreset = (preset: "read-only" | "full-access") => {
+    setAccessPreset(preset);
+    setPermissions(preset === "read-only" ? READ_ONLY_API_KEY_PERMISSIONS : FULL_ACCESS_API_KEY_PERMISSIONS);
+  };
 
   useEffect(() => {
     if (!isOpen || !dialogRef.current) return;
@@ -528,12 +568,25 @@ function CreateApiKeyModal({
       setError(nameError);
       return;
     }
+    if (permissions.length === 0) {
+      setError("Select at least one permission.");
+      return;
+    }
+    if (cidrError) {
+      setError(cidrError);
+      return;
+    }
 
     setLoading(true);
     setError(null);
 
     try {
-      const result = await api.keys.createKey({ name: name.trim(), environment });
+      const result = await api.keys.createKey({
+        name: name.trim(),
+        environment,
+        permissions,
+        ip_allowlist: ipAllowlist ?? [],
+      });
       if ('error' in result) {
         setError(result.error.message);
         return;
@@ -548,6 +601,8 @@ function CreateApiKeyModal({
         masked: `fpk_${environment}_****${(res.last_four as string) || secret.slice(-4)}`,
         secret,
         environment,
+        permissions,
+        ip_allowlist: ipAllowlist ?? [],
       });
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to create API key");
@@ -585,6 +640,8 @@ function CreateApiKeyModal({
           padding: "2rem",
           maxWidth: "500px",
           width: "90%",
+          maxHeight: "90vh",
+          overflowY: "auto",
           boxShadow: "0 20px 25px rgba(0, 0, 0, 0.15)",
         }}
         onClick={(e) => e.stopPropagation()}
@@ -667,10 +724,11 @@ function CreateApiKeyModal({
           </div>
         ) : (
           <div>
-            <label style={{ display: "block", fontSize: "0.875rem", fontWeight: 500, color: "#1a1a3e", marginBottom: "0.5rem" }}>
+            <label htmlFor="developer-api-key-name" style={{ display: "block", fontSize: "0.875rem", fontWeight: 500, color: "#1a1a3e", marginBottom: "0.5rem" }}>
               Key Name
             </label>
             <input
+              id="developer-api-key-name"
               type="text"
               value={name}
               onChange={(e) => {
@@ -705,15 +763,74 @@ function CreateApiKeyModal({
               <option value="test">Test</option>
               <option value="live">Live</option>
             </select>
+            <fieldset style={{ border: 0, padding: 0, margin: "1rem 0" }}>
+              <legend style={{ fontSize: "0.875rem", fontWeight: 600, marginBottom: "0.5rem" }}>Access level</legend>
+              <div role="radiogroup" aria-label="Access level" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: "0.5rem" }}>
+                {(["read-only", "full-access", "custom"] as const).map((preset) => (
+                  <label key={preset} style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.625rem", border: `1px solid ${accessPreset === preset ? "#f59e0b" : "#d1d5db"}`, borderRadius: "0.375rem", cursor: "pointer", fontSize: "0.8125rem" }}>
+                    <input
+                      type="radio"
+                      name="developer-api-key-access"
+                      checked={accessPreset === preset}
+                      onChange={() => {
+                        if (preset === "custom") setAccessPreset("custom");
+                        else applyPreset(preset);
+                      }}
+                    />
+                    {preset === "read-only" ? "Read-only" : preset === "full-access" ? "Full access" : "Custom"}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+
+            <fieldset style={{ border: 0, padding: 0, margin: "1rem 0" }}>
+              <legend style={{ fontSize: "0.875rem", fontWeight: 600, marginBottom: "0.5rem" }}>Permissions</legend>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: "0.375rem" }}>
+                {API_KEY_PERMISSION_OPTIONS.map((option) => (
+                  <label key={option.value} style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.5rem", border: "1px solid #e5e7eb", borderRadius: "0.375rem", fontSize: "0.75rem" }}>
+                    <input
+                      type="checkbox"
+                      checked={permissions.includes(option.value)}
+                      onChange={(event) => {
+                        const checked = event.currentTarget.checked;
+                        setAccessPreset("custom");
+                        setPermissions((current) => checked
+                          ? [...current, option.value]
+                          : current.filter((permission) => permission !== option.value));
+                      }}
+                    />
+                    {option.label}
+                    <span className="sr-only">({option.value})</span>
+                  </label>
+                ))}
+              </div>
+              {permissions.length === 0 && <p role="alert" style={{ color: "#b91c1c", fontSize: "0.75rem" }}>Select at least one permission.</p>}
+            </fieldset>
+
+            <label htmlFor="developer-api-key-ip-allowlist" style={{ display: "block", fontSize: "0.875rem", fontWeight: 600, marginBottom: "0.375rem" }}>
+              IP allowlist (optional)
+            </label>
+            <textarea
+              id="developer-api-key-ip-allowlist"
+              value={ipAllowlistText}
+              onChange={(event) => setIpAllowlistText(event.target.value)}
+              placeholder={"192.0.2.0/24\n2001:db8::/32"}
+              aria-invalid={Boolean(cidrError)}
+              aria-describedby="developer-api-key-ip-help developer-api-key-ip-error"
+              style={{ width: "100%", minHeight: "4.5rem", padding: "0.625rem", border: `1px solid ${cidrError ? "#dc2626" : "#d1d5db"}`, borderRadius: "0.375rem", fontFamily: "monospace", fontSize: "0.8125rem", boxSizing: "border-box" }}
+            />
+            <p id="developer-api-key-ip-help" style={{ fontSize: "0.7rem", color: "#6b7280", margin: "0.25rem 0 0.75rem" }}>Separate IPv4 or IPv6 CIDR blocks with commas or new lines. Blank allows any IP.</p>
+            {cidrError && <p id="developer-api-key-ip-error" role="alert" style={{ fontSize: "0.75rem", color: "#dc2626" }}>{cidrError}</p>}
+
             {error && (
-              <p style={{ fontSize: "0.75rem", color: "#dc2626", marginBottom: "1rem", margin: 0 }}>
+              <p role="alert" style={{ fontSize: "0.75rem", color: "#dc2626", marginBottom: "1rem", margin: 0 }}>
                 {error}
               </p>
             )}
 
-            <div style={{ backgroundColor: "#fef3c7", border: "1px solid #fcd34d", borderRadius: "0.375rem", padding: "0.75rem", marginBottom: "1.5rem" }}>
+            <div role="alert" style={{ backgroundColor: "#fef3c7", border: "1px solid #fcd34d", borderRadius: "0.375rem", padding: "0.75rem", marginBottom: "1.5rem" }}>
               <p style={{ fontSize: "0.75rem", color: "#92400e", margin: 0, lineHeight: 1.4 }}>
-                ⚠️ You will only see the full secret key once. Store it securely.
+                You will only see the full secret key once. Copy and store it securely before closing.
               </p>
             </div>
 
@@ -722,15 +839,15 @@ function CreateApiKeyModal({
                 onClick={() => {
                   handleCreateKey();
                 }}
-                disabled={loading || !name.trim()}
+                disabled={loading || !name.trim() || permissions.length === 0 || Boolean(cidrError)}
                 style={{
                   flex: 1,
                   padding: "0.75rem",
-                  backgroundColor: loading || !name.trim() ? "#d1d5db" : "#fbbf24",
+                  backgroundColor: loading || !name.trim() || permissions.length === 0 || Boolean(cidrError) ? "#d1d5db" : "#fbbf24",
                   color: "#1a1a3e",
                   border: "none",
                   borderRadius: "0.375rem",
-                  cursor: loading || !name.trim() ? "not-allowed" : "pointer",
+                  cursor: loading || !name.trim() || permissions.length === 0 || Boolean(cidrError) ? "not-allowed" : "pointer",
                   fontWeight: 600,
                   fontSize: "0.875rem",
                   opacity: loading ? 0.7 : 1,
@@ -1476,6 +1593,8 @@ export default function DevelopersPage() {
                   <tr style={{ borderBottom: "2px solid #e5e7eb", backgroundColor: "#f9fafb" }}>
                     <th style={{ textAlign: "left", padding: "0.75rem", fontSize: "0.875rem", fontWeight: 600, color: "#1a1a3e" }}>Name</th>
                     <th style={{ textAlign: "left", padding: "0.75rem", fontSize: "0.875rem", fontWeight: 600, color: "#1a1a3e" }}>Key</th>
+                    <th style={{ textAlign: "left", padding: "0.75rem", fontSize: "0.875rem", fontWeight: 600, color: "#1a1a3e" }}>Permissions</th>
+                    <th style={{ textAlign: "left", padding: "0.75rem", fontSize: "0.875rem", fontWeight: 600, color: "#1a1a3e" }}>IP allowlist</th>
                     <th style={{ textAlign: "left", padding: "0.75rem", fontSize: "0.875rem", fontWeight: 600, color: "#1a1a3e" }}>Created</th>
                     <th style={{ textAlign: "left", padding: "0.75rem", fontSize: "0.875rem", fontWeight: 600, color: "#1a1a3e" }}>Status</th>
                     <th style={{ textAlign: "center", padding: "0.75rem", fontSize: "0.875rem", fontWeight: 600, color: "#1a1a3e" }}>Actions</th>
@@ -1521,6 +1640,18 @@ export default function DevelopersPage() {
                             }}
                           />
                         </span>
+                      </td>
+                      <td style={{ padding: "0.75rem", fontSize: "0.75rem", color: "#1a1a3e", minWidth: "220px" }}>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.25rem" }}>
+                          {key.permissions.map((permission) => (
+                            <span key={permission} style={{ border: "1px solid #d1d5db", borderRadius: "9999px", padding: "0.125rem 0.5rem", whiteSpace: "nowrap" }}>
+                              {permission}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                      <td style={{ padding: "0.75rem", fontSize: "0.75rem", color: "#6b7280", minWidth: "130px" }}>
+                        {key.ip_allowlist.length ? key.ip_allowlist.join(", ") : "Any IP"}
                       </td>
                       <td style={{ padding: "0.75rem", fontSize: "0.875rem", color: "#6b7280" }}>{new Date(key.created_at).toLocaleDateString()}</td>
                       <td style={{ padding: "0.75rem", fontSize: "0.8125rem", color: statusColor }}>{status}</td>
@@ -1591,6 +1722,8 @@ export default function DevelopersPage() {
             last_four: key.secret.slice(-4),
             created_at: new Date().toISOString(),
             expires_at: null,
+            permissions: key.permissions,
+            ip_allowlist: key.ip_allowlist,
           }]);
           // Hold on to the only plaintext copy of the secret so the row's copy
           // button can hand the developer a working key (#1206).

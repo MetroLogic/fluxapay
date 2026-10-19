@@ -16,7 +16,7 @@ fi
 # - FluxaPay live API keys: fp_live_<token>
 # - Database URLs with embedded credentials
 # - JWT secrets assigned in config/env files
-PATTERNS='(^|[^A-Za-z0-9])S[A-Z2-7]{55}([^A-Za-z0-9]|$)|fp_live_[A-Za-z0-9]{8,}|(postgres|postgresql|mysql|mongodb(\+srv)?)://[^:@/\s]+:[^@/\s]+@|(JWT_SECRET|JWT_PRIVATE_KEY|JWT_SIGNING_KEY)[[:space:]]*[:=][[:space:]]*["'"']?[A-Za-z0-9_\-]{16,}'
+PATTERNS="(^|[^A-Za-z0-9])S[A-Z2-7]{55}([^A-Za-z0-9]\$)|fp_live_[A-Za-z0-9]{8,}|(postgres|postgresql|mysql|mongodb(\+srv)?)://[^:@/\s]+:[^@/\s]+@|(JWT_SECRET|JWT_PRIVATE_KEY|JWT_SIGNING_KEY)[[:space:]]*[:=][[:space:]]*[\"']?[A-Za-z0-9_\-]{16,}"
 
 FOUND=0
 MATCHED_FILES=""

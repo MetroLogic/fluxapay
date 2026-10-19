@@ -10,7 +10,6 @@ import { eventBus, AppEvents } from "../services/EventService";
 import { validateUserId } from "../helpers/request.helper";
 import { MetadataValidationError } from "../utils/metadata.util";
 import { paymentSettlementService } from "../services/paymentSettlement.service";
-import { IdempotentRequest, storeIdempotentResponse } from "../middleware/idempotency.middleware";
 import { isTerminalStatus, PaymentStatus } from "../types/payment";
 import { assertValidPositiveAmount, AmountValidationError } from "../utils/amount.util";
 import {
@@ -168,17 +167,6 @@ export const createPayment = async (req: Request, res: Response) => {
       ...payment,
       checkout_url: payment.checkout_url,
     };
-
-    const idempotentReq = req as IdempotentRequest;
-    if (idempotentReq.idempotencyKey) {
-      await storeIdempotentResponse(
-        idempotentReq.idempotencyKey,
-        req.body,
-        201,
-        responseBody,
-        merchantId
-      );
-    }
 
     res.status(201).json(responseBody);
   } catch (error: unknown) {
@@ -393,7 +381,17 @@ export const getPaymentById = async (req: Request, res: Response) => {
         // Test keys can only read test payments; live keys can only read live payments.
         ...(typeof isTestMode === "boolean" && { is_test_mode: isTestMode }),
       },
-      include: { merchant: true },
+      include: {
+        merchant: true,
+        settlement: {
+          select: {
+            amount: true,
+            fees: true,
+            net_amount: true,
+            currency: true,
+          },
+        },
+      },
     });
 
     if (!payment) {

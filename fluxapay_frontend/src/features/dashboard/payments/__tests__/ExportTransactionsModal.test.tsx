@@ -1,14 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type * as TransactionCsvExportService from "@/services/transactionCsvExport.service";
 
 const { downloadTransactionsCsv } = vi.hoisted(() => ({
   downloadTransactionsCsv: vi.fn(),
 }));
 
 vi.mock("@/services/transactionCsvExport.service", async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import("@/services/transactionCsvExport.service")>();
+  const actual = await importOriginal<typeof TransactionCsvExportService>();
   return { ...actual, downloadTransactionsCsv };
 });
 
@@ -72,7 +72,7 @@ describe("ExportTransactionsModal", () => {
 
     expect(screen.getByLabelText("Export start date")).toHaveValue("2026-03-01");
     expect(screen.getByLabelText("Export end date")).toHaveValue("2026-03-31");
-    expect(screen.getByLabelText("Status")).toHaveValue("completed");
+    expect(screen.getByRole("combobox", { name: "Status" })).toHaveValue("completed");
     expect(screen.getByTestId("export-date-range-summary")).toHaveTextContent(
       "2026-03-01 to 2026-03-31",
     );
@@ -91,6 +91,67 @@ describe("ExportTransactionsModal", () => {
     expect(new Date(end.value).getTime()).toBeGreaterThanOrEqual(
       new Date(start.value).getTime(),
     );
+  });
+
+  it("provides the requested date range presets", () => {
+    render(<ExportTransactionsModal {...defaultProps} />);
+
+    expect(screen.getByRole("option", { name: "Last 7 Days" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Last 30 Days" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Custom Range" })).toBeInTheDocument();
+  });
+
+  it("exposes accessible column and format controls", () => {
+    render(<ExportTransactionsModal {...defaultProps} />);
+
+    for (const label of [
+      "Date",
+      "Reference",
+      "Amount",
+      "Fees",
+      "Status",
+      "Customer Email",
+      "Metadata",
+    ]) {
+      expect(screen.getByRole("checkbox", { name: label })).toBeChecked();
+    }
+    expect(screen.getByLabelText("File format")).toHaveValue("csv");
+    expect(screen.getByRole("option", { name: "Excel-compatible CSV" })).toBeInTheDocument();
+  });
+
+  it("passes selected columns and format to the CSV generator", async () => {
+    const user = userEvent.setup();
+    render(<ExportTransactionsModal {...defaultProps} />);
+
+    await user.click(screen.getByRole("checkbox", { name: "Date" }));
+    await user.selectOptions(screen.getByLabelText("File format"), "excel");
+    await user.click(screen.getByTestId("confirm-export-csv"));
+
+    await waitFor(() => expect(downloadTransactionsCsv).toHaveBeenCalledTimes(1));
+    expect(downloadTransactionsCsv.mock.calls[0][1]).toMatchObject({
+      columns: expect.not.arrayContaining(["created_at"]),
+      format: "excel",
+    });
+  });
+
+  it("requires at least one selected export column", async () => {
+    const user = userEvent.setup();
+    render(<ExportTransactionsModal {...defaultProps} />);
+
+    for (const column of [
+      "Date",
+      "Reference",
+      "Amount",
+      "Fees",
+      "Status",
+      "Customer Email",
+      "Metadata",
+    ]) {
+      await user.click(screen.getByRole("checkbox", { name: column }));
+    }
+
+    expect(screen.getByTestId("confirm-export-csv")).toBeDisabled();
+    expect(screen.getByText("Select at least one column to export.")).toBeInTheDocument();
   });
 
   it("exports the selected date range and closes on success", async () => {

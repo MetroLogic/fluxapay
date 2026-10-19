@@ -24,6 +24,7 @@ export const PAYMENT_CSV_COLUMNS = [
   "merchant_id",
   "status",
   "amount",
+  "fees",
   "currency",
   "paid_amount",
   "usdc_amount",
@@ -246,6 +247,7 @@ export type PaymentExportRow = {
   cancel_url: string | null;
   paymentLinkId: string | null;
   settlementId: string | null;
+  settlement: { fees: unknown } | null;
   settlement_ref: string | null;
   settlement_fiat_amount: unknown;
   settlement_fiat_currency: string | null;
@@ -288,6 +290,7 @@ const EXPORT_SELECT = {
   cancel_url: true,
   paymentLinkId: true,
   settlementId: true,
+  settlement: { select: { fees: true } },
   settlement_ref: true,
   settlement_fiat_amount: true,
   settlement_fiat_currency: true,
@@ -311,6 +314,7 @@ export function paymentToCsvCells(payment: PaymentExportRow): string[] {
     payment.merchantId,
     payment.status,
     payment.amount,
+    payment.settlement?.fees,
     payment.currency,
     payment.paid_amount,
     payment.usdc_amount,

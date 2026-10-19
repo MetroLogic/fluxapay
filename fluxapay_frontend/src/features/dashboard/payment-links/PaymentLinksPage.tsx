@@ -242,31 +242,31 @@ export function PaymentLinksPage() {
       {/* QR Code Modal */}
       {showQR && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="w-full max-w-sm rounded-lg bg-white p-4 sm:p-6">
+          <div className="w-full max-w-sm rounded-lg bg-card p-4 sm:p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold">Payment Link Created</h3>
               <button
                 onClick={() => setShowQR(null)}
-                className="p-1 hover:bg-gray-100 rounded"
+                className="p-1 hover:bg-muted rounded"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
             <div className="flex flex-col items-center gap-4">
-              <div className="bg-white p-4 rounded-lg border">
+              <div className="bg-white p-4 rounded-lg border border-border">
                 <QRCodeSVG
                   value={`${window.location.origin}/api/links/${showQR.slug}/click`}
                   size={200}
                 />
               </div>
               <div className="w-full">
-                <p className="text-sm text-gray-600 mb-1">Shareable URL:</p>
+                <p className="text-sm text-muted-foreground mb-1">Shareable URL:</p>
                 <div className="flex min-w-0 gap-2">
                   <input
                     type="text"
                     readOnly
                     value={`${window.location.origin}/api/links/${showQR.slug}/click`}
-                    className="w-full min-w-0 rounded border bg-gray-50 px-3 py-2 text-sm"
+                    className="w-full min-w-0 rounded border border-border bg-muted px-3 py-2 text-sm"
                   />
                   <button
                     onClick={() => copyLink(showQR.slug)}
@@ -284,12 +284,12 @@ export function PaymentLinksPage() {
       {/* Edit Modal */}
       {editingLink && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="w-full max-w-md rounded-lg bg-white p-4 sm:p-6">
+          <div className="w-full max-w-md rounded-lg bg-card p-4 sm:p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold">Edit Payment Link</h3>
               <button
                 onClick={() => setEditingLink(null)}
-                className="p-1 hover:bg-gray-100 rounded"
+                className="p-1 hover:bg-muted rounded"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -330,7 +330,7 @@ export function PaymentLinksPage() {
               <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
                 <button
                   onClick={() => setEditingLink(null)}
-                  className="w-full rounded border px-4 py-2 hover:bg-gray-50 sm:w-auto"
+                  className="w-full rounded border border-border px-4 py-2 hover:bg-muted sm:w-auto"
                 >
                   Cancel
                 </button>

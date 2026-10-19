@@ -17,7 +17,7 @@ import {
 import { validatePayment, validateUpdatePayment } from '../validators/payment.validator';
 import { authenticateApiKey } from '../middleware/apiKeyAuth.middleware';
 import { merchantApiKeyRateLimit } from '../middleware/rateLimit.middleware';
-import { idempotencyMiddleware } from '../middleware/idempotency.middleware';
+import { redisIdempotencyMiddleware } from '../middleware/redisIdempotency.middleware';
 import { simpleRateLimit } from "../middleware/simpleRateLimit.middleware";
 import { kycGateMiddleware } from '../middleware/kycGate.middleware';
 import { validatePagination } from '../validators/pagination.validator';
@@ -217,7 +217,7 @@ router.get('/checkout/:id/stream', (_req, res) => {
 router.get('/checkout/:id/status', getPublicCheckoutPaymentStatus);
 router.get('/checkout/:id', getPublicCheckoutPayment);
 
-router.post('/', authenticateApiKey, kycGateMiddleware, merchantApiKeyRateLimit(), idempotencyMiddleware, validatePayment, createPayment);
+router.post('/', authenticateApiKey, kycGateMiddleware, merchantApiKeyRateLimit(), redisIdempotencyMiddleware, validatePayment, createPayment);
 
 /**
  * @swagger

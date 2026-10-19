@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { Payment, WebhookLogEntry, StatusHistoryEntry } from "./types";
+import { useEffect, useState, useCallback, useRef } from "react";
+import type { Payment, WebhookLogEntry, StatusHistoryEntry } from "./types";
 import { Badge } from "@/components/Badge";
 import { Button } from "@/components/Button";
 import { TxHashLink } from "@/components/TxHashLink";
@@ -20,10 +20,14 @@ import {
   LayoutDashboard,
   ChevronDown,
   ChevronUp,
+  Download,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
+import { QRCodeCanvas } from "qrcode.react";
+import { getStellarExpertTxUrl } from "@/lib/stellar";
+import { generatePaymentReceiptPdf, loadReceiptLogo } from "./paymentReceipt";
 
 interface PaymentDrawerProps {
   payment: Payment | null;
@@ -178,6 +182,9 @@ export function PaymentDrawer({ payment, isOpen, onClose }: PaymentDrawerProps) 
   const [webhookLogs, setWebhookLogs] = useState<WebhookLogEntry[]>([]);
   const [webhookLoading, setWebhookLoading] = useState(false);
   const [statusHistory, setStatusHistory] = useState<StatusHistoryEntry[]>([]);
+  const [isGeneratingReceipt, setIsGeneratingReceipt] = useState(false);
+  const [receiptError, setReceiptError] = useState<string | null>(null);
+  const receiptQrRef = useRef<HTMLCanvasElement>(null);
 
   const copyToClipboard = useCallback(async (text: string) => {
     try {
@@ -187,6 +194,70 @@ export function PaymentDrawer({ payment, isOpen, onClose }: PaymentDrawerProps) 
       toast.error("Unable to copy.");
     }
   }, []);
+
+  const handleDownloadReceipt = useCallback(async () => {
+    if (!payment) return;
+    setReceiptError(null);
+    setIsGeneratingReceipt(true);
+
+    try {
+      const result = await api.payments.getById(payment.id);
+      if ("error" in result) throw result.error;
+
+      const details = result.data as Record<string, unknown>;
+      const merchant = (details.merchant ?? {}) as Record<string, unknown>;
+      const settlement = details.settlement as Record<string, unknown> | null;
+      const transactionHash = String(details.transaction_hash ?? payment.txHash ?? "");
+      const transactionUrl =
+        payment.stellarExpertUrl || getStellarExpertTxUrl(transactionHash);
+      const qrCodeDataUrl = receiptQrRef.current?.toDataURL("image/png");
+      if (!transactionHash || !qrCodeDataUrl) {
+        throw new Error("This completed payment does not have a verifiable Stellar transaction.");
+      }
+
+      const logoDataUrl = await loadReceiptLogo(
+        typeof merchant.checkout_logo_url === "string"
+          ? merchant.checkout_logo_url
+          : undefined,
+      );
+      const metadata = details.metadata as Record<string, unknown> | null;
+      generatePaymentReceiptPdf({
+        paymentId: payment.id,
+        description: typeof details.description === "string" ? details.description : undefined,
+        orderId:
+          payment.orderId ||
+          (typeof metadata?.order_id === "string" ? metadata.order_id : undefined),
+        createdAt: payment.createdAt,
+        amount: Number(details.amount ?? payment.amount),
+        currency: String(details.currency ?? payment.currency),
+        customerName: payment.customerName,
+        customerEmail: payment.customerEmail,
+        transactionHash,
+        transactionUrl,
+        qrCodeDataUrl,
+        merchantName:
+          typeof merchant.business_name === "string" ? merchant.business_name : "Merchant",
+        merchantLogoDataUrl: logoDataUrl,
+        locale: navigator.language,
+        settlement: settlement
+          ? {
+              amount: settlement.amount as number | string | null,
+              fees: settlement.fees as number | string | null,
+              netAmount: settlement.net_amount as number | string | null,
+              currency: typeof settlement.currency === "string" ? settlement.currency : null,
+            }
+          : null,
+      });
+      toast.success("Receipt downloaded.");
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unable to generate the receipt. Please try again.";
+      setReceiptError(message);
+      toast.error("Unable to generate the receipt. Please try again.");
+    } finally {
+      setIsGeneratingReceipt(false);
+    }
+  }, [payment]);
 
   // Fetch webhook logs when a payment is selected
   useEffect(() => {
@@ -469,6 +540,41 @@ export function PaymentDrawer({ payment, isOpen, onClose }: PaymentDrawerProps) 
                 <ExternalLink className="h-4 w-4" />
                 View on Stellar Expert
               </Button>
+            </div>
+          )}
+
+          {(payment.status === "completed" || payment.status === "paid") && (
+            <div className="space-y-2 pt-2">
+              <Button
+                className="w-full gap-2"
+                onClick={() => void handleDownloadReceipt()}
+                disabled={isGeneratingReceipt || !payment.txHash}
+                aria-describedby={!payment.txHash || receiptError ? "receipt-status" : undefined}
+              >
+                <Download className="h-4 w-4" />
+                {isGeneratingReceipt ? "Generating receipt..." : "Download Receipt"}
+              </Button>
+              {!payment.txHash && (
+                <p id="receipt-status" role="status" className="text-sm text-muted-foreground">
+                  A Stellar transaction hash is required to verify this receipt.
+                </p>
+              )}
+              {receiptError && (
+                <p id="receipt-status" role="alert" className="text-sm text-destructive">
+                  {receiptError}
+                </p>
+              )}
+              {payment.txHash && (
+                <div className="sr-only" aria-hidden="true">
+                  <QRCodeCanvas
+                    ref={receiptQrRef}
+                    value={payment.stellarExpertUrl || getStellarExpertTxUrl(payment.txHash)}
+                    size={256}
+                    level="H"
+                    title="Stellar transaction verification QR code"
+                  />
+                </div>
+              )}
             </div>
           )}
 

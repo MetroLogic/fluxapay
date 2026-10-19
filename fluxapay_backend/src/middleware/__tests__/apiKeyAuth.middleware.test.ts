@@ -19,12 +19,13 @@ jest.mock("../../helpers/crypto.helper", () => ({
   compareKeys: jest.fn(),
 }));
 
-import { authenticateApiKey, isTestApiKey } from "../apiKeyAuth.middleware";
+import { authenticateApiKey, isLiveApiKey, isTestApiKey } from "../apiKeyAuth.middleware";
 import { prisma } from "../../config/prisma";
 import { compareKeys } from "../../helpers/crypto.helper";
 import { apiKeyService } from "../../services/apiKey.service";
 import { Response, NextFunction } from "express";
 import { AuthRequest } from "../../types/express";
+import crypto from "crypto";
 
 const mockFindMany = prisma.merchant.findMany as jest.Mock;
 const mockCompare = compareKeys as jest.Mock;
@@ -38,6 +39,7 @@ const hexSuffix = "facecafe00000000000000000000000000abcd";
 const skTestKey = `sk_test_${hexSuffix}`;
 const skLiveKey = `sk_live_${hexSuffix}`;
 const fpkTestKey = `fpk_test_${hexSuffix}`;
+const fpkLiveKey = `fpk_live_${hexSuffix}`;
 
 describe("apiKeyAuth.middleware — test mode isolation", () => {
   let mockReq: Partial<AuthRequest>;
@@ -49,7 +51,7 @@ describe("apiKeyAuth.middleware — test mode isolation", () => {
     mockFindMany.mockResolvedValue([]);
     mockApiKeyFindMany.mockResolvedValue([]);
     mockApiKeyUpdateMany.mockResolvedValue({ count: 1 });
-    mockReq = { headers: {} };
+    mockReq = { headers: {}, method: "GET", originalUrl: "/api/v1/payments" };
     mockRes = {
       json: jest.fn().mockReturnThis(),
       status: jest.fn().mockReturnThis(),
@@ -68,6 +70,11 @@ describe("apiKeyAuth.middleware — test mode isolation", () => {
 
     it("returns false for sk_live_ keys", () => {
       expect(isTestApiKey("sk_live_abcd1234")).toBe(false);
+    });
+
+    it("recognizes the managed live key prefix", () => {
+      expect(isLiveApiKey(fpkLiveKey)).toBe(true);
+      expect(isTestApiKey(fpkLiveKey)).toBe(false);
     });
   });
 
@@ -98,6 +105,24 @@ describe("apiKeyAuth.middleware — test mode isolation", () => {
       expect(mockNext).toHaveBeenCalled();
       expect(mockReq.merchantId).toBe("merchant_1");
       expect(mockReq.isTestMode).toBe(true);
+    });
+  });
+
+  describe("fpk_live_ managed key", () => {
+    it("authenticates as a live key", async () => {
+      mockReq.headers = { "x-api-key": fpkLiveKey };
+      mockApiKeyFindMany.mockResolvedValueOnce([{
+        id: "managed-live-key",
+        merchantId: "merchant_1",
+        key_hash: crypto.createHash("sha256").update(fpkLiveKey).digest("hex"),
+        permissions: ["payments:read"],
+        ip_allowlist: [],
+      }]);
+
+      await authenticateApiKey(mockReq as AuthRequest, mockRes as Response, mockNext as NextFunction);
+
+      expect(mockNext).toHaveBeenCalled();
+      expect(mockReq.isTestMode).toBe(false);
     });
   });
 
@@ -138,8 +163,8 @@ describe("apiKeyAuth.middleware — test mode isolation", () => {
   });
 
   it("authenticates old and new keys concurrently during rotation", async () => {
-    const oldReq = { headers: { "x-api-key": skLiveKey } } as AuthRequest;
-    const newReq = { headers: { "x-api-key": skTestKey } } as AuthRequest;
+    const oldReq = { headers: { "x-api-key": skLiveKey } } as unknown as AuthRequest;
+    const newReq = { headers: { "x-api-key": skTestKey } } as unknown as AuthRequest;
     const oldNext = jest.fn();
     const newNext = jest.fn();
     mockApiKeyFindMany.mockImplementation(async ({ where }: { where: { key_last_four: string } }) => [
@@ -178,5 +203,20 @@ describe("apiKeyAuth.middleware — test mode isolation", () => {
 
     expect(mockNext).not.toHaveBeenCalled();
     expect(mockRes.status).toHaveBeenCalledWith(401);
+  });
+
+  it("uses the Redis cache when an auth lookup has already been cached", async () => {
+    const cachedReq = { headers: { "x-api-key": skLiveKey } } as unknown as AuthRequest;
+    const cachedLookup = { merchantId: "merchant_cached", isTestMode: false };
+
+    jest.spyOn(require("../../utils/apiKeyCache.util"), "getCachedApiKeyLookup").mockResolvedValue(cachedLookup);
+
+    await authenticateApiKey(cachedReq, mockRes as Response, mockNext as NextFunction);
+
+    expect(mockNext).toHaveBeenCalledTimes(1);
+    expect(cachedReq.merchantId).toBe("merchant_cached");
+    expect(cachedReq.isTestMode).toBe(false);
+    expect(mockFindMany).not.toHaveBeenCalled();
+    expect(mockCompare).not.toHaveBeenCalled();
   });
 });
