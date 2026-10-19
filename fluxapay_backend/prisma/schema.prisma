@@ -25,6 +25,12 @@ model Merchant {
   settlement_currency   String
   webhook_url           String?
   webhook_secret        String
+  /** Secondary webhook signing secret — present while a rotation grace window is active.
+   *  Both secrets are used to sign outgoing webhooks until the merchant promotes
+   *  the secondary to primary (or revokes it). See POST /api/v1/webhooks/keys/rotate. */
+  webhook_secret_secondary            String?
+  /** Timestamp when the secondary secret was generated; used to enforce grace-window TTL. */
+  webhook_secret_secondary_created_at DateTime?
   /** Optional list of event types this merchant wants delivered. Empty = all events (backward-compatible). */
   webhook_subscribed_events String[]           @default([])
   password              String

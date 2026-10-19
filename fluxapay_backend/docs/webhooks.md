@@ -144,6 +144,61 @@ app.post('/webhook', (req, res) => {
 });
 ```
 
+## Signature Key Rotation
+
+Rotate a signing key without interrupting deliveries that are still being
+verified with the existing key:
+
+1. Call `POST /api/v1/webhooks/keys/rotate`. FluxaPay returns a new secondary
+   secret once. Store it securely and configure your handler to accept both
+   secrets.
+2. During the grace window, each delivery includes
+   `X-FluxaPay-Signature` (primary) and
+   `X-FluxaPay-Signature-Secondary` (secondary), plus
+   `X-FluxaPay-Timestamp`.
+3. After deploying and confirming the handler accepts the new secret, call
+   `POST /api/v1/webhooks/keys/promote`. This promotes the secondary key and
+   retires the old primary.
+4. To cancel rotation instead, call `DELETE /api/v1/webhooks/keys/secondary`.
+   Use `GET /api/v1/webhooks/keys/status` to check whether rotation is active;
+   it does not return secret values.
+
+Both signatures use HMAC-SHA256 over the timestamp, a period, and the exact raw
+request body. Verify each supplied signature against its corresponding known
+secret, accepting the request if either check succeeds:
+
+```javascript
+const crypto = require('crypto');
+
+function verifyWebhookSignature(rawBody, timestamp, signature, secret) {
+  if (!/^[a-f0-9]{64}$/i.test(signature ?? '')) return false;
+  const expected = crypto
+    .createHmac('sha256', secret)
+    .update(`${timestamp}.${rawBody}`)
+    .digest('hex');
+  return crypto.timingSafeEqual(Buffer.from(signature, 'hex'), Buffer.from(expected, 'hex'));
+}
+
+function verifyRotatingWebhook(req, primarySecret, secondarySecret) {
+  const timestamp = req.headers['x-fluxapay-timestamp'];
+  if (typeof timestamp !== 'string') return false;
+
+  const candidates = [
+    [req.headers['x-fluxapay-signature'], primarySecret],
+    [req.headers['x-fluxapay-signature-secondary'], secondarySecret],
+  ];
+  return candidates.some(([signature, secret]) =>
+    typeof signature === 'string' && typeof secret === 'string' &&
+    verifyWebhookSignature(req.rawBody, timestamp, signature, secret)
+  );
+}
+```
+
+Continue validating timestamp freshness and deduplicating by `event_id` after
+signature verification. The existing `/api/v1/merchants/keys/rotate-webhook-secret`
+endpoint also starts a grace-window rotation; use the `/webhooks/keys/*` endpoints
+for the explicit lifecycle and status operations.
+
 ## Retry Behavior
 
 FluxaPay retries failed webhook deliveries with exponential backoff:
