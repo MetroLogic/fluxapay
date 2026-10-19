@@ -8,8 +8,7 @@ import { compareKeys } from "../helpers/crypto.helper";
 import { apiKeyService } from "../services/apiKey.service";
 import jwt, { JwtPayload } from "jsonwebtoken";
 import { getEnvConfig } from "../config/env.config";
-import { isIpAllowed } from "../utils/ipCidr";
-import { requiredApiKeyPermission } from "../utils/apiKeyPermissions";
+import { getCachedApiKeyLookup, setCachedApiKeyLookup } from "../utils/apiKeyCache.util";
 
 
 /**
@@ -73,6 +72,13 @@ export async function authenticateApiKey(
         key.startsWith("fpk_live_") || key.startsWith("fpk_test_");
     if (isApiKey) {
         try {
+            const cachedLookup = await getCachedApiKeyLookup(key);
+            if (cachedLookup) {
+                authReq.merchantId = cachedLookup.merchantId;
+                authReq.isTestMode = cachedLookup.isTestMode;
+                return next();
+            }
+
             const lastFour = key.slice(-4);
 
             // Find merchants with matching last four to narrow down search
@@ -85,11 +91,15 @@ export async function authenticateApiKey(
                 if (merchant.api_key_hashed && await compareKeys(key, merchant.api_key_hashed)) {
                     authReq.merchantId = merchant.id;
                     authReq.isTestMode = isTestApiKey(key);
+                    await setCachedApiKeyLookup(key, merchant.id, authReq.isTestMode);
                     return next();
                 }
             }
 
             const storedKey = await apiKeyService.validateRawApiKey(key);
+            if (storedKey.expired && storedKey.merchantId) {
+                return sendApiError(res, apiError(401, ErrorCode.API_KEY_EXPIRED, "API key expired"));
+            }
             if (storedKey.valid && storedKey.merchantId) {
                 const ipAllowlist = storedKey.ip_allowlist ?? [];
                 if (!isIpAllowed(req.ip, ipAllowlist)) {
@@ -111,17 +121,20 @@ export async function authenticateApiKey(
                 }
                 authReq.merchantId = storedKey.merchantId;
                 authReq.isTestMode = isTestApiKey(key);
-                authReq.apiKeyPermissions = permissions;
-                authReq.apiKeyIpAllowlist = ipAllowlist;
+                await setCachedApiKeyLookup(key, storedKey.merchantId, authReq.isTestMode);
                 return next();
             }
 
             // Support key rotation: a key may be in a grace period after rotation.
             // The previous key remains valid until its grace period expires.
             const rotatedKey = await apiKeyService.validateRotatedApiKey(key);
+            if (rotatedKey.expired && rotatedKey.merchantId) {
+                return sendApiError(res, apiError(401, ErrorCode.API_KEY_EXPIRED, "API key expired"));
+            }
             if (rotatedKey.valid && rotatedKey.merchantId) {
                 authReq.merchantId = rotatedKey.merchantId;
                 authReq.isTestMode = isTestApiKey(key);
+                await setCachedApiKeyLookup(key, rotatedKey.merchantId, authReq.isTestMode);
                 return next();
             }
 

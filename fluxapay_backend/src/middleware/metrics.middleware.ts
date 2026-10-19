@@ -3,6 +3,11 @@ import { getMetricsCollector } from '../utils/logger';
 import { getLogger } from '../utils/logger';
 import { adminAuth } from './adminAuth.middleware';
 import { MetricEvent, MetricsTags } from '../types/logging.types';
+import {
+  DatabasePoolSnapshot,
+  renderDatabasePoolMetrics,
+  warnOnPoolSaturation,
+} from '../utils/prismaPoolMetrics';
 
 /**
  * Prometheus counter families exposed by the `/metrics` endpoint.
@@ -70,7 +75,10 @@ function serializeLabels(labels: Record<string, string>): string {
  * Families without any recorded sample are omitted so the output stays stable
  * as counters spin up.
  */
-export function renderPrometheusMetrics(events: MetricEvent[]): string {
+export function renderPrometheusMetrics(
+  events: MetricEvent[],
+  poolSnapshots: DatabasePoolSnapshot[] = [],
+): string {
   // family name -> help
   const helpByName: Record<string, string> = {};
   for (const mapping of Object.values(PROMETHEUS_COUNTERS)) {
@@ -107,7 +115,8 @@ export function renderPrometheusMetrics(events: MetricEvent[]): string {
     lines.push(`${sample.name}${sample.labels} ${sample.value}`);
   }
 
-  return `${lines.join('\n')}\n`;
+  const businessMetrics = `${lines.join('\n')}\n`;
+  return businessMetrics + renderDatabasePoolMetrics(poolSnapshots);
 }
 
 /**
@@ -116,27 +125,37 @@ export function renderPrometheusMetrics(events: MetricEvent[]): string {
  * Exposes a `/metrics` endpoint (admin-auth protected) that returns the
  * business counters in Prometheus text exposition format for scraping.
  */
-export function metricsMiddleware(req: Request, res: Response, next: NextFunction): void {
-  const isMetricsRequest = req.path === '/metrics' && req.method === 'GET';
-  if (!isMetricsRequest) {
-    next();
-    return;
-  }
+export function createMetricsMiddleware(
+  getPoolSnapshots: () => Promise<DatabasePoolSnapshot[]> = async () => [],
+): (req: Request, res: Response, next: NextFunction) => void {
+  return (req, res, next) => {
+    const isMetricsRequest = req.path === '/metrics' && req.method === 'GET';
+    if (!isMetricsRequest) {
+      next();
+      return;
+    }
 
-  adminAuth(req, res, () => {
-    const collector = getMetricsCollector();
-    const logger = getLogger();
-    const events = collector.getMetrics();
+    adminAuth(req, res, () => {
+      void (async () => {
+        const collector = getMetricsCollector();
+        const logger = getLogger();
+        const events = collector.getMetrics();
+        const poolSnapshots = await getPoolSnapshots();
 
-    logger.debug('Metrics scraped', {
-      eventCount: events.length,
-      families: Object.keys(PROMETHEUS_COUNTERS),
+        for (const snapshot of poolSnapshots) warnOnPoolSaturation(snapshot, logger);
+        logger.debug('Metrics scraped', {
+          eventCount: events.length,
+          families: Object.keys(PROMETHEUS_COUNTERS),
+        });
+
+        res.set('Content-Type', 'text/plain; version=0.0.4; charset=utf-8');
+        res.send(renderPrometheusMetrics(events, poolSnapshots));
+      })().catch((error: unknown) => next(error));
     });
-
-    res.set('Content-Type', 'text/plain; version=0.0.4; charset=utf-8');
-    res.send(renderPrometheusMetrics(events));
-  });
+  };
 }
+
+export const metricsMiddleware = createMetricsMiddleware();
 
 /**
  * Business Metrics Helper Functions

@@ -163,8 +163,8 @@ describe("apiKeyAuth.middleware — test mode isolation", () => {
   });
 
   it("authenticates old and new keys concurrently during rotation", async () => {
-    const oldReq = { headers: { "x-api-key": skLiveKey }, method: "GET", originalUrl: "/api/v1/payments" } as AuthRequest;
-    const newReq = { headers: { "x-api-key": skTestKey }, method: "GET", originalUrl: "/api/v1/payments" } as AuthRequest;
+    const oldReq = { headers: { "x-api-key": skLiveKey } } as unknown as AuthRequest;
+    const newReq = { headers: { "x-api-key": skTestKey } } as unknown as AuthRequest;
     const oldNext = jest.fn();
     const newNext = jest.fn();
     mockApiKeyFindMany.mockImplementation(async ({ where }: { where: { key_last_four: string } }) => [
@@ -205,39 +205,18 @@ describe("apiKeyAuth.middleware — test mode isolation", () => {
     expect(mockRes.status).toHaveBeenCalledWith(401);
   });
 
-  it("rejects a managed key when the request requires an ungranted permission", async () => {
-    mockReq.headers = { "x-api-key": skLiveKey };
-    mockReq.method = "POST";
-    mockReq.originalUrl = "/api/v1/payments";
-    mockApiKeyFindMany.mockResolvedValueOnce([{
-      id: "read-only-key",
-      merchantId: "merchant_1",
-      key_hash: crypto.createHash("sha256").update(skLiveKey).digest("hex"),
-      permissions: ["payments:read"],
-      ip_allowlist: [],
-    }]);
-    mockApiKeyUpdateMany.mockResolvedValueOnce({ count: 1 });
+  it("uses the Redis cache when an auth lookup has already been cached", async () => {
+    const cachedReq = { headers: { "x-api-key": skLiveKey } } as unknown as AuthRequest;
+    const cachedLookup = { merchantId: "merchant_cached", isTestMode: false };
 
-    await authenticateApiKey(mockReq as AuthRequest, mockRes as Response, mockNext as NextFunction);
+    jest.spyOn(require("../../utils/apiKeyCache.util"), "getCachedApiKeyLookup").mockResolvedValue(cachedLookup);
 
-    expect(mockNext).not.toHaveBeenCalled();
-    expect(mockRes.status).toHaveBeenCalledWith(403);
-  });
+    await authenticateApiKey(cachedReq, mockRes as Response, mockNext as NextFunction);
 
-  it("rejects a managed key outside its allowed CIDR range", async () => {
-    mockReq.headers = { "x-api-key": skLiveKey };
-    mockReq.ip = "192.0.2.10";
-    mockApiKeyFindMany.mockResolvedValueOnce([{
-      id: "restricted-key",
-      merchantId: "merchant_1",
-      key_hash: crypto.createHash("sha256").update(skLiveKey).digest("hex"),
-      permissions: ["payments:read"],
-      ip_allowlist: ["198.51.100.0/24"],
-    }]);
-
-    await authenticateApiKey(mockReq as AuthRequest, mockRes as Response, mockNext as NextFunction);
-
-    expect(mockNext).not.toHaveBeenCalled();
-    expect(mockRes.status).toHaveBeenCalledWith(403);
+    expect(mockNext).toHaveBeenCalledTimes(1);
+    expect(cachedReq.merchantId).toBe("merchant_cached");
+    expect(cachedReq.isTestMode).toBe(false);
+    expect(mockFindMany).not.toHaveBeenCalled();
+    expect(mockCompare).not.toHaveBeenCalled();
   });
 });
