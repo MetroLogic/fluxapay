@@ -10,6 +10,7 @@ package fluxapay_test
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"testing"
 	"time"
@@ -164,9 +165,9 @@ func TestMockServerInvalidAPIKey(t *testing.T) {
 		t.Fatal("expected error for invalid API key, got nil")
 	}
 
-	apiErr, ok := err.(*fluxapay.Error)
-	if !ok {
-		t.Fatalf("expected *fluxapay.Error, got %T: %v", err, err)
+	var apiErr *fluxapay.APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("expected *fluxapay.APIError, got %T: %v", err, err)
 	}
 	if apiErr.StatusCode != http.StatusUnauthorized {
 		t.Errorf("want 401, got %d", apiErr.StatusCode)

@@ -3,7 +3,15 @@
  * Run with: node --experimental-vm-modules src/__tests__/sdk.test.ts
  * (or wire into jest / vitest)
  */
-import { FluxaPay, FluxaPayError } from '../index';
+import {
+  createMockCustomer,
+  createMockFluxaPayClient,
+  createMockPayment,
+  createMockPaymentLink,
+  FluxaPay,
+  FluxaPayError,
+  mockJsonResponse,
+} from '../index';
 
 // ── Simple assertion helper ──────────────────────────────────────────────────
 let pass = 0;
@@ -35,25 +43,6 @@ assert(client instanceof FluxaPay, 'creates client instance');
 
 const originalFetch = globalThis.fetch;
 let createPaymentRequestBody: unknown;
-globalThis.fetch = async (_input, init) => {
-  createPaymentRequestBody = init?.body;
-  return {
-    ok: true,
-    json: async () => ({ id: 'pay_1' }),
-    headers: new Headers(),
-  } as Response;
-};
-await client.payments.create({
-  amount: 10,
-  currency: 'USD',
-  customer_email: 'buyer@example.com',
-  expires_in_seconds: 1800,
-});
-assert(
-  JSON.parse(createPaymentRequestBody as string).expires_in_seconds === 1800,
-  'sends expires_in_seconds when creating a payment',
-);
-globalThis.fetch = originalFetch;
 
 // FluxaPayError
 const err = new FluxaPayError(400, 'bad request', 'VALIDATION_ERROR', null, 'req_abc123');
@@ -134,7 +123,7 @@ async function runRetryTests(): Promise<void> {
     attempts++;
     return jsonResponse(attempts < 3 ? { message: 'busy' } : { id: 'pay_1' }, attempts < 3 ? 503 : 200);
   }, async (delays) => {
-    const retryingClient = new FluxaPay({ apiKey: 'sk_test_123', baseUrl: 'http://localhost:3001', retries: 2 });
+    const retryingClient = new FluxaPay({ apiKey: 'sk_test_123', baseUrl: 'http://localhost:3001', retries: 2, timeoutMs: 0 });
     const payment = await retryingClient.payments.get('pay_1');
     assert(payment.id === 'pay_1', 'retries transient 503 responses and returns success');
     assert(attempts === 3, 'performs no more than the configured number of retries');
@@ -147,7 +136,7 @@ async function runRetryTests(): Promise<void> {
     if (attempts === 1) throw new TypeError('network dropped');
     return jsonResponse({ id: 'pay_2' });
   }, async (delays) => {
-    const retryingClient = new FluxaPay({ apiKey: 'sk_test_123', baseUrl: 'http://localhost:3001', retries: 1 });
+    const retryingClient = new FluxaPay({ apiKey: 'sk_test_123', baseUrl: 'http://localhost:3001', retries: 1, timeoutMs: 0 });
     const payment = await retryingClient.payments.get('pay_2');
     assert(payment.id === 'pay_2' && attempts === 2, 'retries network failures');
     assert(delays.length === 1, 'backs off after a network failure');
@@ -160,7 +149,7 @@ async function runRetryTests(): Promise<void> {
       ? jsonResponse({ message: 'rate limited' }, 429, { 'Retry-After': '2' })
       : jsonResponse({ id: 'pay_3' });
   }, async (delays) => {
-    const retryingClient = new FluxaPay({ apiKey: 'sk_test_123', baseUrl: 'http://localhost:3001', retries: 1 });
+    const retryingClient = new FluxaPay({ apiKey: 'sk_test_123', baseUrl: 'http://localhost:3001', retries: 1, timeoutMs: 0 });
     await retryingClient.payments.get('pay_3');
     assert(delays.length === 1 && delays[0] === 2000, 'honors Retry-After on 429 responses');
   });
@@ -170,7 +159,7 @@ async function runRetryTests(): Promise<void> {
     clientErrorAttempts++;
     return jsonResponse({ message: 'invalid request' }, 400);
   }, async (delays) => {
-    const retryingClient = new FluxaPay({ apiKey: 'sk_test_123', baseUrl: 'http://localhost:3001', retries: 3 });
+    const retryingClient = new FluxaPay({ apiKey: 'sk_test_123', baseUrl: 'http://localhost:3001', retries: 3, timeoutMs: 0 });
     let thrown: unknown;
     try {
       await retryingClient.payments.get('pay_4');
@@ -235,9 +224,109 @@ async function runResourceTests(): Promise<void> {
   });
 }
 
+async function runPagingTests(): Promise<void> {
+  const calls: string[] = [];
+  await withMockedNetwork(async (input) => {
+    const url = new URL(String(input));
+    calls.push(url.href);
+    const page = Number(url.searchParams.get('page'));
+    return jsonResponse(page === 1
+      ? { data: [{ id: 'pay_1' }, { id: 'pay_2' }], meta: { page: 1, totalPages: 2, hasNextPage: true } }
+      : { data: [{ id: 'pay_3' }], meta: { page: 2, totalPages: 2, hasNextPage: false } });
+  }, async () => {
+    const client = new FluxaPay({ apiKey: 'sk_paging_test', baseUrl: 'http://localhost:3001' });
+    const seen: string[] = [];
+    for await (const payment of client.payments.list({ limit: 2 })) seen.push(payment.id);
+    assert(seen.join(',') === 'pay_1,pay_2,pay_3', 'for-await iterates through all payment pages');
+    assert(calls.length === 2 && calls.every((url) => new URL(url).searchParams.get('limit') === '2'), 'requests subsequent pages with the configured limit');
+
+    const callbackIds: string[] = [];
+    await client.payments.list({ limit: 2 }).autoPagingEach(async (payment) => {
+      callbackIds.push(payment.id);
+    });
+    assert(callbackIds.join(',') === 'pay_1,pay_2,pay_3', 'autoPagingEach awaits callbacks for every payment');
+  });
+
+  let attempts = 0;
+  await withMockedNetwork(async (input) => {
+    const url = new URL(String(input));
+    attempts++;
+    if (attempts === 1) return jsonResponse({ message: 'rate limited' }, 429, { 'Retry-After': '1' });
+    if (url.searchParams.get('cursor') === 'cursor_2') {
+      return jsonResponse({ payments: [{ id: 'pay_2' }], has_more: false });
+    }
+    return jsonResponse({ payments: [{ id: 'pay_1' }], has_more: true, next_cursor: 'cursor_2' });
+  }, async (delays) => {
+    const client = new FluxaPay({ apiKey: 'sk_cursor_test', baseUrl: 'http://localhost:3001', retries: 1, timeoutMs: 0 });
+    const ids: string[] = [];
+    for await (const payment of client.payments.list({ limit: 1 })) ids.push(payment.id);
+    assert(ids.join(',') === 'pay_1,pay_2', 'follows next_cursor until the final page');
+    assert(attempts === 3 && delays.length === 1 && delays[0] === 1000, 'backs off and retries rate-limited page requests');
+  });
+}
+
+async function runMockClientTests(): Promise<void> {
+  const mockPayment = createMockPayment({ id: 'pay_fixture_1', amount: 42 });
+  const mockCustomer = createMockCustomer({ id: 'cus_fixture_1', email: 'fixture@example.test' });
+  const mockLink = createMockPaymentLink({ id: 'plink_fixture_1', title: 'Fixture link' });
+  const client = createMockFluxaPayClient({
+    fixtures: { payments: [mockPayment], customers: [mockCustomer], paymentLinks: [mockLink] },
+    handlers: {
+      'GET /api/payments/pay_override': () => mockJsonResponse({ ...mockPayment, id: 'pay_override' }),
+      'GET /api/payments/pay_network_error': () => { throw new TypeError('mock network failure'); },
+    },
+  });
+
+  const createdPayment = await client.payments.create({ amount: 99, currency: 'USD', customer_email: 'buyer@example.test' });
+  assert(createdPayment.amount === 99, 'mock client returns generated payment fixture data');
+  assert((await client.payments.get(createdPayment.id)).id === createdPayment.id, 'mock client retains created payments for retrieval');
+  const paymentPage = await client.payments.list({ limit: 10 });
+  assert(paymentPage.data?.[0].id === 'pay_fixture_1', 'mock client serves configured payment fixtures');
+  const paymentLink = await client.paymentLinks.create({ title: 'Mock link', currency: 'USD' });
+  assert(paymentLink.id.startsWith('plink_mock_'), 'mock client handles payment link creation');
+  const customerList = await client.customers.list();
+  assert(customerList.data[0].email === 'fixture@example.test', 'mock client serves configured customer fixtures');
+  const createdCustomer = await client.customers.create({ email: 'created@example.test' });
+  assert((await client.customers.get(createdCustomer.id)).email === 'created@example.test', 'mock client retains created customers for retrieval');
+  const overriddenPayment = await client.payments.get('pay_override');
+  assert(overriddenPayment.id === 'pay_override', 'mock client allows endpoint response overrides');
+
+  let networkError: unknown;
+  try {
+    await client.payments.get('pay_network_error');
+  } catch (error) {
+    networkError = error;
+  }
+  assert(networkError instanceof TypeError && networkError.message === 'mock network failure', 'mock handlers can simulate network errors');
+}
+
+async function runCreatePaymentTest(): Promise<void> {
+  globalThis.fetch = async (_input, init) => {
+    createPaymentRequestBody = init?.body;
+    return jsonResponse({ id: 'pay_1' });
+  };
+  try {
+    await client.payments.create({
+      amount: 10,
+      currency: 'USD',
+      customer_email: 'buyer@example.com',
+      expires_in_seconds: 1800,
+    });
+    assert(
+      JSON.parse(createPaymentRequestBody as string).expires_in_seconds === 1800,
+      'sends expires_in_seconds when creating a payment',
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+}
+
 async function runAllTests(): Promise<void> {
+  await runCreatePaymentTest();
   await runRetryTests();
   await runResourceTests();
+  await runPagingTests();
+  await runMockClientTests();
   console.log(`\n  ${pass} passed, ${fail} failed\n`);
   if (fail > 0) process.exitCode = 1;
 }

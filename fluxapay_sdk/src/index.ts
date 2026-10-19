@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { fetchWithTelemetry, getTransport, registerTransport, type TransportOptions } from './telemetry';
+import type { CreatePaymentLinkParams, PaymentLink } from './batchPaymentLinks';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -22,6 +23,8 @@ export interface FluxaPayConfig {
   onRequest?: TransportOptions['onRequest'];
   /** Hook invoked after each response with duration in ms. */
   onResponse?: TransportOptions['onResponse'];
+  /** Fetch-compatible transport override, primarily for tests. */
+  fetch?: TransportOptions['fetch'];
 }
 
 export interface CreatePaymentParams {
@@ -55,6 +58,102 @@ export interface Payment {
   metadata?: Record<string, unknown>;
   created_at: string;
   expires_at: string;
+}
+
+export interface PagingParams {
+  page?: number;
+  limit: number;
+  cursor?: string;
+}
+
+export interface PagingMetadata {
+  page?: number;
+  total?: number;
+  totalPages?: number;
+  hasNextPage?: boolean;
+  has_more?: boolean;
+  nextCursor?: string | null;
+  next_cursor?: string | null;
+}
+
+export interface PaymentListResponse {
+  payments: Payment[];
+  total: number;
+  data?: Payment[];
+  meta?: PagingMetadata;
+  has_more?: boolean;
+  next_cursor?: string | null;
+}
+
+type PagingPage<T> = {
+  [key: string]: unknown;
+  data?: T[];
+  meta?: PagingMetadata;
+  has_more?: boolean;
+  hasMore?: boolean;
+  next_cursor?: string | null;
+  nextCursor?: string | null;
+};
+
+export class PagingIterable<T, TPage = PagingPage<T>> implements AsyncIterable<T>, PromiseLike<TPage> {
+  private firstPage?: Promise<TPage>;
+
+  constructor(
+    private readonly fetchPage: (params: PagingParams) => Promise<TPage>,
+    private readonly options: PagingParams & { maxItems?: number },
+  ) {}
+
+  private loadPage(params: PagingParams): Promise<TPage> {
+    if (params.page === this.options.page && params.cursor === this.options.cursor) {
+      this.firstPage ??= this.fetchPage(params);
+      return this.firstPage;
+    }
+    return this.fetchPage(params);
+  }
+
+  then<TResult1 = TPage, TResult2 = never>(
+    onfulfilled?: ((value: TPage) => TResult1 | PromiseLike<TResult1>) | null,
+    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+  ): Promise<TResult1 | TResult2> {
+    const firstParams = { page: this.options.page, limit: this.options.limit, cursor: this.options.cursor };
+    return this.loadPage(firstParams).then(onfulfilled, onrejected);
+  }
+
+  async *[Symbol.asyncIterator](): AsyncGenerator<T, void, unknown> {
+    let page = this.options.page ?? 1;
+    let cursor = this.options.cursor;
+    let yielded = 0;
+
+    while (this.options.maxItems === undefined || yielded < this.options.maxItems) {
+      const params: PagingParams = { page, limit: this.options.limit, ...(cursor ? { cursor } : {}) };
+      const response = await this.loadPage(params) as PagingPage<T>;
+      const items = Array.isArray(response.data)
+        ? response.data
+        : Object.values(response).find(Array.isArray) as T[] | undefined;
+      if (!items?.length) return;
+
+      for (const item of items) {
+        if (this.options.maxItems !== undefined && yielded >= this.options.maxItems) return;
+        yield item;
+        yielded++;
+      }
+
+      const meta = response.meta;
+      const nextCursor = response.next_cursor ?? response.nextCursor ?? meta?.next_cursor ?? meta?.nextCursor;
+      const hasMore = response.has_more ?? response.hasMore ?? meta?.has_more ?? meta?.hasNextPage;
+      if (nextCursor) {
+        cursor = nextCursor;
+        continue;
+      }
+      if (hasMore === false || (meta?.totalPages !== undefined && page >= meta.totalPages)) return;
+      if (items.length < this.options.limit && hasMore !== true) return;
+      page++;
+    }
+  }
+
+  async autoPagingEach(callback: (item: T) => unknown | PromiseLike<unknown>): Promise<void> {
+    for await (const item of this) await callback(item);
+  }
 }
 
 export interface PaymentStatus {
@@ -451,6 +550,7 @@ export class FluxaPay {
       timeoutMs: config.timeoutMs,
       onRequest: config.onRequest,
       onResponse: config.onResponse,
+      fetch: config.fetch,
     });
   }
 
@@ -488,14 +588,28 @@ export class FluxaPay {
      * 
      * Canonical route: GET /api/payments
      */
-    list: (params?: { page?: number; limit?: number; status?: string }): Promise<{ payments: Payment[]; total: number }> => {
-      const qs = new URLSearchParams();
-      if (params?.page) qs.set('page', String(params.page));
-      if (params?.limit) qs.set('limit', String(params.limit));
-      if (params?.status) qs.set('status', params.status);
-      const query = qs.toString();
-      return request(this.baseUrl, this.apiKey, 'GET', `/api/payments${query ? `?${query}` : ''}`, undefined, this.retries);
+    list: (params?: { page?: number; limit?: number; status?: string; cursor?: string; maxItems?: number }): PagingIterable<Payment, PaymentListResponse> => {
+      const paging = {
+        page: params?.page ?? 1,
+        limit: params?.limit ?? 50,
+        ...(params?.cursor ? { cursor: params.cursor } : {}),
+      };
+      const fetchPage = (pageParams: PagingParams): Promise<PaymentListResponse> => {
+        const qs = new URLSearchParams();
+        if (pageParams.page !== undefined) qs.set('page', String(pageParams.page));
+        qs.set('limit', String(pageParams.limit));
+        if (pageParams.cursor) qs.set('cursor', pageParams.cursor);
+        if (params?.status) qs.set('status', params.status);
+        return request(this.baseUrl, this.apiKey, 'GET', `/api/payments?${qs.toString()}`, undefined, this.retries);
+      };
+      return new PagingIterable(fetchPage, { ...paging, maxItems: params?.maxItems });
     },
+  };
+
+  readonly paymentLinks = {
+    /** Create a reusable payment link. */
+    create: (params: CreatePaymentLinkParams): Promise<PaymentLink> =>
+      request<PaymentLink>(this.baseUrl, this.apiKey, 'POST', '/api/v1/payment-links', params, this.retries),
   };
 
   // ── customers ──────────────────────────────────────────────────────────────
@@ -744,6 +858,7 @@ export class FluxaPay {
 export default FluxaPay;
 export * from './telemetry';
 export * from './batchPaymentLinks';
+export * from './mock';
 
 /**
  * Auto-paging iterator for list methods that support pagination.
@@ -757,7 +872,7 @@ export * from './batchPaymentLinks';
  * ```
  */
 export async function* autoPagingIterator<T extends { id: string }>(
-  listFn: (params: { page: number; limit: number }) => Promise<{ [key: string]: T[]; total: number }>,
+  listFn: (params: { page: number; limit: number }) => Promise<Record<string, T[] | number> & { total: number }>,
   options: { limit?: number; maxItems?: number } = {}
 ): AsyncGenerator<T, void, unknown> {
   const { limit = 50, maxItems } = options;

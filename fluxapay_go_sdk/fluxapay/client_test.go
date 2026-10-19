@@ -6,8 +6,10 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 	"time"
 
@@ -49,13 +51,23 @@ func TestPaymentsCreate(t *testing.T) {
 		if r.Method != http.MethodPost || r.URL.Path != "/api/payments" {
 			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
 		}
+		if got := r.Header.Get("Idempotency-Key"); got != "payment-key-123" {
+			t.Errorf("Idempotency-Key = %q, want payment-key-123", got)
+		}
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("decode request body: %v", err)
+		} else if _, exists := body["idempotency_key"]; exists {
+			t.Error("idempotency key should be sent as a header, not in the JSON body")
+		}
 		writeJSON(w, 200, paymentFixture)
 	})
 
 	payment, err := client.Payments.Create(context.Background(), fluxapay.CreatePaymentParams{
-		Amount:        49.99,
-		Currency:      "USD",
-		CustomerEmail: "buyer@example.com",
+		Amount:         49.99,
+		Currency:       "USD",
+		CustomerEmail:  "buyer@example.com",
+		IdempotencyKey: "payment-key-123",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -107,6 +119,76 @@ func TestPaymentsList(t *testing.T) {
 	}
 }
 
+func TestStructuredAPIErrorTypes(t *testing.T) {
+	tests := []struct {
+		name      string
+		status    int
+		wantType  string
+		wantRetry bool
+	}{
+		{name: "authentication", status: http.StatusUnauthorized, wantType: "authentication"},
+		{name: "rate limit", status: http.StatusTooManyRequests, wantType: "rate_limit", wantRetry: true},
+		{name: "invalid request", status: http.StatusBadRequest, wantType: "invalid_request"},
+		{name: "generic API error", status: http.StatusNotFound, wantType: "api"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, client := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("X-Request-ID", "req_test_123")
+				writeJSON(w, tt.status, map[string]string{
+					"code":    "TEST_ERROR",
+					"message": "request rejected",
+				})
+			})
+
+			_, err := client.Payments.Get(context.Background(), "pay_test")
+			if err == nil {
+				t.Fatal("expected API error")
+			}
+
+			var apiErr *fluxapay.APIError
+			if !errors.As(err, &apiErr) {
+				t.Fatalf("errors.As(*APIError) failed for %T", err)
+			}
+			if apiErr.StatusCode != tt.status || apiErr.ErrorCode != "TEST_ERROR" || apiErr.Code != "TEST_ERROR" {
+				t.Errorf("unexpected API error fields: %+v", apiErr)
+			}
+			if apiErr.Message != "request rejected" || apiErr.RequestID != "req_test_123" {
+				t.Errorf("unexpected message/request ID: %+v", apiErr)
+			}
+			if apiErr.Retryable != tt.wantRetry {
+				t.Errorf("Retryable = %v, want %v", apiErr.Retryable, tt.wantRetry)
+			}
+			if got, want := err.Error(), "fluxapay: HTTP "+strconv.Itoa(tt.status)+" — request rejected"; got != want {
+				t.Errorf("Error() = %q, want %q", got, want)
+			}
+
+			switch tt.wantType {
+			case "authentication":
+				var typed *fluxapay.AuthenticationError
+				if !errors.As(err, &typed) {
+					t.Errorf("errors.As(*AuthenticationError) failed for %T", err)
+				}
+			case "rate_limit":
+				var typed *fluxapay.RateLimitError
+				if !errors.As(err, &typed) {
+					t.Errorf("errors.As(*RateLimitError) failed for %T", err)
+				}
+			case "invalid_request":
+				var typed *fluxapay.InvalidRequestError
+				if !errors.As(err, &typed) {
+					t.Errorf("errors.As(*InvalidRequestError) failed for %T", err)
+				}
+			default:
+				if _, ok := err.(*fluxapay.APIError); !ok {
+					t.Errorf("expected *APIError, got %T", err)
+				}
+			}
+		})
+	}
+}
+
 // ── Settlements ───────────────────────────────────────────────────────────────
 
 func TestSettlementsList(t *testing.T) {
@@ -152,6 +234,9 @@ func TestInvoicesCreate(t *testing.T) {
 		if body.CustomerEmail != "buyer@example.com" || body.Amount != 75 {
 			t.Errorf("unexpected create params: %+v", body)
 		}
+		if got := r.Header.Get("Idempotency-Key"); got != "invoice-key-123" {
+			t.Errorf("Idempotency-Key = %q, want invoice-key-123", got)
+		}
 		writeJSON(w, 201, map[string]interface{}{"data": map[string]interface{}{
 			"id": "inv_123", "invoice_number": "INV-123", "amount": 75.0,
 			"currency": "USDC", "customer_email": "buyer@example.com", "status": "draft",
@@ -160,7 +245,7 @@ func TestInvoicesCreate(t *testing.T) {
 
 	invoice, err := client.Invoices.Create(context.Background(), fluxapay.CreateInvoiceParams{
 		Amount: 75, Currency: "USDC", CustomerEmail: "buyer@example.com",
-	})
+	}, fluxapay.WithIdempotencyKey("invoice-key-123"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -226,6 +311,9 @@ func TestRefundsCreate(t *testing.T) {
 		if body.PaymentID != "pay_123" || body.Amount != 25 {
 			t.Errorf("unexpected create params: %+v", body)
 		}
+		if got := r.Header.Get("Idempotency-Key"); got != "refund-key-123" {
+			t.Errorf("Idempotency-Key = %q, want refund-key-123", got)
+		}
 		writeJSON(w, 201, map[string]interface{}{"data": map[string]interface{}{
 			"id": "ref_123", "paymentId": "pay_123", "amount": 25.0, "status": "pending",
 		}})
@@ -233,7 +321,7 @@ func TestRefundsCreate(t *testing.T) {
 
 	refund, err := client.Refunds.Create(context.Background(), fluxapay.CreateRefundParams{
 		PaymentID: "pay_123", Amount: 25, Reason: "duplicate",
-	})
+	}, fluxapay.WithIdempotencyKey("refund-key-123"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -298,9 +386,9 @@ func TestAPIErrorPropagation(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
-	apiErr, ok := err.(*fluxapay.Error)
-	if !ok {
-		t.Fatalf("expected *fluxapay.Error, got %T", err)
+	var apiErr *fluxapay.APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("expected *fluxapay.APIError, got %T", err)
 	}
 	if apiErr.StatusCode != 401 {
 		t.Errorf("expected 401, got %d", apiErr.StatusCode)
