@@ -138,8 +138,8 @@ describe("apiKeyAuth.middleware — test mode isolation", () => {
   });
 
   it("authenticates old and new keys concurrently during rotation", async () => {
-    const oldReq = { headers: { "x-api-key": skLiveKey } } as AuthRequest;
-    const newReq = { headers: { "x-api-key": skTestKey } } as AuthRequest;
+    const oldReq = { headers: { "x-api-key": skLiveKey } } as unknown as AuthRequest;
+    const newReq = { headers: { "x-api-key": skTestKey } } as unknown as AuthRequest;
     const oldNext = jest.fn();
     const newNext = jest.fn();
     mockApiKeyFindMany.mockImplementation(async ({ where }: { where: { key_last_four: string } }) => [
@@ -178,5 +178,20 @@ describe("apiKeyAuth.middleware — test mode isolation", () => {
 
     expect(mockNext).not.toHaveBeenCalled();
     expect(mockRes.status).toHaveBeenCalledWith(401);
+  });
+
+  it("uses the Redis cache when an auth lookup has already been cached", async () => {
+    const cachedReq = { headers: { "x-api-key": skLiveKey } } as unknown as AuthRequest;
+    const cachedLookup = { merchantId: "merchant_cached", isTestMode: false };
+
+    jest.spyOn(require("../../utils/apiKeyCache.util"), "getCachedApiKeyLookup").mockResolvedValue(cachedLookup);
+
+    await authenticateApiKey(cachedReq, mockRes as Response, mockNext as NextFunction);
+
+    expect(mockNext).toHaveBeenCalledTimes(1);
+    expect(cachedReq.merchantId).toBe("merchant_cached");
+    expect(cachedReq.isTestMode).toBe(false);
+    expect(mockFindMany).not.toHaveBeenCalled();
+    expect(mockCompare).not.toHaveBeenCalled();
   });
 });

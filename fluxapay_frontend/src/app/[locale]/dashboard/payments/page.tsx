@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { PaymentsTable } from "@/features/dashboard/payments/PaymentsTable";
 import { PaymentsFilters } from "@/features/dashboard/payments/PaymentsFilters";
 import { ExportTransactionsModal } from "@/features/dashboard/payments/ExportTransactionsModal";
@@ -67,22 +67,27 @@ function mapBackendPayment(p: BackendPayment): Payment {
 
 function PaymentsContent() {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const shouldOpenCreateLink =
     searchParams.get("action") === "create-payment" ||
     searchParams.get("action") === "create-payment-link";
 
+  // Initial filter values are seeded from the URL so filtered views can be
+  // bookmarked or shared (#1251).
+  const initialPage = Number(searchParams.get("page")) || 1;
+
   const [payments, setPayments] = useState<Payment[]>([]);
   const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState(initialPage);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [currencyFilter, setCurrencyFilter] = useState("all");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  const [search, setSearch] = useState(searchParams.get("search") ?? "");
+  const [statusFilter, setStatusFilter] = useState(searchParams.get("status") ?? "all");
+  const [currencyFilter, setCurrencyFilter] = useState(searchParams.get("currency") ?? "all");
+  const [dateFrom, setDateFrom] = useState(searchParams.get("from") ?? "");
+  const [dateTo, setDateTo] = useState(searchParams.get("to") ?? "");
   const [amountMin, setAmountMin] = useState("");
   const [amountMax, setAmountMax] = useState("");
 
@@ -169,9 +174,29 @@ function PaymentsContent() {
     }
   }, [page, statusFilter, currencyFilter, search, dateFrom, dateTo]);
 
+  const filtersInitializedRef = useRef(false);
   useEffect(() => {
+    // Skip the initial mount so a `?page=` from the URL is preserved.
+    if (!filtersInitializedRef.current) {
+      filtersInitializedRef.current = true;
+      return;
+    }
     setPage(1);
   }, [statusFilter, currencyFilter, search, dateFrom, dateTo, amountMin, amountMax]);
+
+  // Keep the URL in sync with the active filters so views are shareable (#1251).
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (search) params.set("search", search);
+    if (statusFilter && statusFilter !== "all") params.set("status", statusFilter);
+    if (currencyFilter && currencyFilter !== "all") params.set("currency", currencyFilter);
+    if (dateFrom) params.set("from", dateFrom);
+    if (dateTo) params.set("to", dateTo);
+    if (page > 1) params.set("page", String(page));
+
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }, [router, pathname, search, statusFilter, currencyFilter, dateFrom, dateTo, page]);
 
   useEffect(() => {
     fetchPayments();

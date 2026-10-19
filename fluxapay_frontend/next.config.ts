@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 import path from "node:path";
 import { withSentryConfig } from "@sentry/nextjs";
+import { STATIC_SECURITY_HEADERS } from "./src/lib/securityHeaders";
 
 const nextConfig: NextConfig = {
   env: {
@@ -29,23 +30,9 @@ const nextConfig: NextConfig = {
     return config;
   },
   async headers() {
-    // CSP trusted script origins:
-    // - 'self': app's own scripts from the origin
-    // - https://albedo.link: Albedo wallet provider
-    // - Freighter is injected via browser extension (no explicit CSP needed for extension content)
-    // - Nonces can be added at runtime for inline scripts if needed
-    const cspHeader = [
-      "default-src 'self'",
-      "script-src 'self' https://albedo.link",
-      "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: https:",
-      "font-src 'self' data:",
-      "connect-src 'self' https://api.web3modal.org https://rpc.walletconnect.org https://pulse.walletconnect.org https://secure.walletconnect.org https://secure-mobile.walletconnect.com https://secure-mobile.walletconnect.org wss://relay.walletconnect.org",
-      "frame-ancestors 'none'",
-      process.env.NEXT_PUBLIC_CSP_REPORT_URI ? `report-uri ${process.env.NEXT_PUBLIC_CSP_REPORT_URI}` : "",
-    ]
-      .filter(Boolean)
-      .join("; ");
+    const securityHeaders = Object.entries(STATIC_SECURITY_HEADERS).map(
+      ([key, value]) => ({ key, value }),
+    );
 
     return [
       {
@@ -58,26 +45,13 @@ const nextConfig: NextConfig = {
       {
         source: "/pay/:path*",
         headers: [
-          {
-            key: "Cache-Control",
-            value: "public, max-age=0, stale-while-revalidate=86400",
-          },
-          { key: "Content-Security-Policy", value: cspHeader },
-          { key: "X-Frame-Options", value: "DENY" },
-          { key: "X-Content-Type-Options", value: "nosniff" },
-          { key: "Referrer-Policy", value: "strict-no-referrer" },
-          { key: "Permissions-Policy", value: "geolocation=(), microphone=(), camera=()" },
+          ...securityHeaders,
+          { key: "Cache-Control", value: "private, no-store" },
         ],
       },
       {
         source: "/:path*",
-        headers: [
-          { key: "Content-Security-Policy", value: cspHeader },
-          { key: "X-Frame-Options", value: "DENY" },
-          { key: "X-Content-Type-Options", value: "nosniff" },
-          { key: "Referrer-Policy", value: "strict-no-referrer" },
-          { key: "Permissions-Policy", value: "geolocation=(), microphone=(), camera=()" },
-        ],
+        headers: securityHeaders,
       },
     ];
   },

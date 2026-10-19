@@ -4,6 +4,7 @@ import { Request, Response } from "express";
 import { apiKeyService } from "../services/apiKey.service";
 import { AuthRequest } from "../types/express";
 import { validateUserId } from "../helpers/request.helper";
+import { invalidateApiKeyCacheForMerchant } from "../utils/apiKeyCache.util";
 
 /**
  * POST /v1/api-keys
@@ -77,6 +78,7 @@ export const revokeApiKey = async (req: Request, res: Response) => {
     const keyId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
 
     await apiKeyService.revokeApiKey(merchantId, keyId, merchantId);
+    await invalidateApiKeyCacheForMerchant(merchantId);
 
     res.status(204).send();
   } catch (error: unknown) {
@@ -103,6 +105,7 @@ export const rotateApiKey = async (req: Request, res: Response) => {
     const keyId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
 
     const result = await apiKeyService.rotateApiKey(merchantId, keyId, merchantId);
+    await invalidateApiKeyCacheForMerchant(merchantId);
 
     res.status(200).json(result);
   } catch (error: unknown) {

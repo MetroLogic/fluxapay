@@ -1,0 +1,57 @@
+#!/usr/bin/env sh
+# Pre-commit secret scanning hook.
+# Blocks commits that contain sensitive credentials in staged files.
+
+set -e
+
+# Collect staged files (added/copied/modified), excluding deletions.
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM)
+
+if [ -z "$STAGED_FILES" ]; then
+  exit 0
+fi
+
+# Regex rules for sensitive token patterns.
+# - Stellar private seeds: S followed by 55 base32 chars (total 56)
+# - FluxaPay live API keys: fp_live_<token>
+# - Database URLs with embedded credentials
+# - JWT secrets assigned in config/env files
+PATTERNS='(^|[^A-Za-z0-9])S[A-Z2-7]{55}([^A-Za-z0-9]|$)|fp_live_[A-Za-z0-9]{8,}|(postgres|postgresql|mysql|mongodb(\+srv)?)://[^:@/\s]+:[^@/\s]+@|(JWT_SECRET|JWT_PRIVATE_KEY|JWT_SIGNING_KEY)[[:space:]]*[:=][[:space:]]*["'"']?[A-Za-z0-9_\-]{16,}'
+
+FOUND=0
+MATCHED_FILES=""
+
+for FILE in $STAGED_FILES; do
+  # Skip binary files and files that no longer exist.
+  if [ ! -f "$FILE" ]; then
+    continue
+  fi
+  if git check-attr -a -- "$FILE" >/dev/null 2>&1; then
+    :
+  fi
+  if grep -Iq . "$FILE" 2>/dev/null; then
+    if grep -nEq "$PATTERNS" "$FILE" 2>/dev/null; then
+      FOUND=1
+      MATCHED_FILES="$MATCHED_FILES\n  - $FILE"
+    fi
+  fi
+done
+
+if [ "$FOUND" -eq 1 ]; then
+  printf '\n\033[31m✖ Secret scanning failed: potential credentials detected in staged files.\033[0m\n' >&2
+  printf 'Flagged files:%b\n\n' "$MATCHED_FILES" >&2
+  printf 'Detected patterns may include:\n' >&2
+  printf '  • Stellar private seeds (S...)\n' >&2
+  printf '  • FluxaPay live API keys (fp_live_...)\n' >&2
+  printf '  • Database URLs with embedded credentials\n' >&2
+  printf '  • JWT secrets\n\n' >&2
+  printf 'To fix this:\n' >&2
+  printf '  1. Unstage the file:            git restore --staged <file>\n' >&2
+  printf '  2. Remove the secret from the file and use an env var instead.\n' >&2
+  printf '  3. If the secret was already committed, rotate it immediately.\n' >&2
+  printf '  4. Re-stage the cleaned file:   git add <file>\n\n' >&2
+  printf 'If this is a false positive, review the match and adjust the file.\n' >&2
+  exit 1
+fi
+
+exit 0
