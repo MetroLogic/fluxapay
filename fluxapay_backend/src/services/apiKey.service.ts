@@ -113,6 +113,8 @@ export interface ApiKeyDto {
   last_used_at: Date | null;
   created_at: Date;
   expires_at: Date | null;
+  permissions: ApiKeyPermission[];
+  ip_allowlist: string[];
 }
 
 export interface RotateApiKeyResult {
@@ -124,6 +126,8 @@ export interface RotateApiKeyResult {
   created_at: Date;
   rotated_from_id: string;
   previous_key_expires_at: Date;
+  permissions: ApiKeyPermission[];
+  ip_allowlist: string[];
 }
 
 // ─── Service ─────────────────────────────────────────────────────────────────
@@ -225,6 +229,8 @@ export class ApiKeyService {
         key_hash: keyHash,
         key_last_four: lastFour,
         environment: environment === "live" ? "live" : "test",
+        permissions,
+        ip_allowlist: ipAllowlist,
         status: "active",
         expires_at: expiresAt,
       },
@@ -241,6 +247,8 @@ export class ApiKeyService {
         keyName: name,
         environment,
         lastFour,
+        permissions,
+        ipAllowlist,
       },
     });
 
@@ -282,6 +290,8 @@ export class ApiKeyService {
       last_used_at: key.last_used_at,
       created_at: key.created_at,
       expires_at: key.expires_at,
+      permissions: key.permissions ?? ["payments:read"],
+      ip_allowlist: key.ip_allowlist ?? [],
     }));
   }
 
@@ -337,6 +347,8 @@ export class ApiKeyService {
           key_hash: keyHash,
           key_last_four: lastFour,
           environment,
+          permissions: existingKey.permissions ?? ["payments:read"],
+          ip_allowlist: existingKey.ip_allowlist ?? [],
           status: "active",
         },
       });
@@ -379,6 +391,8 @@ export class ApiKeyService {
       created_at: newKey.created_at,
       rotated_from_id: keyId,
       previous_key_expires_at: previousKeyExpiresAt,
+      permissions: newKey.permissions ?? ["payments:read"],
+      ip_allowlist: newKey.ip_allowlist ?? [],
     };
   }
 
@@ -528,7 +542,12 @@ export class ApiKeyService {
       });
 
       if (updated.count === 1) {
-        return { valid: true, merchantId: candidate.merchantId };
+        return {
+          valid: true,
+          merchantId: candidate.merchantId,
+          permissions: candidate.permissions ?? ["payments:read"],
+          ip_allowlist: candidate.ip_allowlist ?? [],
+        };
       }
     }
 
@@ -702,6 +721,18 @@ export class ApiKeyService {
       },
     });
   }
+}
+
+function normalizeIpAllowlist(value: unknown): string[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > 50) {
+    throw new Error("IP allowlist must contain no more than 50 CIDR blocks");
+  }
+  const ranges = [...new Set(value.map((entry) => (typeof entry === "string" ? entry.trim() : "")))];
+  if (ranges.some((range) => !range || !isValidCidr(range))) {
+    throw new Error("IP allowlist contains an invalid CIDR block");
+  }
+  return ranges;
 }
 
 export const apiKeyService = new ApiKeyService();

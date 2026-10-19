@@ -103,8 +103,8 @@ describe("downloadTransactionsCsv", () => {
     URL.revokeObjectURL = revokeObjectURL as unknown as typeof URL.revokeObjectURL;
 
     const originalClick = HTMLAnchorElement.prototype.click;
-    HTMLAnchorElement.prototype.click = function patched(this: HTMLAnchorElement) {
-      clicked = this;
+    HTMLAnchorElement.prototype.click = () => {
+      clicked = document.querySelector<HTMLAnchorElement>("a[download]") ?? undefined;
     };
     restoreClick = () => {
       HTMLAnchorElement.prototype.click = originalClick;
@@ -176,6 +176,32 @@ describe("downloadTransactionsCsv", () => {
     expect(clicked?.download).toBe("transactions_2026-03-15.csv");
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:mock");
     expect(result.rowCount).toBe(3);
+  });
+
+  it("generates the selected columns and Excel BOM in the downloaded Blob", async () => {
+    const source =
+      "created_at,payment_id,amount,fees,status,customer_email,metadata\r\n" +
+      "2026-03-01,pay_1,12.50,0.25,paid,buyer@example.com,{}\r\n";
+    exportCsv.mockResolvedValue({
+      data: {
+        blob: new Blob([source], { type: "text/csv" }),
+        filename: "transactions_2026-03-15.csv",
+        rowCount: 1,
+        truncated: false,
+      },
+    });
+
+    await downloadTransactionsCsv(
+      {},
+      { columns: ["payment_id", "fees"], format: "excel" },
+    );
+
+    const downloadedBlob = createObjectURL.mock.calls[0][0] as Blob;
+    const bytes = new Uint8Array(await downloadedBlob.arrayBuffer());
+    expect(Array.from(bytes.slice(0, 3))).toEqual([0xef, 0xbb, 0xbf]);
+    expect(new TextDecoder("utf-8", { ignoreBOM: true }).decode(bytes)).toBe(
+      "\uFEFFReference,Fees\r\npay_1,0.25\r\n",
+    );
   });
 
   it("reports the truncated flag so the UI can warn about the row cap", async () => {

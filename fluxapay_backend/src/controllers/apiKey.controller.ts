@@ -39,6 +39,12 @@ export const createApiKey = async (req: Request, res: Response) => {
     res.status(201).json(result);
   } catch (error: unknown) {
     if (error instanceof Error) {
+      if (error.message.includes("permission") || error.message.includes("CIDR") || error.message.includes("IP allowlist")) {
+        return sendApiError(
+          res,
+          apiError(400, ErrorCode.VALIDATION_ERROR, error.message),
+        );
+      }
       if (error.message.includes("Rate limit exceeded")) {
         return sendApiError(
           res,

@@ -16,8 +16,9 @@ import { getCachedApiKeyLookup, setCachedApiKeyLookup } from "../utils/apiKeyCac
  * Supports:
  * - Authorization: Bearer <sk_live_...>    (production API key)
  * - Authorization: Bearer <sk_test_...>     (Stripe-style test mode key, isolated data)
- * - Authorization: Bearer <fpk_test_...>    (local dev / seed API key)
- * - x-api-key: <sk_live_...>, <sk_test_...> or <fpk_test_...>
+ * - Authorization: Bearer <fpk_live_...>    (managed live API key)
+ * - Authorization: Bearer <fpk_test_...>    (managed test API key)
+ * - x-api-key: any supported API key prefix
  * - Authorization: Bearer <jwt_token>       (dashboard / internal)
  */
 
@@ -30,11 +31,11 @@ export function isTestApiKey(key: string): boolean {
 }
 
 /**
- * True when a raw API key is a production key (sk_live_).
+ * True when a raw API key is a production key.
  * Production keys map to the live data partition.
  */
 export function isLiveApiKey(key: string): boolean {
-  return key.startsWith("sk_live_");
+    return key.startsWith("sk_live_") || key.startsWith("fpk_live_");
 }
 
 export async function authenticateApiKey(
@@ -63,11 +64,12 @@ export async function authenticateApiKey(
 
     // 3. Try interpreting as API Key first.
     //    FluxaPay keys use the format <prefix>_<32 hex chars>.
-    //    Supported prefixes: sk_live_ (production), sk_test_ (test mode), fpk_test_ (local dev/seed).
+    //    Supported prefixes: sk_live_/sk_test_ and fpk_live_/fpk_test_.
     //    The real validation is the bcrypt hash comparison — the prefix is only
     //    used to distinguish API keys from JWT tokens and to select the data partition.
     const isApiKey =
-        key.startsWith("sk_live_") || key.startsWith("sk_test_") || key.startsWith("fpk_test_");
+        key.startsWith("sk_live_") || key.startsWith("sk_test_") ||
+        key.startsWith("fpk_live_") || key.startsWith("fpk_test_");
     if (isApiKey) {
         try {
             const cachedLookup = await getCachedApiKeyLookup(key);
@@ -99,6 +101,24 @@ export async function authenticateApiKey(
                 return sendApiError(res, apiError(401, ErrorCode.API_KEY_EXPIRED, "API key expired"));
             }
             if (storedKey.valid && storedKey.merchantId) {
+                const ipAllowlist = storedKey.ip_allowlist ?? [];
+                if (!isIpAllowed(req.ip, ipAllowlist)) {
+                    return sendApiError(
+                        res,
+                        apiError(403, ErrorCode.FORBIDDEN, "API key is not allowed from this IP address"),
+                    );
+                }
+                const permission = requiredApiKeyPermission(
+                    req.method,
+                    req.originalUrl || req.path,
+                );
+                const permissions = storedKey.permissions ?? ["payments:read"];
+                if (!permissions.includes(permission)) {
+                    return sendApiError(
+                        res,
+                        apiError(403, ErrorCode.FORBIDDEN, `API key requires the '${permission}' permission`),
+                    );
+                }
                 authReq.merchantId = storedKey.merchantId;
                 authReq.isTestMode = isTestApiKey(key);
                 await setCachedApiKeyLookup(key, storedKey.merchantId, authReq.isTestMode);
