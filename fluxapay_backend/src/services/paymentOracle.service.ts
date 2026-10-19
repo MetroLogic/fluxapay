@@ -33,6 +33,11 @@ import {
   HorizonPaymentDetectedEvent,
 } from "./horizonPoller.service";
 import { eventBus, AppEvents } from "./EventService";
+import {
+  trackPaymentConfirmed,
+  trackPaymentFailed,
+  trackPaymentStageDuration,
+} from "../middleware/metrics.middleware";
 
 const logger = getLogger("PaymentOracleService");
 const metrics = getMetricsCollector();
@@ -461,10 +466,18 @@ async function verifyPaymentOnChain(
  * Updates payment status in database and triggers webhooks
  */
 async function updatePaymentStatus(verification: PaymentVerification): Promise<void> {
+  const isNewlyConfirmed = isNewlyConfirmedTransition(
+    verification.previousStatus,
+    verification.status,
+  );
   const updateData: any = {
     status: verification.status,
     paid_amount: verification.actualAmount,
   };
+
+  if (isNewlyConfirmed) {
+    updateData.confirmed_at = new Date();
+  }
 
   if (verification.transactionHash) {
     updateData.transaction_hash = verification.transactionHash;
@@ -481,6 +494,18 @@ async function updatePaymentStatus(verification: PaymentVerification): Promise<v
     include: { merchant: true },
   });
 
+  if (isNewlyConfirmed) {
+    trackPaymentConfirmed();
+    if (updatedPayment.createdAt && updatedPayment.confirmed_at) {
+      trackPaymentStageDuration(
+        "onchain_confirmation",
+        (updatedPayment.confirmed_at.getTime() - updatedPayment.createdAt.getTime()) / 1000,
+      );
+    }
+  } else if (verification.status === "failed" && verification.previousStatus !== "failed") {
+    trackPaymentFailed("verification_failed", updatedPayment.currency);
+  }
+
   logger.info("Payment status updated", {
     paymentId: verification.paymentId,
     status: verification.status,
@@ -493,11 +518,6 @@ async function updatePaymentStatus(verification: PaymentVerification): Promise<v
    * successful state, so a re-verification of an already-confirmed payment does
    * not re-fire `PAYMENT_CONFIRMED` (#1190).
    */
-  const isNewlyConfirmed = isNewlyConfirmedTransition(
-    verification.previousStatus,
-    verification.status,
-  );
-
   // Trigger webhook for confirmed/overpaid payments
   if (verification.verified && updatedPayment.merchant) {
     // Emit internal event so email notifications, settlement pipeline, and

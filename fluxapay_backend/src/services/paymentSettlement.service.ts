@@ -27,6 +27,7 @@ import { createAndDeliverWebhook } from "./webhook.service";
 import { eventBus, AppEvents } from "./EventService";
 import { sendSettlementFailureAlert } from "./settlementAlert.service";
 import { getLogger } from "../utils/logger";
+import { trackPaymentFailed, trackPaymentStageDuration } from "../middleware/metrics.middleware";
 
 const logger = getLogger();
 
@@ -38,6 +39,16 @@ const RETRY_INTERVAL_MS = 5 * 60 * 1000;
 
 /** Default fee percentage if merchant config is missing */
 const DEFAULT_FEE_PERCENT = 1.5;
+
+function getPaymentFailureCode(error: unknown): string {
+  if (error && typeof error === "object" && "code" in error) {
+    const code = (error as { code?: unknown }).code;
+    if (typeof code === "string" && /^[A-Za-z0-9_]{1,64}$/.test(code)) {
+      return code;
+    }
+  }
+  return error instanceof Error ? error.name : "unknown";
+}
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -143,6 +154,7 @@ export class PaymentSettlementService {
    * Settle a single payment - convert USDC to fiat and initiate payout.
    */
   public async settlePayment(paymentId: string, retryCount = 0): Promise<SettlementResult> {
+    let paymentCurrency = "unknown";
     try {
       // 1. Fetch payment with merchant and bank account
       const payment = await prisma.payment.findUnique({
@@ -163,6 +175,7 @@ export class PaymentSettlementService {
           retryCount,
         };
       }
+      paymentCurrency = payment.currency;
 
       const merchantId = payment.merchantId;
 
@@ -263,17 +276,25 @@ export class PaymentSettlementService {
       });
 
       // 10. Update payment to settled
+      const settledAt = new Date();
       await prisma.payment.update({
         where: { id: paymentId },
         data: {
           settled: true,
-          settled_at: new Date(),
+          settled_at: settledAt,
           settlement_ref: payout.transfer_ref,
           settlement_fiat_amount: new Decimal(netFiat),
           settlement_fiat_currency: targetCurrency,
           settlementId: settlement.id,
         },
       });
+
+      if (!payment.settled && payment.confirmed_at instanceof Date) {
+        trackPaymentStageDuration(
+          "off_ramp_settlement",
+          (settledAt.getTime() - payment.confirmed_at.getTime()) / 1000,
+        );
+      }
 
       // 11. Emit payment.settled webhook
       if (payment.merchant.webhook_url) {
@@ -310,6 +331,7 @@ export class PaymentSettlementService {
       };
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : String(error);
+      trackPaymentFailed(getPaymentFailureCode(error), paymentCurrency);
 
       // Record failed settlement
       try {
