@@ -229,11 +229,17 @@ router.post('/', authenticateApiKey, kycGateMiddleware, merchantApiKeyRateLimit(
  *       - apiKeyAuth: []
  *     parameters:
  *       - in: query
- *         name: page
- *         schema: { type: integer }
+ *         name: cursor
+ *         schema: { type: string }
+ *         description: Cursor for keyset pagination
  *       - in: query
  *         name: limit
+ *         schema: { type: integer, default: 25, maximum: 100 }
+ *         description: Maximum number of payments to return (default 25, max 100)
+ *       - in: query
+ *         name: page
  *         schema: { type: integer }
+ *         description: Page number for offset pagination (optional)
  *       - in: query
  *         name: status
  *         schema: { type: string }
@@ -252,6 +258,29 @@ router.post('/', authenticateApiKey, kycGateMiddleware, merchantApiKeyRateLimit(
  *     responses:
  *       200:
  *         description: Paginated list of payments
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Payment'
+ *                 nextCursor:
+ *                   type: string
+ *                   nullable: true
+ *                   description: Cursor for the next page, or null if on the final page
+ *                 meta:
+ *                   type: object
+ *                   properties:
+ *                     total: { type: integer }
+ *                     page: { type: integer }
+ *                     limit: { type: integer }
+ *                     totalPages: { type: integer }
+ *                     hasNextPage: { type: boolean }
+ *                     hasPreviousPage: { type: boolean }
+ *                     nextCursor: { type: string, nullable: true }
  */
 router.get('/', authenticateApiKey, merchantApiKeyRateLimit(), validatePagination, getPayments);
 

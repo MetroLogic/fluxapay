@@ -1003,6 +1003,7 @@ export const api = {
       params?: {
         page?: number;
         limit?: number;
+        cursor?: string;
         status?: string;
         currency?: string;
         search?: string;
@@ -1014,6 +1015,7 @@ export const api = {
       const sp = new URLSearchParams();
       if (params?.page != null) sp.set("page", String(params.page));
       if (params?.limit != null) sp.set("limit", String(params.limit));
+      if (params?.cursor) sp.set("cursor", params.cursor);
       if (params?.status && params.status !== "all")
         sp.set("status", params.status);
       if (params?.currency && params.currency !== "all")
@@ -1021,7 +1023,19 @@ export const api = {
       if (params?.search) sp.set("search", params.search);
       if (params?.date_from) sp.set("date_from", params.date_from);
       if (params?.date_to) sp.set("date_to", params.date_to);
-      return fetchWithAuth<Record<string, unknown>>(
+      return fetchWithAuth<{
+        data: Array<Record<string, unknown>>;
+        nextCursor?: string | null;
+        meta?: {
+          total: number;
+          page?: number;
+          limit?: number;
+          totalPages?: number;
+          hasNextPage?: boolean;
+          hasPreviousPage?: boolean;
+          nextCursor?: string | null;
+        };
+      }>(
         `/api/v1/payments?${sp.toString()}`,
         init,
       );
