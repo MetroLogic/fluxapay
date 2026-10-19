@@ -15,6 +15,10 @@ import {
   adminRetryWebhookService,
   getWebhookRetryConfigService,
   getWebhookDeliveryAttemptsService,
+  initiateWebhookKeyRotation,
+  promoteSecondaryWebhookKey,
+  revokeSecondaryWebhookKey,
+  getWebhookKeyStatusService,
 } from "../services/webhook.service";
 import { WebhookEventType, WebhookStatus } from "../generated/client/client";
 import { AuthRequest } from "../types/express";
@@ -229,6 +233,102 @@ export async function adminRetryWebhook(req: Request, res: Response) {
     }
 
     const result = await adminRetryWebhookService({ log_id });
+    res.status(200).json(result);
+  } catch (err: any) {
+    console.error(err);
+    sendApiError(res, err);
+  }
+}
+
+/* ── Retry-with-backoff alias (route alias for retryWebhook) ─────────────── */
+
+/** Alias used by the route file; delegates to retryWebhook. */
+export const retryWebhookWithBackoff = retryWebhook;
+
+/* ── Delivery-attempt history ─────────────────────────────────────────────── */
+
+export async function getWebhookAttempts(req: AuthRequest, res: Response) {
+  try {
+    const merchantId = await validateUserId(req);
+    const { log_id } = req.params;
+
+    if (!log_id || Array.isArray(log_id)) {
+      return sendApiError(res, apiError(400, ErrorCode.LOG_ID_REQUIRED, "Log ID is required"));
+    }
+
+    const result = await getWebhookDeliveryAttemptsService({ merchantId, log_id });
+    res.status(200).json(result);
+  } catch (err: any) {
+    console.error(err);
+    sendApiError(res, err);
+  }
+}
+
+/* ── Webhook key rotation endpoints ──────────────────────────────────────── */
+
+/**
+ * POST /api/v1/webhooks/keys/rotate
+ *
+ * Initiates a webhook secret rotation. Generates a new secondary secret that
+ * is used alongside the primary for dual-signing during the grace window.
+ * Returns the new secondary secret (shown only once — store it securely).
+ */
+export async function initiateWebhookRotation(req: AuthRequest, res: Response) {
+  try {
+    const merchantId = await validateUserId(req);
+    const result = await initiateWebhookKeyRotation(merchantId);
+    res.status(201).json(result);
+  } catch (err: any) {
+    console.error(err);
+    sendApiError(res, err);
+  }
+}
+
+/**
+ * POST /api/v1/webhooks/keys/promote
+ *
+ * Promotes the pending secondary secret to primary, retiring the old primary.
+ * Must be called after the merchant has updated their webhook handler to accept
+ * both signatures.
+ */
+export async function promoteWebhookKey(req: AuthRequest, res: Response) {
+  try {
+    const merchantId = await validateUserId(req);
+    const result = await promoteSecondaryWebhookKey(merchantId);
+    res.status(200).json(result);
+  } catch (err: any) {
+    console.error(err);
+    sendApiError(res, err);
+  }
+}
+
+/**
+ * DELETE /api/v1/webhooks/keys/secondary
+ *
+ * Revokes the pending secondary secret without promoting it.
+ * Cancels the rotation and restores single-key signing with the primary.
+ */
+export async function revokeWebhookKey(req: AuthRequest, res: Response) {
+  try {
+    const merchantId = await validateUserId(req);
+    const result = await revokeSecondaryWebhookKey(merchantId);
+    res.status(200).json(result);
+  } catch (err: any) {
+    console.error(err);
+    sendApiError(res, err);
+  }
+}
+
+/**
+ * GET /api/v1/webhooks/keys/status
+ *
+ * Returns whether a rotation is in progress and when the secondary key was
+ * created. Does not expose raw secret values.
+ */
+export async function getWebhookKeyStatus(req: AuthRequest, res: Response) {
+  try {
+    const merchantId = await validateUserId(req);
+    const result = await getWebhookKeyStatusService(merchantId);
     res.status(200).json(result);
   } catch (err: any) {
     console.error(err);
