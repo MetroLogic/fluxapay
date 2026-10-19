@@ -393,7 +393,17 @@ export const getPaymentById = async (req: Request, res: Response) => {
         // Test keys can only read test payments; live keys can only read live payments.
         ...(typeof isTestMode === "boolean" && { is_test_mode: isTestMode }),
       },
-      include: { merchant: true },
+      include: {
+        merchant: true,
+        settlement: {
+          select: {
+            amount: true,
+            fees: true,
+            net_amount: true,
+            currency: true,
+          },
+        },
+      },
     });
 
     if (!payment) {

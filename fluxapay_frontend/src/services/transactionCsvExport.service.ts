@@ -1,4 +1,10 @@
 import { api, type PaymentCsvExportResult } from "@/lib/api";
+import {
+  generateTransactionsCsv,
+  TRANSACTION_EXPORT_COLUMNS,
+  type TransactionCsvFormat,
+  type TransactionExportColumn,
+} from "@/utils/transactionCsv";
 
 /**
  * Client side of the transaction-history CSV export (#1216).
@@ -33,13 +39,13 @@ export type DateRangePreset =
 
 export const DATE_RANGE_PRESETS: ReadonlyArray<{ value: DateRangePreset; label: string }> = [
   { value: "today", label: "Today" },
-  { value: "7d", label: "Last 7 days" },
-  { value: "30d", label: "Last 30 days" },
+  { value: "7d", label: "Last 7 Days" },
+  { value: "30d", label: "Last 30 Days" },
   { value: "90d", label: "Last 90 days" },
   { value: "month", label: "This month" },
   { value: "ytd", label: "Year to date" },
   { value: "all", label: "All time" },
-  { value: "custom", label: "Custom" },
+  { value: "custom", label: "Custom Range" },
 ];
 
 /** Format a Date as the YYYY-MM-DD string the date inputs and API expect. */
@@ -112,6 +118,8 @@ function triggerDownload(blob: Blob, filename: string): void {
 export interface DownloadTransactionsCsvOptions {
   onProgress?: (elapsedMs: number) => void;
   signal?: AbortSignal;
+  columns?: readonly TransactionExportColumn[];
+  format?: TransactionCsvFormat;
 }
 
 /**
@@ -143,7 +151,16 @@ export async function downloadTransactionsCsv(
       throw new Error(result.error.message);
     }
 
-    triggerDownload(result.data.blob, result.data.filename);
+    const sourceCsv = await result.data.blob.text();
+    const csv = generateTransactionsCsv(
+      sourceCsv,
+      options.columns ?? TRANSACTION_EXPORT_COLUMNS.map((column) => column.key),
+      options.format,
+    );
+    triggerDownload(
+      new Blob([csv], { type: "text/csv;charset=utf-8" }),
+      result.data.filename,
+    );
     return result.data;
   } finally {
     clearInterval(tick);

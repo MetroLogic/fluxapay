@@ -882,6 +882,10 @@ model ApiKey {
   key_last_four     String
   /** Environment: live or test */
   environment       ApiKeyEnvironment
+  /** API permissions granted to this key. */
+  permissions       String[]               @default(["payments:read"])
+  /** Optional source-address allowlist in CIDR notation. */
+  ip_allowlist      String[]               @default([])
   /** Status: active or revoked */
   status            ApiKeyStatus            @default(active)
   /** Timestamp when the key was last used for authentication */

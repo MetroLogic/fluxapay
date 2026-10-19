@@ -12,7 +12,7 @@ import { validateUserId } from "../helpers/request.helper";
 export const createApiKey = async (req: Request, res: Response) => {
   try {
     const merchantId = await validateUserId(req as AuthRequest);
-    const { name, environment } = req.body;
+    const { name, environment, permissions, ip_allowlist } = req.body;
 
     if (!name || typeof name !== "string") {
       return sendApiError(res, apiError(400, ErrorCode.MISSING_REQUIRED_FIELD, "name is required and must be a string"));
@@ -27,11 +27,18 @@ export const createApiKey = async (req: Request, res: Response) => {
       name,
       environment,
       merchantId, // actor is the merchant themselves
+      { permissions, ipAllowlist: ip_allowlist },
     );
 
     res.status(201).json(result);
   } catch (error: unknown) {
     if (error instanceof Error) {
+      if (error.message.includes("permission") || error.message.includes("CIDR") || error.message.includes("IP allowlist")) {
+        return sendApiError(
+          res,
+          apiError(400, ErrorCode.VALIDATION_ERROR, error.message),
+        );
+      }
       if (error.message.includes("Rate limit exceeded")) {
         return sendApiError(
           res,

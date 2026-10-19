@@ -172,7 +172,7 @@ export const PaymentsFilters = memo(({
         <ListPageFilterBar stack>
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div className="flex items-center gap-3 w-full md:w-auto">
-                    <span className="text-sm font-semibold text-slate-700 whitespace-nowrap">Saved Filters:</span>
+                    <span className="text-sm font-semibold text-foreground whitespace-nowrap">Saved Filters:</span>
                     <Select 
                         className="w-full md:w-[200px]"
                         value={selectedPresetId}
