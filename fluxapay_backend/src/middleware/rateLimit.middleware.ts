@@ -7,6 +7,11 @@ import { prisma } from "../config/prisma";
 import { isDevEnv } from "../helpers/env.helper";
 import Redis from "ioredis";
 import { closeRedisClient } from "../utils/redisClose.util";
+import {
+  checkSlidingWindowLimit,
+  getTrustedClientIp,
+  parsePositiveInt,
+} from "./slidingWindowRateLimit.middleware";
 
 
 /**
@@ -87,8 +92,7 @@ function nowMs(): number {
 }
 
 function getIp(req: Request): string {
-  // Respects trust proxy setting on the Express app
-  return req.ip || req.socket?.remoteAddress || "unknown";
+  return getTrustedClientIp(req);
 }
 
 async function checkLimit(
@@ -97,29 +101,12 @@ async function checkLimit(
   windowMs: number,
 ): Promise<{ allowed: boolean; retryAfterSeconds: number; remaining: number }> {
   const redis = getRedisClientForRateLimit();
-  const windowSeconds = Math.max(1, Math.ceil(windowMs / 1000));
-
-  try {
-    const current = await redis.incr(key);
-    if (current === 1) {
-      await redis.expire(key, windowSeconds);
-    }
-
-    const ttl = await redis.ttl(key);
-    const retryAfterSeconds = ttl > 0 ? ttl : windowSeconds;
-
-    if (current > max) {
-      return { allowed: false, retryAfterSeconds, remaining: 0 };
-    }
-
-    const remaining = Math.max(0, max - current);
-    return { allowed: true, retryAfterSeconds: 0, remaining };
-  } catch (error) {
-    if (isDevEnv()) {
-      console.error("Rate limiter Redis unavailable, allowing request", error);
-    }
-    return { allowed: true, retryAfterSeconds: 0, remaining: max };
-  }
+  const result = await checkSlidingWindowLimit(redis, key, max, windowMs, nowMs());
+  return {
+    allowed: result.allowed,
+    retryAfterSeconds: result.retryAfterSeconds,
+    remaining: result.remaining,
+  };
 }
 
 /**
@@ -217,13 +204,13 @@ export function addEmergencyBlock(ip: string) {
  *   GLOBAL_RATE_LIMIT_WINDOW_MS     (legacy)
  */
 export function globalRateLimit(): RequestHandler {
-  const max = parseInt(
-    process.env.PUBLIC_API_IP_RATE_MAX || process.env.GLOBAL_RATE_LIMIT_MAX || "100",
-    10,
+  const max = parsePositiveInt(
+    process.env.PUBLIC_API_RATE_LIMIT_MAX || process.env.PUBLIC_API_IP_RATE_MAX || process.env.GLOBAL_RATE_LIMIT_MAX,
+    100,
   );
-  const windowMs = parseInt(
-    process.env.PUBLIC_API_IP_WINDOW_MS || process.env.GLOBAL_RATE_LIMIT_WINDOW_MS || "60000",
-    10,
+  const windowMs = parsePositiveInt(
+    process.env.PUBLIC_API_RATE_LIMIT_WINDOW_MS || process.env.PUBLIC_API_IP_WINDOW_MS || process.env.GLOBAL_RATE_LIMIT_WINDOW_MS,
+    60000,
   );
 
   return async (req: Request, res: Response, next: NextFunction) => {
@@ -519,8 +506,14 @@ function getMerchantIdForApiKeyLimit(req: Request): string | null {
 }
 
 export function merchantApiKeyRateLimit(): RequestHandler {
-  const max = parseInt(process.env.MERCHANT_API_KEY_RATE_MAX || "200", 10);
-  const windowMs = parseInt(process.env.MERCHANT_API_KEY_RATE_WINDOW_MS || "60000", 10);
+  const max = parsePositiveInt(
+    process.env.CHARGES_RATE_LIMIT_MAX || process.env.MERCHANT_API_KEY_RATE_MAX,
+    200,
+  );
+  const windowMs = parsePositiveInt(
+    process.env.CHARGES_RATE_LIMIT_WINDOW_MS || process.env.MERCHANT_API_KEY_RATE_WINDOW_MS,
+    60000,
+  );
 
   return async (req: Request, res: Response, next: NextFunction) => {
     const id = getMerchantIdForApiKeyLimit(req);
@@ -626,3 +619,17 @@ export function captchaCheck(): RequestHandler {
     next();
   };
 }
+
+export {
+  createSlidingWindowRateLimiter,
+  checkSlidingWindowLimit,
+  getTrustedClientIp,
+  getClientIdentifier,
+  publicPaymentStatusRateLimit,
+  publicPaymentStreamRateLimit,
+  publicCheckoutRateLimit,
+  chargesRateLimit,
+  setSlidingWindowRedisClientForTests,
+  resetSlidingWindowRedisClientForTests,
+  clearInMemorySlidingWindowCounters,
+} from "./slidingWindowRateLimit.middleware";
