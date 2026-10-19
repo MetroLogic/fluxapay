@@ -11,6 +11,7 @@ import { validateUserId } from "../helpers/request.helper";
 import { MetadataValidationError } from "../utils/metadata.util";
 import { paymentSettlementService } from "../services/paymentSettlement.service";
 import { isTerminalStatus, PaymentStatus } from "../types/payment";
+import { IdempotentRequest, storeIdempotentResponse } from "../middleware/idempotency.middleware";
 import { assertValidPositiveAmount, AmountValidationError } from "../utils/amount.util";
 import {
     buildPaymentExportFilename,
@@ -36,16 +37,70 @@ const PAYMENT_LIST_SORT_COLUMNS = new Set([
   "settled_at",
 ]);
 
-/** Upper bound on rows returned per page for the payments list endpoint. */
+/** Default and upper bound on rows returned per page for the payments list endpoint (#1210). */
+const PAYMENT_LIST_DEFAULT_LIMIT = 25;
 const PAYMENT_LIST_MAX_LIMIT = 100;
+
+export interface PaymentCursor {
+  id: string;
+  createdAt: Date;
+}
+
+/**
+ * Encode a payment into an opaque URL-safe base64 cursor representing
+ * the (createdAt, id) composite keyset for deterministic pagination (#1210).
+ */
+export function encodePaymentCursor(payment: { id: string; createdAt: Date | string }): string {
+  const createdAt = payment.createdAt instanceof Date
+    ? payment.createdAt.toISOString()
+    : new Date(payment.createdAt).toISOString();
+  return Buffer.from(
+    JSON.stringify({ id: payment.id, createdAt }),
+    "utf8",
+  ).toString("base64url");
+}
+
+/**
+ * Decode an opaque base64url or base64 cursor string into a PaymentCursor.
+ * Returns null if the cursor is malformed or missing required keyset attributes.
+ */
+export function decodePaymentCursor(rawCursor: string): PaymentCursor | null {
+  try {
+    const raw = String(rawCursor).trim();
+    if (!raw) return null;
+    let jsonStr: string;
+    try {
+      jsonStr = Buffer.from(raw, "base64url").toString("utf8");
+    } catch {
+      jsonStr = Buffer.from(raw, "base64").toString("utf8");
+    }
+    const parsed = JSON.parse(jsonStr);
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      typeof parsed.id === "string" &&
+      parsed.id.trim() !== "" &&
+      typeof parsed.createdAt === "string" &&
+      !isNaN(Date.parse(parsed.createdAt))
+    ) {
+      return { id: parsed.id.trim(), createdAt: new Date(parsed.createdAt) };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Clamp `?limit` so a single request cannot ask the database to materialise an
- * unbounded number of rows for a merchant with a large payment history (#1208).
+ * unbounded number of rows for a merchant with a large payment history (#1208, #1210).
  */
 function resolvePageSize(rawLimit: unknown): number {
+  if (rawLimit === undefined || rawLimit === null || rawLimit === "") {
+    return PAYMENT_LIST_DEFAULT_LIMIT;
+  }
   const requested = Number(rawLimit);
-  if (!Number.isFinite(requested) || requested <= 0) return 10;
+  if (!Number.isFinite(requested) || requested <= 0) return PAYMENT_LIST_DEFAULT_LIMIT;
   return Math.min(Math.floor(requested), PAYMENT_LIST_MAX_LIMIT);
 }
 
@@ -168,6 +223,17 @@ export const createPayment = async (req: Request, res: Response) => {
       checkout_url: payment.checkout_url,
     };
 
+    const idempotentReq = req as IdempotentRequest;
+    if (idempotentReq.idempotencyKey) {
+      await storeIdempotentResponse(
+        idempotentReq.idempotencyKey,
+        req.body,
+        201,
+        responseBody,
+        merchantId,
+      );
+    }
+
     res.status(201).json(responseBody);
   } catch (error: unknown) {
     if (error instanceof MetadataValidationError) {
@@ -213,7 +279,37 @@ export const getPayments = async (req: Request, res: Response) => {
     const sortBy = resolveSortColumn(query.sort_by);
     const sortOrder: "asc" | "desc" = query.order === "asc" ? "asc" : "desc";
 
-    const where: Record<string, unknown> = {
+    const rawCursor =
+      query.cursor !== undefined && query.cursor !== null && query.cursor !== ""
+        ? String(query.cursor).trim()
+        : undefined;
+
+    let cursor: PaymentCursor | null = null;
+    if (rawCursor) {
+      cursor = decodePaymentCursor(rawCursor);
+      if (!cursor) {
+        // Fallback: check if rawCursor is an existing payment ID for this merchant
+        const existingPayment = await prisma.payment.findFirst({
+          where: { id: rawCursor, merchantId },
+          select: { id: true, createdAt: true },
+        });
+        if (existingPayment) {
+          cursor = { id: existingPayment.id, createdAt: existingPayment.createdAt };
+        } else {
+          return sendApiError(
+            res,
+            apiError(
+              400,
+              ErrorCode.VALIDATION_ERROR,
+              "Invalid pagination cursor",
+              { errors: [{ field: "cursor", message: "Invalid pagination cursor" }] },
+            ),
+          );
+        }
+      }
+    }
+
+    const baseWhere: Record<string, unknown> = {
       merchantId,
       // Partition live vs test-mode payments. JWT (dashboard) requests see both.
       ...(typeof isTestMode === "boolean" && { is_test_mode: isTestMode }),
@@ -233,26 +329,65 @@ export const getPayments = async (req: Request, res: Response) => {
       }),
     };
 
-    const [data, total] = await Promise.all([
+    let pagedWhere: Record<string, unknown> = baseWhere;
+    if (cursor) {
+      const cursorClause =
+        sortOrder === "asc"
+          ? {
+              OR: [
+                { createdAt: { gt: cursor.createdAt } },
+                { createdAt: cursor.createdAt, id: { gt: cursor.id } },
+              ],
+            }
+          : {
+              OR: [
+                { createdAt: { lt: cursor.createdAt } },
+                { createdAt: cursor.createdAt, id: { lt: cursor.id } },
+              ],
+            };
+
+      pagedWhere = {
+        AND: [baseWhere, cursorClause],
+      };
+    }
+
+    // Stable ordering: secondary sort key is `id` so identical timestamps never cause skip/duplication (#1210)
+    const orderBy =
+      sortBy === "createdAt"
+        ? [{ createdAt: sortOrder }, { id: sortOrder }]
+        : [{ [sortBy]: sortOrder }, { id: sortOrder }];
+
+    const skip = cursor ? undefined : (page - 1) * limit;
+
+    const [rows, total] = await Promise.all([
       prisma.payment.findMany({
-        where,
-        skip: (page - 1) * limit,
-        take: limit,
-        orderBy: { [sortBy]: sortOrder },
+        where: pagedWhere,
+        ...(skip !== undefined && skip > 0 && { skip }),
+        take: limit + 1,
+        orderBy,
       }),
-      prisma.payment.count({ where }),
+      prisma.payment.count({ where: baseWhere }),
     ]);
+
+    const hasNextPage = rows.length > limit;
+    const data = hasNextPage ? rows.slice(0, limit) : rows;
+    const nextCursor =
+      hasNextPage && data.length > 0
+        ? encodePaymentCursor(data[data.length - 1])
+        : null;
 
     const totalPages = Math.max(1, Math.ceil(total / limit));
     return res.json({
       data,
+      nextCursor,
       meta: {
         total,
         page,
         limit,
         totalPages,
-        hasNextPage: page < totalPages,
-        hasPreviousPage: page > 1,
+        hasNextPage,
+        hasPreviousPage: Boolean(cursor || page > 1),
+        nextCursor,
       },
     });
   } catch (error: unknown) {

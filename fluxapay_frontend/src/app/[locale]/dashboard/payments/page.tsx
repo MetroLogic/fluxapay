@@ -16,11 +16,11 @@ import { Suspense } from "react";
 import toast from "react-hot-toast";
 import { api, type MerchantExportFormat } from "@/lib/api";
 import { QRCodeCanvas } from "qrcode.react";
-import { DataTableCard, TablePaginationBar } from "@/components/data-table";
+import { DataTableCard } from "@/components/data-table";
 import { ExportActionButtons } from "@/components/data-table/ExportActionButtons";
 import { useMerchantDataExport } from "@/hooks/useMerchantDataExport";
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 25;
 
 interface BackendPayment {
   id: string;
@@ -73,14 +73,11 @@ function PaymentsContent() {
     searchParams.get("action") === "create-payment" ||
     searchParams.get("action") === "create-payment-link";
 
-  // Initial filter values are seeded from the URL so filtered views can be
-  // bookmarked or shared (#1251).
-  const initialPage = Number(searchParams.get("page")) || 1;
-
   const [payments, setPayments] = useState<Payment[]>([]);
   const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(initialPage);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [search, setSearch] = useState(searchParams.get("search") ?? "");
@@ -149,17 +146,23 @@ function PaymentsContent() {
     setLoading(true);
     setLoadError(null);
     try {
-      const result = (await api.payments.list({
-        page,
-        limit: PAGE_SIZE,
-        status: statusFilter,
-        currency: currencyFilter,
-        search: search || undefined,
-        date_from: dateFrom || undefined,
-        date_to: dateTo || undefined,
-      }, { signal: controller.signal })) as { data: BackendPayment[]; meta: { total: number } };
-      setPayments(result.data.map(mapBackendPayment));
-      setTotal(result.meta.total);
+      const result = await api.payments.list(
+        {
+          limit: PAGE_SIZE,
+          status: statusFilter,
+          currency: currencyFilter,
+          search: search || undefined,
+          date_from: dateFrom || undefined,
+          date_to: dateTo || undefined,
+        },
+        { signal: controller.signal },
+      );
+      const items = (result.data || []).map((p: any) =>
+        mapBackendPayment(p as BackendPayment),
+      );
+      setPayments(items);
+      setNextCursor(result.nextCursor ?? result.meta?.nextCursor ?? null);
+      setTotal(result.meta?.total ?? items.length);
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
         return;
@@ -172,17 +175,50 @@ function PaymentsContent() {
         setLoading(false);
       }
     }
-  }, [page, statusFilter, currencyFilter, search, dateFrom, dateTo]);
+  }, [statusFilter, currencyFilter, search, dateFrom, dateTo]);
+
+  const handleLoadMore = useCallback(async () => {
+    if (!nextCursor || isLoadingMore || loading) return;
+
+    setIsLoadingMore(true);
+    try {
+      const result = await api.payments.list({
+        cursor: nextCursor,
+        limit: PAGE_SIZE,
+        status: statusFilter,
+        currency: currencyFilter,
+        search: search || undefined,
+        date_from: dateFrom || undefined,
+        date_to: dateTo || undefined,
+      });
+
+      const newItems = (result.data || []).map((p: any) =>
+        mapBackendPayment(p as BackendPayment),
+      );
+      setPayments((prev) => {
+        const existingIds = new Set(prev.map((p) => p.id));
+        const nonDuplicateItems = newItems.filter((p) => !existingIds.has(p.id));
+        return [...prev, ...nonDuplicateItems];
+      });
+      setNextCursor(result.nextCursor ?? result.meta?.nextCursor ?? null);
+      if (result.meta?.total !== undefined) {
+        setTotal(result.meta.total);
+      }
+    } catch {
+      toast.error("Failed to load more transactions.");
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [nextCursor, isLoadingMore, loading, statusFilter, currencyFilter, search, dateFrom, dateTo]);
 
   const filtersInitializedRef = useRef(false);
   useEffect(() => {
-    // Skip the initial mount so a `?page=` from the URL is preserved.
     if (!filtersInitializedRef.current) {
       filtersInitializedRef.current = true;
       return;
     }
-    setPage(1);
-  }, [statusFilter, currencyFilter, search, dateFrom, dateTo, amountMin, amountMax]);
+    fetchPayments();
+  }, [statusFilter, currencyFilter, search, dateFrom, dateTo, amountMin, amountMax, fetchPayments]);
 
   // Keep the URL in sync with the active filters so views are shareable (#1251).
   useEffect(() => {
@@ -192,11 +228,10 @@ function PaymentsContent() {
     if (currencyFilter && currencyFilter !== "all") params.set("currency", currencyFilter);
     if (dateFrom) params.set("from", dateFrom);
     if (dateTo) params.set("to", dateTo);
-    if (page > 1) params.set("page", String(page));
 
     const query = params.toString();
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
-  }, [router, pathname, search, statusFilter, currencyFilter, dateFrom, dateTo, page]);
+  }, [router, pathname, search, statusFilter, currencyFilter, dateFrom, dateTo]);
 
   useEffect(() => {
     fetchPayments();
@@ -235,7 +270,7 @@ function PaymentsContent() {
         amount_min: amountMin || undefined,
         amount_max: amountMax || undefined,
       },
-      page,
+      page: 1,
       limit: PAGE_SIZE,
     });
   };
@@ -421,13 +456,30 @@ function PaymentsContent() {
           />
         }
         footer={
-          <TablePaginationBar
-            page={page}
-            pageSize={PAGE_SIZE}
-            total={total}
-            loading={loading}
-            onPageChange={setPage}
-          />
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 sm:px-6 py-4 text-sm text-muted-foreground border-t border-border/60">
+            <p>
+              {payments.length === 0 && !loading
+                ? "No results"
+                : total > 0
+                  ? `Showing ${payments.length} of ${total} transactions`
+                  : `Showing ${payments.length} transaction${payments.length === 1 ? "" : "s"}`}
+            </p>
+            <div className="flex items-center gap-2">
+              {nextCursor ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  disabled={isLoadingMore || loading}
+                  onClick={handleLoadMore}
+                >
+                  {isLoadingMore ? "Loading more..." : "Load More"}
+                </Button>
+              ) : payments.length > 0 && !loading ? (
+                <span className="text-xs text-muted-foreground">All transactions loaded</span>
+              ) : null}
+            </div>
+          </div>
         }
       >
         <PaymentsTable

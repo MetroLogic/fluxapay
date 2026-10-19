@@ -283,6 +283,8 @@ describe("runPaymentExpiryJob — webhook emission (issue #655)", () => {
       }),
     );
     expect(releaseAddress).toHaveBeenCalledWith(PENDING_PAYMENT.id);
+  });
+
   it("releases the distributed lock even when an unhandled exception occurs mid-job (#1071)", async () => {
     setupLock();
     // Simulate an unexpected failure partway through the job — e.g. a DB
