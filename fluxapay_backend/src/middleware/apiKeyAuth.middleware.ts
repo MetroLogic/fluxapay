@@ -95,6 +95,9 @@ export async function authenticateApiKey(
             }
 
             const storedKey = await apiKeyService.validateRawApiKey(key);
+            if (storedKey.expired && storedKey.merchantId) {
+                return sendApiError(res, apiError(401, ErrorCode.API_KEY_EXPIRED, "API key expired"));
+            }
             if (storedKey.valid && storedKey.merchantId) {
                 authReq.merchantId = storedKey.merchantId;
                 authReq.isTestMode = isTestApiKey(key);
@@ -105,6 +108,9 @@ export async function authenticateApiKey(
             // Support key rotation: a key may be in a grace period after rotation.
             // The previous key remains valid until its grace period expires.
             const rotatedKey = await apiKeyService.validateRotatedApiKey(key);
+            if (rotatedKey.expired && rotatedKey.merchantId) {
+                return sendApiError(res, apiError(401, ErrorCode.API_KEY_EXPIRED, "API key expired"));
+            }
             if (rotatedKey.valid && rotatedKey.merchantId) {
                 authReq.merchantId = rotatedKey.merchantId;
                 authReq.isTestMode = isTestApiKey(key);
