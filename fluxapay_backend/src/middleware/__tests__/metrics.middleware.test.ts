@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import {
+  createMetricsMiddleware,
   metricsMiddleware,
   renderPrometheusMetrics,
   trackPaymentConfirmed,
@@ -9,7 +10,7 @@ import {
 } from "../metrics.middleware";
 import { MetricEvent } from "../../types/logging.types";
 
-const SAMPLE_LINE = /^[a-zA-Z_:][a-zA-Z0-9_:]*(\{[^}]*\})? -?[0-9.eE+-]+$/;
+const SAMPLE_LINE = /^[a-zA-Z_:][a-zA-Z0-9_:]*(\{[^}]*\})? ([+-]?[0-9.eE+-]+|[+-]?(?:Inf|NaN))$/i;
 const HELP_LINE = /^# HELP [a-zA-Z_:][a-zA-Z0-9_:]* .+$/;
 const TYPE_LINE = /^# TYPE [a-zA-Z_:][a-zA-Z0-9_:]* counter$/;
 
@@ -121,6 +122,28 @@ describe("renderPrometheusMetrics", () => {
     const events: MetricEvent[] = [{ name: "payment_amount", value: 5, type: "histogram" }];
     expect(renderPrometheusMetrics(events)).toBe("\n");
   });
+
+  it("renders Prisma pool utilization and wait metrics in Prometheus format", () => {
+    const out = renderPrometheusMetrics([], [
+      {
+        pool: "primary",
+        activeConnections: 9,
+        idleConnections: 1,
+        maxConnections: 10,
+        utilization: 0.9,
+        queueWaitDurationMs: 12.5,
+      },
+    ]);
+
+    expect(out).toContain("# TYPE fluxapay_database_pool_connections_active gauge");
+    expect(out).toContain('fluxapay_database_pool_connections_active{pool="primary"} 9');
+    expect(out).toContain('fluxapay_database_pool_connections_idle{pool="primary"} 1');
+    expect(out).toContain('fluxapay_database_pool_utilization_ratio{pool="primary"} 0.9');
+    expect(out).toContain('fluxapay_database_pool_queue_wait_duration_ms{pool="primary"} 12.5');
+    for (const line of out.trim().split("\n")) {
+      if (!line.startsWith("#")) expect(SAMPLE_LINE.test(line)).toBe(true);
+    }
+  });
 });
 
 describe("metricsMiddleware /metrics endpoint (smoke)", () => {
@@ -153,7 +176,7 @@ describe("metricsMiddleware /metrics endpoint (smoke)", () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  it("serves valid Prometheus text to an authorized scrape", () => {
+  it("serves valid Prometheus text to an authorized scrape", async () => {
     process.env.NODE_ENV = "production";
     process.env.ADMIN_SECRET = "op-secret";
 
@@ -164,6 +187,7 @@ describe("metricsMiddleware /metrics endpoint (smoke)", () => {
       res as unknown as Response,
       next,
     );
+    await new Promise<void>((resolve) => setImmediate(resolve));
 
     expect(res.statusCode).toBe(200);
     expect(res.headers["Content-Type"]).toContain("text/plain");
@@ -175,8 +199,8 @@ describe("metricsMiddleware /metrics endpoint (smoke)", () => {
 
     const lines = String(res.body).trim().split("\n");
     for (const line of lines) {
-      if (!line.startsWith("#")) {
-        expect(SAMPLE_LINE.test(line)).toBe(true);
+      if (line.length > 0 && !line.startsWith("#")) {
+        expect(line).toMatch(SAMPLE_LINE);
       }
     }
   });
@@ -189,5 +213,28 @@ describe("metricsMiddleware /metrics endpoint (smoke)", () => {
     expect(next).toHaveBeenCalledTimes(1);
     expect(res.statusCode).toBe(0);
     expect(res.body).toBeUndefined();
+  });
+
+  it("exports Prisma pool snapshots from an authorized scrape", async () => {
+    process.env.NODE_ENV = "production";
+    process.env.ADMIN_SECRET = "op-secret";
+    const middleware = createMetricsMiddleware(async () => [{
+      pool: "primary",
+      activeConnections: 9,
+      idleConnections: 1,
+      maxConnections: 10,
+      utilization: 0.9,
+      queueWaitDurationMs: 12.5,
+    }]);
+    const res = mockResponse();
+
+    middleware(
+      mockRequest("/metrics", { "x-admin-secret": "op-secret" }),
+      res as unknown as Response,
+      nextSpy(),
+    );
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(String(res.body)).toContain('fluxapay_database_pool_connections_active{pool="primary"} 9');
   });
 });

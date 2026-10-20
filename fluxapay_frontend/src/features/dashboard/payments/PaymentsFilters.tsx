@@ -1,4 +1,4 @@
-import { ListPageFilterBar } from "@/components/data-table";
+import { ListPageFilterBar, DateRangeFilter, TRANSACTIONS_DATE_RANGE_PRESETS } from "@/components/data-table";
 import { Input } from "@/components/Input";
 import { Select } from "@/components/Select";
 import { Button } from "@/components/Button";
@@ -172,7 +172,7 @@ export const PaymentsFilters = memo(({
         <ListPageFilterBar stack>
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div className="flex items-center gap-3 w-full md:w-auto">
-                    <span className="text-sm font-semibold text-slate-700 whitespace-nowrap">Saved Filters:</span>
+                    <span className="text-sm font-semibold text-foreground whitespace-nowrap">Saved Filters:</span>
                     <Select 
                         className="w-full md:w-[200px]"
                         value={selectedPresetId}
@@ -222,74 +222,67 @@ export const PaymentsFilters = memo(({
                 </div>
             </div>
 
-            <div className="flex flex-col md:flex-row gap-4">
-                <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                        placeholder="Search by ID, Order ID, or customer..."
-                        className="pl-10"
-                        value={localSearch}
-                        onChange={handleSearchChange}
-                    />
-                </div>
-                <div className="flex gap-4">
-                    <Select
-                        className="w-[150px]"
-                        value={statusValue}
-                        onChange={handleStatusChange}
-                    >
-                        <option value="all">All Statuses</option>
-                        <option value="pending">Pending</option>
-                        <option value="confirmed">Confirmed</option>
-                        <option value="partially_paid">Partially Paid</option>
-                        <option value="overpaid">Overpaid</option>
-                        <option value="paid">Paid</option>
-                        <option value="completed">Completed</option>
-                        <option value="expired">Expired</option>
-                        <option value="failed">Failed</option>
-                        <option value="settled">Settled</option>
-                        <option value="underpaid">Underpaid</option>
-                    </Select>
-                    <Select
-                        className="w-[120px]"
-                        value={currencyValue}
-                        onChange={handleCurrencyChange}
-                    >
-                        <option value="all">All Currencies</option>
-                        <option value="USDC">USDC</option>
-                        <option value="XLM">XLM</option>
-                        <option value="EURC">EURC</option>
-                    </Select>
-                    <Input
-                        type="date"
-                        className="w-[150px]"
-                        title="From date"
-                        value={dateFrom}
-                        onChange={(e) => {
-                            onDateFromChange(e.target.value);
-                            setSelectedPresetId("custom");
-                        }}
-                    />
-                    <Input
-                        type="date"
-                        className="w-[150px]"
-                        title="To date"
-                        value={dateTo}
-                        onChange={(e) => {
-                            onDateToChange(e.target.value);
-                            setSelectedPresetId("custom");
-                        }}
-                    />
-                </div>
+            <div className="relative w-full">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                    placeholder="Search by ID, Order ID, or customer..."
+                    className="pl-10"
+                    value={localSearch}
+                    onChange={handleSearchChange}
+                />
+            </div>
+
+            <div className="flex flex-col sm:flex-row sm:flex-wrap gap-4">
+                <Select
+                    aria-label="Status"
+                    className="w-full sm:w-[150px]"
+                    value={statusValue}
+                    onChange={handleStatusChange}
+                >
+                    <option value="all">All Statuses</option>
+                    <option value="pending">Pending</option>
+                    <option value="confirmed">Confirmed</option>
+                    <option value="partially_paid">Partially Paid</option>
+                    <option value="overpaid">Overpaid</option>
+                    <option value="paid">Paid</option>
+                    <option value="completed">Completed</option>
+                    <option value="expired">Expired</option>
+                    <option value="failed">Failed</option>
+                    <option value="settled">Settled</option>
+                    <option value="underpaid">Underpaid</option>
+                </Select>
+                <Select
+                    aria-label="Currency"
+                    className="w-full sm:w-[150px]"
+                    value={currencyValue}
+                    onChange={handleCurrencyChange}
+                >
+                    <option value="all">All Currencies</option>
+                    <option value="USDC">USDC</option>
+                    <option value="XLM">XLM</option>
+                    <option value="EURC">EURC</option>
+                    <option value="NGN">NGN</option>
+                    <option value="KES">KES</option>
+                </Select>
+                <DateRangeFilter
+                    from={dateFrom}
+                    to={dateTo}
+                    presets={TRANSACTIONS_DATE_RANGE_PRESETS}
+                    onChange={({ from, to }) => {
+                        onDateFromChange(from);
+                        onDateToChange(to);
+                        setSelectedPresetId("custom");
+                    }}
+                />
             </div>
 
             {/* Amount Range */}
             <div className="flex flex-col md:flex-row gap-4">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                     <span className="text-sm font-medium text-muted-foreground whitespace-nowrap">Amount:</span>
                     <Input
                         type="number"
-                        className="w-[120px]"
+                        className="w-[110px] sm:w-[120px]"
                         placeholder="Min"
                         value={amountMin}
                         min="0"
@@ -302,7 +295,7 @@ export const PaymentsFilters = memo(({
                     <span className="text-muted-foreground">–</span>
                     <Input
                         type="number"
-                        className="w-[120px]"
+                        className="w-[110px] sm:w-[120px]"
                         placeholder="Max"
                         value={amountMax}
                         min="0"

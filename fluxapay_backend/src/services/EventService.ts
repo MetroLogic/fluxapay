@@ -10,5 +10,7 @@ export enum AppEvents {
     PAYMENT_EXPIRED = "payment.expired",
     PAYMENT_PARTIALLY_PAID = "payment.partially_paid",
     PAYMENT_OVERPAID = "payment.overpaid",
-    DASHBOARD_REFRESH = "dashboard.refresh",
+    DASHTBOARD_REFRESH = "dashboard.refresh",
+    REFUND_CREATED = "refund.created",
+    REFUND_UPDATED = "refund.updated",
 }

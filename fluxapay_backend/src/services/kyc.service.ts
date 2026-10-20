@@ -15,6 +15,7 @@ import { logKycDecision } from "./audit.service";
 import { KYCStatus as AuditKYCStatus } from "../types/audit.types";
 import { validateKycUploadFile, KYC_MAX_FILE_SIZE_BYTES } from "../utils/kycUploadValidation.util";
 import { scanFile, handleScanFailure } from "../utils/fileScan.util";
+import { screenKycSubmission, hasUnresolvedSanctionsHit } from "./sanctionsScreening.service";
 
 
 /**
@@ -60,6 +61,14 @@ export async function submitKycService(
       },
     });
 
+    void screenKycSubmission({
+      merchantId,
+      kycId: updatedKyc.id,
+      companyName: data.legal_business_name,
+      directorName: data.director_full_name,
+      country: data.country_of_registration,
+    });
+
     return {
       message: "KYC information updated and submitted for review",
       kyc: updatedKyc,
@@ -82,6 +91,14 @@ export async function submitKycService(
       government_id_number: data.government_id_number,
       kyc_status: PrismaKYCStatus.pending_review,
     },
+  });
+
+  void screenKycSubmission({
+    merchantId,
+    kycId: kyc.id,
+    companyName: data.legal_business_name,
+    directorName: data.director_full_name,
+    country: data.country_of_registration,
   });
 
   return {
@@ -367,6 +384,15 @@ export async function updateKycStatusService(
           ? allowedNext.join(", ")
           : "none (only pending_review submissions can be reviewed)"
       }.`,
+    );
+  }
+
+  // Block automatic tier activation while a sanctions hit is unresolved.
+  if (newStatus === PrismaKYCStatus.approved && (await hasUnresolvedSanctionsHit(merchantId))) {
+    throw apiError(
+      400,
+      ErrorCode.VALIDATION_ERROR,
+      "SANCTIONS_REVIEW_REQUIRED: sanctions/PEP screening hit must be resolved before approval.",
     );
   }
 

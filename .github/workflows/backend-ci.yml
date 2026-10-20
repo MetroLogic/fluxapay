@@ -11,6 +11,65 @@ on:
       - develop
 
 jobs:
+  secret-scan:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Scan PR diff for committed secrets
+        run: |
+          set -euo pipefail
+
+          # Regex rules for sensitive token patterns.
+          # Stellar private seeds (S...), FluxaPay live API keys (fp_live_...),
+          # database URLs with embedded credentials, and JWT secrets.
+          PATTERNS='(^|[^A-Za-z0-9])S[A-Z2-7]{55}([^A-Za-z0-9]|$)|fp_live_[A-Za-z0-9]{16,}|(postgres(ql)?|mysql|mongodb(\+srv)?|redis)://[^:@/\s]+:[^@/\s]+@|(JWT_SECRET|ADMIN_JWT_SECRET|WEBHOOK_SECRET|ADMIN_SECRET)[[:space:]]*[:=][[:space:]]*["'"']?[A-Za-z0-9_\-]{16,}'
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="origin/${{ github.base_ref }}"
+            git fetch --no-tags origin "${{ github.base_ref }}" || true
+            DIFF_RANGE="${BASE}...HEAD"
+          else
+            BEFORE="${{ github.event.before }}"
+            if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+              DIFF_RANGE="HEAD~1...HEAD"
+            else
+              DIFF_RANGE="${BEFORE}...HEAD"
+            fi
+          fi
+
+          echo "Scanning diff range: ${DIFF_RANGE}"
+
+          # Only inspect added lines in the diff.
+          ADDED_LINES=$(git diff "${DIFF_RANGE}" --unified=0 --no-color | grep -E '^\+' | grep -vE '^\+\+\+' || true)
+
+          if [ -z "${ADDED_LINES}" ]; then
+            echo "No added lines to scan."
+            exit 0
+          fi
+
+          MATCHES=$(printf '%s\n' "${ADDED_LINES}" | grep -nE "${PATTERNS}" || true)
+
+          if [ -n "${MATCHES}" ]; then
+            echo "::error::Potential secret(s) detected in this change set."
+            echo ""
+            echo "The following added lines matched secret-scanning rules:"
+            printf '%s\n' "${MATCHES}"
+            echo ""
+            echo "How to fix:"
+            echo "  1. Remove the secret from the offending file."
+            echo "  2. Unstage it: git restore --staged <file>"
+            echo "  3. Rotate the credential if it was ever pushed."
+            echo "  4. Use environment variables or a secrets manager instead of hardcoding."
+            exit 1
+          fi
+
+          echo "No secrets detected in the diff."
+
   build-and-test:
     runs-on: ubuntu-latest
 
@@ -94,6 +153,9 @@ jobs:
 
       - name: OpenAPI Validation
         run: npm run validate:openapi
+
+      - name: API Collection Synchronization
+        run: npm run check:api-collections
 
       - name: Route Coverage
         run: npm run check:route-coverage

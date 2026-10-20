@@ -147,6 +147,33 @@
       "answer": "Yes, we use bank-grade encryption, multi-signature wallets, and comply with international security standards."
     }
   },
+  "customerFaq": {
+    "title": "Stellar payment help",
+    "subtitle": "Answers about wallets, payment memos, amounts, and checking your payment status.",
+    "searchLabel": "Search payment questions",
+    "searchPlaceholder": "Search FAQs...",
+    "noResults": "No matching questions. Try another search.",
+    "wallets": {
+      "question": "Which Stellar wallets can I use?",
+      "answer": "You can pay directly with Freighter or Albedo when available. The wallet selector may also offer compatible mobile wallets such as LOBSTR or Solar through WalletConnect. You can also scan the QR code or copy the address and pay from another Stellar wallet. Make sure your wallet is on the same Stellar network and supports the asset shown on this checkout."
+    },
+    "memo": {
+      "question": "Why is a memo required for some payments?",
+      "answer": "Some payment destinations are shared by many customers. The memo identifies your specific order so the merchant can credit your payment correctly. If this checkout marks the memo as required, include the exact value shown, including any leading zeros. A missing or incorrect memo can delay crediting and may require the merchant to investigate."
+    },
+    "amountAsset": {
+      "question": "What if I send the wrong amount or asset?",
+      "answer": "An underpayment may appear as a partial payment with the remaining balance shown; an overpayment may be flagged separately. A different asset may not be recognized automatically. Contact the merchant promptly and share the transaction hash, amount, asset, and memo. Do not send another payment unless the merchant tells you what to do."
+    },
+    "confirmation": {
+      "question": "How long does payment confirmation take?",
+      "answer": "Stellar transactions are usually recorded within a few seconds. FluxaPay checks the payment status automatically, but network delays or status indexing can take longer. Keep this page open and wait for it to show Confirmed before trying again."
+    },
+    "status": {
+      "question": "How can I check my payment status?",
+      "answer": "This checkout updates your status automatically. When confirmed, it will show a confirmation message and, when available, the Stellar transaction hash. If it still shows Pending after a few minutes, check that your transaction succeeded on the correct network and that the address, asset, amount, and required memo match. Then contact the merchant with your transaction hash; do not resend while the status is pending."
+    }
+  },
   "footer": {
     "tagline": "The future of global payments",
     "product": "Product",
@@ -248,7 +275,19 @@
       "close": "Close",
       "timerExpired": "Expired",
       "timerExpiredAria": "Payment timer expired",
-      "timeRemainingAria": "Time remaining: {minutes} minutes and {seconds} seconds"
+      "timeRemainingAria": "Time remaining: {minutes} minutes and {seconds} seconds",
+      "statusAwaiting": "Awaiting payment",
+      "statusAwaitingDescription": "Send the exact amount to the address below. We'll detect it automatically.",
+      "statusConfirming": "Payment detected — confirming",
+      "statusConfirmingDescription": "We've detected your payment on-chain and are waiting for confirmation.",
+      "statusUnderpaid": "Underpayment received",
+      "statusUnderpaidDescription": "We received less than the full amount. Send the remaining {amount} {currency} to complete your payment.",
+      "statusOverpaid": "Overpayment received",
+      "statusOverpaidDescription": "We received more than the requested amount. Your payment has been accepted.",
+      "statusUpdating": "Live updates enabled",
+      "statusPolling": "Checking for updates every few seconds",
+      "statusAnnouncement": "Payment status: {status}",
+      "redirectingIn": "Redirecting in {seconds}s…"
     }
   },
   "auth": {

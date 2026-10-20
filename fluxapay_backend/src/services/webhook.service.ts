@@ -5,7 +5,11 @@ import { prisma } from "../config/prisma";
 import crypto from "crypto";
 import { webhookEventTypes } from "../schemas/webhook.schema";
 import { normalizeEventName, toLegacyEventName } from "../utils/webhook-event-mapping.util";
+import { getCorrelationId } from "../utils/requestContext";
 import { trackWebhookDelivery } from "../middleware/metrics.middleware";
+import { getWebhookBackoffConfig, computeJitteredBackoffMs } from "../utils/webhookBackoff";
+
+const MAX_AUTOMATIC_WEBHOOK_RETRIES = getWebhookBackoffConfig().maxRetries;
 
 /** Get webhook timestamp tolerance from environment (in seconds, default 5 minutes) */
 function getWebhookTimestampToleranceSeconds(): number {
@@ -98,6 +102,7 @@ export class WebhookDispatcher {
           'Content-Type': 'application/json',
           'X-FluxaPay-Signature': signature,
           'X-FluxaPay-Timestamp': timestamp,
+          ...(getCorrelationId() ? { 'X-Correlation-ID': getCorrelationId() } : {}),
         },
         body: payload,
       });
@@ -409,7 +414,8 @@ export async function retryWebhookService(params: RetryWebhookParams) {
   );
 
   const newRetryCount = log.retry_count + 1;
-  const isPermanentlyFailed = !result.success && newRetryCount >= log.max_retries;
+  const retryLimit = Math.min(log.max_retries, MAX_AUTOMATIC_WEBHOOK_RETRIES);
+  const isPermanentlyFailed = !result.success && newRetryCount >= retryLimit;
   const newStatus: WebhookStatus = result.success ? "delivered" :
     isPermanentlyFailed ? "failed" : "retrying";
 
@@ -424,9 +430,12 @@ export async function retryWebhookService(params: RetryWebhookParams) {
     },
   });
 
-  // Calculate next retry time using exact schedule: 5s, 30s, 2m, 10m, 1h
-  const retryDelaysMs = [5000, 30000, 120000, 600000, 3600000];
-  const delayMs = retryDelaysMs[newRetryCount - 1] || 3600000;
+  const delayMs = computeJitteredBackoffMs(newRetryCount);
+  if (newStatus === "retrying") {
+    console.log(
+      `[WebhookRetry] log=${log.id} attempt=${newRetryCount}/${retryLimit} next_backoff_ms=${delayMs}`,
+    );
+  }
   const nextRetryAt = newStatus === "retrying"
     ? new Date(Date.now() + delayMs)
     : null;
@@ -461,6 +470,30 @@ export async function retryWebhookService(params: RetryWebhookParams) {
       failure_reason: updatedLog.failure_reason,
     },
   };
+}
+
+export async function processDueWebhookRetries(batchSize = 100) {
+  const dueLogs = await prisma.webhookLog.findMany({
+    where: {
+      status: "retrying",
+      next_retry_at: { lte: new Date() },
+    },
+    orderBy: { next_retry_at: "asc" },
+    take: batchSize,
+  });
+
+  let processed = 0;
+  for (const log of dueLogs) {
+    try {
+      await retryWebhookService({ merchantId: log.merchantId, log_id: log.id });
+      processed++;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`[WebhookRetry] Failed to retry webhook ${log.id}: ${message}`);
+    }
+  }
+
+  return { processed, due: dueLogs.length };
 }
 
 interface GetDeadLetterQueueParams {
@@ -777,6 +810,7 @@ export async function deliverWebhook(
         "Content-Type": "application/json",
         "X-FluxaPay-Signature": signature,
         "X-FluxaPay-Timestamp": timestamp,
+        ...(getCorrelationId() ? { "X-Correlation-ID": getCorrelationId() } : {}),
       },
       body,
       signal: controller.signal,
@@ -866,6 +900,7 @@ function generateTestPayload(
   const canonicalEventType = normalizeEventName(eventType as any);
 
   const basePayload = {
+    event: canonicalEventType,
     event_id: eventId ?? crypto.randomUUID(),
     webhook_id: `test_${Date.now()}`,
     event_type: canonicalEventType,
@@ -1118,6 +1153,7 @@ async function deliverWebhookEvent(
   // deduplicate and apply replay-protection on their side.
   const deliveryTimestamp = new Date().toISOString();
   const enrichedPayload = {
+    event: payload.event ?? normalizeEventName(eventType as any),
     event_id: resolvedEventId,
     timestamp: deliveryTimestamp,
     ...payload,
@@ -1156,10 +1192,10 @@ async function deliverWebhookEvent(
   const status: WebhookStatus = result.success ? "delivered" : "retrying";
 
   const nextRetryAt = status === "retrying"
-    ? new Date(Date.now() + 60 * 1000)
+    ? new Date(Date.now() + WEBHOOK_RETRY_BASE_DELAY_MS)
     : null;
 
-  const retryCount = result.success ? 0 : 1;
+  const retryCount = 0;
 
   await prisma.webhookRetryAttempt.create({
     data: {

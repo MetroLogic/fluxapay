@@ -177,6 +177,7 @@ export function getSafeRequestMetadata(req: any) {
     userAgent: headers['user-agent'] ? headers['user-agent'].split(' ')[0] : undefined, // Just browser name
     ip: req.ip,
     requestId: req.requestId || req.headers['x-request-id'],
+    correlationId: req.correlationId || req.headers['x-correlation-id'],
     hasAuthHeader: !!(headers['authorization'] || headers['x-api-key']),
     contentType: headers['content-type'],
     contentLength: headers['content-length'],

@@ -33,6 +33,11 @@ import {
   HorizonPaymentDetectedEvent,
 } from "./horizonPoller.service";
 import { eventBus, AppEvents } from "./EventService";
+import {
+  trackPaymentConfirmed,
+  trackPaymentFailed,
+  trackPaymentStageDuration,
+} from "../middleware/metrics.middleware";
 
 const logger = getLogger("PaymentOracleService");
 const metrics = getMetricsCollector();
@@ -52,6 +57,31 @@ const ORACLE_PENDING_CURSOR_KEY = "oracle:pending_payments_cursor";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
+/**
+ * Statuses that represent a successfully completed payment, and therefore the
+ * only states from which `PAYMENT_CONFIRMED` should be emitted.
+ */
+const SUCCESS_STATUSES = new Set(["confirmed", "overpaid"]);
+
+/**
+ * Whether a verification represents a real transition into a successful state.
+ *
+ * `updatePaymentStatus` writes with a bare `where: { id }`, so the oracle
+ * re-verifies an already-confirmed payment on later ticks and on manual admin
+ * re-verify. Emitting on every pass would email the merchant repeatedly, run
+ * the fiat settlement pipeline again, and release the pooled address twice, so
+ * the event is gated on the status actually changing (#1190).
+ *
+ * Exported for unit testing: the surrounding function needs a live Horizon
+ * server, this decision does not.
+ */
+export function isNewlyConfirmedTransition(
+  previousStatus: string,
+  nextStatus: string,
+): boolean {
+  return SUCCESS_STATUSES.has(nextStatus) && previousStatus !== nextStatus;
+}
+
 interface PaymentVerification {
   paymentId: string;
   address: string;
@@ -63,6 +93,17 @@ interface PaymentVerification {
   payer?: string;
   verified: boolean;
   status: string;
+  /**
+   * The status the payment held before this verification ran.
+   *
+   * `updatePaymentStatus` writes with a bare `where: { id }`, so the oracle
+   * re-verifies an already-confirmed payment on later ticks and on manual admin
+   * re-verify. Without the prior value there is no way to tell a first
+   * confirmation from a repeat, and every `PAYMENT_CONFIRMED` subscriber (the
+   * confirmation email, fiat settlement, deposit-pool release) would fire again
+   * (#1190).
+   */
+  previousStatus: string;
   matchedPayments: MatchedStellarPayment[];
   hasDuplicatePayment: boolean;
   surplusAmount: Decimal;
@@ -338,6 +379,7 @@ async function verifyPayment(payment: Payment): Promise<PaymentVerification> {
     }
 
     // Determine payment status based on amount comparison
+    const previousStatus = payment.status;
     let status = payment.status;
     let verified = false;
 
@@ -363,6 +405,7 @@ async function verifyPayment(payment: Payment): Promise<PaymentVerification> {
       payer: latestPayer,
       verified,
       status,
+      previousStatus,
       matchedPayments,
       hasDuplicatePayment: duplicateAnalysis.hasDuplicate,
       surplusAmount: duplicateAnalysis.surplusAmount,
@@ -423,10 +466,18 @@ async function verifyPaymentOnChain(
  * Updates payment status in database and triggers webhooks
  */
 async function updatePaymentStatus(verification: PaymentVerification): Promise<void> {
+  const isNewlyConfirmed = isNewlyConfirmedTransition(
+    verification.previousStatus,
+    verification.status,
+  );
   const updateData: any = {
     status: verification.status,
     paid_amount: verification.actualAmount,
   };
+
+  if (isNewlyConfirmed) {
+    updateData.confirmed_at = new Date();
+  }
 
   if (verification.transactionHash) {
     updateData.transaction_hash = verification.transactionHash;
@@ -443,6 +494,18 @@ async function updatePaymentStatus(verification: PaymentVerification): Promise<v
     include: { merchant: true },
   });
 
+  if (isNewlyConfirmed) {
+    trackPaymentConfirmed();
+    if (updatedPayment.createdAt && updatedPayment.confirmed_at) {
+      trackPaymentStageDuration(
+        "onchain_confirmation",
+        (updatedPayment.confirmed_at.getTime() - updatedPayment.createdAt.getTime()) / 1000,
+      );
+    }
+  } else if (verification.status === "failed" && verification.previousStatus !== "failed") {
+    trackPaymentFailed("verification_failed", updatedPayment.currency);
+  }
+
   logger.info("Payment status updated", {
     paymentId: verification.paymentId,
     status: verification.status,
@@ -450,12 +513,24 @@ async function updatePaymentStatus(verification: PaymentVerification): Promise<v
     expectedAmount: verification.expectedAmount.toString(),
   });
 
+  /**
+   * True only when this verification actually moved the payment into a
+   * successful state, so a re-verification of an already-confirmed payment does
+   * not re-fire `PAYMENT_CONFIRMED` (#1190).
+   */
   // Trigger webhook for confirmed/overpaid payments
   if (verification.verified && updatedPayment.merchant) {
     // Emit internal event so email notifications, settlement pipeline, and
     // deposit-pool release all fire (fixes #1004 — these listeners were wired
     // to this event but it was never emitted from the production oracle path).
-    eventBus.emit(AppEvents.PAYMENT_CONFIRMED, updatedPayment);
+    if (isNewlyConfirmed) {
+      eventBus.emit(AppEvents.PAYMENT_CONFIRMED, updatedPayment);
+    } else if (verification.status === verification.previousStatus) {
+      logger.debug("Skipping PAYMENT_CONFIRMED for already-confirmed payment", {
+        paymentId: updatedPayment.id,
+        status: verification.status,
+      });
+    }
 
     try {
       await createAndDeliverWebhook(

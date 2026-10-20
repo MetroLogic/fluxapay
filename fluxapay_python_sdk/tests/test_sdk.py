@@ -4,6 +4,8 @@ import json
 import hashlib
 import hmac
 import time
+from datetime import datetime, timezone
+from decimal import Decimal
 from unittest.mock import patch
 
 import pytest
@@ -17,6 +19,10 @@ from fluxapay import (
     Payment,
     PaymentStatus,
     Invoice,
+    CustomerResponse,
+    PaymentLinkResponse,
+    PaymentResponse,
+    RefundResponse,
     verify_webhook_signature,
 )
 
@@ -75,6 +81,59 @@ def test_payments_get():
     client = FluxaPay(api_key=API_KEY)
     payment = client.payments.get("pay_123")
     assert payment.checkout_url == PAYMENT_FIXTURE["checkout_url"]
+
+
+def test_response_models_parse_values_and_preserve_dict_access():
+    payment = PaymentResponse.model_validate(PAYMENT_FIXTURE)
+    assert payment.amount == Decimal("49.99")
+    assert payment.created_at == datetime(2024, 1, 1, tzinfo=timezone.utc)
+    assert payment["id"] == "pay_123"
+    assert payment.to_dict()["amount"] == Decimal("49.99")
+
+    customer = CustomerResponse.model_validate({"id": "cus_1", "email": "buyer@example.com"})
+    link = PaymentLinkResponse.model_validate({
+        "id": "plink_1",
+        "slug": "monthly-support",
+        "title": "Monthly support",
+        "amount": "12.50",
+        "currency": "USD",
+        "expiry": "2024-02-01T00:00:00Z",
+        "customer": customer.to_dict(),
+        "created_at": "2024-01-01T00:00:00Z",
+    })
+    assert link.amount == Decimal("12.50")
+    assert link.expiry == datetime(2024, 2, 1, tzinfo=timezone.utc)
+    assert isinstance(link.customer, CustomerResponse)
+
+    refund = RefundResponse.model_validate({
+        "id": "ref_123",
+        "payment_id": "pay_123",
+        "amount": "25.00",
+        "currency": "USD",
+        "status": "pending",
+        "created_at": "2024-01-02T00:00:00Z",
+    })
+    assert refund.amount == Decimal("25.00")
+    assert refund.created_at == datetime(2024, 1, 2, tzinfo=timezone.utc)
+    assert refund.get("missing") is None
+
+
+def test_response_models_accept_backend_field_names():
+    payment = PaymentResponse.model_validate({
+        **PAYMENT_FIXTURE,
+        "createdAt": PAYMENT_FIXTURE["created_at"],
+        "expiration": PAYMENT_FIXTURE["expires_at"],
+        "customerId": "cus_1",
+    })
+    assert payment.customer_id == "cus_1"
+
+    refund = RefundResponse.model_validate({
+        "id": "ref_123",
+        "paymentId": "pay_123",
+        "amount": "25.00",
+        "status": "pending",
+    })
+    assert refund.payment_id == "pay_123"
 
 
 @respx.mock
@@ -286,3 +345,158 @@ def test_verify_webhook_expired():
     secret = "whsec_test"
     sig = _make_sig(body, old_ts, secret)
     assert verify_webhook_signature(body, sig, old_ts, secret, tolerance_seconds=300) is False
+
+
+# ── Async context manager behavior ────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_async_context_manager_closes_client():
+    """__aexit__ must close the httpx.AsyncClient connection pool."""
+    client = AsyncFluxaPay(api_key=API_KEY)
+    assert client._http.is_closed is False
+
+    async with client as entered:
+        assert entered is client
+        assert client._http.is_closed is False
+
+    # After exiting the context manager, the connection pool must be closed.
+    assert client._http.is_closed is True
+
+
+@pytest.mark.asyncio
+async def test_async_context_manager_closes_on_exception():
+    """The connection pool must be closed even if an exception is raised inside the block."""
+    client = AsyncFluxaPay(api_key=API_KEY)
+
+    with pytest.raises(RuntimeError, match="boom"):
+        async with client:
+            raise RuntimeError("boom")
+
+    assert client._http.is_closed is True
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_async_context_manager_closes_on_api_error():
+    """The connection pool must be closed even when a FluxaPayError is raised."""
+    respx.post(f"{BASE}/api/payments").mock(
+        return_value=httpx.Response(401, json={"message": "Unauthorized"})
+    )
+    client = AsyncFluxaPay(api_key=API_KEY)
+
+    with pytest.raises(FluxaPayError):
+        async with client:
+            await client.payments.create(amount=1, currency="USD", customer_email="x@x.com")
+
+    assert client._http.is_closed is True
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_async_context_manager_re_entry():
+    """A client instance can be re-used across multiple async with blocks.
+
+    After the first context exits and closes the connection pool, re-entering
+    via a second ``async with`` must re-create the httpx.AsyncClient so the
+    client is usable again.
+    """
+    respx.post(f"{BASE}/api/payments").mock(return_value=httpx.Response(200, json=PAYMENT_FIXTURE))
+
+    client = AsyncFluxaPay(api_key=API_KEY)
+
+    # First usage
+    async with client:
+        payment1 = await client.payments.create(
+            amount=49.99, currency="USD", customer_email="buyer@example.com",
+        )
+        assert payment1.id == "pay_123"
+
+    # Connection pool is closed after first exit
+    assert client._http.is_closed is True
+
+    # Re-enter — __aenter__ must re-create the httpx.AsyncClient
+    async with client:
+        assert client._http.is_closed is False
+        payment2 = await client.payments.create(
+            amount=49.99, currency="USD", customer_email="buyer@example.com",
+        )
+        assert payment2.id == "pay_123"
+
+    # Connection pool is closed again
+    assert client._http.is_closed is True
+
+
+@pytest.mark.asyncio
+async def test_async_aclose_closes_connection_pool():
+    """aclose() must close the underlying httpx.AsyncClient."""
+    client = AsyncFluxaPay(api_key=API_KEY)
+    assert client._http.is_closed is False
+
+    await client.aclose()
+
+    assert client._http.is_closed is True
+
+
+@pytest.mark.asyncio
+async def test_async_aclose_idempotent():
+    """Calling aclose() multiple times should not raise."""
+    client = AsyncFluxaPay(api_key=API_KEY)
+    await client.aclose()
+    # Second call should not raise
+    await client.aclose()
+    assert client._http.is_closed is True
+
+
+@pytest.mark.asyncio
+async def test_async_context_manager_returns_self():
+    """__aenter__ must return the client instance itself."""
+    client = AsyncFluxaPay(api_key=API_KEY)
+    async with client as entered:
+        assert entered is client
+    await client.aclose()
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_async_context_manager_full_lifecycle():
+    """Full lifecycle: create → poll status → exit → verify pool closed.
+
+    This mirrors the merchant checkout flow: create a payment, poll its
+    status, then exit the context manager and verify the pool was released.
+    """
+    respx.post(f"{BASE}/api/payments").mock(return_value=httpx.Response(200, json=PAYMENT_FIXTURE))
+    respx.get(f"{BASE}/api/payments/pay_123").mock(return_value=httpx.Response(200, json=PAYMENT_FIXTURE))
+
+    async with AsyncFluxaPay(api_key=API_KEY) as client:
+        # Create
+        payment = await client.payments.create(
+            amount=49.99, currency="USD", customer_email="buyer@example.com",
+        )
+        assert payment.id == "pay_123"
+
+        # Poll status
+        status = await client.payments.get_status(payment.id)
+        assert status.status == "pending"
+
+        # Fetch full payment
+        fetched = await client.payments.get(payment.id)
+        assert fetched.id == "pay_123"
+
+    # After exiting, the connection pool must be released
+    assert client._http.is_closed is True
+
+
+@pytest.mark.asyncio
+async def test_async_context_manager_multiple_clients():
+    """Multiple AsyncFluxaPay instances can be used concurrently without
+    interfering with each other's connection pools."""
+    client_a = AsyncFluxaPay(api_key=API_KEY)
+    client_b = AsyncFluxaPay(api_key=API_KEY)
+
+    async with client_a, client_b:
+        assert client_a._http.is_closed is False
+        assert client_b._http.is_closed is False
+
+    assert client_a._http.is_closed is True
+    assert client_b._http.is_closed is True

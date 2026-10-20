@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useCheckoutDirection } from './useCheckoutDirection';
 
 const DEFAULT_ACCENT = '#2563eb';
 
@@ -53,6 +54,8 @@ function CheckoutBrandMark({
   );
 }
 
+import { useCheckoutDirection } from './useCheckoutDirection';
+
 /**
  * Hosted checkout wrapper: CSS variables for accent + optional merchant header.
  * Logo falls back to monogram when the image fails to load.
@@ -64,6 +67,7 @@ export function CheckoutBrandingShell({
   showBrandHeader = false,
   children,
 }: CheckoutBrandingShellProps) {
+  const dir = useCheckoutDirection();
   const accent = accentHex.startsWith('#') ? accentHex : `#${accentHex}`;
 
   const shellStyle = {
@@ -74,6 +78,7 @@ export function CheckoutBrandingShell({
 
   return (
     <div
+      dir={dir}
       className="min-h-screen flex flex-col bg-gradient-to-br from-[var(--checkout-tint1)] to-[var(--checkout-tint2)]"
       style={shellStyle}
     >

@@ -31,22 +31,6 @@ const (
 	Version        = "0.1.0"
 )
 
-// ── Errors ────────────────────────────────────────────────────────────────────
-
-// Error represents an API error returned by FluxaPay.
-type Error struct {
-	StatusCode int
-	Message    string
-	Code       string
-	RequestID  string
-	Retryable  bool
-	Raw        json.RawMessage
-}
-
-func (e *Error) Error() string {
-	return fmt.Sprintf("fluxapay: HTTP %d — %s", e.StatusCode, e.Message)
-}
-
 // ── Models ────────────────────────────────────────────────────────────────────
 
 // Payment represents a FluxaPay payment object.
@@ -83,6 +67,7 @@ type CreatePaymentParams struct {
 	Amount           float64                `json:"amount"`
 	Currency         string                 `json:"currency"`
 	CustomerEmail    string                 `json:"customer_email"`
+	IdempotencyKey   string                 `json:"-"`
 	OrderID          string                 `json:"order_id,omitempty"`
 	SuccessURL       string                 `json:"success_url,omitempty"`
 	CancelURL        string                 `json:"cancel_url,omitempty"`
@@ -192,7 +177,7 @@ type CreateRefundParams struct {
 	PaymentID      string  `json:"payment_id"`
 	Amount         float64 `json:"amount"`
 	Reason         string  `json:"reason,omitempty"`
-	IdempotencyKey string  `json:"idempotency_key,omitempty"`
+	IdempotencyKey string  `json:"-"`
 }
 
 // RefundList is the response from listing refunds.
@@ -222,22 +207,22 @@ type WebhookEventBase struct {
 }
 
 // PaymentCreatedEvent represents a payment.created webhook payload.
-type PaymentCreatedEvent struct { WebhookEventBase }
+type PaymentCreatedEvent struct{ WebhookEventBase }
 
 // PaymentPendingEvent represents a payment.pending webhook payload.
-type PaymentPendingEvent struct { WebhookEventBase }
+type PaymentPendingEvent struct{ WebhookEventBase }
 
 // PaymentConfirmedEvent represents a payment.confirmed webhook payload.
-type PaymentConfirmedEvent struct { WebhookEventBase }
+type PaymentConfirmedEvent struct{ WebhookEventBase }
 
 // PaymentFailedEvent represents a payment.failed webhook payload.
-type PaymentFailedEvent struct { WebhookEventBase }
+type PaymentFailedEvent struct{ WebhookEventBase }
 
 // PaymentSettledEvent represents a payment.settled webhook payload.
-type PaymentSettledEvent struct { WebhookEventBase }
+type PaymentSettledEvent struct{ WebhookEventBase }
 
 // RefundCompletedEvent represents a refund.completed webhook payload.
-type RefundCompletedEvent struct { WebhookEventBase }
+type RefundCompletedEvent struct{ WebhookEventBase }
 
 // WebhookEvent is a parsed FluxaPay webhook payload.
 type WebhookEvent = WebhookEventBase
@@ -278,6 +263,18 @@ func New(apiKey string, opts ...Option) *Client {
 // Option is a functional option for configuring the Client.
 type Option func(*Client)
 
+// RequestOption configures an individual API request.
+type RequestOption func(*http.Request)
+
+// WithIdempotencyKey adds an Idempotency-Key header to a mutating request.
+func WithIdempotencyKey(key string) RequestOption {
+	return func(req *http.Request) {
+		if key != "" {
+			req.Header.Set("Idempotency-Key", key)
+		}
+	}
+}
+
 // WithBaseURL overrides the default API base URL.
 func WithBaseURL(u string) Option {
 	return func(c *Client) { c.baseURL = u }
@@ -295,7 +292,7 @@ func WithTimeout(d time.Duration) Option {
 
 // ── Internal HTTP ─────────────────────────────────────────────────────────────
 
-func (c *Client) do(ctx context.Context, method, path string, body interface{}, out interface{}) error {
+func (c *Client) do(ctx context.Context, method, path string, body interface{}, out interface{}, opts ...RequestOption) error {
 	var bodyReader io.Reader
 	if body != nil {
 		b, err := json.Marshal(body)
@@ -312,6 +309,11 @@ func (c *Client) do(ctx context.Context, method, path string, body interface{}, 
 	req.Header.Set("Authorization", "Bearer "+c.apiKey)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-API-Version", apiVersion)
+	for _, opt := range opts {
+		if opt != nil {
+			opt(req)
+		}
+	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -325,27 +327,31 @@ func (c *Client) do(ctx context.Context, method, path string, body interface{}, 
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		var errBody struct {
-			Message string `json:"message"`
-			Code    string `json:"code"`
-		}
-		_ = json.Unmarshal(raw, &errBody)
-		msg := errBody.Message
-		if msg == "" {
-			msg = fmt.Sprintf("HTTP %d", resp.StatusCode)
+		apiErr := &APIError{StatusCode: resp.StatusCode, Raw: raw}
+		_ = json.Unmarshal(raw, apiErr)
+		apiErr.StatusCode = resp.StatusCode
+		if apiErr.Message == "" {
+			apiErr.Message = fmt.Sprintf("HTTP %d", resp.StatusCode)
 		}
 		reqID := resp.Header.Get("X-Request-ID")
 		if reqID == "" {
 			reqID = resp.Header.Get("x-request-id")
 		}
-		retryable := resp.StatusCode == 429 || resp.StatusCode == 502 || resp.StatusCode == 503 || resp.StatusCode == 504
-		return &Error{
-			StatusCode: resp.StatusCode,
-			Message:    msg,
-			Code:       errBody.Code,
-			RequestID:  reqID,
-			Retryable:  retryable,
-			Raw:        raw,
+		if reqID != "" {
+			apiErr.RequestID = reqID
+		}
+		apiErr.Code = apiErr.ErrorCode
+		apiErr.Retryable = resp.StatusCode == 429 || resp.StatusCode == 502 || resp.StatusCode == 503 || resp.StatusCode == 504
+
+		switch resp.StatusCode {
+		case http.StatusUnauthorized, http.StatusForbidden:
+			return &AuthenticationError{APIError: apiErr}
+		case http.StatusTooManyRequests:
+			return &RateLimitError{APIError: apiErr}
+		case http.StatusBadRequest, http.StatusUnprocessableEntity:
+			return &InvalidRequestError{APIError: apiErr}
+		default:
+			return apiErr
 		}
 	}
 
@@ -363,9 +369,12 @@ func (c *Client) do(ctx context.Context, method, path string, body interface{}, 
 type PaymentsResource struct{ client *Client }
 
 // Create creates a new payment.
-func (r *PaymentsResource) Create(ctx context.Context, params CreatePaymentParams) (*Payment, error) {
+func (r *PaymentsResource) Create(ctx context.Context, params CreatePaymentParams, opts ...RequestOption) (*Payment, error) {
 	var out Payment
-	if err := r.client.do(ctx, http.MethodPost, "/api/payments", params, &out); err != nil {
+	if params.IdempotencyKey != "" {
+		opts = append([]RequestOption{WithIdempotencyKey(params.IdempotencyKey)}, opts...)
+	}
+	if err := r.client.do(ctx, http.MethodPost, "/api/payments", params, &out, opts...); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -473,11 +482,11 @@ func (r *SettlementsResource) Summary(ctx context.Context) (map[string]interface
 type InvoicesResource struct{ client *Client }
 
 // Create creates a new invoice.
-func (r *InvoicesResource) Create(ctx context.Context, params CreateInvoiceParams) (*Invoice, error) {
+func (r *InvoicesResource) Create(ctx context.Context, params CreateInvoiceParams, opts ...RequestOption) (*Invoice, error) {
 	var out struct {
 		Data Invoice `json:"data"`
 	}
-	if err := r.client.do(ctx, http.MethodPost, "/api/v1/invoices", params, &out); err != nil {
+	if err := r.client.do(ctx, http.MethodPost, "/api/v1/invoices", params, &out, opts...); err != nil {
 		return nil, err
 	}
 	return &out.Data, nil
@@ -542,11 +551,14 @@ func (r *InvoicesResource) List(ctx context.Context, params ListInvoicesParams) 
 type RefundsResource struct{ client *Client }
 
 // Create creates a refund for a payment.
-func (r *RefundsResource) Create(ctx context.Context, params CreateRefundParams) (*Refund, error) {
+func (r *RefundsResource) Create(ctx context.Context, params CreateRefundParams, opts ...RequestOption) (*Refund, error) {
 	var out struct {
 		Data Refund `json:"data"`
 	}
-	if err := r.client.do(ctx, http.MethodPost, "/api/v1/refunds", params, &out); err != nil {
+	if params.IdempotencyKey != "" {
+		opts = append([]RequestOption{WithIdempotencyKey(params.IdempotencyKey)}, opts...)
+	}
+	if err := r.client.do(ctx, http.MethodPost, "/api/v1/refunds", params, &out, opts...); err != nil {
 		return nil, err
 	}
 	return &out.Data, nil

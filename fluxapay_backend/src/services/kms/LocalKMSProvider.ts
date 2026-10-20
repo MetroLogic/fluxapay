@@ -1,5 +1,10 @@
 import crypto from "crypto";
 import { IKMSProvider } from "./IKMSProvider";
+import {
+  getActiveKeyVersion,
+  parseEnvelope,
+  wrapEnvelope,
+} from "./keyVersioning";
 
 /**
  * Local KMS Provider
@@ -103,25 +108,48 @@ export class LocalKMSProvider implements IKMSProvider {
   }
 
   /**
-   * Encrypts data using AES-256-GCM
+   * Resolves the key for a version. Version 1 is the primary key; later
+   * versions are derived from KMS_ENCRYPTION_PASSPHRASE_V<N>.
+   */
+  private keyForVersion(version: number): Buffer {
+    if (version === 1) return this.encryptionKey;
+    const secret = process.env[`KMS_ENCRYPTION_PASSPHRASE_V${version}`];
+    if (!secret) {
+      throw new Error(`No encryption key configured for key version v${version}`);
+    }
+    return crypto.pbkdf2Sync(secret, "fluxapay-kms-salt", 100000, 32, "sha256");
+  }
+
+  /**
+   * Encrypts data using AES-256-GCM under the active key version.
+   * Format: v<N>$iv:authTag:ciphertext
    */
   private _encrypt(plaintext: string): string {
+    const version = getActiveKeyVersion();
     const iv = crypto.randomBytes(16);
-    const cipher = crypto.createCipheriv("aes-256-gcm", this.encryptionKey, iv);
+    const cipher = crypto.createCipheriv(
+      "aes-256-gcm",
+      this.keyForVersion(version),
+      iv,
+    );
 
     let encrypted = cipher.update(plaintext, "utf8", "hex");
     encrypted += cipher.final("hex");
 
     const authTag = cipher.getAuthTag();
 
-    // Format: iv:authTag:ciphertext (all hex encoded)
-    return `${iv.toString("hex")}:${authTag.toString("hex")}:${encrypted}`;
+    return wrapEnvelope(
+      version,
+      `${iv.toString("hex")}:${authTag.toString("hex")}:${encrypted}`,
+    );
   }
 
   /**
    * Decrypts data using AES-256-GCM
    */
-  private _decrypt(ciphertext: string): string {
+  private _decrypt(envelope: string): string {
+    // Unversioned legacy ciphertext is treated as v1.
+    const { version, body: ciphertext } = parseEnvelope(envelope);
     const parts = ciphertext.split(":");
     if (parts.length !== 3) {
       throw new Error("Invalid encrypted data format");
@@ -133,7 +161,7 @@ export class LocalKMSProvider implements IKMSProvider {
 
     const decipher = crypto.createDecipheriv(
       "aes-256-gcm",
-      this.encryptionKey,
+      this.keyForVersion(version),
       iv,
     );
     decipher.setAuthTag(authTag);

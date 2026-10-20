@@ -6,6 +6,7 @@ import { InvoicesTable } from "@/features/dashboard/invoices/InvoicesTable";
 import { InvoiceDetails } from "@/features/dashboard/invoices/InvoiceDetails";
 import { InvoiceForm } from "@/features/dashboard/invoices/InvoiceForm";
 import { Modal } from "@/components/Modal";
+import { RecurringScheduleButton } from "@/features/dashboard/recurring-invoices/RecurringScheduleButton";
 import { Button } from "@/components/Button";
 import { Plus } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
@@ -133,10 +134,13 @@ function InvoicesContent() {
             Create and manage invoices with embedded payment links.
           </p>
         </div>
-        <Button className="gap-2" onClick={() => setShowCreateModal(true)}>
-          <Plus className="h-4 w-4" />
-          Create Invoice
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <RecurringScheduleButton />
+          <Button className="gap-2" onClick={() => setShowCreateModal(true)}>
+            <Plus className="h-4 w-4" />
+            Create Invoice
+          </Button>
+        </div>
       </div>
 
       <DataTableCard

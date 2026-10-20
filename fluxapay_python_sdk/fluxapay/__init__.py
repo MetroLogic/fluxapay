@@ -6,9 +6,14 @@ import hashlib
 import hmac
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Union, Literal
+from datetime import datetime
+from decimal import Decimal
+from typing import Any, Dict, List, Optional, Union, Literal, cast
 
 import httpx
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
+from . import webhooks
+from .webhooks import WebhookSignatureVerificationError, verify_signature
 
 __version__ = "0.1.0"
 __all__ = [
@@ -16,6 +21,10 @@ __all__ = [
     "AsyncFluxaPay",
     "FluxaPayError",
     "Payment",
+    "PaymentResponse",
+    "CustomerResponse",
+    "PaymentLinkResponse",
+    "RefundResponse",
     "PaymentStatus",
     "Invoice",
     "WebhookEvent",
@@ -26,6 +35,9 @@ __all__ = [
     "PaymentFailedEvent",
     "PaymentSettledEvent",
     "RefundCompletedEvent",
+    "webhooks",
+    "verify_signature",
+    "WebhookSignatureVerificationError",
     "verify_webhook_signature",
 ]
 
@@ -57,19 +69,105 @@ class FluxaPayError(Exception):
 # ── Models ────────────────────────────────────────────────────────────────────
 
 
-@dataclass
-class Payment:
+class ResponseModel(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    def to_dict(self) -> Dict[str, Any]:
+        return self.model_dump(mode="python")
+
+    def __getitem__(self, key: str) -> Any:
+        return self.to_dict()[key]
+
+    def get(self, key: str, default: Any = None) -> Any:
+        return self.to_dict().get(key, default)
+
+
+class CustomerResponse(ResponseModel):
     id: str
-    amount: float
+    email: str
+    name: Optional[str] = None
+    phone: Optional[str] = None
+    stellar_address: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
+    deleted_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+
+class PaymentResponse(ResponseModel):
+    id: str
+    amount: Decimal
     currency: str
     status: str
     checkout_url: str
-    stellar_address: str
+    stellar_address: Optional[str] = None
     customer_email: str
-    created_at: str
-    expires_at: str
+    created_at: datetime = Field(
+        validation_alias=AliasChoices("created_at", "createdAt")
+    )
+    expires_at: datetime = Field(
+        validation_alias=AliasChoices("expires_at", "expiration")
+    )
     order_id: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = None
+    description: Optional[str] = None
+    paid_amount: Optional[Decimal] = None
+    usdc_amount: Optional[Decimal] = None
+    fx_rate: Optional[Decimal] = None
+    transaction_hash: Optional[str] = None
+    confirmed_at: Optional[datetime] = None
+    settled_at: Optional[datetime] = None
+    customer_id: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("customer_id", "customerId"),
+    )
+    payment_link_id: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("payment_link_id", "paymentLinkId"),
+    )
+
+
+Payment = PaymentResponse
+
+
+class PaymentLinkResponse(ResponseModel):
+    id: str
+    slug: str
+    title: str
+    description: Optional[str] = None
+    amount: Optional[Decimal] = None
+    currency: str
+    redirect_url: Optional[str] = None
+    expiry: Optional[datetime] = None
+    active: bool = True
+    metadata: Optional[Dict[str, Any]] = None
+    short_url: Optional[str] = None
+    total_payments: int = 0
+    total_volume: Decimal = Decimal("0")
+    customer: Optional[CustomerResponse] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    expired: Optional[bool] = None
+
+
+class RefundResponse(ResponseModel):
+    id: str
+    payment_id: str = Field(
+        validation_alias=AliasChoices("payment_id", "paymentId")
+    )
+    amount: Decimal
+    currency: Optional[str] = None
+    reason: Optional[str] = None
+    status: str
+    failed_reason: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+
+def _response_data(payload: Any) -> Dict[str, Any]:
+    response = cast(Dict[str, Any], payload)
+    data = response.get("data")
+    return cast(Dict[str, Any], data) if isinstance(data, dict) else response
 
 
 @dataclass
@@ -78,6 +176,10 @@ class PaymentStatus:
     status: str
     transaction_hash: Optional[str] = None
     confirmed_at: Optional[str] = None
+
+
+def _empty_line_items() -> List[Dict[str, Any]]:
+    return []
 
 
 @dataclass
@@ -91,7 +193,7 @@ class Invoice:
     due_date: Optional[str]
     created_at: str
     updated_at: Optional[str] = None
-    line_items: List[Dict[str, Any]] = field(default_factory=list)
+    line_items: List[Dict[str, Any]] = field(default_factory=_empty_line_items)
     notes: Optional[str] = None
 
 
@@ -304,20 +406,20 @@ class FluxaPay(_PaymentsMixin, _SettlementsMixin, _InvoicesMixin, _RefundsMixin)
     def __exit__(self, *_: Any) -> None:
         self.close()
 
-    def _get(self, path: str, params: Optional[Dict] = None) -> Any:
+    def _get(self, path: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         r = self._http.get(path, params=params)
         _raise_for(r)
-        return r.json()
+        return cast(Dict[str, Any], r.json())
 
-    def _post(self, path: str, body: Dict) -> Any:
+    def _post(self, path: str, body: Dict[str, Any]) -> Dict[str, Any]:
         r = self._http.post(path, json=body)
         _raise_for(r)
-        return r.json()
+        return cast(Dict[str, Any], r.json())
 
-    def _patch(self, path: str, body: Dict) -> Any:
+    def _patch(self, path: str, body: Dict[str, Any]) -> Dict[str, Any]:
         r = self._http.patch(path, json=body)
         _raise_for(r)
-        return r.json()
+        return cast(Dict[str, Any], r.json())
 
     # ── payments ──────────────────────────────────────────────────────────────
 
@@ -347,11 +449,11 @@ class FluxaPay(_PaymentsMixin, _SettlementsMixin, _InvoicesMixin, _RefundsMixin)
                 expires_in_minutes=expires_in_minutes,
             )
             data = self._c._post("/api/payments", body)
-            return Payment(**{k: data[k] for k in Payment.__dataclass_fields__ if k in data})
+            return Payment.model_validate(_response_data(data))
 
         def get(self, payment_id: str) -> Payment:
             data = self._c._get(f"/api/payments/{payment_id}")
-            return Payment(**{k: data[k] for k in Payment.__dataclass_fields__ if k in data})
+            return Payment.model_validate(_response_data(data))
 
         def get_status(self, payment_id: str) -> PaymentStatus:
             data = self._c._get(f"/api/payments/{payment_id}")
@@ -440,17 +542,20 @@ class FluxaPay(_PaymentsMixin, _SettlementsMixin, _InvoicesMixin, _RefundsMixin)
             amount: float,
             reason: Optional[str] = None,
             idempotency_key: Optional[str] = None,
-        ) -> Dict[str, Any]:
+        ) -> RefundResponse:
             body = self._c._refund_create_body(
                 payment_id=payment_id,
                 amount=amount,
                 reason=reason,
                 idempotency_key=idempotency_key,
             )
-            return self._c._post("/api/v1/refunds", body)
+            return RefundResponse.model_validate(
+                _response_data(self._c._post("/api/v1/refunds", body))
+            )
 
-        def get(self, refund_id: str) -> Dict[str, Any]:
-            return self._c._get(f"/api/v1/refunds/{refund_id}")
+        def get(self, refund_id: str) -> RefundResponse:
+            data = self._c._get(f"/api/v1/refunds/{refund_id}")
+            return RefundResponse.model_validate(_response_data(data))
 
         def list(
             self,
@@ -528,7 +633,12 @@ class FluxaPay(_PaymentsMixin, _SettlementsMixin, _InvoicesMixin, _RefundsMixin)
             cls = classes.get(event_type)
             if not cls:
                 raise ValueError(f"Unknown event type: {event_type}")
-            return cls(**{k: d[k] for k in cls.__dataclass_fields__ if k in d})
+            event_fields = getattr(cls, "__dataclass_fields__")
+            event_class: Any = cls
+            return cast(
+                WebhookEvent,
+                event_class(**{k: d[k] for k in event_fields if k in d}),
+            )
 
     @property
     def webhooks(self) -> "_Webhooks":
@@ -570,28 +680,38 @@ class AsyncFluxaPay(_PaymentsMixin, _SettlementsMixin, _InvoicesMixin, _RefundsM
         )
 
     async def aclose(self) -> None:
+        """Close the underlying httpx.AsyncClient and release connection pool resources."""
         await self._http.aclose()
 
     async def __aenter__(self) -> "AsyncFluxaPay":
+        # Support re-entry: if the client was previously closed (e.g. via a
+        # prior ``async with`` block), recreate the httpx.AsyncClient so the
+        # context manager can be safely reused.
+        if self._http.is_closed:
+            self._http = httpx.AsyncClient(
+                base_url=self._base_url,
+                headers=_headers(self._api_key),
+                timeout=30.0,
+            )
         return self
 
-    async def __aexit__(self, *_: Any) -> None:
+    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         await self.aclose()
 
-    async def _get(self, path: str, params: Optional[Dict] = None) -> Any:
+    async def _get(self, path: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         r = await self._http.get(path, params=params)
         _raise_for(r)
-        return r.json()
+        return cast(Dict[str, Any], r.json())
 
-    async def _post(self, path: str, body: Dict) -> Any:
+    async def _post(self, path: str, body: Dict[str, Any]) -> Dict[str, Any]:
         r = await self._http.post(path, json=body)
         _raise_for(r)
-        return r.json()
+        return cast(Dict[str, Any], r.json())
 
-    async def _patch(self, path: str, body: Dict) -> Any:
+    async def _patch(self, path: str, body: Dict[str, Any]) -> Dict[str, Any]:
         r = await self._http.patch(path, json=body)
         _raise_for(r)
-        return r.json()
+        return cast(Dict[str, Any], r.json())
 
     # ── payments ──────────────────────────────────────────────────────────────
 
@@ -621,11 +741,11 @@ class AsyncFluxaPay(_PaymentsMixin, _SettlementsMixin, _InvoicesMixin, _RefundsM
                 expires_in_minutes=expires_in_minutes,
             )
             data = await self._c._post("/api/payments", body)
-            return Payment(**{k: data[k] for k in Payment.__dataclass_fields__ if k in data})
+            return Payment.model_validate(_response_data(data))
 
         async def get(self, payment_id: str) -> Payment:
             data = await self._c._get(f"/api/payments/{payment_id}")
-            return Payment(**{k: data[k] for k in Payment.__dataclass_fields__ if k in data})
+            return Payment.model_validate(_response_data(data))
 
         async def get_status(self, payment_id: str) -> PaymentStatus:
             data = await self._c._get(f"/api/payments/{payment_id}")
@@ -714,17 +834,19 @@ class AsyncFluxaPay(_PaymentsMixin, _SettlementsMixin, _InvoicesMixin, _RefundsM
             amount: float,
             reason: Optional[str] = None,
             idempotency_key: Optional[str] = None,
-        ) -> Dict[str, Any]:
+        ) -> RefundResponse:
             body = self._c._refund_create_body(
                 payment_id=payment_id,
                 amount=amount,
                 reason=reason,
                 idempotency_key=idempotency_key,
             )
-            return await self._c._post("/api/v1/refunds", body)
+            data = await self._c._post("/api/v1/refunds", body)
+            return RefundResponse.model_validate(_response_data(data))
 
-        async def get(self, refund_id: str) -> Dict[str, Any]:
-            return await self._c._get(f"/api/v1/refunds/{refund_id}")
+        async def get(self, refund_id: str) -> RefundResponse:
+            data = await self._c._get(f"/api/v1/refunds/{refund_id}")
+            return RefundResponse.model_validate(_response_data(data))
 
         async def list(
             self,

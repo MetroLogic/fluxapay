@@ -2,6 +2,7 @@ import { Router } from "express";
 import * as dashboardController from "../controllers/dashboard.controller";
 import { authenticateApiKey } from "../middleware/apiKeyAuth.middleware";
 import { authenticate } from "../middleware/auth.middleware";
+import { requireAuth } from "../middleware/auth.middleware";
 const router = Router();
 
 router.use(authenticateApiKey);
@@ -127,6 +128,44 @@ router.get("/overview/metrics", dashboardController.overviewMetrics);
  *         description: Unauthorized, token missing or invalid
  */
 router.get("/overview/charts", dashboardController.analytics);
+
+/**
+ * @swagger
+ * /api/v1/dashboard/overview/daily-volume:
+ *   get:
+ *     summary: Get daily transaction volume for the past 30 days
+ *     tags: [Dashboard]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Daily transaction volume retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Daily transaction volume recovered"
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       date:
+ *                         type: string
+ *                         example: "2026-01-18"
+ *                       count:
+ *                         type: number
+ *                         example: 32
+ *                       amount:
+ *                         type: number
+ *                         example: 124000
+ *       401:
+ *         description: Unauthorized, token missing or invalid
+ */
+router.get("/overview/daily-volume", dashboardController.dailyVolume);
 
 /**
  * @swagger
@@ -263,5 +302,21 @@ router.get("/audit-logs", dashboardController.getMerchantAuditLogs);
  *         description: Unauthorized
  */
 router.get("/events", authenticate, dashboardController.streamEvents);
+
+/**
+ * @swagger
+ * /api/v1/dashboard/refunds/stream:
+ *   get:
+ *     summary: Subscribe to real-time refund status updates (Server-Sent Events)
+ *     tags: [Dashboard]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Event stream opened; emits refund status changes as they occur
+ *       401:
+ *         description: Unauthorized
+ */
+router.get("/refunds/stream", authenticate, dashboardController.streamRefundEvents);
 
 export default router;

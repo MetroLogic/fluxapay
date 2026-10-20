@@ -2,6 +2,7 @@ import createMiddleware from "next-intl/middleware";
 import { routing } from "./i18n/routing";
 import { NextRequest, NextResponse } from "next/server";
 import { getClientIp, isBotUserAgent, paymentPageLimiter, logAbuseEvent } from "./lib/rateLimit";
+import { applySecurityHeaders, createCspNonce, createContentSecurityPolicy } from "./lib/securityHeaders";
 
 const intlMiddleware = createMiddleware(routing);
 
@@ -67,6 +68,12 @@ function hasAuthToken(request: NextRequest): boolean {
 
 export default function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const nonce = createCspNonce();
+  const cspHeader = createContentSecurityPolicy(nonce);
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("Content-Security-Policy", cspHeader);
+  requestHeaders.set("x-nonce", nonce);
+  const nonceRequest = new NextRequest(request, { headers: requestHeaders });
 
   // ── 0. Rate limiting for public payment pages ─────────────────────────────
   // Check if this is a payment page route: /pay/[payment_id] or /checkout/[charge_id]
@@ -83,9 +90,9 @@ export default function middleware(request: NextRequest) {
         pathname,
         userAgent,
       });
-      return NextResponse.json(
-        { error: 'Access denied' },
-        { status: 403 }
+      return applySecurityHeaders(
+        NextResponse.json({ error: 'Access denied' }, { status: 403 }),
+        nonce,
       );
     }
 
@@ -96,14 +103,17 @@ export default function middleware(request: NextRequest) {
         pathname,
         resetMs,
       });
-      return NextResponse.json(
-        { error: 'Too many requests. Please try again later.' },
-        {
-          status: 429,
-          headers: {
-            'Retry-After': String(Math.ceil(resetMs / 1000)),
+      return applySecurityHeaders(
+        NextResponse.json(
+          { error: 'Too many requests. Please try again later.' },
+          {
+            status: 429,
+            headers: {
+              'Retry-After': String(Math.ceil(resetMs / 1000)),
+            },
           },
-        }
+        ),
+        nonce,
       );
     }
   }
@@ -124,7 +134,7 @@ export default function middleware(request: NextRequest) {
     if (!isBypassed) {
       const url = request.nextUrl.clone();
       url.pathname = "/maintenance";
-      return NextResponse.redirect(url);
+      return applySecurityHeaders(NextResponse.redirect(url), nonce);
     }
   }
 
@@ -139,11 +149,11 @@ export default function middleware(request: NextRequest) {
     loginUrl.pathname = "/login";
     // Preserve the original destination so the login page can redirect back.
     loginUrl.searchParams.set("redirect", pathname);
-    return NextResponse.redirect(loginUrl);
+    return applySecurityHeaders(NextResponse.redirect(loginUrl), nonce);
   }
 
   // ── 3. Delegate to next-intl for locale handling ─────────────────────────
-  return intlMiddleware(request);
+  return applySecurityHeaders(intlMiddleware(nonceRequest), nonce);
 }
 
 export const config = {

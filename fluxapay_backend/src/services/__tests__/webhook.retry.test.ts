@@ -4,7 +4,7 @@
  * Comprehensive tests for webhook retry logic with exponential backoff
  */
 
-import { retryWebhookService, deliverWebhook } from "../webhook.service";
+import { retryWebhookService, processDueWebhookRetries, deliverWebhook } from "../webhook.service";
 
 jest.mock("../../generated/client/client", () => {
   const mockPrismaClient = {
@@ -13,6 +13,7 @@ jest.mock("../../generated/client/client", () => {
     },
     webhookLog: {
       findFirst: jest.fn(),
+      findMany: jest.fn(),
       update: jest.fn(),
     },
     webhookRetryAttempt: {
@@ -28,7 +29,7 @@ import { PrismaClient } from "../../generated/client/client";
 
 const mockPrisma = new PrismaClient() as jest.Mocked<PrismaClient> & {
   merchant: { findUnique: jest.Mock };
-  webhookLog: { findFirst: jest.Mock; update: jest.Mock };
+  webhookLog: { findFirst: jest.Mock; findMany: jest.Mock; update: jest.Mock };
   webhookRetryAttempt: { create: jest.Mock };
 };
 
@@ -47,7 +48,7 @@ describe("Webhook Retry Logic with Exponential Backoff", () => {
         request_payload: { event: "payment.confirmed" },
         status: "retrying",
         retry_count: 0,
-        max_retries: 5,
+        max_retries: 3,
       };
 
       const mockMerchant = {
@@ -75,15 +76,15 @@ describe("Webhook Retry Logic with Exponential Backoff", () => {
         });
       });
 
-      // Attempt 1: retry_count = 0 -> 1, backoff = 5 seconds
+      // First retry failed: retry_count = 0 -> 1, schedule the second retry in 2 minutes
       await retryWebhookService({ merchantId: "merchant_1", log_id: "log_1" });
       expect(updatedLogs[0].retry_count).toBe(1);
       expect(updatedLogs[0].next_retry_at).toBeDefined();
       const backoff1 = updatedLogs[0].next_retry_at.getTime() - Date.now();
-      expect(backoff1).toBeGreaterThanOrEqual(5 * 1000 - 1000);
-      expect(backoff1).toBeLessThanOrEqual(5 * 1000 + 1000);
+      expect(backoff1).toBeGreaterThanOrEqual(2 * 60 * 1000 - 1000);
+      expect(backoff1).toBeLessThanOrEqual(2 * 60 * 1000 + 1000);
 
-      // Attempt 2: retry_count = 1 -> 2, backoff = 30 seconds
+      // Second retry failed: retry_count = 1 -> 2, schedule the third retry in 4 minutes
       mockLog.retry_count = 1;
       mockPrisma.webhookLog.findFirst.mockResolvedValue(mockLog);
       updatedLogs.length = 0;
@@ -91,30 +92,29 @@ describe("Webhook Retry Logic with Exponential Backoff", () => {
       await retryWebhookService({ merchantId: "merchant_1", log_id: "log_1" });
       expect(updatedLogs[0].retry_count).toBe(2);
       const backoff2 = updatedLogs[0].next_retry_at.getTime() - Date.now();
-      expect(backoff2).toBeGreaterThanOrEqual(30 * 1000 - 1000);
-      expect(backoff2).toBeLessThanOrEqual(30 * 1000 + 1000);
+      expect(backoff2).toBeGreaterThanOrEqual(4 * 60 * 1000 - 1000);
+      expect(backoff2).toBeLessThanOrEqual(4 * 60 * 1000 + 1000);
 
-      // Attempt 3: retry_count = 2 -> 3, backoff = 2 minutes
+      // Third retry reaches the maximum and marks the webhook failed.
       mockLog.retry_count = 2;
       mockPrisma.webhookLog.findFirst.mockResolvedValue(mockLog);
       updatedLogs.length = 0;
 
       await retryWebhookService({ merchantId: "merchant_1", log_id: "log_1" });
       expect(updatedLogs[0].retry_count).toBe(3);
-      const backoff3 = updatedLogs[0].next_retry_at.getTime() - Date.now();
-      expect(backoff3).toBeGreaterThanOrEqual(2 * 60 * 1000 - 1000);
-      expect(backoff3).toBeLessThanOrEqual(2 * 60 * 1000 + 1000);
+      expect(updatedLogs[0].status).toBe("failed");
+      expect(updatedLogs[0].next_retry_at).toBeNull();
     });
 
-    it("should mark webhook as failed after max retries (5 attempts)", async () => {
+    it("should mark webhook as failed after the third retry", async () => {
       const mockLog = {
         id: "log_max_retries",
         merchantId: "merchant_1",
         endpoint_url: "https://example.com/webhook",
         request_payload: { event: "payment.confirmed" },
         status: "retrying",
-        retry_count: 4, // Already 4 attempts
-        max_retries: 5,
+        retry_count: 2, // Two retries already failed
+        max_retries: 3,
       };
 
       const mockMerchant = {
@@ -141,7 +141,7 @@ describe("Webhook Retry Logic with Exponential Backoff", () => {
 
       await retryWebhookService({ merchantId: "merchant_1", log_id: "log_max_retries" });
 
-      expect(updatedLog.retry_count).toBe(5);
+      expect(updatedLog.retry_count).toBe(3);
       expect(updatedLog.status).toBe("failed");
       expect(updatedLog.next_retry_at).toBeNull();
       expect(updatedLog.failed_at).toBeDefined();
@@ -156,7 +156,7 @@ describe("Webhook Retry Logic with Exponential Backoff", () => {
         request_payload: { event: "payment.confirmed" },
         status: "retrying",
         retry_count: 2,
-        max_retries: 5,
+        max_retries: 3,
       };
 
       const mockMerchant = {
@@ -199,7 +199,7 @@ describe("Webhook Retry Logic with Exponential Backoff", () => {
         request_payload: { event: "payment.confirmed" },
         status: "retrying",
         retry_count: 1,
-        max_retries: 5,
+        max_retries: 3,
       };
 
       const mockMerchant = {
@@ -243,7 +243,7 @@ describe("Webhook Retry Logic with Exponential Backoff", () => {
         request_payload: { event: "payment.confirmed" },
         status: "retrying",
         retry_count: 0,
-        max_retries: 5,
+        max_retries: 3,
       };
 
       const mockMerchant = {
@@ -270,6 +270,38 @@ describe("Webhook Retry Logic with Exponential Backoff", () => {
       expect(retryAttempts[0].error_message).toContain("Network connection failed");
       expect(retryAttempts[0].http_status).toBeUndefined();
     });
+  });
+
+  it("automatically retries due webhook logs", async () => {
+    const dueLog = {
+      id: "log_due",
+      merchantId: "merchant_1",
+      endpoint_url: "https://example.com/webhook",
+      request_payload: { event: "payment.confirmed" },
+      status: "retrying",
+      retry_count: 0,
+      max_retries: 3,
+    };
+    mockPrisma.webhookLog.findMany.mockResolvedValue([dueLog]);
+    mockPrisma.webhookLog.findFirst.mockResolvedValue(dueLog);
+    mockPrisma.merchant.findUnique.mockResolvedValue({ webhook_secret: "secret_123" });
+    mockPrisma.webhookRetryAttempt.create.mockResolvedValue({});
+    mockPrisma.webhookLog.update.mockImplementation((params: any) =>
+      Promise.resolve({ ...dueLog, ...params.data }),
+    );
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: () => Promise.resolve("OK"),
+    });
+
+    const result = await processDueWebhookRetries();
+
+    expect(mockPrisma.webhookLog.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { status: "retrying", next_retry_at: { lte: expect.any(Date) } },
+      orderBy: { next_retry_at: "asc" },
+    }));
+    expect(result).toEqual({ processed: 1, due: 1 });
   });
 
   describe("deliverWebhook - Timeout Handling", () => {

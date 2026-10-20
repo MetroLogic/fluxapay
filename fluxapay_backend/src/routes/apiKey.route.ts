@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import {
   createApiKey,
+  rotateApiKey,
   listApiKeys,
   revokeApiKey,
 } from '../controllers/apiKey.controller';
@@ -35,6 +36,14 @@ const router = Router();
  *                 type: string
  *                 enum: [live, test]
  *                 description: The environment for this key
+ *               permissions:
+ *                 type: array
+ *                 items: { type: string }
+ *                 description: Explicit scopes granted to this key; defaults to read-only
+ *               ip_allowlist:
+ *                 type: array
+ *                 items: { type: string }
+ *                 description: Optional IPv4/IPv6 CIDR ranges allowed to use the key
  *     responses:
  *       201:
  *         description: API key created successfully
@@ -67,6 +76,7 @@ const router = Router();
  *         description: Rate limit exceeded
  */
 router.post('/', authenticateApiKey, merchantApiKeyRateLimit(), createApiKey);
+router.post('/:id/rotate', authenticateApiKey, merchantApiKeyRateLimit(), rotateApiKey);
 
 /**
  * @swagger

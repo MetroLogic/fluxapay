@@ -33,6 +33,34 @@ console.log('Payment URL:', payment.checkout_url);
 
 ## API Reference
 
+### Testing
+
+Use the in-memory mock client to test SDK integrations without making network requests. Fixture factories accept partial overrides, and handlers can override a route with a `Response` or throw to simulate a network failure.
+
+```typescript
+import {
+  createMockCustomer,
+  createMockFluxaPayClient,
+  createMockPayment,
+} from '@fluxapay/sdk';
+
+const client = createMockFluxaPayClient({
+  fixtures: {
+    payments: [createMockPayment({ id: 'pay_test_1' })],
+    customers: [createMockCustomer({ id: 'cus_test_1' })],
+  },
+  handlers: {
+    'GET /api/payments/pay_failure': () => {
+      throw new TypeError('simulated network failure');
+    },
+  },
+});
+
+const payment = await client.payments.get('pay_test_1');
+```
+
+Available factories are `createMockPayment`, `createMockPaymentLink`, and `createMockCustomer`. Default mock routes cover payment creation/list/retrieval, payment-link creation/list/retrieval, and customer create/list/retrieve/update/delete. Use `mockJsonResponse(body, status)` to supply a mocked HTTP response from an override handler.
+
 ### Configuration
 
 ```typescript
@@ -80,12 +108,21 @@ const status = await client.payments.getStatus(paymentId);
 #### List Payments
 
 ```typescript
-const result = await client.payments.list({
-  page?: number;      // Optional: Page number (default: 1)
-  limit?: number;     // Optional: Items per page (default: 10)
-  status?: string;    // Optional: Filter by status
+// Iterate every payment, fetching the next page as needed.
+for await (const payment of client.payments.list({ limit: 50 })) {
+  console.log(payment.id);
+}
+
+// Or process each payment with an async callback.
+await client.payments.list({ status: 'confirmed' }).autoPagingEach(async (payment) => {
+  await processPayment(payment);
 });
+
+// Awaiting list() still returns the first page response.
+const firstPage = await client.payments.list({ limit: 50 });
 ```
+
+The iterator follows the endpoint's page or cursor metadata and applies the SDK's configured retry and `Retry-After` backoff behavior to each request.
 
 **Canonical Route:** `GET /api/payments`
 
