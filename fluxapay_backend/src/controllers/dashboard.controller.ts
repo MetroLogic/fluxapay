@@ -8,6 +8,7 @@ import { AuthRequest } from "../types/express";
 import { Response } from "express";
 import { queryAuditLogs } from "../services/audit.service";
 import { AuditActionType } from "../types/audit.types";
+import { getMerchantExpiringDocuments } from "../services/kycExpiry.service";
 
 export const overviewMetrics = createController(
   dashboardService.getDashboardOverview,
@@ -125,6 +126,49 @@ export async function getMerchantAuditLogs(req: AuthRequest, res: Response) {
     });
   } catch (error: any) {
     console.error("Error fetching merchant audit logs:", error);
-    return sendApiError(res, apiError(500, ErrorCode.INTERNAL_ERROR, "Failed to fetch audit logs"));
+    return sendApiError(res, apiError(500, ErrorCode.INTERNAL_ERROR,"Failed to fetch audit logs"));
+  }
+}
+
+/**
+ * GET /api/v1/dashboard/kyc-expiry-banner
+ * Returns a warning banner payload when the merchant has KYC documents
+ * approaching expiry (60/30/7 day thresholds) or already expired.
+ */
+export async function getKycExpiryBanner(req: AuthRequest, res: Response) {
+  try {
+    const merchantId = req.merchantId;
+    if (!merchantId) {
+      return sendApiError(res, apiError(401, ErrorCode.UNAUTHORIZED, "Authentication required"));
+    }
+
+    const documents = await getMerchantExpiringDocuments(merchantId);
+
+    if (documents.length === 0) {
+      return res.status(200).json({ success: true, data: null });
+    }
+
+    // Show the most urgent document in the banner message.
+    const mostUrgent = documents.reduce((a, b) =>
+      a.daysUntilExpiry <= b.daysUntilExpiry ? a : b,
+    );
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        severity: mostUrgent.daysUntilExpiry <= 7 ? "critical" : "warning",
+        message: `Your ${mostUrgent.documentType.replace(/_/g, " ")} expires in ${mostUrgent.daysUntilExpiry} days. Please upload a renewed copy.`,
+        documents: documents.map((d) => ({
+          id: d.id,
+          document_type: d.documentType,
+          document_expiry_date: d.documentExpiryDate.toISOString(),
+          days_until_expiry: d.daysUntilExpiry,
+          threshold: d.threshold,
+        })),
+      },
+    });
+  } catch (error: any) {
+    console.error("Error fetching KYC expiry banner:", error);
+    return sendApiError(res, apiError(500, ErrorCode.INTERNAL_ERROR,"Failed to fetch KYC expiry banner"));
   }
 }

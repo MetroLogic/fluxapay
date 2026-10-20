@@ -276,6 +276,54 @@ Run all checks before committing:
 npm run lint && npm test && npm run type-check
 ```
 
+## Security Scanning (Trivy)
+
+A GitHub Actions workflow (`.github/workflows/security-scan.yml`) automatically
+scans all package directories for known dependency vulnerabilities on every
+push and pull request to `main`/`develop`, plus a nightly scheduled run.
+
+### What it scans
+
+| Package | Directory | Ecosystem |
+|---------|-----------|-----------|
+| Backend | `fluxapay_backend` | npm |
+| Frontend | `fluxapay_frontend` | npm |
+| JS/TS SDK | `fluxapay_sdk` | npm |
+| Python SDK | `fluxapay_python_sdk` | Python |
+| Go SDK | `fluxapay_go_sdk` | Go |
+| Root app | `src/` | npm |
+
+### Build-blocking behavior
+
+- The scan **fails the CI build** when a vulnerability at or above the severity
+  threshold **has a known fix** (`ignore-unfixed: true`).
+- Default severity threshold: **HIGH,CRITICAL**.
+- The threshold is configurable for manual runs via `workflow_dispatch` input
+  (`severity_threshold`).
+
+### Viewing results
+
+SARIF reports are uploaded to the **Security → Code Scanning** tab on GitHub,
+one category per package.  Artifacts are also retained for 30 days.
+
+### Exempting false positives (.trivyignore)
+
+If Trivy reports a false positive or a vulnerability you have accepted, add
+the CVE ID to `.trivyignore` at the repository root:
+
+```bash
+# Format: <CVE-ID>  # <justification> | review-by: YYYY-MM-DD | added-by: <name>
+echo "CVE-2024-12345  # False positive: vulnerable function not called | review-by: 2025-06-01 | added-by: devname" >> .trivyignore
+```
+
+**Rules:**
+1. Every entry MUST include a justification comment.
+2. Acceptable reasons: false positive, no fix available, compensating control,
+   or accepted risk.
+3. Include a `review-by` date so stale exemptions are revisited.
+4. Do NOT use `.trivyignore` to suppress vulnerabilities that should be fixed
+   by updating the dependency — update the dependency instead.
+
 ## Database Migrations & Rollbacks
 
 When altering the database schema, extreme care must be taken in production to avoid data loss. We categorize migrations into two types:

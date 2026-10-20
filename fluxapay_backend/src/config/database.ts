@@ -1,5 +1,6 @@
 import { PrismaClient } from "../generated/client/client";
 import { getLogger, getMetricsCollector } from "../utils/logger";
+import { withTracingPrisma } from "../utils/prismaTracing";
 import {
   getPrimaryConnectionPoolLimit,
   getReplicaConnectionPoolLimit,
@@ -142,7 +143,7 @@ if (!process.env.NODE_ENV || process.env.NODE_ENV !== "production") {
 }
 
 const replicaUrl = process.env.DATABASE_REPLICA_URL;
-let prisma = primary;
+let prisma: PrismaClient = primary;
 let replicaClient: PrismaClient | undefined;
 let replicaPoolLimit: number | undefined;
 
@@ -159,7 +160,15 @@ if (replicaUrl) {
   prisma = createReadReplicaClient(primary, replicaClient).client;
 }
 
-export { prisma };
+// Wrap with OpenTelemetry span instrumentation.
+// When OTEL_ENABLED is not "true" withTracingPrisma returns the original client
+// unchanged, so there is zero Proxy overhead in non-tracing environments.
+const tracedPrisma = withTracingPrisma(prisma);
+
+export { tracedPrisma as prisma };
+
+// Re-export the tracing wrapper so consumers can wrap additional clients.
+export { withTracingPrisma };
 
 export async function getDatabasePoolSnapshots(): Promise<DatabasePoolSnapshot[]> {
   const clients = [

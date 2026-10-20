@@ -1,9 +1,8 @@
-
 // This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
+// learn more about it in the docs: https://pris.ly/prisma-schema
 
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+// Looking for ways to speed up your queries, or scale easily on your serverless or edge functions?
+// Try Prisma Accelerate: https://prisl.ly/cli/accelerate-init
 
 generator client {
   provider        = "prisma-client"
@@ -17,7 +16,7 @@ datasource db {
 }
 
 model Merchant {
-  id                    String                 @id @default(cuid())
+  id                    String                 @id @default(cuid)
   business_name         String
   email                 String                 @unique
   phone_number          String                 @unique
@@ -70,7 +69,7 @@ model Merchant {
   refunds               Refund[]
   invoices              Invoice[]
   bankAccount           BankAccount?
-  merchantHDIndex       MerchantHDIndex?
+  merchantHDDIndex       MerchantHDIndex?
   subscriptions         MerchantSubscription[]
   reconciliationRecords ReconciliationRecord[]
   discrepancyThresholds DiscrepancyThreshold[]
@@ -85,7 +84,7 @@ model Merchant {
 }
 
 model Customer {
-  id              String   @id @default(cuid())
+  id              String   @id @default(cuid)
   merchant        Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
   merchantId      String
   email           String
@@ -93,9 +92,9 @@ model Customer {
   phone           String?
   stellar_address String?
   metadata        Json     @default("{}")
-  deleted_at      DateTime?
-  created_at      DateTime @default(now())
-  updated_at      DateTime @updatedAt
+  deleted_at       DateTime?
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
   payments        Payment[]
   paymentLinks    PaymentLink[]
 
@@ -106,25 +105,25 @@ model Customer {
 }
 
 model PaymentLink {
-  id             String   @id @default(cuid())
-  merchant       Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
-  merchantId     String
+  id             String   @id @default(cuid)
+  merchant        Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  merchantId      String
   slug           String   @unique
   title          String
   description    String?
-  amount         Decimal?
-  currency       String
-  redirect_url   String?
-  expiry         DateTime?
-  active         Boolean  @default(true)
-  metadata       Json     @default("{}")
+  amount          Decimal?
+  currency        String
+  redirect_url    String?
+  expiry          DateTime?
+  active          Boolean  @default(true)
+  metadata        Json     @default("{}")
   total_payments Int      @default(0)
   total_volume   Decimal  @default(0)
-  created_at     DateTime @default(now())
-  updated_at     DateTime @updatedAt
-  payments       Payment[]
-  customerId     String?
-  customer       Customer? @relation(fields: [customerId], references: [id])
+  created_at       DateTime  @default(now())
+  updated_at       DateTime  @updatedAt
+  payments        Payment[]
+  customerId      String?
+  customer        Customer? @relation(fields: [customerId], references: [id])
 
   @@index([merchantId])
   @@index([slug])
@@ -137,42 +136,42 @@ model MerchantHDIndex {
   merchant        Merchant @relation(fields: [merchantId], references: [id])
   merchant_index  Int      @unique
   payment_counter Int      @default(0)
-  created_at      DateTime @default(now())
-  updated_at      DateTime @updatedAt
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
 }
 
 model HDIndexCounter {
-  id                   String   @id @default("global")
+  id                  String   @id @default("global")
   next_merchant_index  Int      @default(0)
   updated_at           DateTime @updatedAt
 }
 
 model ManualIntervention {
-  id          String   @id @default(cuid())
+  id          String   @id @default(cuid)
   merchantId  String
   issue_type  String
   description String
   status      String   @default("pending")
-  created_at  DateTime @default(now())
-  updated_at  DateTime @updatedAt
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
 }
 
 model BankAccount {
-  id             String   @id @default(cuid())
-  merchant       Merchant @relation(fields: [merchantId], references: [id])
-  merchantId     String   @unique
-  account_name   String
-  account_number String
-  bank_name      String
-  bank_code      String?
-  currency       String
-  country        String
-  created_at     DateTime @default(now())
-  updated_at     DateTime @updatedAt
+  id             String   @id @default(cuid)
+  merchant        Merchant @relation(fields: [merchantId], references: [id])
+  merchantId      String   @unique
+  account_name    String
+  account_number  String
+  bank_name       String
+  bank_code       String?
+  currency        String
+  country         String
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
 }
 
 model Plan {
-  id                      String                 @id @default(cuid())
+  id                      String                 @id @default(cuid)
   name                    String
   slug                    String                 @unique
   description             String?
@@ -199,7 +198,7 @@ model Plan {
 
 /// Per-merchant usage counters for the current billing period.
 model MerchantUsagePeriod {
-  id                 String   @id @default(cuid())
+  id                 String   @id @default(cuid)
   merchant           Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
   merchantId         String
   period_start       DateTime
@@ -208,15 +207,15 @@ model MerchantUsagePeriod {
   charges_created    Int      @default(0)
   settlement_volume  Decimal  @default(0)
   warning_80_sent_at DateTime?
-  created_at         DateTime @default(now())
-  updated_at         DateTime @updatedAt
+  created_at          DateTime @default(now())
+  updated_at          DateTime @updatedAt
 
   @@unique([merchantId, period_start])
   @@index([merchantId])
 }
 
 model MerchantSubscription {
-  id                   String   @id @default(cuid())
+  id                   String   @id @default(cuid)
   merchant             Merchant @relation(fields: [merchantId], references: [id])
   merchantId           String
   plan                 Plan     @relation(fields: [planId], references: [id])
@@ -238,20 +237,20 @@ model MerchantSubscription {
 }
 
 model AuditLog {
-  id          String          @id @default(cuid())
+  id          String          @id @default(cuid)
   admin_id    String
   action_type AuditActionType
   entity_type AuditEntityType
   entity_id   String
   details     Json
-  created_at  DateTime        @default(now())
+  created_at   DateTime        @default(now())
 
   @@index([admin_id, created_at(sort: Desc)])
   @@index([entity_id, action_type])
 }
 
 model OTP {
-  id         String     @id @default(cuid())
+  id         String     @id @default(cuid)
   merchant   Merchant   @relation(fields: [merchantId], references: [id])
   merchantId String
   channel    OTPChannel
@@ -263,13 +262,13 @@ model OTP {
 }
 
 model Settlement {
-  id               String           @id @default(cuid())
+  id               String           @id @default(cuid)
   merchant         Merchant         @relation(fields: [merchantId], references: [id])
   merchantId       String
   usdc_amount      Decimal?
   amount           Decimal
   fees             Decimal
-  net_amount       Decimal?
+  net_amount        Decimal?
   currency         String
   status           SettlementStatus @default(pending)
   exchange_partner String?
@@ -291,7 +290,7 @@ model Settlement {
 }
 
 model MerchantKYC {
-  id                           String           @id @default(cuid())
+  id                           String           @id @default(cuid)
   merchant                     Merchant         @relation(fields: [merchantId], references: [id])
   merchantId                   String           @unique
   business_type                BusinessType
@@ -308,13 +307,16 @@ model MerchantKYC {
   rejection_reason             String?
   reviewed_at                  DateTime?
   reviewed_by                  String?
+  /** Set when documents expire without renewal; merchant flagged for compliance review. */
+  flagged_for_review           Boolean          @default(false)
+  flagged_for_review_at        DateTime?
   documents                    KYCDocument[]
-  created_at                   DateTime         @default(now())
-  updated_at                   DateTime         @updatedAt
+  created_at                    DateTime         @default(now())
+  updated_at                    DateTime         @updatedAt
 }
 
 model KYCDocument {
-  id            String       @id @default(cuid())
+  id            String       @id @default(cuid)
   kyc           MerchantKYC  @relation(fields: [kycId], references: [id])
   kycId         String
   document_type DocumentType

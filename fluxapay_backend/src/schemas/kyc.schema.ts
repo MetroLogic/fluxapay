@@ -5,6 +5,11 @@ export const governmentIdTypeEnum = z.enum(['passport', 'national_id', 'driver_l
 export const kycStatusEnum = z.enum(['not_submitted', 'pending_review', 'approved', 'rejected']);
 export const documentTypeEnum = z.enum(['government_id', 'proof_of_business_registration', 'proof_of_address']);
 
+const expiryDateValidator = z.string().refine(
+  (val) => !isNaN(Date.parse(val)),
+  'Invalid document expiry date',
+);
+
 export const submitKycSchema = z.object({
   business_type: businessTypeEnum,
   legal_business_name: z.string().min(2, 'Legal business name is required'),
@@ -16,6 +21,7 @@ export const submitKycSchema = z.object({
   director_phone: z.string().min(7, 'Director phone number is required'),
   government_id_type: governmentIdTypeEnum,
   government_id_number: z.string().min(3, 'Government ID number is required'),
+  document_expiry_date: expiryDateValidator.optional(),
 }).refine(
   (data) => {
     // If business_type is registered_business, business_registration_number is required
@@ -32,6 +38,7 @@ export const submitKycSchema = z.object({
 
 export const uploadDocumentSchema = z.object({
   document_type: documentTypeEnum,
+  document_expiry_date: expiryDateValidator.optional(),
 });
 
 export const updateKycStatusSchema = z.object({

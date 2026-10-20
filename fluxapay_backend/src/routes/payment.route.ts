@@ -18,30 +18,20 @@ import { validatePayment, validateUpdatePayment } from '../validators/payment.va
 import { authenticateApiKey } from '../middleware/apiKeyAuth.middleware';
 import { merchantApiKeyRateLimit } from '../middleware/rateLimit.middleware';
 import { redisIdempotencyMiddleware } from '../middleware/redisIdempotency.middleware';
-import { simpleRateLimit } from "../middleware/simpleRateLimit.middleware";
+import {
+  publicPaymentStatusRateLimit,
+  publicPaymentStreamRateLimit,
+  publicCheckoutRateLimit,
+} from "../middleware/slidingWindowRateLimit.middleware";
 import { kycGateMiddleware } from '../middleware/kycGate.middleware';
 import { validatePagination } from '../validators/pagination.validator';
 
 const router = Router();
 
-// Rate-limit unauthenticated status checks by IP *and* payment id so a single
-// client cannot enumerate or hammer an arbitrary number of payment ids.
-const publicPaymentStatusRateLimit = simpleRateLimit({
-  keyPrefix: "payments:status",
-  windowMs: 30_000,
-  max: 30,
-  getKey: (req) => {
-    const ip = req.ip || req.socket.remoteAddress || "unknown";
-    const paymentId = req.params.id || "unknown";
-    return `${ip}:${paymentId}`;
-  },
-});
-
-const publicPaymentStreamRateLimit = simpleRateLimit({
-  keyPrefix: "payments:stream",
-  windowMs: 30_000,
-  max: 15,
-});
+// Rate-limit unauthenticated status checks by IP *and* payment id using Redis sliding window
+const paymentStatusLimiter = publicPaymentStatusRateLimit();
+const paymentStreamLimiter = publicPaymentStreamRateLimit();
+const checkoutLimiter = publicCheckoutRateLimit();
 
 /**
  * @swagger
@@ -91,7 +81,7 @@ const publicPaymentStreamRateLimit = simpleRateLimit({
  *       429:
  *         description: Rate limit exceeded
  */
-router.get('/:id/status', publicPaymentStatusRateLimit, getPaymentStatus);
+router.get('/:id/status', paymentStatusLimiter, getPaymentStatus);
 
 /**
  * @swagger
@@ -123,7 +113,7 @@ router.get('/:id/status', publicPaymentStatusRateLimit, getPaymentStatus);
  *       429:
  *         description: Rate limit exceeded
  */
-router.get('/:id/stream', publicPaymentStreamRateLimit, streamPaymentStatus);
+router.get('/:id/stream', paymentStreamLimiter, streamPaymentStatus);
 
 /**
  * @swagger
@@ -211,11 +201,11 @@ router.get('/:id/stream', publicPaymentStreamRateLimit, streamPaymentStatus);
 /**
  * Hosted checkout (public, no API key) — must be registered before /:id
  */
-router.get('/checkout/:id/stream', (_req, res) => {
+router.get('/checkout/:id/stream', checkoutLimiter, (_req, res) => {
   sendApiError(res, apiError(404, ErrorCode.CHECKOUT_SSE_UNAVAILABLE, "Checkout SSE is not available; use polling"));
 });
-router.get('/checkout/:id/status', getPublicCheckoutPaymentStatus);
-router.get('/checkout/:id', getPublicCheckoutPayment);
+router.get('/checkout/:id/status', checkoutLimiter, getPublicCheckoutPaymentStatus);
+router.get('/checkout/:id', checkoutLimiter, getPublicCheckoutPayment);
 
 router.post('/', authenticateApiKey, kycGateMiddleware, merchantApiKeyRateLimit(), redisIdempotencyMiddleware, validatePayment, createPayment);
 

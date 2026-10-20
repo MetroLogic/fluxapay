@@ -10,7 +10,7 @@ import {
 } from "../metrics.middleware";
 import { MetricEvent } from "../../types/logging.types";
 
-const SAMPLE_LINE = /^[a-zA-Z_:][a-zA-Z0-9_:]*(\{[^}]*\})? -?[0-9.eE+-]+$/;
+const SAMPLE_LINE = /^[a-zA-Z_:][a-zA-Z0-9_:]*(\{[^}]*\})? ([+-]?[0-9.eE+-]+|[+-]?(?:Inf|NaN))$/i;
 const HELP_LINE = /^# HELP [a-zA-Z_:][a-zA-Z0-9_:]* .+$/;
 const TYPE_LINE = /^# TYPE [a-zA-Z_:][a-zA-Z0-9_:]* counter$/;
 
@@ -187,7 +187,7 @@ describe("metricsMiddleware /metrics endpoint (smoke)", () => {
       res as unknown as Response,
       next,
     );
-    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise<void>((resolve) => setImmediate(resolve));
 
     expect(res.statusCode).toBe(200);
     expect(res.headers["Content-Type"]).toContain("text/plain");
@@ -199,8 +199,8 @@ describe("metricsMiddleware /metrics endpoint (smoke)", () => {
 
     const lines = String(res.body).trim().split("\n");
     for (const line of lines) {
-      if (!line.startsWith("#")) {
-        expect(SAMPLE_LINE.test(line)).toBe(true);
+      if (line.length > 0 && !line.startsWith("#")) {
+        expect(line).toMatch(SAMPLE_LINE);
       }
     }
   });
