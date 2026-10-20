@@ -11,6 +11,10 @@ import {
   adminGetWebhookLogs,
   adminRetryWebhook,
   getWebhookAttempts,
+  initiateWebhookRotation,
+  promoteWebhookKey,
+  revokeWebhookKey,
+  getWebhookKeyStatus,
 } from "../controllers/webhook.controller";
 import { validate, validateQuery } from "../middleware/validation.middleware";
 import * as webhookSchema from "../schemas/webhook.schema";
@@ -731,6 +735,184 @@ router.get(
   "/admin/retry-config",
   adminAuth,
   getWebhookRetryConfig
+);
+
+/* ── Webhook Key Rotation (/api/v1/webhooks/keys/...) ───────────────────── */
+
+/**
+ * @swagger
+ * /api/v1/webhooks/keys/status:
+ *   get:
+ *     summary: Get webhook signing key rotation status
+ *     description: |
+ *       Returns whether a rotation grace window is active and when the secondary
+ *       key was created. Secret values are never returned by this endpoint.
+ *     tags: [Webhooks]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Key status retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     rotation_in_progress:
+ *                       type: boolean
+ *                       description: Whether a secondary key is pending promotion
+ *                     secondary_key_created_at:
+ *                       type: string
+ *                       format: date-time
+ *                       nullable: true
+ *                     primary_key_hint:
+ *                       type: string
+ *                       description: Last 4 chars of primary secret, masked
+ *       401:
+ *         description: Unauthorized
+ */
+router.get(
+  "/keys/status",
+  authenticateToken, merchantApiKeyRateLimit(),
+  getWebhookKeyStatus
+);
+
+/**
+ * @swagger
+ * /api/v1/webhooks/keys/rotate:
+ *   post:
+ *     summary: Initiate webhook signing key rotation
+ *     description: |
+ *       Generates a new secondary webhook signing secret and begins the dual-signing
+ *       grace window. During this period every outgoing webhook is signed with both
+ *       the current primary key (`X-FluxaPay-Signature`) and the new secondary key
+ *       (`X-FluxaPay-Signature-Secondary`), so your handler can accept either.
+ *
+ *       The secondary secret is returned **only once** — store it securely before
+ *       calling promote.
+ *
+ *       Throws 409 if a rotation is already in progress.
+ *     tags: [Webhooks]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       201:
+ *         description: Rotation initiated. Secondary secret returned (shown once only).
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     secondary_secret:
+ *                       type: string
+ *                       description: The new secondary signing secret (shown only once)
+ *                     secondary_created_at:
+ *                       type: string
+ *                       format: date-time
+ *                     instructions:
+ *                       type: string
+ *       409:
+ *         description: Rotation already in progress
+ *       401:
+ *         description: Unauthorized
+ */
+router.post(
+  "/keys/rotate",
+  authenticateToken, merchantApiKeyRateLimit(),
+  initiateWebhookRotation
+);
+
+/**
+ * @swagger
+ * /api/v1/webhooks/keys/promote:
+ *   post:
+ *     summary: Promote secondary webhook key to primary
+ *     description: |
+ *       Promotes the pending secondary secret to primary and retires the old primary.
+ *       After this call only one key is active — dual-signing stops.
+ *
+ *       Call this after you have deployed your updated webhook handler that can
+ *       verify signatures from the new key.
+ *
+ *       Throws 400 if no rotation is in progress.
+ *     tags: [Webhooks]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Secondary key promoted to primary
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     promoted_at:
+ *                       type: string
+ *                       format: date-time
+ *       400:
+ *         description: No secondary key pending promotion
+ *       401:
+ *         description: Unauthorized
+ */
+router.post(
+  "/keys/promote",
+  authenticateToken, merchantApiKeyRateLimit(),
+  promoteWebhookKey
+);
+
+/**
+ * @swagger
+ * /api/v1/webhooks/keys/secondary:
+ *   delete:
+ *     summary: Revoke the secondary webhook key (cancel rotation)
+ *     description: |
+ *       Cancels an in-progress rotation by removing the secondary secret without
+ *       promoting it. The primary key continues to be the sole signing key.
+ *
+ *       Throws 400 if no rotation is in progress.
+ *     tags: [Webhooks]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Secondary key revoked
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     revoked_at:
+ *                       type: string
+ *                       format: date-time
+ *       400:
+ *         description: No secondary key to revoke
+ *       401:
+ *         description: Unauthorized
+ */
+router.delete(
+  "/keys/secondary",
+  authenticateToken, merchantApiKeyRateLimit(),
+  revokeWebhookKey
 );
 
 export default router;

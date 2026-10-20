@@ -81,3 +81,9 @@ export const getDeadLetterQueueSchema = z.object({
 export const requeueWebhookSchema = z.object({
   log_id: z.string().min(1, 'Log ID is required'),
 });
+
+// Webhook key rotation schemas (no request body required for initiate/promote/revoke)
+export const webhookKeyStatusSchema = z.object({});
+export const initiateRotationSchema = z.object({});
+export const promoteSecondaryKeySchema = z.object({});
+export const revokeSecondaryKeySchema = z.object({});

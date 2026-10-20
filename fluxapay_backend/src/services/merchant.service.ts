@@ -351,16 +351,28 @@ export async function rotateWebhookSecretService(data: {
   merchantId: string;
 }) {
   const { merchantId } = data;
-  const newSecret = crypto.randomBytes(32).toString("hex");
 
-  const existing = await prisma.merchant.findUnique({
+  const existing: any = await (prisma.merchant as any).findUnique({
     where: { id: merchantId },
-    select: { webhook_secret: true },
+    select: { webhook_secret: true, webhook_secret_secondary: true },
   });
 
-  await prisma.merchant.update({
+  if (existing?.webhook_secret_secondary) {
+    throw apiError(
+      409,
+      ErrorCode.WEBHOOK_ROTATION_IN_PROGRESS,
+      "A webhook key rotation is already in progress. Promote or revoke the secondary key first.",
+    );
+  }
+
+  const newSecret = `whsec_${crypto.randomBytes(32).toString("hex")}`;
+
+  await (prisma.merchant as any).update({
     where: { id: merchantId },
-    data: { webhook_secret: newSecret },
+    data: {
+      webhook_secret_secondary: newSecret,
+      webhook_secret_secondary_created_at: new Date(),
+    },
   });
 
   // Audit log: webhook secret rotation. The raw secret values (old or new)
@@ -371,7 +383,10 @@ export async function rotateWebhookSecretService(data: {
     previousSecretLastFour: existing?.webhook_secret ? getLastFour(existing.webhook_secret) : undefined,
   }).catch(() => {});
 
-  return { message: "Webhook secret rotated", webhook_secret: newSecret };
+  return {
+    message: "Webhook secret rotation initiated. Both keys are active during the grace window.",
+    webhook_secret: newSecret,
+  };
 }
 
 export async function updateSettlementScheduleService(data: {

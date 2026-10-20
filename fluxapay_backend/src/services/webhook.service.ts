@@ -93,17 +93,31 @@ export class WebhookDispatcher {
     // Sign the exact bytes we send so receivers can verify against the raw body.
     const signature = generateWebhookSignature(payload, merchant.webhook_secret, timestamp);
 
+    // Build delivery headers; add secondary signature header during rotation grace window.
+    const deliveryHeaders: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'X-FluxaPay-Signature': signature,
+      'X-FluxaPay-Timestamp': timestamp,
+    };
+
+    if ((merchant as any).webhook_secret_secondary) {
+      deliveryHeaders['X-FluxaPay-Signature-Secondary'] = generateWebhookSignature(
+        payload,
+        (merchant as any).webhook_secret_secondary,
+        timestamp,
+      );
+    }
+
+    if (getCorrelationId()) {
+      deliveryHeaders['X-Correlation-ID'] = getCorrelationId() as string;
+    }
+
     let deliveryStatus: 'SUCCESS' | 'FAILED' = 'FAILED';
 
     try {
       const response = await fetch(merchant.webhook_url, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-FluxaPay-Signature': signature,
-          'X-FluxaPay-Timestamp': timestamp,
-          ...(getCorrelationId() ? { 'X-Correlation-ID': getCorrelationId() } : {}),
-        },
+        headers: deliveryHeaders,
         body: payload,
       });
 
@@ -410,7 +424,8 @@ export async function retryWebhookService(params: RetryWebhookParams) {
   const result = await deliverWebhook(
     log.endpoint_url,
     log.request_payload as Record<string, any>,
-    merchant.webhook_secret
+    merchant.webhook_secret,
+    (merchant as any).webhook_secret_secondary ?? undefined,
   );
 
   const newRetryCount = log.retry_count + 1;
@@ -778,7 +793,11 @@ export async function sendTestWebhookService(params: SendTestWebhookParams) {
 export async function deliverWebhook(
   endpointUrl: string,
   payload: Record<string, any>,
-  merchantSecret: string
+  merchantSecret: string,
+  /** Optional secondary secret — present during a rotation grace window.
+   *  When set, the response includes both X-FluxaPay-Signature (primary) and
+   *  X-FluxaPay-Signature-Secondary so merchants can verify with either key. */
+  secondarySecret?: string | null
 ): Promise<{
   success: boolean;
   httpStatus?: number;
@@ -802,16 +821,26 @@ export async function deliverWebhook(
 
     // Serialize once and sign the exact body we send.
     const body = JSON.stringify(payload);
-    const signature = generateWebhookSignature(body, merchantSecret, timestamp);
+    const primarySignature = generateWebhookSignature(body, merchantSecret, timestamp);
+
+    // Build headers — add secondary signature header when rotation is in progress.
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      "X-FluxaPay-Signature": primarySignature,
+      "X-FluxaPay-Timestamp": timestamp,
+    };
+
+    if (secondarySecret) {
+      headers["X-FluxaPay-Signature-Secondary"] = generateWebhookSignature(body, secondarySecret, timestamp);
+    }
+
+    if (getCorrelationId()) {
+      headers["X-Correlation-ID"] = getCorrelationId() as string;
+    }
 
     const response = await fetch(endpointUrl, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-FluxaPay-Signature": signature,
-        "X-FluxaPay-Timestamp": timestamp,
-        ...(getCorrelationId() ? { "X-Correlation-ID": getCorrelationId() } : {}),
-      },
+      headers,
       body,
       signal: controller.signal,
     });
@@ -1188,11 +1217,18 @@ async function deliverWebhookEvent(
     throw error;
   }
 
-  const result = await deliverWebhook(endpointUrl, enrichedPayload, merchant.webhook_secret);
+  // Pass secondary secret if rotation is in progress — deliverWebhook will add
+  // the X-FluxaPay-Signature-Secondary header so merchants can verify with either key.
+  const result = await deliverWebhook(
+    endpointUrl,
+    enrichedPayload,
+    merchant.webhook_secret,
+    merchant.webhook_secret_secondary ?? undefined,
+  );
   const status: WebhookStatus = result.success ? "delivered" : "retrying";
 
   const nextRetryAt = status === "retrying"
-    ? new Date(Date.now() + WEBHOOK_RETRY_BASE_DELAY_MS)
+    ? new Date(Date.now() + getWebhookBackoffConfig().baseDelayMs)
     : null;
 
   const retryCount = 0;
@@ -1219,4 +1255,209 @@ async function deliverWebhookEvent(
   });
 
   return webhookLog;
+}
+
+// ─── Webhook Key Rotation ─────────────────────────────────────────────────────
+
+/**
+ * Initiates a webhook secret rotation for a merchant.
+ *
+ * Generates a new random secret and stores it as `webhook_secret_secondary`.
+ * The existing `webhook_secret` remains the primary; both are used to sign
+ * outgoing webhooks during the grace window so merchants can verify with
+ * either key before promoting the new one.
+ *
+ * Throws 409 if a rotation is already in progress.
+ */
+export async function initiateWebhookKeyRotation(merchantId: string) {
+  const merchant = await prisma.merchant.findUnique({ where: { id: merchantId } });
+
+  if (!merchant) {
+    throw apiError(404, ErrorCode.MERCHANT_NOT_FOUND, "Merchant not found");
+  }
+
+  if ((merchant as any).webhook_secret_secondary) {
+    throw apiError(
+      409,
+      ErrorCode.WEBHOOK_ROTATION_IN_PROGRESS,
+      "A webhook key rotation is already in progress. Promote or revoke the existing secondary key first.",
+    );
+  }
+
+  const newSecret = `whsec_${crypto.randomBytes(32).toString("hex")}`;
+
+  const updated = await (prisma.merchant as any).update({
+    where: { id: merchantId },
+    data: {
+      webhook_secret_secondary: newSecret,
+      webhook_secret_secondary_created_at: new Date(),
+    },
+    select: {
+      id: true,
+      webhook_secret_secondary: true,
+      webhook_secret_secondary_created_at: true,
+    },
+  });
+
+  return {
+    message: "Webhook key rotation initiated. Both keys will be used to sign webhooks during the grace window.",
+    data: {
+      secondary_secret: updated.webhook_secret_secondary as string,
+      secondary_created_at: updated.webhook_secret_secondary_created_at as Date,
+      instructions: "Update your webhook handler to accept signatures from either key, then call POST /api/v1/webhooks/keys/promote to make the new key primary.",
+    },
+  };
+}
+
+/**
+ * Promotes the secondary webhook secret to primary, retiring the old primary.
+ *
+ * After promotion the old primary is discarded; only the (now-primary) new
+ * secret is used to sign webhooks.
+ *
+ * Throws 400 if no rotation is in progress.
+ */
+export async function promoteSecondaryWebhookKey(merchantId: string) {
+  const merchant = await prisma.merchant.findUnique({ where: { id: merchantId } });
+
+  if (!merchant) {
+    throw apiError(404, ErrorCode.MERCHANT_NOT_FOUND, "Merchant not found");
+  }
+
+  const secondarySecret = (merchant as any).webhook_secret_secondary as string | null;
+
+  if (!secondarySecret) {
+    throw apiError(
+      400,
+      ErrorCode.WEBHOOK_NO_SECONDARY_KEY,
+      "No secondary webhook key is pending promotion. Initiate a rotation first.",
+    );
+  }
+
+  await (prisma.merchant as any).update({
+    where: { id: merchantId },
+    data: {
+      webhook_secret: secondarySecret,
+      webhook_secret_secondary: null,
+      webhook_secret_secondary_created_at: null,
+    },
+  });
+
+  return {
+    message: "Secondary webhook key promoted to primary. The old primary has been retired.",
+    data: {
+      promoted_at: new Date().toISOString(),
+    },
+  };
+}
+
+/**
+ * Revokes the secondary webhook secret without promoting it.
+ *
+ * Use this to cancel an in-progress rotation and revert to the original
+ * primary key exclusively.
+ *
+ * Throws 400 if no rotation is in progress.
+ */
+export async function revokeSecondaryWebhookKey(merchantId: string) {
+  const merchant = await prisma.merchant.findUnique({ where: { id: merchantId } });
+
+  if (!merchant) {
+    throw apiError(404, ErrorCode.MERCHANT_NOT_FOUND, "Merchant not found");
+  }
+
+  if (!(merchant as any).webhook_secret_secondary) {
+    throw apiError(
+      400,
+      ErrorCode.WEBHOOK_ROTATION_NOT_IN_PROGRESS,
+      "No secondary webhook key exists. Nothing to revoke.",
+    );
+  }
+
+  await (prisma.merchant as any).update({
+    where: { id: merchantId },
+    data: {
+      webhook_secret_secondary: null,
+      webhook_secret_secondary_created_at: null,
+    },
+  });
+
+  return {
+    message: "Secondary webhook key revoked. The primary key is now the only active signing key.",
+    data: {
+      revoked_at: new Date().toISOString(),
+    },
+  };
+}
+
+/**
+ * Returns the current webhook key rotation status for a merchant.
+ *
+ * Does NOT expose the secret values — only whether a rotation is in progress
+ * and when it was started.
+ */
+export async function getWebhookKeyStatusService(merchantId: string) {
+  const merchant = await prisma.merchant.findUnique({ where: { id: merchantId } });
+
+  if (!merchant) {
+    throw apiError(404, ErrorCode.MERCHANT_NOT_FOUND, "Merchant not found");
+  }
+
+  const secondaryCreatedAt = (merchant as any).webhook_secret_secondary_created_at as Date | null;
+  const rotationInProgress = !!(merchant as any).webhook_secret_secondary;
+
+  return {
+    message: "Webhook key status retrieved successfully",
+    data: {
+      rotation_in_progress: rotationInProgress,
+      secondary_key_created_at: secondaryCreatedAt ?? null,
+      primary_key_hint: merchant.webhook_secret.slice(-4).padStart(8, "*"),
+    },
+  };
+}
+
+export async function getWebhookRetryConfigService() {
+  const config = getWebhookBackoffConfig();
+  return {
+    message: "Webhook retry configuration retrieved successfully",
+    data: {
+      maxRetries: config.maxRetries,
+      baseDelayMs: config.baseDelayMs,
+      maxDelayMs: config.maxDelayMs,
+    },
+  };
+}
+
+export async function getWebhookDeliveryAttemptsService(params: { merchantId: string; log_id: string }) {
+  const { merchantId, log_id } = params;
+
+  const log = await prisma.webhookLog.findFirst({
+    where: { id: log_id, merchantId },
+    include: {
+      retryAttempts: {
+        orderBy: { attempt_number: "asc" },
+      },
+    },
+  });
+
+  if (!log) {
+    throw apiError(404, ErrorCode.WEBHOOK_LOG_NOT_FOUND, "Webhook log not found");
+  }
+
+  return {
+    message: "Webhook delivery attempts retrieved successfully",
+    data: {
+      log_id: log.id,
+      event_type: log.event_type,
+      status: log.status,
+      retry_count: log.retry_count,
+      attempts: log.retryAttempts.map((a: any) => ({
+        attempt_number: a.attempt_number,
+        http_status: a.http_status,
+        response_body: a.response_body,
+        error_message: a.error_message,
+        timestamp: a.created_at,
+      })),
+    },
+  };
 }
