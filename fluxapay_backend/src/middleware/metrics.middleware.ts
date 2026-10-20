@@ -3,11 +3,46 @@ import { getMetricsCollector } from '../utils/logger';
 import { getLogger } from '../utils/logger';
 import { adminAuth } from './adminAuth.middleware';
 import { MetricEvent, MetricsTags } from '../types/logging.types';
-import {
-  DatabasePoolSnapshot,
-  renderDatabasePoolMetrics,
-  warnOnPoolSaturation,
-} from '../utils/prismaPoolMetrics';
+import { Counter, Histogram, collectDefaultMetrics, Registry } from 'prom-client';
+
+const prometheusRegistry = new Registry();
+collectDefaultMetrics({ register: prometheusRegistry });
+
+const paymentsCreatedCounter = new Counter({
+  name: 'fluxapay_payments_created_total',
+  help: 'Total number of payments created.',
+  registers: [prometheusRegistry],
+});
+const paymentsConfirmedCounter = new Counter({
+  name: 'fluxapay_payments_confirmed_total',
+  help: 'Total number of payments confirmed.',
+  registers: [prometheusRegistry],
+});
+const webhookDeliveriesCounter = new Counter({
+  name: 'fluxapay_webhook_delivery_total',
+  help: 'Total number of webhook deliveries, labelled by status.',
+  labelNames: ['status'],
+  registers: [prometheusRegistry],
+});
+const settlementBatchesCounter = new Counter({
+  name: 'fluxapay_settlement_batch_total',
+  help: 'Total number of settlement batches initiated, labelled by currency.',
+  labelNames: ['currency'],
+  registers: [prometheusRegistry],
+});
+const failedPaymentsCounter = new Counter({
+  name: 'fluxapay_payments_failed_total',
+  help: 'Total number of payments that failed, labelled by error code and currency.',
+  labelNames: ['error_code', 'currency'],
+  registers: [prometheusRegistry],
+});
+const paymentStageDuration = new Histogram({
+  name: 'fluxapay_payment_stage_duration_seconds',
+  help: 'Time spent in a payment lifecycle stage, in seconds.',
+  labelNames: ['stage'],
+  buckets: [0.1, 0.5, 1, 2, 5, 10, 30, 60, 120, 300, 600, 1800],
+  registers: [prometheusRegistry],
+});
 
 /**
  * Prometheus counter families exposed by the `/metrics` endpoint.
@@ -122,13 +157,12 @@ export function renderPrometheusMetrics(
 /**
  * Metrics Endpoint Middleware
  *
- * Exposes a `/metrics` endpoint (admin-auth protected) that returns the
- * business counters in Prometheus text exposition format for scraping.
+ * Exposes Prometheus runtime and business metrics behind admin authentication.
  */
 export function createMetricsMiddleware(
-  getPoolSnapshots: () => Promise<DatabasePoolSnapshot[]> = async () => [],
+  _getPoolSnapshots?: () => Promise<unknown[]>,
 ): (req: Request, res: Response, next: NextFunction) => void {
-  return (req, res, next) => {
+  return (req: Request, res: Response, next: NextFunction): void => {
     const isMetricsRequest = req.path === '/metrics' && req.method === 'GET';
     if (!isMetricsRequest) {
       next();
@@ -136,21 +170,13 @@ export function createMetricsMiddleware(
     }
 
     adminAuth(req, res, () => {
-      void (async () => {
-        const collector = getMetricsCollector();
-        const logger = getLogger();
-        const events = collector.getMetrics();
-        const poolSnapshots = await getPoolSnapshots();
-
-        for (const snapshot of poolSnapshots) warnOnPoolSaturation(snapshot, logger);
-        logger.debug('Metrics scraped', {
-          eventCount: events.length,
+      prometheusRegistry.metrics().then((metrics) => {
+        getLogger().debug('Metrics scraped', {
           families: Object.keys(PROMETHEUS_COUNTERS),
         });
-
-        res.set('Content-Type', 'text/plain; version=0.0.4; charset=utf-8');
-        res.send(renderPrometheusMetrics(events, poolSnapshots));
-      })().catch((error: unknown) => next(error));
+        res.set('Content-Type', prometheusRegistry.contentType);
+        res.send(metrics);
+      }).catch(next);
     });
   };
 }
@@ -173,11 +199,18 @@ export function trackPaymentInitiated(amount: number, currency: string, method?:
 export function trackPaymentCreated(): void {
   const metrics = getMetricsCollector();
   metrics.increment('payments_created_total');
+  paymentsCreatedCounter.inc();
 }
 
 export function trackPaymentConfirmed(): void {
   const metrics = getMetricsCollector();
   metrics.increment('payments_confirmed_total');
+  paymentsConfirmedCounter.inc();
+}
+
+export function trackPaymentStageDuration(stage: string, durationSeconds: number): void {
+  if (!Number.isFinite(durationSeconds) || durationSeconds < 0) return;
+  paymentStageDuration.labels(stage).observe(durationSeconds);
 }
 
 export function trackPaymentExpired(count: number = 1): void {
@@ -188,6 +221,7 @@ export function trackPaymentExpired(count: number = 1): void {
 export function trackWebhookDelivery(status: 'success' | 'fail'): void {
   const metrics = getMetricsCollector();
   metrics.increment('webhook_deliveries_total', { status });
+  webhookDeliveriesCounter.labels(status).inc();
 }
 
 export function trackPaymentCompleted(
@@ -205,6 +239,7 @@ export function trackPaymentCompleted(
 export function trackPaymentFailed(errorType: string, currency: string): void {
   const metrics = getMetricsCollector();
   metrics.increment('payments_failed_total', { error_type: errorType, currency });
+  failedPaymentsCounter.labels(errorType || 'unknown', currency || 'unknown').inc();
 }
 
 export function trackKYCSubmission(status: string, method: string): void {
@@ -215,6 +250,7 @@ export function trackKYCSubmission(status: string, method: string): void {
 export function trackSettlementBatchInitiated(merchantCount: number, currency: string): void {
   const metrics = getMetricsCollector();
   metrics.increment('settlement_batches_total', { currency });
+  settlementBatchesCounter.labels(currency || 'unknown').inc();
   metrics.histogram('settlement_batch_merchant_count', merchantCount);
 }
 

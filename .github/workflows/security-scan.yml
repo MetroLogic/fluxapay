@@ -1,0 +1,165 @@
+name: Security Scan
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+  schedule:
+    # Nightly at 02:00 UTC to catch newly-disclosed CVEs
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      severity_threshold:
+        description: 'Comma-separated severities that block the build (UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL)'
+        required: false
+        default: 'HIGH,CRITICAL'
+
+# Limit permissions to what is required for SARIF upload
+permissions:
+  contents: read
+  security-events: write # Required to upload SARIF results to Code Scanning
+
+jobs:
+  # ── Filesystem dependency scan (matrix over all package directories) ───────
+  trivy-scan:
+    name: Trivy Scan (${{ matrix.target.name }})
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - name: backend
+            path: fluxapay_backend
+          - name: frontend
+            path: fluxapay_frontend
+          - name: js-sdk
+            path: fluxapay_sdk
+          - name: python-sdk
+            path: fluxapay_python_sdk
+          - name: go-sdk
+            path: fluxapay_go_sdk
+          - name: root
+            path: src
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy filesystem scan on ${{ matrix.target.name }}
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: 'fs'
+          scan-ref: ${{ matrix.target.path }}
+          format: 'sarif'
+          output: 'trivy-results-${{ matrix.target.name }}.sarif'
+          # Severity threshold is configurable:
+          #   - workflow_dispatch input (manual runs)
+          #   - defaults to HIGH,CRITICAL (blocks HIGH and CRITICAL)
+          #   - Only vulnerabilities WITH a known fix block the build (ignore-unfixed: true)
+          severity: ${{ github.event.inputs.severity_threshold || 'HIGH,CRITICAL' }}
+          ignore-unfixed: true
+          # Focus on library/dependency packages (skip OS packages — not relevant in repo scan)
+          vuln-type: 'library'
+          # Only run the vulnerability scanner (not secret/misconfig scanners)
+          scanners: 'vuln'
+          # Exemption list: .trivyignore (CVE IDs with justification comments)
+          trivyignores: '.trivyignore'
+          # Fail the job when matching vulnerabilities are found
+          exit-code: '1'
+
+      - name: Upload SARIF results for ${{ matrix.target.name }}
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results-${{ matrix.target.name }}.sarif
+          category: trivy-${{ matrix.target.name }}
+
+      - name: Upload Trivy SARIF artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-sarif-${{ matrix.target.name }}
+          path: trivy-results-${{ matrix.target.name }}.sarif
+          retention-days: 30
+
+  # ── PR summary comment ─────────────────────────────────────────────────────
+  pr-summary:
+    name: Security Scan Summary
+    needs: trivy-scan
+    runs-on: ubuntu-latest
+    if: always() && github.event_name == 'pull_request'
+
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Determine scan result
+        id: result
+        run: |
+          if [ "${{ needs.trivy-scan.result }}" = "failure" ]; then
+            echo "status=failed" >> $GITHUB_OUTPUT
+            echo "message=🚨 Trivy security scan **FAILED** — fixable vulnerabilities at or above the severity threshold were detected." >> $GITHUB_OUTPUT
+          else
+            echo "status=passed" >> $GITHUB_OUTPUT
+            echo "message=✅ Trivy security scan **passed** — no fixable vulnerabilities at or above the severity threshold." >> $GITHUB_OUTPUT
+          fi
+
+      - name: Comment on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const message = `${{ steps.result.outputs.message }}
+
+            **Scanned packages:**
+            - \`fluxapay_backend\` (npm)
+            - \`fluxapay_frontend\` (npm)
+            - \`fluxapay_sdk\` (npm)
+            - \`fluxapay_python_sdk\` (Python)
+            - \`fluxapay_go_sdk\` (Go)
+            - \`src/\` (npm root)
+
+            **Severity threshold:** \`${{ github.event.inputs.severity_threshold || 'HIGH,CRITICAL' }}\`
+            Only vulnerabilities with a known fix block the build.
+
+            Full results: [Security Code Scanning tab](/${{ github.repository }}/security/code-scanning)
+
+            To exempt a false positive, add the CVE ID to [\`.trivyignore\`](/${{ github.repository }}/blob/main/.trivyignore) with a justification comment.`;
+
+            const marker = '<!-- trivy-security-scan -->';
+
+            // Find and update existing comment, or create a new one
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const existing = comments.find(c => c.body.includes(marker));
+
+            const body = `${marker}\n${message}`;
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }

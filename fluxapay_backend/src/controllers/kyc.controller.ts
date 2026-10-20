@@ -11,6 +11,7 @@ import {
   updateKycStatusService,
   getAllKycSubmissionsService,
   getKycDetailsByMerchantIdService,
+  getKycExpiryWarningsService,
 } from "../services/kyc.service";
 
 const MAX_KYC_DOCUMENT_SIZE_BYTES = 10 * 1024 * 1024;
@@ -91,7 +92,7 @@ export async function submitKyc(req: AuthRequest, res: Response) {
 export async function uploadKycDocument(req: AuthRequest, res: Response) {
   try {
     const merchantId = await validateUserId(req);
-    const { document_type } = (req as unknown as any).body;
+    const { document_type, document_expiry_date } = (req as unknown as any).body;
 
     if (!(req as unknown as any).file) {
       return sendApiError(res, apiError(400, ErrorCode.NO_FILE_UPLOADED, "No file uploaded"));
@@ -152,6 +153,20 @@ export async function getKycStatus(req: AuthRequest, res: Response) {
 }
 
 /**
+ * Get KYC document expiry warnings for logged-in merchant
+ */
+export async function getKycExpiryWarnings(req: AuthRequest, res: Response) {
+  try {
+    const merchantId = await validateUserId(req);
+    const result = await getKycExpiryWarningsService(merchantId);
+    res.status(200).json(result);
+  } catch (err: unknown) {
+    console.error(err);
+    sendApiError(res, err);
+  }
+}
+
+/**
  * Update KYC status (Admin only)
  */
 export async function updateKycStatus(req: AuthRequest, res: Response) {
@@ -179,7 +194,7 @@ export async function getAllKycSubmissions(req: AuthRequest, res: Response) {
     const result = await getAllKycSubmissionsService(
       status as KYCStatus | undefined,
       parseInt(page as string),
-      parseInt(limit as string)
+      parseInt(limit as string),
     );
     res.status(200).json(result);
   } catch (err: unknown) {

@@ -7,6 +7,8 @@ import {
   logout as logoutService,
   logoutAll as logoutAllService,
   checkAccountLockout,
+  forgotPassword as forgotPasswordService,
+  resetPassword as resetPasswordService,
 } from "../services/auth.service";
 import { AuthRequest } from "../types/express";
 import { Request } from "express";
@@ -14,7 +16,7 @@ import { Request } from "express";
 export const login = createController(async (body: any, req: Request) => {
   const ipAddress = req.ip || req.socket.remoteAddress || "unknown";
   const userAgent = req.headers["user-agent"] || "unknown";
-  
+
   return loginWithEmailPassword({
     email: body.email,
     password: body.password,
@@ -26,7 +28,7 @@ export const login = createController(async (body: any, req: Request) => {
 export const refresh = createController(async (body: any, req: Request) => {
   const ipAddress = req.ip || req.socket.remoteAddress || "unknown";
   const userAgent = req.headers["user-agent"] || "unknown";
-  
+
   return refreshAccessToken({
     refreshToken: body.refresh_token,
     ipAddress,
@@ -46,10 +48,33 @@ export const logoutAll = createController(async (_: any, req: AuthRequest) => {
   if (!merchantId) {
     throw apiError(401, ErrorCode.AUTHENTICATION_REQUIRED, "Authentication required");
   }
-  
+
   return logoutAllService({ merchantId });
 });
 
 export const checkLockoutStatus = createController(async (body: any) => {
   return checkAccountLockout(body.email);
+});
+
+export const forgotPassword = createController(async (body: any, req: Request) => {
+  const ipAddress = req.ip || req.socket.remoteAddress || "unknown";
+  const userAgent = req.headers["user-agent"] || "unknown";
+
+  return forgotPasswordService({
+    email: body.email,
+    ipAddress,
+    userAgent,
+  });
+});
+
+export const resetPassword = createController(async (body: any, req: Request) => {
+  const ipAddress = req.ip || req.socket.remoteAddress || "unknown";
+  const userAgent = req.headers["user-agent"] || "unknown";
+
+  return resetPasswordService({
+    token: body.token,
+    password: body.password,
+    ipAddress,
+    userAgent,
+  });
 });

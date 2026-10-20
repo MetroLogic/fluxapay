@@ -5,7 +5,6 @@ const mockReleaseCronLock = jest.fn();
 const mockSendOpsAlert = jest.fn();
 const mockTrackFunderBalanceLow = jest.fn();
 const mockTrackAddressPoolDepleted = jest.fn();
-
 jest.mock("../funderMonitor.service", () => ({
   funderMonitorService: {
     getBalanceStatus: mockGetBalanceStatus,
@@ -47,6 +46,12 @@ jest.mock("../../config/sweep.config", () => ({
 }));
 jest.mock("../paymentSettlement.service", () => ({
   paymentSettlementService: { processPendingSettlementRetries: jest.fn() },
+}));
+jest.mock("../kycExpiry.service", () => ({
+  runKycExpiryJob: jest.fn(),
+}));
+jest.mock("../kycExpiry.service", () => ({
+  runKycExpiryJob: jest.fn(),
 }));
 
 import { runFunderMonitorTask } from "../cron.service";
