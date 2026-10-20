@@ -33,5 +33,20 @@ export function validatePagination(
     }
   }
 
+  const cursor = req.query.cursor;
+  if (cursor !== undefined && cursor !== null && cursor !== "") {
+    if (typeof cursor !== "string" || cursor.trim() === "") {
+      return sendApiError(
+        res,
+        apiError(
+          400,
+          ErrorCode.VALIDATION_ERROR,
+          "`cursor` must be a non-empty string",
+          { errors: [{ field: "cursor", message: "must be a non-empty string" }] },
+        ),
+      );
+    }
+  }
+
   return next();
 }
