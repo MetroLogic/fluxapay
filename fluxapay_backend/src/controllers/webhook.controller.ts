@@ -235,3 +235,20 @@ export async function adminRetryWebhook(req: Request, res: Response) {
     sendApiError(res, err);
   }
 }
+
+export async function getWebhookAttempts(req: AuthRequest, res: Response) {
+  try {
+    const merchantId = await validateUserId(req);
+    const { log_id } = req.params;
+
+    if (!log_id || Array.isArray(log_id)) {
+      return sendApiError(res, apiError(400, ErrorCode.LOG_ID_REQUIRED, "Log ID is required"));
+    }
+
+    const result = await getWebhookDeliveryAttemptsService({ merchantId, log_id });
+    res.status(200).json(result);
+  } catch (err: any) {
+    console.error(err);
+    sendApiError(res, err);
+  }
+}
