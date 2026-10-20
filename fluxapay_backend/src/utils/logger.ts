@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from 'async_hooks';
+import { trace, context as otelContext, isSpanContextValid, TraceFlags } from '@opentelemetry/api';
 import { Logger, LogEntry, LogLevel, LogContext, MetricsCollector, MetricEvent, MetricsTags } from '../types/logging.types';
 import { getCorrelationId, getRequestId } from './requestContext';
 import { redactRequestContext } from './piiRedactor';
@@ -53,6 +54,21 @@ class StructuredLogger implements Logger {
       version: this.version,
       environment: this.environment,
     };
+
+    // ── OpenTelemetry trace context injection ───────────────────────────────
+    // When OTEL is active and there is a valid span in the current async
+    // context, attach traceId and a W3C traceparent string to every log line.
+    // This allows log-to-trace correlation in Grafana Tempo / Jaeger / Datadog.
+    try {
+      const spanContext = trace.getSpan(otelContext.active())?.spanContext();
+      if (spanContext && isSpanContextValid(spanContext)) {
+        entry.traceId = spanContext.traceId;
+        const sampled = (spanContext.traceFlags & TraceFlags.SAMPLED) !== 0 ? '01' : '00';
+        entry.traceparent = `00-${spanContext.traceId}-${spanContext.spanId}-${sampled}`;
+      }
+    } catch {
+      // OTel API not initialised — safe to ignore; tracing is opt-in.
+    }
 
     // Automatically inject requestId from AsyncLocalStorage if available and not already provided
     const requestId = getRequestId();
