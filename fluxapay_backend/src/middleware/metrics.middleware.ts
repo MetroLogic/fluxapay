@@ -159,22 +159,26 @@ export function renderPrometheusMetrics(
  *
  * Exposes Prometheus runtime and business metrics behind admin authentication.
  */
-export function metricsMiddleware(req: Request, res: Response, next: NextFunction): void {
-  const isMetricsRequest = req.path === '/metrics' && req.method === 'GET';
-  if (!isMetricsRequest) {
-    next();
-    return;
-  }
+export function createMetricsMiddleware(
+  _getPoolSnapshots?: () => Promise<unknown[]>,
+): (req: Request, res: Response, next: NextFunction) => void {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    const isMetricsRequest = req.path === '/metrics' && req.method === 'GET';
+    if (!isMetricsRequest) {
+      next();
+      return;
+    }
 
-  adminAuth(req, res, () => {
-    prometheusRegistry.metrics().then((metrics) => {
-      getLogger().debug('Metrics scraped', {
-        families: Object.keys(PROMETHEUS_COUNTERS),
-      });
-      res.set('Content-Type', prometheusRegistry.contentType);
-      res.send(metrics);
-    }).catch(next);
-  });
+    adminAuth(req, res, () => {
+      prometheusRegistry.metrics().then((metrics) => {
+        getLogger().debug('Metrics scraped', {
+          families: Object.keys(PROMETHEUS_COUNTERS),
+        });
+        res.set('Content-Type', prometheusRegistry.contentType);
+        res.send(metrics);
+      }).catch(next);
+    });
+  };
 }
 
 export const metricsMiddleware = createMetricsMiddleware();

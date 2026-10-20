@@ -3,9 +3,13 @@ import { apiError, sendApiError } from "../helpers/apiError.helper";
 import { Request, Response, NextFunction } from "express";
 import Redis from "ioredis";
 import { AuthRequest } from "../types/express";
-import { validate as validateUUID } from "uuid";
-import crypto from "crypto";
+import * as crypto from "crypto";
 import { closeRedisClient } from "../utils/redisClose.util";
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+function validateUUID(str: string): boolean {
+  return typeof str === "string" && UUID_REGEX.test(str);
+}
 
 // Initialize Redis connection. Adjust the URL based on env vars if needed.
 // Fail fast when Redis is down (no offline queue) so tests/CI do not hang indefinitely.
