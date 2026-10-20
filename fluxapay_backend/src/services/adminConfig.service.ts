@@ -10,6 +10,7 @@ export const ADMIN_CONFIG_KEYS = [
   "default_payment_expiry_minutes",
   "webhook_max_retries",
   "reconciliation_alert_threshold_percent",
+  "min_sweep_profitability_usdc",
 ] as const;
 
 export type AdminConfigKey = (typeof ADMIN_CONFIG_KEYS)[number];
@@ -19,6 +20,7 @@ const DEFAULTS: Record<AdminConfigKey, string> = {
   default_payment_expiry_minutes: "60",
   webhook_max_retries: "5",
   reconciliation_alert_threshold_percent: "1.0",
+  min_sweep_profitability_usdc: "0.5",
 };
 
 const SENSITIVE_KEYS = new Set<string>();

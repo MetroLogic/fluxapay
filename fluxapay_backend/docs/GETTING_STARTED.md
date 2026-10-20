@@ -109,6 +109,7 @@ Validate using your merchant webhook secret and this signing format:
 For full verification and replay-protection examples, see:
 
 - `docs/WEBHOOK_SIGNATURE_VERIFICATION.md`
+- [Test webhooks against a local receiver](../../docs/guides/local-webhook-testing.md)
 
 ## Notes
 

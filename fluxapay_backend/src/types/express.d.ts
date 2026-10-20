@@ -17,5 +17,10 @@ export interface AuthRequest extends Request {
    * (sk_test_/fpk_test_), false for live API keys, undefined for JWT auth.
    */
   isTestMode?: boolean;
+  /** Permissions carried by a managed API key; undefined for legacy keys/JWTs. */
+  apiKeyPermissions?: string[];
+  /** Optional CIDR allowlist carried by a managed API key. */
+  apiKeyIpAllowlist?: string[];
   requestId?: string;
+  correlationId?: string;
 }

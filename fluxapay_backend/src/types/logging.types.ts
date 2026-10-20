@@ -6,6 +6,7 @@ export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 export interface LogContext {
   requestId?: string;
+  correlationId?: string;
   method?: string;
   path?: string;
   statusCode?: number;
@@ -21,6 +22,7 @@ export interface LogEntry {
   message: string;
   timestamp: string;
   requestId?: string;
+  correlationId?: string;
   service: string;
   version: string;
   environment: string;

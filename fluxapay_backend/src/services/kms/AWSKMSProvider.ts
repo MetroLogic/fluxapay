@@ -1,4 +1,9 @@
 import { IKMSProvider } from "./IKMSProvider";
+import {
+  getActiveKeyVersion,
+  parseEnvelope,
+  wrapEnvelope,
+} from "./keyVersioning";
 
 /**
  * AWS KMS Provider
@@ -175,8 +180,10 @@ export class AWSKMSProvider implements IKMSProvider {
       const { GenerateDataKeyCommand } = require("@aws-sdk/client-kms");
       const { createCipheriv, randomBytes } = await import("crypto");
 
+      // Active version may map to a dedicated key/alias via AWS_KMS_KEY_ID_V<N>
+      const version = getActiveKeyVersion();
       const command = new GenerateDataKeyCommand({
-        KeyId: this.keyId,
+        KeyId: process.env[`AWS_KMS_KEY_ID_V${version}`] || this.keyId,
         KeySpec: "AES_256",
       });
       const response = await this.kmsClient.send(command);
@@ -191,8 +198,11 @@ export class AWSKMSProvider implements IKMSProvider {
       enc += cipher.final("hex");
       const tag = cipher.getAuthTag();
 
-      // Format: encryptedDataKey|iv|tag|ciphertext
-      return `${encryptedDataKey}|${iv.toString("hex")}|${tag.toString("hex")}|${enc}`;
+      // Format: v<N>$encryptedDataKey|iv|tag|ciphertext
+      return wrapEnvelope(
+        version,
+        `${encryptedDataKey}|${iv.toString("hex")}|${tag.toString("hex")}|${enc}`,
+      );
     } catch (error) {
       console.error("AWS KMS encrypt failed:", error);
       throw new Error("Failed to encrypt data with AWS KMS");
@@ -208,11 +218,13 @@ export class AWSKMSProvider implements IKMSProvider {
       const { DecryptCommand } = require("@aws-sdk/client-kms");
       const { createDecipheriv } = await import("crypto");
 
-      const [encryptedDataKey, ivHex, tagHex, ciphertext] = data.split("|");
+      // Unversioned legacy ciphertext is treated as v1.
+      const { version, body } = parseEnvelope(data);
+      const [encryptedDataKey, ivHex, tagHex, ciphertext] = body.split("|");
 
       const decryptCommand = new DecryptCommand({
         CiphertextBlob: Buffer.from(encryptedDataKey, "base64"),
-        KeyId: this.keyId,
+        KeyId: process.env[`AWS_KMS_KEY_ID_V${version}`] || this.keyId,
       });
       const response = await this.kmsClient.send(decryptCommand);
       const plainDataKey: Buffer = Buffer.from(response.Plaintext);

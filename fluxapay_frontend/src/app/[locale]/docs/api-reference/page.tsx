@@ -494,6 +494,47 @@ export default function LocalizedApiReferencePage() {
 
         <ApiKeyInput />
 
+        <section className="rounded-xl border border-slate-200 bg-white p-5">
+          <h2 className="text-lg font-semibold text-slate-900">Download API collections</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            Import the generated requests into your API client. Set the included base URL and credentials before sending authenticated requests.
+          </p>
+          <div className="mt-4 flex flex-wrap items-center gap-4">
+            <a
+              href="/api-collections/fluxapay.postman_collection.json"
+              download
+              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
+            >
+              Download Postman collection
+            </a>
+            <a
+              href="/api-collections/fluxapay.postman_environment.json"
+              download
+              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Download Postman environment
+            </a>
+            <a
+              href="/api-collections/fluxapay.insomnia.json"
+              download
+              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Download Insomnia export
+            </a>
+            <a
+              href="/api-collections/fluxapay.postman_collection.json"
+              download
+              aria-label="Run in Postman"
+            >
+              <img src="https://run.pstmn.io/button.svg" alt="Run in Postman" />
+            </a>
+          </div>
+          <p className="mt-3 text-xs text-slate-500">
+            Variables: <code>{'{{baseUrl}}'}</code>, <code>{'{{apiKey}}'}</code>, and <code>{'{{merchantId}}'}</code>.
+            Import the Postman collection with **Import** to run it. A fork-style Run in Postman link requires the collection to be published in a public Postman workspace.
+          </p>
+        </section>
+
         {/* Base URL */}
         <div className="p-4 rounded-xl border border-slate-200 bg-slate-50">
           <p className="text-sm font-medium text-slate-500 mb-1">Base URL</p>

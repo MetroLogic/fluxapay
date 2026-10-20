@@ -8,6 +8,7 @@ import {
 } from "../utils/checkout-branding.util";
 import { countryMap } from "../utils/country-map.util";
 import bcrypt from "bcrypt";
+import { assertSafeWebhookUrl } from "../utils/webhookUrlSsrf.util";
 import { createOtp, verifyOtp as verifyOtpService } from "./otp.service";
 import { sendOtpEmail } from "./email.service";
 import { sendMerchantOtpSms } from "./smsOtp.service";
@@ -15,6 +16,7 @@ import { isDevEnv } from "../helpers/env.helper";
 import { generateToken } from "../helpers/jwt.helper";
 import { merchantRegistryService } from "./merchantRegistry.service";
 import { generateApiKey, generateWebhookSecret, hashKey, getLastFour, ApiKeyMode } from "../helpers/crypto.helper";
+import { invalidateApiKeyCacheForMerchant } from "../utils/apiKeyCache.util";
 import * as crypto from "crypto";
 import {
   logMerchantProfileUpdate,
@@ -280,6 +282,8 @@ export async function regenerateApiKeyService(data: {
     });
   });
 
+  await invalidateApiKeyCacheForMerchant(merchantId);
+
   // Audit log: API key rotation
   logApiKeyRotation({ merchantId, lastFour: apiKeyLastFour }).catch(() => {});
 
@@ -335,6 +339,7 @@ export async function updateMerchantWebhookService(data: {
   webhook_url: string;
 }) {
   const { merchantId, webhook_url } = data;
+  await assertSafeWebhookUrl(webhook_url);
   await prisma.merchant.update({
     where: { id: merchantId },
     data: { webhook_url },

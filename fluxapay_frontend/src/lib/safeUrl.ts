@@ -1,9 +1,11 @@
 /**
  * Validate a redirect/success URL before sending the user there.
  *
- * Only allows same-origin URLs (including relative paths). Rejects
- * `javascript:`, `data:`, `vbscript:` and any other non-http(s) scheme,
- * plus any external origin. Invalid URLs fall back to a safe default.
+ * Allows relative paths, same-origin absolute URLs, and merchant-provided
+ * absolute `http(s)` success URLs (the hosted checkout must be able to
+ * redirect back to the merchant's own site, #1252). Rejects `javascript:`,
+ * `data:`, `vbscript:`, `file:` and `blob:` schemes. Invalid URLs fall back to
+ * a safe default.
  */
 export function sanitizeRedirectUrl(
   url: string | null | undefined,
@@ -22,19 +24,15 @@ export function sanitizeRedirectUrl(
   try {
     const parsed = new URL(trimmed, window.location.origin);
 
+    // Only http(s) destinations are ever allowed.
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-      return fallback;
-    }
-
-    if (parsed.origin !== window.location.origin) {
       return fallback;
     }
 
     return parsed.toString();
   } catch {
-    // Not parseable as an absolute URL — treat as a relative path. Same-origin
-    // by definition, so safe to return as-is (dangerous schemes were already
-    // rejected above).
+    // Not parseable as an absolute URL — treat as a relative path. Dangerous
+    // schemes were already rejected above.
     return trimmed;
   }
 }

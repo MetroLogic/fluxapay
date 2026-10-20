@@ -1,0 +1,28 @@
+# FluxaPay Frontend - distroless production image (deps -> builder -> runner).
+# Build:  docker build -f Dockerfile.distroless -t fluxapay-frontend:distroless .
+ARG NODE_VERSION=20-bookworm-slim
+
+FROM node:${NODE_VERSION} AS deps
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+
+FROM node:${NODE_VERSION} AS builder
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN npm run build
+RUN npm prune --omit=dev
+
+FROM gcr.io/distroless/nodejs20-debian12:nonroot AS runner
+WORKDIR /app
+ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1
+COPY --from=builder --chown=nonroot:nonroot /app/.next ./.next
+COPY --from=builder --chown=nonroot:nonroot /app/public ./public
+COPY --from=builder --chown=nonroot:nonroot /app/node_modules ./node_modules
+COPY --from=builder --chown=nonroot:nonroot /app/package.json ./package.json
+COPY --from=builder --chown=nonroot:nonroot /app/next.config.ts ./next.config.ts
+USER nonroot:nonroot
+EXPOSE 3075
+CMD ["node_modules/next/dist/bin/next", "start", "-p", "3075"]

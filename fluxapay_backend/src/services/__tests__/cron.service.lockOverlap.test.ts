@@ -76,6 +76,9 @@ jest.mock("../paymentSettlement.service", () => ({
     processPendingSettlementRetries: jest.fn().mockResolvedValue({ processed: 0, succeeded: 0, failed: 0 }),
   },
 }));
+jest.mock("../webhook.service", () => ({
+  processDueWebhookRetries: jest.fn().mockResolvedValue({ processed: 1, due: 1 }),
+}));
 
 const mockAcquireCronLock = jest.fn();
 const mockReleaseCronLock = jest.fn();
@@ -87,6 +90,7 @@ jest.mock("../../utils/redisLock.util", () => ({
 
 import { schedule } from "node-cron";
 import { runSettlementBatch } from "../settlementBatch.service";
+import { processDueWebhookRetries } from "../webhook.service";
 import { startCronJobs, stopCronJobs } from "../cron.service";
 
 describe("cron.service — lock acquisition/release around scheduled jobs (#1080)", () => {
@@ -157,5 +161,19 @@ describe("cron.service — lock acquisition/release around scheduled jobs (#1080
     const acquireOwner = mockAcquireCronLock.mock.calls[0][1].lockOwner;
     const releaseOwner = mockReleaseCronLock.mock.calls[0][1].lockOwner;
     expect(releaseOwner).toBe(acquireOwner);
+  });
+
+  it("runs due webhook retries under a Redis lock", async () => {
+    mockAcquireCronLock.mockResolvedValue(true);
+    mockReleaseCronLock.mockResolvedValue(undefined);
+
+    startCronJobs();
+    const retrySchedules = scheduleMock.mock.calls.filter((call) => call[0] === "*/1 * * * *");
+    const webhookRetryFn = retrySchedules[retrySchedules.length - 1][1];
+    await webhookRetryFn();
+
+    expect(processDueWebhookRetries).toHaveBeenCalledTimes(1);
+    expect(mockAcquireCronLock).toHaveBeenCalledWith("webhook_retry", expect.any(Object));
+    expect(mockReleaseCronLock).toHaveBeenCalledWith("webhook_retry", expect.any(Object));
   });
 });

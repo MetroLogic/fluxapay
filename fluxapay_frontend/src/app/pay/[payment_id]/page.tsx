@@ -30,6 +30,7 @@ import { sanitizeRedirectUrl } from '@/lib/safeUrl';
 export default function CheckoutPage() {
   const t = useTranslations('payment');
   const tAuth = useTranslations('auth');
+  const tFooter = useTranslations('footer');
   const params = useParams();
   const searchParams = useSearchParams();
   const paymentId = params.payment_id as string;
@@ -527,6 +528,12 @@ export default function CheckoutPage() {
                 className="transition-colors hover:text-[color:var(--checkout-accent)]"
               >
                 {tAuth('privacy')}
+              </Link>
+              <Link
+                href="/faq"
+                className="transition-colors hover:text-[color:var(--checkout-accent)]"
+              >
+                {tFooter('faqs')}
               </Link>
             </div>
           </div>

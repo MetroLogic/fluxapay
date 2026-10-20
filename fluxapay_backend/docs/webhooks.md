@@ -21,46 +21,81 @@ network layer and later retried.
 
 ## Webhook Events
 
-### Payment Events
+FluxaPay sends the following canonical event names in the `event` field:
 
-| Event | Description |
-|-------|-------------|
-| `payment.completed` | Payment successfully confirmed on-chain |
-| `payment.failed` | Payment failed or expired |
-| `payment.pending` | Payment created, awaiting funds |
-| `payment.expired` | Payment expired before completion |
-| `payment.partially_paid` | Payment received partial amount |
-| `payment.overpaid` | Payment received more than required |
-| `payment.settled` | Payment settled to local currency |
+| Event | When it is sent |
+|-------|-----------------|
+| `payment.created` | A payment is created |
+| `payment.pending` | A payment is awaiting funds |
+| `payment.confirmed` | An on-chain payment is confirmed |
+| `payment.failed` | A payment fails |
+| `payment.expired` | A payment expires before completion |
+| `payment.expiring_soon` | A pending payment is nearing expiration |
+| `payment.settled` | Funds are settled to the merchant |
+| `payment.duplicate_received` | A duplicate payment is detected |
+| `refund.created` | A refund is created |
+| `refund.completed` | A refund completes successfully |
+| `refund.failed` | A refund fails |
+| `subscription.created` | A subscription is created |
+| `subscription.cancelled` | A subscription is cancelled |
+| `subscription.renewed` | A subscription renews |
+| `invoice.paid` | An invoice is paid |
+| `invoice.overdue` | An invoice becomes overdue |
 
-### Settlement Events
+Older integrations may still specify these legacy event names; FluxaPay maps them to the canonical names above:
 
-| Event | Description |
-|-------|-------------|
-| `settlement.completed` | Settlement batch completed successfully |
-| `settlement.failed` | Settlement batch failed |
+| Legacy name | Canonical name |
+|-------------|---------------|
+| `payment_completed` | `payment.settled` |
+| `payment_confirmed` | `payment.confirmed` |
+| `payment_failed` | `payment.failed` |
+| `payment_expired` | `payment.expired` |
+| `payment_expiring_soon` | `payment.expiring_soon` |
+| `payment_pending` | `payment.pending` |
+| `payment_duplicate_received` | `payment.duplicate_received` |
+| `refund_completed` | `refund.completed` |
+| `refund_failed` | `refund.failed` |
+| `subscription_created` | `subscription.created` |
+| `subscription_cancelled` | `subscription.cancelled` |
+| `subscription_renewed` | `subscription.renewed` |
+| `invoice_paid` | `invoice.paid` |
+| `invoice_overdue` | `invoice.overdue` |
 
-### Refund Events
+## Event Payloads
 
-| Event | Description |
-|-------|-------------|
-| `refund.completed` | Refund processed successfully |
-| `refund.failed` | Refund failed |
+Each delivery includes `event`, `event_id`, and `timestamp`. The remaining fields depend on the event and are sent at the top level; some existing payment events group their event-specific fields under `data`. Amounts are decimal strings in live payment events.
 
-### Subscription Events
+For example, a confirmed payment may look like:
 
-| Event | Description |
-|-------|-------------|
-| `subscription.created` | Subscription created |
-| `subscription.cancelled` | Subscription cancelled |
-| `subscription.renewed` | Subscription renewed |
+```json
+{
+  "event": "payment.confirmed",
+  "event_id": "e6b6a6a6-a1a4-4f85-9c7b-7c8f1d5c4a12",
+  "timestamp": "2026-09-30T10:20:05.000Z",
+  "payment_id": "pay_123",
+  "amount": "49.99",
+  "amount_received": "49.99",
+  "currency": "USD",
+  "status": "confirmed",
+  "transaction_hash": "stellar_transaction_hash",
+  "payer_address": "G..."
+}
+```
 
-### Invoice Events
+| Event family | Event-specific fields |
+|--------------|-----------------------|
+| `payment.created`, `payment.pending`, `payment.failed` | `payment_id`, `amount`, `currency`, `status`; `customer_email` and `failure_reason` may also be present |
+| `payment.confirmed` | `payment_id`, `amount`, `amount_received`, `currency`, `status`, `transaction_hash`, `payer_address` |
+| `payment.expired` | `data.charge_id`, `data.merchant_id`, `data.amount`, `data.currency`, `data.expired_at` |
+| `payment.expiring_soon` | `payment_id`, `checkout_url`, `expires_at`, `minutes_remaining` |
+| `payment.settled` | `payment_id`, `merchant_id`, `settlement_id`, `settlement`, `settled_at` |
+| `payment.duplicate_received` | `payment_id`, `charge_id`, `expected_amount`, `total_received`, `surplus_amount`, `transaction_hashes`, `currency` |
+| `refund.created`, `refund.completed`, `refund.failed` | `refund_id`, `payment_id`, `amount`, `currency`, `status`; failure details may be present for failed refunds |
+| `subscription.created`, `subscription.renewed` | `subscription_id`, `plan_id`, `plan_slug`, `billing_cycle`, `current_period_end` or `renewed_at`, `next_billing_date` |
+| `subscription.cancelled` | `subscription_id`, `plan_id`, `status`, `cancelled_at` |
+| `invoice.paid`, `invoice.overdue` | `invoice_id`, `merchant_id`, `invoice_number`, `amount`, `currency`, `status`, `paid_at`, `payment_tx_hash`, `updated_at` |
 
-| Event | Description |
-|-------|-------------|
-| `invoice.paid` | Invoice paid |
-| `invoice.overdue` | Invoice overdue |
+Fields not applicable to an event are omitted. `event_id` is stable across retries, so use it to deduplicate deliveries. Test webhooks also include `webhook_id` and `test_mode: true`.
 
 ## Setting Up Webhooks
 
@@ -73,18 +108,6 @@ Your webhook endpoint should:
 - Accept POST requests
 - Return HTTP 200 OK within 10 seconds
 - Handle JSON content type
-
-## Webhook Payload Structure
-
-All webhooks follow this structure:
-
-```json
-{
-  "event": "payment.completed",
-  "data": { /* event-specific data */ },
-  "timestamp": "2026-06-01T10:20:05Z"
-}
-```
 
 ## Signature Verification
 
@@ -127,13 +150,12 @@ FluxaPay retries failed webhook deliveries with exponential backoff:
 
 | Attempt | Delay |
 |---------|-------|
-| 1 | Immediate |
-| 2 | 1 minute |
-| 3 | 5 minutes |
-| 4 | 30 minutes |
-| 5 | 2 hours |
+| Initial delivery | Immediate |
+| Retry 1 | 1 minute |
+| Retry 2 | 2 minutes |
+| Retry 3 | 4 minutes |
 
-After 5 failed attempts, the webhook is marked as failed. Check your dashboard for failed webhook logs.
+After three failed retries, the webhook is marked as failed. Check your dashboard for failed webhook logs.
 
 ## Example Webhook Handlers
 
@@ -150,11 +172,11 @@ app.post('/webhook', express.raw({ type: 'application/json' }), (req, res) => {
   const event = JSON.parse(req.body.toString());
   
   switch (event.event) {
-    case 'payment.completed':
-      handlePaymentCompleted(event.data);
+    case 'payment.confirmed':
+      handlePaymentCompleted(event);
       break;
     case 'payment.settled':
-      handlePaymentSettled(event.data);
+      handlePaymentSettled(event);
       break;
     default:
       console.log('Unhandled event:', event.event);
@@ -189,8 +211,8 @@ def webhook():
     
     event = request.json
     
-    if event['event'] == 'payment.completed':
-        handle_payment_completed(event['data'])
+    if event['event'] == 'payment.confirmed':
+      handle_payment_completed(event)
     
     return jsonify({'status': 'ok'}), 200
 ```

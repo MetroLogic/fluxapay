@@ -1,0 +1,35 @@
+# .trivyignore — Trivy vulnerability exemptions
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# How this file works
+# ─────────────────────────────────────────────────────────────────────────────
+# Each line is a CVE ID (or OS package) that Trivy should suppress during
+# filesystem scans.  Comments (lines starting with #) are ignored by Trivy
+# but must be used to document WHY each exemption exists.
+#
+# This file is read automatically by the security-scan workflow via the
+# `trivyignores` input.  Suppressed vulnerabilities will not fail the CI build
+# and will not appear in the SARIF report uploaded to GitHub Code Scanning.
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# Exemption policy
+# ─────────────────────────────────────────────────────────────────────────────
+# 1.  Every entry MUST have a comment explaining the justification.
+# 2.  Acceptable reasons to exempt:
+#       a. False positive — the vulnerable code path is not used.
+#       b.  No fix available — will be resolved upstream.
+#       c.  Compensating control — risk mitigated by another measure.
+#       d.  Accepted risk — documented business decision.
+# 3.  Every entry should have an expiry/review date in the comment so stale
+#     exemptions are revisited when dependencies are upgraded.
+# 4.  Do NOT use this file to ignore vulnerabilities that should be fixed
+#     by updating the dependency.  Update the dependency instead.
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# Format
+# ─────────────────────────────────────────────────────────────────────────────
+#   <CVE-ID>  # <justification> | review-by: YYYY-MM-DD | added-by: <name>
+#
+# Example (uncomment if needed):
+# CVE-2024-12345  # False positive: vulnerable function not called in our code | review-by: 2025-06-01 | added-by: devname
+# ─────────────────────────────────────────────────────────────────────────────

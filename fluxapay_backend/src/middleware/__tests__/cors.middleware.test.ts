@@ -126,6 +126,8 @@ describe('CORS Middleware', () => {
     it('should allow wildcard origin in test environment', () => {
       const options = getCorsOptions();
       expect(options.origin).toBe('*');
+      expect(options.allowedHeaders).toContain('X-Correlation-ID');
+      expect(options.exposedHeaders).toContain('X-Correlation-ID');
     });
   });
 

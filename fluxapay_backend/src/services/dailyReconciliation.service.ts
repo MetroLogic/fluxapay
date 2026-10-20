@@ -4,6 +4,7 @@ import { PrismaClient, Prisma } from "../generated/client/client";
 import { sendInvoiceEmail } from "./email.service";
 
 import { prisma } from "../config/prisma";
+import { sendDiscrepancyAlert, DiscrepancyItem } from "./discrepancyAlert.service";
 
 export async function generateDailyReconciliationReportService(params: {
   merchantId: string;
@@ -66,6 +67,31 @@ export async function generateDailyReconciliationReportService(params: {
     };
   });
 
+  // Detect discrepancies between internal records and expected on-chain state
+  const discrepancies: DiscrepancyItem[] = [];
+  for (const payment of payments) {
+    if (!payment.transaction_hash) {
+      discrepancies.push({
+        type: "unrecordedInternal",
+        paymentId: payment.id,
+        txHash: null,
+        expected: "transaction hash",
+        actual: "missing",
+      });
+    } else if (
+      payment.paid_amount != null &&
+      Number(payment.paid_amount) !== Number(payment.amount)
+    ) {
+      discrepancies.push({
+        type: "amountMismatch",
+        paymentId: payment.id,
+        txHash: payment.transaction_hash,
+        expected: Number(payment.amount),
+        actual: Number(payment.paid_amount),
+      });
+    }
+  }
+
   // Create or update report
   const report = await prisma.dailyReconciliationReport.upsert({
     where: {
@@ -93,6 +119,8 @@ export async function generateDailyReconciliationReportService(params: {
       report_data: reportData as Prisma.InputJsonValue,
     },
   });
+
+  await sendDiscrepancyAlert({ reportDate: startOfDay, merchantId, discrepancies });
 
   return {
     id: report.id,

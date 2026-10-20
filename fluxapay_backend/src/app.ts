@@ -5,12 +5,13 @@ import { specs } from "./docs/swagger";
 import { apiError, sendApiError } from "./helpers/apiError.helper";
 import { ErrorCode } from "./types/errors";
 import { prisma } from "./config/prisma";
+import { getDatabasePoolSnapshots } from "./config/database";
 import { requestIdMiddleware } from "./middleware/requestId.middleware";
 import {
   requestLoggingMiddleware,
   errorLoggingMiddleware,
 } from "./middleware/requestLogging.middleware";
-import { metricsMiddleware } from "./middleware/metrics.middleware";
+import { createMetricsMiddleware } from "./middleware/metrics.middleware";
 import { corsMiddleware } from "./middleware/cors.middleware";
 import { adminRateLimit, globalRateLimit, merchantRateLimit } from "./middleware/rateLimit.middleware";
 
@@ -51,7 +52,7 @@ const app = express();
 // Observability Middleware (must be first)
 app.use(requestIdMiddleware);
 app.use(requestLoggingMiddleware);
-app.use(metricsMiddleware);
+app.use(createMetricsMiddleware(getDatabasePoolSnapshots));
 
 // CORS Middleware (before routes, after observability)
 app.use(corsMiddleware);

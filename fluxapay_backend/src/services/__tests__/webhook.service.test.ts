@@ -1,6 +1,7 @@
 import crypto from "crypto";
-import { WebhookDispatcher, createAndDeliverWebhook, deliverWebhook, generateWebhookSignature, getDeadLetterQueueService, requeueWebhookService, verifyWebhookTimestamp } from "../webhook.service";
+import { WebhookDispatcher, createAndDeliverWebhook, deliverWebhook, generateWebhookSignature, getDeadLetterQueueService, requeueWebhookService, sendTestWebhookService, verifyWebhookTimestamp } from "../webhook.service";
 import { PrismaClient } from "../../generated/client/client";
+import { requestContextStorage } from "../../utils/requestContext";
 
 // Define mock functions inside the factory to avoid jest-hoisting TDZ issues with const
 jest.mock("../../generated/client/client", () => {
@@ -81,13 +82,18 @@ describe("webhook.service", () => {
     });
 
     const payload = { foo: "bar" };
-    await createAndDeliverWebhook(merchantId, "payment_completed", payload);
+    await requestContextStorage.run(
+      { requestId: "req-webhook", correlationId: "corr-webhook" },
+      () => createAndDeliverWebhook(merchantId, "payment_completed", payload),
+    );
 
     expect(global.fetch).toHaveBeenCalledWith(webhookUrl, expect.any(Object));
     expect(capturedHeaders["X-FluxaPay-Timestamp"]).toBeDefined();
+    expect(capturedHeaders["X-Correlation-ID"]).toBe("corr-webhook");
 
     // The sent body includes event_id prepended; reconstruct it to verify signature
     const sentBody = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+    expect(sentBody.event).toBe("payment.settled");
     const ts = capturedHeaders["X-FluxaPay-Timestamp"] as string;
     const expectedSig = generateWebhookSignature(sentBody, merchantSecret, ts);
     expect(capturedHeaders["X-FluxaPay-Signature"]).toBe(expectedSig);
@@ -116,6 +122,22 @@ describe("webhook.service", () => {
     const ts = opts.headers["X-FluxaPay-Timestamp"];
     const sig = generateWebhookSignature(payload, secret, ts);
     expect(opts.headers["X-FluxaPay-Signature"]).toBe(sig);
+  });
+
+  it("forwards the active correlation ID on outbound webhook requests", async () => {
+    const fakeFetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: () => Promise.resolve("OK"),
+    });
+    global.fetch = fakeFetch as any;
+
+    await requestContextStorage.run(
+      { requestId: "req-123", correlationId: "corr-123" },
+      () => deliverWebhook("https://example.com", { event: "payment.confirmed" }, "secret"),
+    );
+
+    expect(fakeFetch.mock.calls[0][1].headers["X-Correlation-ID"]).toBe("corr-123");
   });
 
   it("deliverWebhook signs the exact raw body it sends, bound to the timestamp header", async () => {
@@ -585,6 +607,30 @@ describe("DLQ services", () => {
     await expect(requeueWebhookService({ log_id: "missing" })).rejects.toEqual(
       expect.objectContaining({ status: 404, message: "Webhook log not found" })
     );
+  });
+});
+
+describe("test webhook payload", () => {
+  it("includes the canonical event name", async () => {
+    mockMerchant.findUnique.mockResolvedValueOnce({ id: "m1", webhook_secret: "secret" });
+    mockMerchant.webhookLog.create.mockResolvedValueOnce({ id: "log_test" });
+    mockMerchant.webhookLog.update.mockResolvedValueOnce({ id: "log_test", status: "delivered" });
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: () => Promise.resolve("OK"),
+    }) as any;
+
+    await sendTestWebhookService({
+      merchantId: "m1",
+      event_type: "payment_completed" as any,
+      endpoint_url: "https://example.com/webhook",
+    });
+
+    const payload = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body);
+    expect(payload.event).toBe("payment.settled");
+    expect(payload.event_id).toBeDefined();
+    expect(payload.test_mode).toBe(true);
   });
 });
 

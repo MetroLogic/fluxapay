@@ -48,8 +48,16 @@ async function handlePaymentConfirmed(payment: any) {
       return;
     }
 
-    // Build explorer link
-    const network = process.env.STELLAR_NETWORK_PASSPHRASE?.includes('Testnet') ? 'testnet' : 'public';
+    // Build explorer link.
+    //
+    // Network detection keys off the horizon URL, matching payment.controller.ts.
+    // Keying off STELLAR_NETWORK_PASSPHRASE cannot work: the real testnet
+    // passphrase is "Test SDF Network ; September 2015", which does not contain
+    // the substring "Testnet", so that check always resolved to "public" and
+    // emailed testnet merchants a mainnet explorer link (#1190).
+    const network = (process.env.STELLAR_HORIZON_URL || "").includes("testnet")
+      ? "testnet"
+      : "public";
     const explorerLink = payment.transaction_hash
       ? `https://stellar.expert/explorer/${network}/tx/${payment.transaction_hash}`
       : `https://stellar.expert/explorer/${network}/account/${payment.stellar_address}`;
@@ -62,6 +70,8 @@ async function handlePaymentConfirmed(payment: any) {
       merchant_reference: payment.merchant_reference || undefined,
       explorer_link: explorerLink,
       timestamp: payment.updated_at || payment.created_at,
+      // Customer locale from checkout session metadata (Accept-Language is resolved at checkout)
+      locale: payment.metadata?.locale || payment.customer_locale || undefined,
     };
 
     await sendPaymentConfirmationEmail(

@@ -175,8 +175,8 @@ export function getCorsOptions(): CorsOptions {
       },
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Admin-Secret'],
-      exposedHeaders: ['X-Request-ID'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Admin-Secret', 'X-Correlation-ID'],
+      exposedHeaders: ['X-Request-ID', 'X-FluxaPay-Request-ID', 'X-Correlation-ID'],
       maxAge: 86400, // 24 hours
     };
   }
@@ -186,7 +186,8 @@ export function getCorsOptions(): CorsOptions {
     return {
       origin: '*',
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Admin-Secret'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Admin-Secret', 'X-Correlation-ID'],
+      exposedHeaders: ['X-Request-ID', 'X-FluxaPay-Request-ID', 'X-Correlation-ID'],
     };
   }
 
@@ -210,8 +211,8 @@ export function getCorsOptions(): CorsOptions {
       },
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Admin-Secret'],
-      exposedHeaders: ['X-Request-ID'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Admin-Secret', 'X-Correlation-ID'],
+      exposedHeaders: ['X-Request-ID', 'X-FluxaPay-Request-ID', 'X-Correlation-ID'],
       maxAge: 86400, // 24 hours
     };
   }
@@ -250,8 +251,8 @@ export function getCorsOptions(): CorsOptions {
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Admin-Secret'],
-    exposedHeaders: ['X-Request-ID'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Admin-Secret', 'X-Correlation-ID'],
+    exposedHeaders: ['X-Request-ID', 'X-FluxaPay-Request-ID', 'X-Correlation-ID'],
     maxAge: 86400, // 24 hours
   };
 }

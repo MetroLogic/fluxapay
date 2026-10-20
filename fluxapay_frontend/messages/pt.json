@@ -147,6 +147,33 @@
       "answer": "Sim, usamos criptografia de nível bancário, carteiras multi-assinatura e cumprimos padrões de segurança internacionais."
     }
   },
+  "customerFaq": {
+    "title": "Ajuda sobre pagamentos Stellar",
+    "subtitle": "Respostas sobre carteiras, memos de pagamento, valores e como verificar o status do pagamento.",
+    "searchLabel": "Pesquisar perguntas sobre pagamentos",
+    "searchPlaceholder": "Pesquisar perguntas frequentes...",
+    "noResults": "Nenhuma pergunta encontrada. Tente outra busca.",
+    "wallets": {
+      "question": "Quais carteiras Stellar posso usar?",
+      "answer": "Você pode pagar diretamente com Freighter ou Albedo quando disponíveis. O seletor de carteiras também pode oferecer carteiras móveis compatíveis, como LOBSTR ou Solar, pelo WalletConnect. Você também pode escanear o QR code ou copiar o endereço e pagar por outra carteira Stellar. Confira se sua carteira está na mesma rede Stellar e aceita o ativo exibido nesta página."
+    },
+    "memo": {
+      "question": "Por que um memo é necessário para alguns pagamentos?",
+      "answer": "Alguns destinos de pagamento são compartilhados por vários clientes. O memo identifica seu pedido para que o comerciante credite o pagamento corretamente. Se esta página indicar que o memo é obrigatório, inclua exatamente o valor exibido, inclusive zeros à esquerda. Um memo ausente ou incorreto pode atrasar o crédito e exigir uma análise do comerciante."
+    },
+    "amountAsset": {
+      "question": "O que acontece se eu enviar o valor ou ativo errado?",
+      "answer": "Um pagamento incompleto pode aparecer como parcial, com o saldo restante indicado; um pagamento excedente pode ser sinalizado separadamente. Outro ativo talvez não seja reconhecido automaticamente. Entre em contato com o comerciante rapidamente e informe o hash da transação, valor, ativo e memo. Não envie outro pagamento sem a orientação do comerciante."
+    },
+    "confirmation": {
+      "question": "Quanto tempo leva para confirmar o pagamento?",
+      "answer": "As transações Stellar normalmente são registradas em poucos segundos. A FluxaPay verifica o status automaticamente, mas atrasos na rede ou na indexação podem levar mais tempo. Mantenha esta página aberta e espere aparecer Confirmado antes de tentar novamente."
+    },
+    "status": {
+      "question": "Como posso verificar o status do meu pagamento?",
+      "answer": "Esta página atualiza o status automaticamente. Quando confirmado, ela mostrará uma mensagem de confirmação e, quando disponível, o hash da transação Stellar. Se ainda estiver pendente após alguns minutos, confira se a transação foi concluída na rede correta e se o endereço, ativo, valor e memo obrigatório estão corretos. Depois, entre em contato com o comerciante e envie o hash; não pague novamente enquanto o status estiver pendente."
+    }
+  },
   "footer": {
     "tagline": "O futuro dos pagamentos globais",
     "product": "Produto",
@@ -248,7 +275,19 @@
       "close": "Fechar",
       "timerExpired": "Expirado",
       "timerExpiredAria": "O tempo de pagamento expirou",
-      "timeRemainingAria": "Tempo restante: {minutes} minutos e {seconds} segundos"
+      "timeRemainingAria": "Tempo restante: {minutes} minutos e {seconds} segundos",
+      "statusAwaiting": "Aguardando pagamento",
+      "statusAwaitingDescription": "Envie o valor exato para o endereço abaixo. Nós o detectaremos automaticamente.",
+      "statusConfirming": "Pagamento detectado — confirmando",
+      "statusConfirmingDescription": "Detectamos seu pagamento na blockchain e estamos aguardando a confirmação.",
+      "statusUnderpaid": "Pagamento insuficiente recebido",
+      "statusUnderpaidDescription": "Recebemos menos que o valor total. Envie os {amount} {currency} restantes para concluir seu pagamento.",
+      "statusOverpaid": "Pagamento excedente recebido",
+      "statusOverpaidDescription": "Recebemos mais que o valor solicitado. Seu pagamento foi aceito.",
+      "statusUpdating": "Atualizações ao vivo ativadas",
+      "statusPolling": "Verificando atualizações a cada poucos segundos",
+      "statusAnnouncement": "Status do pagamento: {status}",
+      "redirectingIn": "Redirecionando em {seconds}s…"
     }
   },
   "auth": {

@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { Copy, Check } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { vibrateOnCopy } from './shareLink';
 
 interface CopyFieldProps {
   label: string;
@@ -31,6 +32,7 @@ export function CopyField({
     try {
       await navigator.clipboard.writeText(value);
       setCopied(true);
+      vibrateOnCopy();
       toast.success(`${label} copied to clipboard`);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
@@ -58,7 +60,8 @@ export function CopyField({
       <div className="relative flex items-center overflow-hidden rounded-xl border border-gray-200 bg-gray-50 transition-all hover:border-slate-400">
         <div
           id={valueId}
-          className="flex-1 overflow-hidden px-4 py-3 font-mono text-sm text-gray-900"
+          dir="ltr"
+          className="flex-1 overflow-hidden px-4 py-3 text-start font-mono text-sm text-gray-900"
           aria-labelledby={`${valueId}-label`}
           aria-label={`${label}: ${value}`}
         >
@@ -69,18 +72,26 @@ export function CopyField({
         <button
           type="button"
           onClick={handleCopy}
-          className="flex h-full items-center justify-center border-l border-gray-200 px-4 py-3 text-gray-500 transition-colors hover:bg-slate-900 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--checkout-accent)]"
+          className="flex h-full items-center justify-center border-s border-gray-200 px-4 py-3 text-gray-500 transition-colors hover:bg-slate-900 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--checkout-accent)]"
           aria-label={buttonAriaLabel}
           aria-describedby={copied ? `${valueId}-copied` : undefined}
         >
           {copied ? (
-            <Check className="h-4 w-4 animate-in zoom-in" aria-hidden="true" />
+            <Check className="h-4 w-4 animate-in zoom-in text-green-500 duration-200" aria-hidden="true" />
           ) : (
             <Copy className="h-4 w-4" aria-hidden="true" />
           )}
           <span className="sr-only">{copied ? 'Copied' : buttonAriaLabel}</span>
         </button>
       </div>
+      {copied && (
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute -top-7 end-2 animate-in fade-in slide-in-from-bottom-1 rounded bg-slate-900 px-2 py-1 text-xs font-medium text-white"
+        >
+          Copied!
+        </span>
+      )}
       <span
         id={`${valueId}-copied`}
         role="status"

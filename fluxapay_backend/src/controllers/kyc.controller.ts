@@ -58,7 +58,7 @@ function detectMimeTypeFromMagicBytes(buffer: Buffer): string | null {
     return "image/png";
   }
 
-  // JPEG: FF A8 FF
+  // JPEG: FF D8 FF
   if (
     buffer.length >= 3 &&
     buffer[0] === 0xff &&
@@ -98,18 +98,6 @@ export async function uploadKycDocument(req: AuthRequest, res: Response) {
       return sendApiError(res, apiError(400, ErrorCode.NO_FILE_UPLOADED, "No file uploaded"));
     }
 
-    let expiryDate: Date | undefined;
-    if (document_expiry_date !== undefined && document_expiry_date !== null && document_expiry_date !== "") {
-      const parsed = new Date(document_expiry_date as string);
-      if (Number.isNaN(parsed.getTime())) {
-        return sendApiError(
-          res,
-          apiError(400, ErrorCode.VALIDATION_ERROR, "Invalid document_expiry_date"),
-        );
-      }
-      expiryDate = parsed;
-    }
-
     const file = (req as unknown as any).file as {
       buffer: Buffer;
       originalname: string;
@@ -140,8 +128,7 @@ export async function uploadKycDocument(req: AuthRequest, res: Response) {
         originalname: file.originalname,
         mimetype: detectedMimeType,
         size: file.size,
-      },
-      expiryDate,
+      }
     );
     res.status(200).json(result);
   } catch (err: unknown) {

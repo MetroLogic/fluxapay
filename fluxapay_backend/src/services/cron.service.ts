@@ -38,8 +38,9 @@ import { DepositAddressService } from "./depositAddress.service";
 import { getSweepCronInterval, logSweepConfigAtStartup } from "../config/sweep.config";
 import { acquireCronLock, releaseCronLock, getLockOwner } from "../utils/redisLock.util";
 import { paymentSettlementService } from "./paymentSettlement.service";
+import { processDueWebhookRetries } from "./webhook.service";
 import { sendOpsAlert } from "./settlementAlert.service";
-import { processWebhookRetries } from "./webhookRetry.service";
+import { runApiKeyExpiryWarningJob } from "./apiKey.service";
 import {
   trackAddressPoolDepleted,
   trackFunderBalanceLow,
@@ -52,6 +53,7 @@ const SWEEP_CRON_EXPR = getSweepCronInterval();
 const FUNDER_MONITOR_CRON_EXPR = process.env.FUNDER_MONITOR_CRON ?? "*/10 * * * *";
 const CHECKOUT_REMINDER_CRON_EXPR = process.env.CHECKOUT_REMINDER_CRON ?? "*/2 * * * *";
 const PAYMENT_EXPIRY_CRON_EXPR = process.env.PAYMENT_EXPIRY_CRON ?? "*/5 * * * *";
+const API_KEY_EXPIRY_WARNING_CRON_EXPR = process.env.API_KEY_EXPIRY_WARNING_CRON ?? "0 1 * * *";
 const DB_BACKUP_CRON_EXPR = process.env.DB_BACKUP_CRON ?? "0 2 * * *";
 const INVOICE_OVERDUE_CRON_EXPR = process.env.INVOICE_OVERDUE_CRON ?? "0 * * * *";
 const IDEMPOTENCY_CLEANUP_CRON_EXPR = process.env.IDEMPOTENCY_CLEANUP_CRON ?? "0 3 * * *";
@@ -66,6 +68,7 @@ let sweepTask: ScheduledTask | null = null;
 let funderMonitorTask: ScheduledTask | null = null;
 let checkoutReminderTask: ScheduledTask | null = null;
 let paymentExpiryTask: ScheduledTask | null = null;
+let apiKeyExpiryWarningTask: ScheduledTask | null = null;
 let dbBackupTask: ScheduledTask | null = null;
 let invoiceOverdueTask: ScheduledTask | null = null;
 let idempotencyCleanupTask: ScheduledTask | null = null;
@@ -262,6 +265,27 @@ export function startCronJobs(): void {
     console.log("[Cron] DISABLE_PAYMENT_EXPIRY_CRON=true – payment expiry job disabled.");
   }
 
+  // ── API Key Expiry Warning Job ───────────────────────────────────────────
+  apiKeyExpiryWarningTask = schedule(API_KEY_EXPIRY_WARNING_CRON_EXPR, async () => {
+    const lockOwner = getLockOwner();
+    const acquired = await acquireCronLock("api_key_expiry_warning", { lockOwner });
+    if (!acquired) {
+      console.warn("[Cron] ⚠️ API key expiry warning lock held by another instance – skipping tick.");
+      return;
+    }
+    try {
+      const result = await runApiKeyExpiryWarningJob();
+      if (result.processed > 0) {
+        console.log(`[Cron] ✅ API key expiry warnings — ${result.notified}/${result.processed} notified.`);
+      }
+    } catch (err: any) {
+      console.error(`[Cron] ❌ API key expiry warning job failed: ${err.message}`);
+    } finally {
+      await releaseCronLock("api_key_expiry_warning", { lockOwner });
+    }
+  }, { timezone: "UTC" });
+  console.log(`[Cron] ✅ API key expiry warning job scheduled (${API_KEY_EXPIRY_WARNING_CRON_EXPR}) in UTC.`);
+
   // ── Database Daily Backup ──────────────────────────────────────────────────
   dbBackupTask = schedule(DB_BACKUP_CRON_EXPR, async () => {
     console.log(`[Cron] ⏰ Database backup triggered at ${new Date().toISOString()}`);
@@ -406,6 +430,7 @@ export function stopCronJobs(): void {
     [funderMonitorTask, "Funder monitor"],
     [checkoutReminderTask, "Checkout reminder"],
     [paymentExpiryTask, "Payment expiry"],
+    [apiKeyExpiryWarningTask, "API key expiry warning"],
     [dbBackupTask, "Database backup"],
     [invoiceOverdueTask, "Invoice overdue"],
     [idempotencyCleanupTask, "Idempotency cleanup"],
@@ -426,6 +451,7 @@ export function stopCronJobs(): void {
   funderMonitorTask = null;
   checkoutReminderTask = null;
   paymentExpiryTask = null;
+  apiKeyExpiryWarningTask = null;
   dbBackupTask = null;
   invoiceOverdueTask = null;
   idempotencyCleanupTask = null;

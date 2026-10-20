@@ -2,6 +2,8 @@ import { PrismaClient } from "../generated/client/client";
 import { getRedisClient } from "../sms/otpSmsRateLimiter";
 import { rpc } from "@stellar/stellar-sdk";
 import { isSorobanVerificationEnabled } from "../utils/sorobanVerification.util";
+import { getPrimaryConnectionPoolLimit, readDatabasePoolSnapshot, warnOnPoolSaturation, type DatabasePoolSnapshot } from "../utils/prismaPoolMetrics";
+import { getLogger } from "../utils/logger";
 
 export const DEPENDENCY_TIMEOUT_MS = 200;
 
@@ -16,6 +18,7 @@ export type DependencyStatus = "up" | "down" | "disabled";
 export interface DependencyCheckResult {
   status: DependencyStatus;
   latencyMs: number;
+  pool?: DatabasePoolSnapshot & { status: "ok" | "degraded" };
 }
 
 export interface ReadinessResult {
@@ -107,7 +110,21 @@ export async function getReadiness(prisma: PrismaClient): Promise<ReadinessResul
     horizon,
     soroban,
   };
-  const allUp = Object.values(dependencies).every(
+  const poolSnapshot = await readDatabasePoolSnapshot(
+    prisma,
+    "primary",
+    getPrimaryConnectionPoolLimit(),
+  );
+  const poolDegraded = poolSnapshot
+    ? warnOnPoolSaturation(poolSnapshot, getLogger("DatabasePool"))
+    : false;
+  if (poolSnapshot) {
+    dependencies.database.pool = {
+      ...poolSnapshot,
+      status: poolDegraded ? "degraded" : "ok",
+    };
+  }
+  const allUp = !poolDegraded && Object.values(dependencies).every(
     (dependency) => dependency.status !== "down",
   );
 

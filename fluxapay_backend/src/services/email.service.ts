@@ -3,6 +3,7 @@ import { isDevEnv } from "../helpers/env.helper";
 import { isEmailSuppressed } from "./emailSuppression.service";
 import { getLogger } from "../utils/logger";
 import { getEmailProvider } from "../email/emailProvider.factory";
+import { renderPaymentReceipt } from "../email/templates/paymentReceipt.renderer";
 dotenv.config();
 
 const logger = (getLogger("EmailService") ?? { warn: () => {} }) as { warn: (msg: string, meta?: unknown) => void };
@@ -138,6 +139,52 @@ export async function sendPasswordResetEmail(to: string, resetUrl: string) {
   }
 }
 
+export interface ApiKeyExpirationWarningDetails {
+  key_id: string;
+  key_name: string;
+  expires_at: string;
+  days_remaining: number;
+  severity: "warning";
+  window: "7d" | "30d";
+}
+
+export async function sendApiKeyExpirationWarningEmail(
+  to: string,
+  businessName: string,
+  details: ApiKeyExpirationWarningDetails,
+) {
+  try {
+    const subject = details.days_remaining <= 7
+      ? "Action required: your API key expires in 7 days"
+      : "Your API key is expiring soon";
+
+    await sendIfNotSuppressed(to, async () => {
+      await getEmailProvider().sendEmail({
+        from: process.env.MAIL_FROM || "noreply@fluxapay.com",
+        to,
+        subject,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2>API key renewal reminder</h2>
+            <p>Hello ${escapeHtml(businessName)},</p>
+            <p>Your FluxaPay API key <strong>${escapeHtml(details.key_name)}</strong> expires on <strong>${escapeHtml(new Date(details.expires_at).toLocaleString())}</strong>.</p>
+            <div style="background: #fff8e1; border-left: 4px solid #f59e0b; padding: 16px; border-radius: 4px; margin: 16px 0;">
+              <p><strong>Days remaining:</strong> ${details.days_remaining}</p>
+              <p><strong>Action:</strong> Generate a new API key and update your integration before the current one expires.</p>
+            </div>
+            <p>We recommend rotating to a fresh key now to avoid unexpected service interruptions.</p>
+            <p>— The FluxaPay Team</p>
+            ${buildUnsubscribeFooter(to)}
+          </div>
+        `,
+      });
+    });
+  } catch (err) {
+    if (isDevEnv()) console.error("Error sending API key expiration warning email:", err);
+    throw err;
+  }
+}
+
 export interface CheckoutExpiryReminderDetails {
   payment_id: string;
   amount: string;
@@ -245,6 +292,8 @@ export interface PaymentConfirmationDetails {
   merchant_reference?: string;
   explorer_link: string;
   timestamp: string;
+  /** Preferred locale (e.g. "es", "pt-BR"). Unsupported/missing falls back to the English template. */
+  locale?: string;
 }
 
 export async function sendPaymentConfirmationEmail(
@@ -254,6 +303,27 @@ export async function sendPaymentConfirmationEmail(
 ) {
   try {
     await sendIfNotSuppressed(to, async () => {
+    if (details.locale && !/^en([-_]|$)/i.test(details.locale)) {
+      const rendered = renderPaymentReceipt(
+        {
+          name: businessName,
+          amount: details.amount,
+          currency: details.currency,
+          paymentId: details.payment_id,
+          merchantReference: details.merchant_reference,
+          explorerLink: details.explorer_link,
+          timestamp: details.timestamp,
+        },
+        details.locale,
+      );
+      await getEmailProvider().sendEmail({
+        from: process.env.MAIL_FROM || "noreply@fluxapay.com",
+        to,
+        subject: rendered.subject,
+        html: rendered.html + buildUnsubscribeFooter(to),
+      });
+      return;
+    }
     await getEmailProvider().sendEmail({
       from: process.env.MAIL_FROM || "noreply@fluxapay.com",
       to,

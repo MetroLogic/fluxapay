@@ -1,9 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { PaymentsTable } from "@/features/dashboard/payments/PaymentsTable";
 import { PaymentsFilters } from "@/features/dashboard/payments/PaymentsFilters";
+import { ExportTransactionsModal } from "@/features/dashboard/payments/ExportTransactionsModal";
+import type { TransactionExportFilters } from "@/services/transactionCsvExport.service";
 import { type Payment } from "@/features/dashboard/payments/types";
 import { PaymentDrawer } from "@/features/dashboard/payments/PaymentDrawer";
 import { usePaymentUpdates } from "@/hooks/usePaymentUpdates";
@@ -17,10 +19,6 @@ import { QRCodeCanvas } from "qrcode.react";
 import { DataTableCard, TablePaginationBar } from "@/components/data-table";
 import { ExportActionButtons } from "@/components/data-table/ExportActionButtons";
 import { useMerchantDataExport } from "@/hooks/useMerchantDataExport";
-import {
-  exportDataToCsv,
-  ExportCancelledError,
-} from "@/services/dataExport.service";
 
 const PAGE_SIZE = 20;
 
@@ -69,22 +67,27 @@ function mapBackendPayment(p: BackendPayment): Payment {
 
 function PaymentsContent() {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const shouldOpenCreateLink =
     searchParams.get("action") === "create-payment" ||
     searchParams.get("action") === "create-payment-link";
 
+  // Initial filter values are seeded from the URL so filtered views can be
+  // bookmarked or shared (#1251).
+  const initialPage = Number(searchParams.get("page")) || 1;
+
   const [payments, setPayments] = useState<Payment[]>([]);
   const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState(initialPage);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [currencyFilter, setCurrencyFilter] = useState("all");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  const [search, setSearch] = useState(searchParams.get("search") ?? "");
+  const [statusFilter, setStatusFilter] = useState(searchParams.get("status") ?? "all");
+  const [currencyFilter, setCurrencyFilter] = useState(searchParams.get("currency") ?? "all");
+  const [dateFrom, setDateFrom] = useState(searchParams.get("from") ?? "");
+  const [dateTo, setDateTo] = useState(searchParams.get("to") ?? "");
   const [amountMin, setAmountMin] = useState("");
   const [amountMax, setAmountMax] = useState("");
 
@@ -106,7 +109,7 @@ function PaymentsContent() {
     { id: string; url: string; amount: number; currency: string; description?: string; createdAt: string }[]
   >([]);
   const { exportData, exportingFormat } = useMerchantDataExport();
-  const [isBulkExporting, setIsBulkExporting] = useState(false);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const fetchAbortRef = useRef<AbortController | null>(null);
 
   const handleSearchChange = useCallback((value: string) => {
@@ -171,9 +174,29 @@ function PaymentsContent() {
     }
   }, [page, statusFilter, currencyFilter, search, dateFrom, dateTo]);
 
+  const filtersInitializedRef = useRef(false);
   useEffect(() => {
+    // Skip the initial mount so a `?page=` from the URL is preserved.
+    if (!filtersInitializedRef.current) {
+      filtersInitializedRef.current = true;
+      return;
+    }
     setPage(1);
   }, [statusFilter, currencyFilter, search, dateFrom, dateTo, amountMin, amountMax]);
+
+  // Keep the URL in sync with the active filters so views are shareable (#1251).
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (search) params.set("search", search);
+    if (statusFilter && statusFilter !== "all") params.set("status", statusFilter);
+    if (currencyFilter && currencyFilter !== "all") params.set("currency", currencyFilter);
+    if (dateFrom) params.set("from", dateFrom);
+    if (dateTo) params.set("to", dateTo);
+    if (page > 1) params.set("page", String(page));
+
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }, [router, pathname, search, statusFilter, currencyFilter, dateFrom, dateTo, page]);
 
   useEffect(() => {
     fetchPayments();
@@ -196,6 +219,10 @@ function PaymentsContent() {
   }, []);
 
   const handleExport = (format: MerchantExportFormat) => {
+    if (format === "csv") {
+      setIsExportModalOpen(true);
+      return;
+    }
     exportData({
       resource: "payments",
       format,
@@ -213,64 +240,19 @@ function PaymentsContent() {
     });
   };
 
-  const handleBulkExportCsv = useCallback(async () => {
-    // Export the current filtered view rather than just the visible page: the
-    // service omits page/limit so the job covers every matching record.
-    const filters = {
-      status: statusFilter !== "all" ? statusFilter : undefined,
-      currency: currencyFilter !== "all" ? currencyFilter : undefined,
+  /** Seed the export dialog with whatever the table is currently filtered by. */
+  const exportDialogFilters = useMemo<TransactionExportFilters>(
+    () => ({
+      status: statusFilter,
+      currency: currencyFilter,
       search: search || undefined,
-      date_from: dateFrom || undefined,
-      date_to: dateTo || undefined,
-      amount_min: amountMin || undefined,
-      amount_max: amountMax || undefined,
-    };
-
-    setIsBulkExporting(true);
-    const toastId = toast.loading("Preparing payments CSV export...");
-
-    try {
-      const result = await exportDataToCsv(
-        { resource: "payments", format: "csv", filters },
-        {
-          onProgress: (elapsedMs) => {
-            const seconds = Math.floor(elapsedMs / 1000);
-            toast.loading(`Preparing payments CSV export... (${seconds}s)`, {
-              id: toastId,
-            });
-          },
-        },
-      );
-
-      toast.success(
-        `Export ready — ${result.rowCount.toLocaleString()} payment${
-          result.rowCount === 1 ? "" : "s"
-        } downloaded.`,
-        { id: toastId },
-      );
-    } catch (error) {
-      if (error instanceof ExportCancelledError) {
-        toast.dismiss(toastId);
-        return;
-      }
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "Export failed. Please try again.",
-        { id: toastId },
-      );
-    } finally {
-      setIsBulkExporting(false);
-    }
-  }, [
-    statusFilter,
-    currencyFilter,
-    search,
-    dateFrom,
-    dateTo,
-    amountMin,
-    amountMax,
-  ]);
+      dateFrom: dateFrom || undefined,
+      dateTo: dateTo || undefined,
+      amountMin: amountMin || undefined,
+      amountMax: amountMax || undefined,
+    }),
+    [statusFilter, currencyFilter, search, dateFrom, dateTo, amountMin, amountMax],
+  );
 
   const handleOpenCreateLink = () => {
     setShowCreateLinkModal(true);
@@ -372,7 +354,7 @@ function PaymentsContent() {
           <ExportActionButtons
             onExport={handleExport}
             exportingFormat={exportingFormat}
-            formats={["pdf"]}
+            formats={["csv", "pdf"]}
           />
           <Button className="gap-2" onClick={handleOpenCreateLink}>
             <Plus className="h-4 w-4" />
@@ -435,8 +417,7 @@ function PaymentsContent() {
             onDateToChange={(v) => setDateTo(v)}
             onAmountMinChange={(v) => setAmountMin(v)}
             onAmountMaxChange={(v) => setAmountMax(v)}
-            onExportCsv={handleBulkExportCsv}
-            isExportingCsv={isBulkExporting}
+            onExportCsv={() => setIsExportModalOpen(true)}
           />
         }
         footer={
@@ -462,6 +443,12 @@ function PaymentsContent() {
         payment={drawerPayment}
         isOpen={isDrawerOpen}
         onClose={handleCloseDrawer}
+      />
+
+      <ExportTransactionsModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        initialFilters={exportDialogFilters}
       />
 
       <Modal

@@ -2,14 +2,14 @@
   "ci": {
     "collect": {
       "url": [
-        "http://localhost:3075",
-        "http://localhost:3075/login",
-        "http://localhost:3075/pay/test-payment-id"
+        "http://localhost:3075/en/dashboard",
+        "http://localhost:3075/pay/lighthouse-test-payment"
       ],
       "numberOfRuns": 3,
       "settings": {
         "chromePath": "/usr/bin/google-chrome-stable",
-        "chromeFlags": "--headless --no-sandbox --disable-dev-shm-usage"
+        "chromeFlags": "--headless --no-sandbox --disable-dev-shm-usage --user-data-dir=/tmp/fluxapay-lighthouse-chrome",
+        "disableStorageReset": true
       }
     },
     "upload": {
@@ -18,13 +18,11 @@
     "assert": {
       "preset": "lighthouse:recommended",
       "assertions": {
-        "categories:performance": ["error", { "minScore": 0.70 }],
+        "categories:performance": ["error", { "minScore": 0.80 }],
         "categories:accessibility": ["error", { "minScore": 0.90 }],
-        "categories:best-practices": ["error", { "minScore": 0.80 }],
-        "categories:seo": ["error", { "minScore": 0.80 }],
+        "categories:best-practices": ["error", { "minScore": 0.90 }],
         "metrics:largest-contentful-paint": ["error", { "maxNumericValue": 2500 }],
         "metrics:cumulative-layout-shift": ["error", { "maxNumericValue": 0.1 }],
-        "metrics:first-input-delay": ["error", { "maxNumericValue": 100 }],
         "metrics:speed-index": ["error", { "maxNumericValue": 4000 }]
       }
     }

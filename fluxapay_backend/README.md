@@ -130,6 +130,8 @@ npm run test:contract
 
 For an implementation-aligned API walkthrough (auth, payment creation, payment status polling/streaming, and webhook verification), see [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md).
 
+For testing webhook deliveries against a receiver on your development machine, see the [local webhook testing guide](../docs/guides/local-webhook-testing.md).
+
 ## Telegram link
 
 https://t.me/+m23gN14007w0ZmQ0

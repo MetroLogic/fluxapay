@@ -10,9 +10,16 @@ import { eventBus, AppEvents } from "../services/EventService";
 import { validateUserId } from "../helpers/request.helper";
 import { MetadataValidationError } from "../utils/metadata.util";
 import { paymentSettlementService } from "../services/paymentSettlement.service";
-import { IdempotentRequest, storeIdempotentResponse } from "../middleware/idempotency.middleware";
 import { isTerminalStatus, PaymentStatus } from "../types/payment";
 import { assertValidPositiveAmount, AmountValidationError } from "../utils/amount.util";
+import {
+    buildPaymentExportFilename,
+    ExportClientDisconnectedError,
+    InvalidExportDateError,
+    parseAmountBound,
+    parseExportDateBound,
+    streamPaymentsCsv,
+} from "../services/paymentCsvExport.service";
 import { mapStellarError, StellarErrorMapping } from "../utils/stellar-error.util";
 
 /**
@@ -49,13 +56,25 @@ function resolvePage(rawPage: unknown): number {
   return Math.floor(requested);
 }
 
+/**
+ * Expand a bare `YYYY-MM-DD` upper bound to the end of that day (UTC) so the
+ * last day of a selected range is never silently dropped (#1251). Full
+ * timestamps are returned unchanged.
+ */
+function toEndOfDayIfBareDate(raw: string): Date {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    const end = new Date(`${raw}T23:59:59.999Z`);
+    if (!Number.isNaN(end.getTime())) return end;
+  }
+  return new Date(raw);
+}
+
 /** Resolve `?sort_by` against the allow-list, falling back to createdAt. */
 function resolveSortColumn(rawSortBy: unknown): string {
   return typeof rawSortBy === "string" && PAYMENT_LIST_SORT_COLUMNS.has(rawSortBy)
     ? rawSortBy
     : "createdAt";
 }
-
 
 
 export const createPayment = async (req: Request, res: Response) => {
@@ -149,17 +168,6 @@ export const createPayment = async (req: Request, res: Response) => {
       checkout_url: payment.checkout_url,
     };
 
-    const idempotentReq = req as IdempotentRequest;
-    if (idempotentReq.idempotencyKey) {
-      await storeIdempotentResponse(
-        idempotentReq.idempotencyKey,
-        req.body,
-        201,
-        responseBody,
-        merchantId
-      );
-    }
-
     res.status(201).json(responseBody);
   } catch (error: unknown) {
     if (error instanceof MetadataValidationError) {
@@ -214,7 +222,7 @@ export const getPayments = async (req: Request, res: Response) => {
       ...((date_from || date_to) && {
         createdAt: {
           ...(date_from && { gte: new Date(date_from) }),
-          ...(date_to && { lte: new Date(date_to) }),
+          ...(date_to && { lte: toEndOfDayIfBareDate(date_to) }),
         },
       }),
       ...(search && {
@@ -253,75 +261,109 @@ export const getPayments = async (req: Request, res: Response) => {
 };
 
 export const exportPayments = async (req: Request, res: Response) => {
+    const authReq = req as AuthRequest;
+
+    let merchantId: string | undefined;
     try {
-        const merchantId = await validateUserId(req as AuthRequest);
-        if (!merchantId) {
-            return sendApiError(res, apiError(401, ErrorCode.UNAUTHORIZED, "Unauthorized"));
+        merchantId = await validateUserId(authReq);
+    } catch {
+        merchantId = undefined;
+    }
+    if (!merchantId) {
+        return sendApiError(res, apiError(401, ErrorCode.UNAUTHORIZED, "Unauthorized"));
+    }
+
+    const isTestMode = authReq.isTestMode;
+    const query = req.query as Record<string, unknown>;
+
+    const readParam = (name: string): string | undefined => {
+        const raw = query[name];
+        if (raw === undefined || raw === null) return undefined;
+        const value = String(raw).trim();
+        return value === "" ? undefined : value;
+    };
+
+    // Date range is the primary export filter (#1216). A bare YYYY-MM-DD bound
+    // for date_to is expanded to the end of that day so the last day of the
+    // selected range is never silently dropped.
+    let dateFrom: Date | undefined;
+    let dateTo: Date | undefined;
+    try {
+        dateFrom = parseExportDateBound(readParam("date_from"), "from");
+        dateTo = parseExportDateBound(readParam("date_to"), "to");
+    } catch (error) {
+        if (error instanceof InvalidExportDateError) {
+            return sendApiError(
+                res,
+                apiError(400, ErrorCode.VALIDATION_ERROR, error.message),
+            );
         }
-        const isTestMode = (req as AuthRequest).isTestMode;
+        return sendApiError(
+            res,
+            apiError(400, ErrorCode.VALIDATION_ERROR, "Invalid export filters"),
+        );
+    }
 
-        // 1. Destructure with explicit type casting immediately
-        const query = req.query as Record<string, unknown>;
+    if (dateFrom && dateTo && dateFrom.getTime() > dateTo.getTime()) {
+        return sendApiError(
+            res,
+            apiError(
+                400,
+                ErrorCode.VALIDATION_ERROR,
+                "date_from must be earlier than or equal to date_to",
+            ),
+        );
+    }
 
-        // Force these to be strings or undefined (No arrays allowed!)
-        const status = query.status ? String(query.status) : undefined;
-        const currency = query.currency ? String(query.currency) : undefined;
-        const search = query.search ? String(query.search) : undefined;
-        const date_from = query.date_from ? String(query.date_from) : undefined;
-        const date_to = query.date_to ? String(query.date_to) : undefined;
+    const filename = buildPaymentExportFilename();
 
-        // 2. We use an allow-listed constant for Sort/Order so an arbitrary
-        // column name can never force a full sort of the merchant's payments.
-        const sortBy = resolveSortColumn(query.sort_by);
-        const sortOrder: 'asc' | 'desc' = query.order === 'asc' ? 'asc' : 'desc';
+    try {
+        res.setHeader("Content-Type", "text/csv; charset=utf-8");
+        res.setHeader("Cache-Control", "no-store");
+        res.attachment(filename);
 
-        const where: Record<string, unknown> = {
-            merchantId: merchantId,
-            // Partition live vs test-mode payments (test payments never appear in live exports).
-            ...(typeof isTestMode === "boolean" && { is_test_mode: isTestMode }),
-            ...(status && { status }),
-            ...(currency && { currency }),
-            ...((date_from || date_to) && {
-                createdAt: {
-                    ...(date_from && { gte: new Date(date_from) }),
-                    ...(date_to && { lte: new Date(date_to) }),
+        await streamPaymentsCsv({
+            filters: {
+                merchantId,
+                isTestMode,
+                status: readParam("status"),
+                currency: readParam("currency"),
+                search: readParam("search"),
+                amountMin: parseAmountBound(readParam("amount_min")),
+                amountMax: parseAmountBound(readParam("amount_max")),
+                dateFrom,
+                dateTo,
+            },
+            sink: res,
+            // Runs after the pre-flight count but before the first byte is
+            // written, which is the only window where extra headers still land.
+            onStart: (totalMatched, truncated) => {
+                res.setHeader("X-Export-Row-Count", String(totalMatched));
+                if (truncated) {
+                    res.setHeader("X-Export-Truncated", "true");
                 }
-            }),
-            ...(search && {
-                OR: [
-                    { id: { contains: search } },
-                    { customer_email: { contains: search, mode: 'insensitive' } }
-                ]
-            })
-        };
-
-        const payments = await prisma.payment.findMany({
-            where,
-            orderBy: { [sortBy]: sortOrder }
+            },
         });
-
-        // CSV escaping: wrap fields containing comma or newline in quotes
-        const escapeCsv = (field: string | null | undefined) => {
-            if (!field) return '';
-            const str = String(field);
-            if (str.includes(',') || str.includes('\n') || str.includes('"')) {
-                return `"${str.replace(/"/g, '""')}"`;
-            }
-            return str;
-        };
-
-        const header = "ID,MerchantID,Amount,Currency,Status,Email,Date\n";
-        const csv = payments.map((p) =>
-            `${escapeCsv(p.id)},${escapeCsv(p.merchantId)},${escapeCsv(p.amount.toString())},${escapeCsv(p.currency)},${escapeCsv(p.status)},${escapeCsv(p.customer_email)},${escapeCsv(p.createdAt.toISOString())}`
-        ).join("\n");
-
-        res.setHeader("Content-Type", "text/csv");
-        res.attachment("payments_history.csv");
-        return res.status(200).send(header + csv);
-    } catch (error: unknown) {
-        return sendApiError(res, apiError(500, ErrorCode.INTERNAL_ERROR, "Internal Server Error"));
+        return;
+    } catch (error) {
+        if (error instanceof ExportClientDisconnectedError) {
+            // The browser aborted the download (navigation, tab close). Nothing
+            // to report and nothing left to clean up.
+            return;
+        }
+        console.error("Error exporting payments CSV:", error);
+        if (!res.headersSent) {
+            return sendApiError(
+                res,
+                apiError(500, ErrorCode.INTERNAL_ERROR, "Internal Server Error"),
+            );
+        }
+        // Headers are already on the wire, so the only honest signal left is
+        // to terminate the response rather than pad it with a valid-looking row.
+        return res.end();
     }
 };
+
 
 export const getPaymentById = async (req: Request, res: Response) => {
   try {
@@ -339,7 +381,17 @@ export const getPaymentById = async (req: Request, res: Response) => {
         // Test keys can only read test payments; live keys can only read live payments.
         ...(typeof isTestMode === "boolean" && { is_test_mode: isTestMode }),
       },
-      include: { merchant: true },
+      include: {
+        merchant: true,
+        settlement: {
+          select: {
+            amount: true,
+            fees: true,
+            net_amount: true,
+            currency: true,
+          },
+        },
+      },
     });
 
     if (!payment) {
@@ -393,6 +445,8 @@ export const getPaymentById = async (req: Request, res: Response) => {
  * checkout.  Intentionally excludes: merchantId, internal DB ids beyond the
  * payment id, merchant API keys, customer PII, and any internal metadata.
  */
+
+
 export const getPaymentStatus = async (req: Request, res: Response) => {
   try {
     const payment_id = String(req.params.id);
@@ -663,7 +717,7 @@ export const getAdminPayments = async (req: Request, res: Response) => {
       ...((date_from || date_to) && {
         createdAt: {
           ...(date_from && { gte: new Date(date_from) }),
-          ...(date_to && { lte: new Date(date_to) }),
+          ...(date_to && { lte: toEndOfDayIfBareDate(date_to) }),
         },
       }),
       ...(search && {
@@ -694,18 +748,7 @@ export const getAdminPayments = async (req: Request, res: Response) => {
       prisma.payment.count({ where: where as any }),
     ]);
 
-    const totalPages = Math.max(1, Math.ceil(total / limit));
-    return res.json({
-      data,
-      meta: {
-        total,
-        page,
-        limit,
-        totalPages,
-        hasNextPage: page < totalPages,
-        hasPreviousPage: page > 1,
-      },
-    });
+    return res.json({ data, meta: { total, page, limit } });
   } catch (error: unknown) {
     console.error("Error in getAdminPayments:", error);
     return res.status(500).json({ error: "Internal Server Error" });
@@ -728,4 +771,3 @@ export const updatePayment = async (req: Request, res: Response) => {
     return sendApiError(res, error);
   }
 };
-
