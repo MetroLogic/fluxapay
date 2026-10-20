@@ -4,6 +4,7 @@ import { ArrowUpRight, ArrowDownLeft, CheckCircle2, XCircle, Clock, AlertTriangl
 import { cn } from "@/lib/utils";
 import { useDashboardDateRange } from "@/features/dashboard/context/DashboardDateRangeContext";
 import { useDashboardActivity, type ActivityItem } from "@/hooks/useDashboardActivity";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type ActivityType = "payment" | "settlement" | "alert";
 type Status = "success" | "failed" | "pending";
@@ -46,15 +47,15 @@ export const RecentActivity = () => {
                 </div>
                 <div className="p-6 pt-4 space-y-6">
                     {[1, 2, 3, 4, 5].map((i) => (
-                        <div key={i} className="flex items-center justify-between animate-pulse">
+                        <div key={i} className="flex items-center justify-between">
                             <div className="flex items-center gap-4">
-                                <div className="h-9 w-9 rounded-full bg-muted" />
+                                <Skeleton className="h-9 w-9 rounded-full" />
                                 <div className="space-y-1">
-                                    <div className="h-4 w-32 bg-muted rounded" />
-                                    <div className="h-3 w-24 bg-muted rounded" />
+                                    <Skeleton className="h-4 w-32" />
+                                    <Skeleton className="h-3 w-24" />
                                 </div>
                             </div>
-                            <div className="h-4 w-16 bg-muted rounded" />
+                            <Skeleton className="h-4 w-16" />
                         </div>
                     ))}
                 </div>

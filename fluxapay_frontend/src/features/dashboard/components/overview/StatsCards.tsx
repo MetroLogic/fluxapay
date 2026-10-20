@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { useDashboardDateRange } from "@/features/dashboard/context/DashboardDateRangeContext";
 import { useDashboardStats } from "@/hooks/useDashboardStats";
 import { FxRateBadge } from "./FxRateBadge";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface StatCardProps {
     title: string;
@@ -82,21 +83,21 @@ export const StatsCards = () => {
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
                 {/* First skeleton matches the highlighted Total Volume card with flex layout */}
                 <div className="md:col-span-2 lg:col-span-1 xl:col-span-2 flex flex-col gap-2">
-                    <div className="rounded-xl border bg-card p-6 animate-pulse flex-1">
-                        <div className="h-4 w-32 bg-muted rounded mb-2" />
-                        <div className="h-8 w-40 bg-muted rounded mb-2" />
-                        <div className="h-3 w-24 bg-muted rounded" />
+                    <div className="rounded-xl border bg-card p-6 flex-1">
+                        <Skeleton className="h-4 w-32 mb-2" />
+                        <Skeleton className="h-8 w-40 mb-2" />
+                        <Skeleton className="h-3 w-24" />
                     </div>
                     <div className="flex justify-end">
-                        <div className="h-6 w-20 bg-muted rounded animate-pulse" />
+                        <Skeleton className="h-6 w-20" />
                     </div>
                 </div>
                 {/* Remaining 5 skeletons match individual stat card dimensions */}
                 {[1, 2, 3, 4, 5].map((i) => (
-                    <div key={i} className="rounded-xl border bg-card p-6 animate-pulse md:col-span-2 lg:col-span-1 xl:col-span-1">
-                        <div className="h-4 w-24 bg-muted rounded mb-2" />
-                        <div className="h-8 w-32 bg-muted rounded mb-2" />
-                        <div className="h-3 w-20 bg-muted rounded" />
+                    <div key={i} className="rounded-xl border bg-card p-6 md:col-span-2 lg:col-span-1 xl:col-span-1">
+                        <Skeleton className="h-4 w-24 mb-2" />
+                        <Skeleton className="h-8 w-32 mb-2" />
+                        <Skeleton className="h-3 w-20" />
                     </div>
                 ))}
             </div>
