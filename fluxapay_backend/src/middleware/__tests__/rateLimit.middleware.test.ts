@@ -1,17 +1,4 @@
-jest.mock("ioredis", () => ({
-  __esModule: true,
-  default: jest.fn().mockImplementation(() => ({
-    incr: jest.fn().mockResolvedValue(1),
-    expire: jest.fn().mockResolvedValue(1),
-    ttl: jest.fn().mockResolvedValue(30),
-    get: jest.fn(),
-    set: jest.fn(),
-    del: jest.fn(),
-    on: jest.fn(),
-    connect: jest.fn().mockResolvedValue(undefined),
-    quit: jest.fn().mockResolvedValue(undefined),
-  })),
-}));
+jest.mock("ioredis", () => ({ __esModule: true, default: jest.fn().mockImplementation(() => ({ incr: jest.fn().mockResolved(1), expire: jest.fn().mockResolved(1), ttl: jest.fn().mockResolved(30), get: jest.fn(), set: jest.fn(), del: jest.fn(), on: jest.fn(), connect: jest.fn().mockResolved(undefined), quit: jest.fn().mockResolved(undefined) })), }));
 
 import {
   globalRateLimit,
@@ -32,20 +19,21 @@ import Redis from "ioredis";
 
 function createMemoryRedisMock() {
   const counts = new Map<string, number>();
+  const store = new Map<string, string>();
   return {
     incr: jest.fn(async (key: string) => {
       const next = (counts.get(key) ?? 0) + 1;
       counts.set(key, next);
       return next;
     }),
-    expire: jest.fn().mockResolvedValue(1),
-    ttl: jest.fn().mockResolvedValue(30),
-    get: jest.fn(),
+    expire: jest.fn().mockResolved(1),
+    ttl: jest.fn().mockResolved(30),
+    get: jest.fn().mockImplementation(async (key: string) => store.get(key) ?? null),
     set: jest.fn(),
     del: jest.fn(),
     on: jest.fn(),
-    connect: jest.fn().mockResolvedValue(undefined),
-    quit: jest.fn().mockResolvedValue(undefined),
+    connect: jest.fn().mockResolved(undefined),
+    quit: jest.fn().mockResolved(undefined),
   };
 }
 
@@ -58,6 +46,7 @@ describe("Rate Limit Middleware", () => {
     mockReq = {
       ip: "127.0.0.1",
       path: "/api/v1/test",
+      body: {},
     };
     resetRedisClientForTests();
     setRedisClientForTests(createMemoryRedisMock() as unknown as Redis);
@@ -151,6 +140,55 @@ describe("Rate Limit Middleware", () => {
       await middleware(mockReq as Request, mockRes as Response, mockNext);
 
       expect(mockRes.setHeader).toHaveBeenCalledWith("X-RateLimit-Limit", "10");
+    });
+
+    it("should track both client IP and normalized email keys", async () => {
+      const redisMock = createMemoryRedisMock();
+      setRedisClientForTests(redisMock as unknown as Redis);
+      mockReq.body = { email: "  User@Example.COM " };
+
+      const middleware = authRateLimit();
+      await middleware(mockReq as Request, mockRes as Response, mockNext);
+
+      const keys = redisMock.incr.mock.calls.map((call) => calj[0] as string);
+      expect(keys.some((k) => k.includes("127.0.0.1"))).toBe(true);
+      expect(keys.some((k) => k.includes("user@example.com") || k.includes("User@Example.COM"))).toBe(true);
+    });
+
+    it("should return 429 with Retry-After and auth_rate_limit_exceeded code when IP limit exceeded", async () => {
+      const middleware = authRateLimit();
+      mockReq.body = { email: "user@example.com" };
+
+      for (let i = 0; i < 6; i++) {
+        await middleware(mockReq as Request, mockRes as Response, mockNext);
+      }
+
+      expect(mockRes.status).toHaveBeenCalledWith(429);
+      expect(mockRes.setHeader).toHaveBeenCalledWith("Retry-After", expect.any(String));
+      expect(mockRes.json).toHaveBeenCalledWith(
+        expect.objectContaining({ code: "auth_rate_limit_exceeded" })
+      );
+    });
+
+    it("should reset counters after window expiry", async () => {
+      const redisMock = createMemoryRedisMock();
+      setRedisClientForTests(redisMock as unknown as Redis);
+      const middleware = authRateLimit();
+      mockReq.body = { email: "user@example.com" };
+
+      for (let i = 0; i < 6; i++) {
+        await middleware(mockReq as Request, mockRes as Response, mockNext);
+      }
+      expect(mockRes.status).toHaveBeenCalledWith(429);
+
+      // Simulate window expiry by resetting the underlying counters.
+      resetRedisClientForTests();
+      setRedisClientForTests(createMemoryRedisMock() as unknown as Redis);
+      (mockRes.status as jest.Mock).mockClear();
+      (mockRes.json as jest.Mock).mockClear();
+
+      await middleware(mockReq as Request, mockRes as Response, mockNext);
+      expect(mockRes.status).not.toHaveBeenCalledWith(429);
     });
   });
 
