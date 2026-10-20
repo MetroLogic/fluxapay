@@ -1,6 +1,6 @@
 // OTEL must be imported first so auto-instrumentation patches load before any
 // application modules are required.
-import "./tracing";
+import "./config/tracing";
 
 import dotenv from "dotenv";
 import { validateEnv, EnvValidationError } from "./config/env.config";

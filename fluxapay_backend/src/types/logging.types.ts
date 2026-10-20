@@ -23,6 +23,17 @@ export interface LogEntry {
   timestamp: string;
   requestId?: string;
   correlationId?: string;
+  /**
+   * OpenTelemetry trace ID of the active span at log time (hex string, 32 chars).
+   * Injected automatically when OTEL_ENABLED=true and a span is active.
+   */
+  traceId?: string;
+  /**
+   * W3C traceparent header value derived from the active span context.
+   * Format: 00-<traceId>-<spanId>-<flags>
+   * Enables direct log-to-trace correlation in Grafana / Tempo / Jaeger.
+   */
+  traceparent?: string;
   service: string;
   version: string;
   environment: string;
