@@ -35,7 +35,10 @@ jest.mock("../../helpers/request.helper", () => ({
   }),
 }));
 
-import { createPayment, getPaymentById, getPayments } from "../payment.controller";
+jest.mock("sanitize-html", () => jest.fn((str) => str));
+jest.mock("uuid", () => ({ validate: jest.fn(() => true), v4: jest.fn(() => "mock-uuid") }), { virtual: true });
+
+import { createPayment, getPaymentById, getPayments, encodePaymentCursor, decodePaymentCursor } from "../payment.controller";
 import { PaymentService } from "../../services/payment.service";
 import { validateUserId } from "../../helpers/request.helper";
 
@@ -145,15 +148,15 @@ describe("getPayments controller — list performance and query safety (#1208)",
   const reqWithQuery = (query: Record<string, unknown>) =>
     ({ merchantId: "merchant_1", isTestMode: false, query }) as any;
 
-  it("defaults to page 1 with a limit of 10", async () => {
+  it("defaults to page 1 with a limit of 25 (#1210)", async () => {
     const res = buildRes();
     await getPayments(reqWithQuery({}), res);
 
     const args = prismaMock.payment.findMany.mock.calls[0][0];
-    expect(args.skip).toBe(0);
-    expect(args.take).toBe(10);
+    expect(args.skip).toBeUndefined();
+    expect(args.take).toBe(26);
     expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({ meta: expect.objectContaining({ page: 1, limit: 10 }) }),
+      expect.objectContaining({ meta: expect.objectContaining({ page: 1, limit: 25 }) }),
     );
   });
 
@@ -161,7 +164,7 @@ describe("getPayments controller — list performance and query safety (#1208)",
     const res = buildRes();
     await getPayments(reqWithQuery({ limit: "100000" }), res);
 
-    expect(prismaMock.payment.findMany.mock.calls[0][0].take).toBe(100);
+    expect(prismaMock.payment.findMany.mock.calls[0][0].take).toBe(101);
     expect(res.json).toHaveBeenCalledWith(
       expect.objectContaining({ meta: expect.objectContaining({ limit: 100 }) }),
     );
@@ -169,28 +172,28 @@ describe("getPayments controller — list performance and query safety (#1208)",
 
   it("falls back to the default limit for non-numeric or non-positive limits", async () => {
     await getPayments(reqWithQuery({ limit: "abc" }), buildRes());
-    expect(prismaMock.payment.findMany.mock.calls[0][0].take).toBe(10);
+    expect(prismaMock.payment.findMany.mock.calls[0][0].take).toBe(26);
 
     jest.clearAllMocks();
     prismaMock.payment.findMany.mockResolvedValue([]);
     prismaMock.payment.count.mockResolvedValue(0);
 
     await getPayments(reqWithQuery({ limit: "-5" }), buildRes());
-    expect(prismaMock.payment.findMany.mock.calls[0][0].take).toBe(10);
+    expect(prismaMock.payment.findMany.mock.calls[0][0].take).toBe(26);
   });
 
   it("ignores an unknown sort_by and falls back to createdAt", async () => {
     await getPayments(reqWithQuery({ sort_by: "DROP TABLE" }), buildRes());
 
     const args = prismaMock.payment.findMany.mock.calls[0][0];
-    expect(Object.keys(args.orderBy)).toEqual(["createdAt"]);
+    expect(args.orderBy).toEqual([{ createdAt: "desc" }, { id: "desc" }]);
   });
 
   it("honours an allow-listed sort_by column", async () => {
     await getPayments(reqWithQuery({ sort_by: "amount", order: "asc" }), buildRes());
 
     const args = prismaMock.payment.findMany.mock.calls[0][0];
-    expect(args.orderBy).toEqual({ amount: "asc" });
+    expect(args.orderBy).toEqual([{ amount: "asc" }, { id: "asc" }]);
   });
 
   it("searches only fields that exist on the Payment model", async () => {
@@ -210,6 +213,140 @@ describe("getPayments controller — list performance and query safety (#1208)",
     const where = prismaMock.payment.findMany.mock.calls[0][0].where;
     expect(where.status).toBe("confirmed");
     expect(where.currency).toBe("USDC");
+  });
+});
+
+describe("getPayments controller — cursor-based pagination (#1210)", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    prismaMock.payment.findMany.mockResolvedValue([]);
+    prismaMock.payment.findFirst.mockResolvedValue(null);
+    prismaMock.payment.count.mockResolvedValue(0);
+  });
+
+  const buildRes = () => {
+    const res: any = { json: jest.fn(), status: jest.fn().mockReturnThis() };
+    return res;
+  };
+
+  const reqWithQuery = (query: Record<string, unknown>, merchantId = "merchant_1") =>
+    ({ merchantId, isTestMode: false, query }) as any;
+
+  it("returns nextCursor when more records exist than limit (first page)", async () => {
+    const mockPayments = Array.from({ length: 26 }, (_, i) => ({
+      id: `pay_${i + 1}`,
+      merchantId: "merchant_1",
+      amount: 100,
+      createdAt: new Date(Date.now() - i * 1000),
+    }));
+    prismaMock.payment.findMany.mockResolvedValue(mockPayments as any);
+    prismaMock.payment.count.mockResolvedValue(50);
+
+    const res = buildRes();
+    await getPayments(reqWithQuery({ limit: "25" }), res);
+
+    expect(res.json).toHaveBeenCalled();
+    const payload = res.json.mock.calls[0][0];
+    expect(payload.data).toHaveLength(25);
+    expect(payload.nextCursor).toBeDefined();
+    expect(payload.nextCursor).not.toBeNull();
+    expect(payload.meta.hasNextPage).toBe(true);
+    expect(payload.meta.nextCursor).toBe(payload.nextCursor);
+
+    // Verify nextCursor decodes to the 25th item
+    const decoded = decodePaymentCursor(payload.nextCursor);
+    expect(decoded?.id).toBe("pay_25");
+  });
+
+  it("returns nextCursor: null on final page and empty transaction history", async () => {
+    // Empty history
+    const resEmpty = buildRes();
+    await getPayments(reqWithQuery({}), resEmpty);
+    const emptyPayload = resEmpty.json.mock.calls[0][0];
+    expect(emptyPayload.data).toEqual([]);
+    expect(emptyPayload.nextCursor).toBeNull();
+    expect(emptyPayload.meta.hasNextPage).toBe(false);
+
+    // Final page with fewer records than limit
+    jest.clearAllMocks();
+    const finalPagePayments = [
+      { id: "pay_99", merchantId: "merchant_1", createdAt: new Date() },
+    ];
+    prismaMock.payment.findMany.mockResolvedValue(finalPagePayments as any);
+    prismaMock.payment.count.mockResolvedValue(26);
+
+    const resFinal = buildRes();
+    await getPayments(reqWithQuery({ limit: "25" }), resFinal);
+    const finalPayload = resFinal.json.mock.calls[0][0];
+    expect(finalPayload.data).toHaveLength(1);
+    expect(finalPayload.nextCursor).toBeNull();
+    expect(finalPayload.meta.hasNextPage).toBe(false);
+  });
+
+  it("queries subsequent pages using keyset cursor without skip", async () => {
+    const cursorPayment = {
+      id: "pay_25",
+      createdAt: new Date("2026-10-19T12:00:00.000Z"),
+    };
+    const cursor = encodePaymentCursor(cursorPayment);
+
+    const res = buildRes();
+    await getPayments(reqWithQuery({ cursor, limit: "25" }), res);
+
+    const findManyArgs = prismaMock.payment.findMany.mock.calls[0][0];
+    expect(findManyArgs.skip).toBeUndefined();
+    expect(findManyArgs.where.AND).toBeDefined();
+    expect(findManyArgs.where.AND[1].OR).toEqual([
+      { createdAt: { lt: cursorPayment.createdAt } },
+      { createdAt: cursorPayment.createdAt, id: { lt: cursorPayment.id } },
+    ]);
+  });
+
+  it("handles transactions with identical timestamps stably using id tie-breaker", async () => {
+    const sameTimestamp = new Date("2026-10-19T15:00:00.000Z");
+    const paymentA = { id: "pay_b_tie", createdAt: sameTimestamp };
+    const cursor = encodePaymentCursor(paymentA);
+
+    const res = buildRes();
+    await getPayments(reqWithQuery({ cursor }), res);
+
+    const findManyArgs = prismaMock.payment.findMany.mock.calls[0][0];
+    // Must contain tie-breaker clause { createdAt: sameTimestamp, id: { lt: 'pay_b_tie' } }
+    expect(findManyArgs.where.AND[1].OR).toContainEqual({
+      createdAt: sameTimestamp,
+      id: { lt: "pay_b_tie" },
+    });
+    // OrderBy must be stable composite
+    expect(findManyArgs.orderBy).toEqual([
+      { createdAt: "desc" },
+      { id: "desc" },
+    ]);
+  });
+
+  it("rejects malformed or invalid cursors with a 400 validation error", async () => {
+    const res = buildRes();
+    prismaMock.payment.findFirst.mockResolvedValue(null);
+
+    await getPayments(reqWithQuery({ cursor: "not-a-valid-cursor-string-123" }), res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        code: "VALIDATION_ERROR",
+        message: expect.stringContaining("Invalid pagination cursor"),
+      }),
+    );
+  });
+
+  it("preserves merchant isolation and prevents cross-merchant cursor leakage", async () => {
+    const res = buildRes();
+    await getPayments(reqWithQuery({ cursor: "pay_other_merchant" }, "merchant_1"), res);
+
+    // Verifies that database check for raw transaction id strictly isolates to authenticated merchant
+    expect(prismaMock.payment.findFirst).toHaveBeenCalledWith({
+      where: { id: "pay_other_merchant", merchantId: "merchant_1" },
+      select: { id: true, createdAt: true },
+    });
   });
 });
 
