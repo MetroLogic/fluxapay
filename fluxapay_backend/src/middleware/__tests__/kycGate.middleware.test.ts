@@ -1,4 +1,4 @@
-/**
+/*
  * kycGate.middleware.test.ts
  *
  * Unit tests for KYC gate middleware.
@@ -40,7 +40,7 @@ describe("kycGate.middleware", () => {
 
   describe("approved KYC status", () => {
     it("should pass through when KYC status is approved", async () => {
-      (mockPrisma.merchant.findUnique as jest.Mock).mockResolvedValueOnce({
+      (mockPrisma.merchant.findUnique as jest.Mock).mockResolvedOnce({
         id: "merchant_test_123",
         kyc: { kyc_status: "approved" },
       });
@@ -54,7 +54,7 @@ describe("kycGate.middleware", () => {
 
   describe("unapproved KYC statuses", () => {
     it("should block when KYC status is pending_review", async () => {
-      (mockPrisma.merchant.findUnique as jest.Mock).mockResolvedValueOnce({
+      (mockPrisma.merchant.findUnique as jest.Mock).mockResolvedOnce({
         id: "merchant_test_123",
         kyc: { kyc_status: "pending_review" },
       });
@@ -67,7 +67,7 @@ describe("kycGate.middleware", () => {
     });
 
     it("should block when KYC status is rejected", async () => {
-      (mockPrisma.merchant.findUnique as jest.Mock).mockResolvedValueOnce({
+      (mockPrisma.merchant.findUnique as jest.Mock).mockResolvedOnce({
         id: "merchant_test_123",
         kyc: { kyc_status: "rejected" },
       });
@@ -80,7 +80,7 @@ describe("kycGate.middleware", () => {
     });
 
     it("should block when KYC is not submitted", async () => {
-      (mockPrisma.merchant.findUnique as jest.Mock).mockResolvedValueOnce({
+      (mockPrisma.merchant.findUnique as jest.Mock).mockResolvedOnce({
         id: "merchant_test_123",
         kyc: null,
       });
@@ -94,7 +94,7 @@ describe("kycGate.middleware", () => {
 
   describe("error response format", () => {
     it("should include actual KYC status in error response", async () => {
-      (mockPrisma.merchant.findUnique as jest.Mock).mockResolvedValueOnce({
+      (mockPrisma.merchant.findUnique as jest.Mock).mockResolvedOnce({
         id: "merchant_test_123",
         kyc: { kyc_status: "rejected" },
       });
@@ -113,7 +113,7 @@ describe("kycGate.middleware", () => {
 
   describe("all KYC statuses", () => {
     it("should allow status: approved", async () => {
-      (mockPrisma.merchant.findUnique as jest.Mock).mockResolvedValueOnce({
+      (mockPrisma.merchant.findUnique as jest.Mock).mockResolvedOnce({
         id: "merchant_test_123",
         kyc: { kyc_status: "approved" },
       });
@@ -125,7 +125,7 @@ describe("kycGate.middleware", () => {
     it.each(["pending_review", "rejected", "not_submitted"] as const)(
       "should block status: %s",
       async (status) => {
-        (mockPrisma.merchant.findUnique as jest.Mock).mockResolvedValueOnce({
+        (mockPrisma.merchant.findUnique as jest.Mock).mockResolvedOnce({
           id: "merchant_test_123",
           kyc: status === "not_submitted" ? null : { kyc_status: status },
         });
@@ -145,7 +145,7 @@ describe("kycGate.middleware", () => {
     });
 
     it("should return 401 when merchant not found", async () => {
-      (mockPrisma.merchant.findUnique as jest.Mock).mockResolvedValueOnce(null);
+      (mockPrisma.merchant.findUnique as jest.Mock).mockResolvedOnce(null);
       await kycGateMiddleware(mockReq as AuthRequest, mockRes as Response, mockNext);
       expect(mockRes.status).toHaveBeenCalledWith(401);
     });
