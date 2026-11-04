@@ -3,6 +3,7 @@
 Contributions are welcome! Please read this document for information on how to contribute safely and effectively.
 
 ## Table of Contents
+- [Signed Commits Required](#signed-commits-required)
 - [Getting Started](#getting-started)
 - [Development Environment Setup](#development-environment-setup)
 - [Secret Handling & Scanning](#secret-handling--scanning)
@@ -11,6 +12,66 @@ Contributions are welcome! Please read this document for information on how to c
 - [Pull Request Process](#pull-request-process)
 - [Running Tests Locally](#running-tests-locally)
 - [Database Migrations & Rollbacks](#database-migrations--rollbacks)
+
+## Signed Commits Required
+
+All commits merged to `main` and `develop` **must be cryptographically signed**. The `main` branch is protected and will reject any unsigned merge commits.
+
+This policy was introduced to prevent supply-chain attacks (such as the PolinRider campaign) from injecting malicious code through rewritten git history or unverified commits.
+
+### Setting Up SSH Commit Signing
+
+Git 2.34+ supports SSH commit signing natively — no GPG required.
+
+1. **Generate a dedicated SSH signing key** (ed25519 recommended):
+
+   ```bash
+   ssh-keygen -t ed25519 -C "your-email-commit-signing" -f ~/.ssh/signing_key -N ""
+   ```
+
+2. **Upload the public key to GitHub** as a **signing key** (not an authentication key):
+
+   ```bash
+   gh ssh-key add ~/.ssh/signing_key.pub --type signing --title "commit-signing"
+   ```
+
+   If you get a permissions error, refresh your GitHub CLI scopes first:
+
+   ```bash
+   gh auth refresh -h github.com -s admin:ssh_signing_key
+   ```
+
+   Alternatively, add it via the GitHub web UI: **Settings → SSH and GPG keys → New SSH key → Key type: Signing Key**.
+
+3. **Configure git to sign commits** (run inside the repo root):
+
+   ```bash
+   git config gpg.format ssh
+   git config user.signingkey ~/.ssh/signing_key.pub
+   git config commit.gpgsign true
+   git config gpg.ssh.program ssh-keygen
+   ```
+
+   To sign commits on all your repos by default, use `--global` instead:
+
+   ```bash
+   git config --global gpg.format ssh
+   git config --global user.signingkey ~/.ssh/signing_key.pub
+   git config --global commit.gpgsign true
+   git config --global gpg.ssh.program ssh-keygen
+   ```
+
+4. **Verify your setup** by making a test commit and checking GitHub shows a "Verified" badge on it.
+
+### Verifying Signatures
+
+GitHub displays a **Verified** badge on signed commits. You can also verify locally:
+
+```bash
+git log --show-signature -1
+```
+
+Unsigned commits will be rejected when pushing or merging to protected branches.
 
 ## Getting Started
 
