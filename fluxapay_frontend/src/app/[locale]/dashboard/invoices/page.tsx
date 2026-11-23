@@ -67,13 +67,18 @@ function InvoicesContent() {
     setIsLoading(true);
     setLoadError(null);
     try {
-      const { invoices: rows, meta } = await api.invoices.list({
+      const listResult = await api.invoices.list({
         page,
         limit: PAGE_SIZE,
         status: statusFilter !== "all" ? statusFilter : undefined,
         search: debouncedSearch.trim() || undefined,
         signal,
       });
+      if ("error" in listResult) throw listResult.error;
+      const { invoices: rows, meta } = listResult.data as {
+        invoices: unknown[];
+        meta: { total: number; page: number; limit: number; total_pages?: number };
+      };
       setTotal(meta.total);
       setInvoices(
         (rows as Record<string, unknown>[]).map((r) => mapBackendInvoice(r)),

@@ -157,12 +157,13 @@ function PaymentsContent() {
         },
         { signal: controller.signal },
       );
-      const items = (result.data || []).map((p: any) =>
+      if ("error" in result) throw result.error;
+      const items = (result.data.data || []).map((p: any) =>
         mapBackendPayment(p as BackendPayment),
       );
       setPayments(items);
-      setNextCursor(result.nextCursor ?? result.meta?.nextCursor ?? null);
-      setTotal(result.meta?.total ?? items.length);
+      setNextCursor(result.data.nextCursor ?? result.data.meta?.nextCursor ?? null);
+      setTotal(result.data.meta?.total ?? items.length);
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
         return;
@@ -192,7 +193,8 @@ function PaymentsContent() {
         date_to: dateTo || undefined,
       });
 
-      const newItems = (result.data || []).map((p: any) =>
+      if ("error" in result) throw result.error;
+      const newItems = (result.data.data || []).map((p: any) =>
         mapBackendPayment(p as BackendPayment),
       );
       setPayments((prev) => {
@@ -200,9 +202,9 @@ function PaymentsContent() {
         const nonDuplicateItems = newItems.filter((p) => !existingIds.has(p.id));
         return [...prev, ...nonDuplicateItems];
       });
-      setNextCursor(result.nextCursor ?? result.meta?.nextCursor ?? null);
-      if (result.meta?.total !== undefined) {
-        setTotal(result.meta.total);
+      setNextCursor(result.data.nextCursor ?? result.data.meta?.nextCursor ?? null);
+      if (result.data.meta?.total !== undefined) {
+        setTotal(result.data.meta.total);
       }
     } catch {
       toast.error("Failed to load more transactions.");

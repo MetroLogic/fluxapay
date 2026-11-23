@@ -55,16 +55,18 @@ export default function WebhooksPage() {
                 });
 
                 if (cancelled) return;
+                if ("error" in res) throw res.error;
 
-                const logs = res?.data?.logs ?? [];
-                const pag = res?.data?.pagination as { total?: number } | undefined;
+                const resData = res.data as unknown as { logs?: Record<string, unknown>[]; pagination?: { total?: number } };
+                const logs = resData?.logs ?? [];
+                const pag = resData?.pagination;
                 setTotal(typeof pag?.total === "number" ? pag.total : logs.length);
                 const mapped: WebhookEvent[] = logs.map(
                   (log: Record<string, unknown>) => ({
                     id: String(log.id),
                     paymentId: String(log.payment_id ?? ""),
                     eventType: String(log.event_type),
-                    status: log.status,
+                    status: log.status as WebhookEvent["status"],
                     endpoint: String(log.endpoint_url),
                     attempts: Number(log.retry_count ?? 0) + 1,
                     lastAttempt: String(log.updated_at ?? log.created_at),

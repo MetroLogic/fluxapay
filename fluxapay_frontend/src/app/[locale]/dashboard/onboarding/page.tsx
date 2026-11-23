@@ -696,7 +696,7 @@ function BusinessForm({
         {registrationError && (
           <p className="mt-1 text-xs text-red-500">{registrationError}</p>
         )}
-        {!registrationError && business.country && hasRegistrationValidation(business.country as string) && (
+        {!registrationError && (business.country as string) && hasRegistrationValidation(business.country as string) && (
           <p className="mt-1 text-xs text-muted-foreground">
             {getRegistrationFormat(business.country as string)}
           </p>

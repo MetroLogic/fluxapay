@@ -177,7 +177,7 @@ function generate24HourLatencyData(): LatencyPoint[] {
     const d = new Date(now.getTime() - i * 3600 * 1000);
     const hourLabel = d.toLocaleTimeString('en-US', {
       hour: '2-digit',
-      minute: '00',
+      minute: '2-digit',
       hour12: false,
     });
     // Generate realistic historical response latency baseline (35ms - 75ms)
@@ -263,7 +263,7 @@ export default function AdminSystemPage() {
       });
       const hourStr = new Date().toLocaleTimeString('en-US', {
         hour: '2-digit',
-        minute: '00',
+        minute: '2-digit',
         hour12: false,
       });
 
@@ -370,7 +370,7 @@ export default function AdminSystemPage() {
         };
         const metricsData = metricsJson?.data;
         if (metricsData) {
-          webhookQueueSize = metricsData.failedVerifications ?? 0;
+          webhookQueueSize = metricsData.paymentsFailed ?? 0;
           oracleVerifiedCount = metricsData.paymentsVerified ?? 0;
           if (metricsData.missedPolls && metricsData.missedPolls > 0) {
             indexerQueueStatus = `${metricsData.missedPolls} missed poll(s)`;

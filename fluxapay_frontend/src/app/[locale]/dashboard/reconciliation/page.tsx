@@ -77,7 +77,8 @@ export default function ReconciliationPage() {
                 ...exportParams,
                 format: 'pdf',
             });
-            const pdfResult = result as { content: Parameters<typeof exportSettlementReportPDF>[0] };
+            if ("error" in result) throw result.error;
+            const pdfResult = result.data as unknown as { content: Parameters<typeof exportSettlementReportPDF>[0] };
             exportSettlementReportPDF(
                 pdfResult.content,
                 `reconciliation-${exportParams.date_from}-${exportParams.date_to}.pdf`,
@@ -94,10 +95,12 @@ export default function ReconciliationPage() {
         setExportError(null);
         setExportLoading('csv');
         try {
-            const blob = (await api.settlements.exportRange({
+            const csvResult = await api.settlements.exportRange({
                 ...exportParams,
                 format: 'csv',
-            })) as Blob;
+            });
+            if ("error" in csvResult) throw csvResult.error;
+            const blob = csvResult.data as unknown as Blob;
             downloadBlob(blob, `reconciliation-${exportParams.date_from}-${exportParams.date_to}.csv`);
         } catch (e) {
             const message = e instanceof ApiError ? e.message : 'Failed to export CSV from server';

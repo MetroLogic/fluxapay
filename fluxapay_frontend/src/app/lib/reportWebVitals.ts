@@ -19,21 +19,16 @@ import * as Sentry from '@sentry/nextjs';
  */
 function reportWebVital(metric: Metric) {
   // Add to Sentry transaction if available
-  if (typeof window !== 'undefined' && Sentry.getCurrentHub().getScope()) {
-    Sentry.captureMessage(`Web Vital: ${metric.name}`, 'info', {
-      tags: {
-        webVital: metric.name,
-      },
-      measurements: {
-        [metric.name]: {
-          value: metric.value,
-        },
-      },
-      extra: {
+  if (typeof window !== 'undefined') {
+    Sentry.withScope((scope) => {
+      scope.setTags({ webVital: metric.name });
+      scope.setExtras({
         id: metric.id,
         rating: metric.rating,
         navigationType: metric.navigationType,
-      },
+        [metric.name]: metric.value,
+      });
+      Sentry.captureMessage(`Web Vital: ${metric.name}`, 'info');
     });
   }
 

@@ -221,7 +221,7 @@ const AdminMerchantsPage = () => {
         );
 
         try {
-            const data = await api.admin.merchants.bulkUpdateStatus(
+            const result = await api.admin.merchants.bulkUpdateStatus(
                 selectedArray,
                 status,
                 reason,
@@ -231,6 +231,7 @@ const AdminMerchantsPage = () => {
 
             setSelectedIds(new Set());
 
+            const data = ("error" in result ? {} : result.data) as unknown as { failed?: { id: string; error: string }[]; succeeded?: number };
             const failed = data.failed ?? [];
             if (failed.length > 0) {
                 toast.error(`${failed.length} merchant(s) failed to update`);

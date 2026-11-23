@@ -189,7 +189,9 @@ function RefundsContent() {
   const handleInitiateClick = async (refund: RefundRecord) => {
     setIsFetchingPayment(true);
     try {
-      const payment = (await api.payments.getById(refund.paymentId)) as {
+      const paymentResult = await api.payments.getById(refund.paymentId);
+      if ("error" in paymentResult) throw paymentResult.error;
+      const payment = paymentResult.data as unknown as {
         id: string;
         amount: number;
         currency: string;

@@ -234,9 +234,10 @@ function AdminAuditLogsContent() {
                 date_to: dateTo || undefined,
             });
 
-            if (response.success) {
-                setLogs(response.data);
-                setTotalPages(response.pagination.totalPages);
+            if (!("error" in response)) {
+                const responseData = response.data as unknown as { data: typeof logs; pagination: { totalPages: number } };
+                setLogs(responseData.data);
+                setTotalPages(responseData.pagination.totalPages);
             }
         } catch (error) {
             console.error('Failed to fetch audit logs:', error);

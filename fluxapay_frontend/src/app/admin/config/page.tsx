@@ -124,18 +124,17 @@ const AdminConfigPage = () => {
       try {
         setLoadingLogs(true);
         const response = await api.admin.auditLogs.list({ limit: 5, page: 1 });
-        if (response.success) {
-          // Transform API response to fit the local AuditLog interface
-          const transformedLogs: AuditLog[] = (
-            response.data as Array<{
+        if (!("error" in response)) {
+          const responseData = response.data as unknown as Array<{
               id: string;
               action_type: string;
               admin_id: string;
               created_at: string;
               entity_type: string | null;
               entity_id: string | null;
-            }>
-          ).map((log) => ({
+            }>;
+          // Transform API response to fit the local AuditLog interface
+          const transformedLogs: AuditLog[] = responseData.map((log) => ({
             id: log.id,
             action: ACTION_MAP[log.action_type] || log.action_type,
             user: log.admin_id,

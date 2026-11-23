@@ -173,7 +173,7 @@ export async function refreshAccessToken(): Promise<RefreshedSession | null> {
   const refreshToken = getRefreshToken();
   if (!refreshToken) return null;
 
-  const keepLoggedIn = localStorage.getItem(REFRESH_TOKEN_KEY) !== null;
+  const keepLoggedIn = localStorage.getItem("refresh_token") !== null;
 
   const response = await fetch(`${API_BASE_URL}/api/v1/auth/refresh`, {
     method: "POST",
@@ -1637,10 +1637,10 @@ export const fetchPricingConfig = async (): Promise<
     const res = await fetch(`${API_BASE_URL}/api/v1/public/pricing-config`, {
       headers: { "Content-Type": "application/json" },
     });
-    if (!res.ok) return null;
-    return res.json();
+    if (!res.ok) return { error: new ApiError(res.status, "Failed to fetch pricing config") };
+    return { data: await res.json() };
   } catch {
-    return null;
+    return { error: new ApiError(500, "Failed to fetch pricing config") };
   }
 };
 
