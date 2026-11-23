@@ -72,15 +72,17 @@ describe("Merchant Transaction History — cursor-based pagination (#1210)", () 
   it("loads first page with default limit 25 and shows nextCursor Load More control", async () => {
     const page1Data = createMockPayments(25, 0);
     listMock.mockResolvedValueOnce({
-      data: page1Data as any,
-      nextCursor: "cursor_page_1",
-      meta: {
-        total: 50,
-        page: 1,
-        limit: 25,
-        totalPages: 2,
-        hasNextPage: true,
+      data: {
+        data: page1Data as any,
         nextCursor: "cursor_page_1",
+        meta: {
+          total: 50,
+          page: 1,
+          limit: 25,
+          totalPages: 2,
+          hasNextPage: true,
+          nextCursor: "cursor_page_1",
+        },
       },
     });
 
@@ -103,14 +105,18 @@ describe("Merchant Transaction History — cursor-based pagination (#1210)", () 
 
     listMock
       .mockResolvedValueOnce({
-        data: page1Data as any,
-        nextCursor: "cursor_page_1",
-        meta: { total: 35, limit: 25, hasNextPage: true, nextCursor: "cursor_page_1" },
+        data: {
+          data: page1Data as any,
+          nextCursor: "cursor_page_1",
+          meta: { total: 35, limit: 25, hasNextPage: true, nextCursor: "cursor_page_1" },
+        },
       })
       .mockResolvedValueOnce({
-        data: page2Data as any,
-        nextCursor: null,
-        meta: { total: 35, limit: 25, hasNextPage: false, nextCursor: null },
+        data: {
+          data: page2Data as any,
+          nextCursor: null,
+          meta: { total: 35, limit: 25, hasNextPage: false, nextCursor: null },
+        },
       });
 
     render(<PaymentsPage />);
@@ -138,9 +144,11 @@ describe("Merchant Transaction History — cursor-based pagination (#1210)", () 
 
   it("handles empty transaction history correctly", async () => {
     listMock.mockResolvedValueOnce({
-      data: [],
-      nextCursor: null,
-      meta: { total: 0, limit: 25, hasNextPage: false, nextCursor: null },
+      data: {
+        data: [],
+        nextCursor: null,
+        meta: { total: 0, limit: 25, hasNextPage: false, nextCursor: null },
+      },
     });
 
     render(<PaymentsPage />);
@@ -158,9 +166,11 @@ describe("Merchant Transaction History — cursor-based pagination (#1210)", () 
 
     listMock
       .mockResolvedValueOnce({
-        data: page1Data as any,
-        nextCursor: "cursor_page_1",
-        meta: { total: 50, limit: 25, hasNextPage: true, nextCursor: "cursor_page_1" },
+        data: {
+          data: page1Data as any,
+          nextCursor: "cursor_page_1",
+          meta: { total: 50, limit: 25, hasNextPage: true, nextCursor: "cursor_page_1" },
+        },
       })
       .mockRejectedValueOnce(new Error("Network failure"));
 
