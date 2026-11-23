@@ -121,7 +121,20 @@
     "remittance": {
       "title": "Remesas",
       "description": "Transferencias transfronterizas con comisiones mínimas"
-    }
+    },
+    "business": {
+      "title": "Transferencias Comerciales",
+      "description": "Gestiona las transferencias de tu empresa con facilidad."
+    },
+    "personal": {
+      "title": "Transferencias Personales",
+      "description": "¡Envía dinero y apoyo a tus seres queridos!"
+    },
+    "exchange": {
+      "title": "Cambio de Divisas",
+      "description": "Accede a las mejores tasas de cambio y ahorra."
+    },
+    "cta": "Comenzar"
   },
   "faq": {
     "title": "Preguntas Frecuentes",

@@ -121,7 +121,20 @@
     "remittance": {
       "title": "Transferts",
       "description": "Transferts transfrontaliers avec frais minimaux"
-    }
+    },
+    "business": {
+      "title": "Transferts d'Entreprise",
+      "description": "Gérez vos transferts professionnels en toute simplicité."
+    },
+    "personal": {
+      "title": "Transferts Personnels",
+      "description": "Envoyez de l'argent à vos proches facilement."
+    },
+    "exchange": {
+      "title": "Change de Devises",
+      "description": "Bénéficiez des meilleurs taux de change et économisez."
+    },
+    "cta": "Commencer"
   },
   "faq": {
     "title": "Questions Fréquemment Posées",

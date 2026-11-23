@@ -121,7 +121,20 @@
     "remittance": {
       "title": "Remessas",
       "description": "Transferências internacionais com taxas mínimas"
-    }
+    },
+    "business": {
+      "title": "Transferências Empresariais",
+      "description": "Faça transferências comerciais com facilidade."
+    },
+    "personal": {
+      "title": "Transferências Pessoais",
+      "description": "Envie suporte e recursos para quem você ama!"
+    },
+    "exchange": {
+      "title": "Câmbio de Moedas",
+      "description": "Desbloqueie as melhores taxas de câmbio e economize."
+    },
+    "cta": "Começar"
   },
   "faq": {
     "title": "Perguntas Frequentes",

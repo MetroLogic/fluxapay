@@ -121,7 +121,20 @@
     "remittance": {
       "title": "Mipango",
       "description": "Kuhamisha mahali pote duniani kwa gharama ndogo"
-    }
+    },
+    "business": {
+      "title": "Uhamisho wa Biashara",
+      "description": "Dhibiti uhamisho wa biashara yako kwa urahisi."
+    },
+    "personal": {
+      "title": "Uhamisho wa Kibinafsi",
+      "description": "Tuma upendo na msaada kwa urahisi!"
+    },
+    "exchange": {
+      "title": "Ubadilishaji wa Sarafu",
+      "description": "Pata viwango bora vya ubadilishaji na uokoe."
+    },
+    "cta": "Anza Sasa"
   },
   "faq": {
     "title": "Maswali Yanayouliziwa Mara kwa Mara",

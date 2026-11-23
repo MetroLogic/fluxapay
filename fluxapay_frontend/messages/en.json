@@ -121,7 +121,20 @@
     "remittance": {
       "title": "Remittances",
       "description": "Cross-border transfers with minimal fees"
-    }
+    },
+    "business": {
+      "title": "Business Transfers",
+      "description": "Boss Moves? We've got your business transfers handled."
+    },
+    "personal": {
+      "title": "Personal Transfers",
+      "description": "Send Love, Send Support, Send Smiles!"
+    },
+    "exchange": {
+      "title": "Currency exchange",
+      "description": "Unlock the best exchange rates, and say hello to savings."
+    },
+    "cta": "Get onboarded"
   },
   "faq": {
     "title": "Frequently Asked Questions",
