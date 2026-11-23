@@ -1,3 +1,11 @@
+# Fluxapay Frontend
+
+[![Vercel Deployment](https://img.shields.io/badge/Vercel-Deployed-000000?style=flat&logo=vercel&logoColor=white)](https://fluxapay-5wrk.vercel.app)
+[![Preview](https://img.shields.io/badge/Preview-fluxapay--5wrk-blue?style=flat&logo=vercel)](https://fluxapay-5wrk-2zmgi2d30-fitechs-projects.vercel.app)
+
+> 🚀 **Live Demo:** [fluxapay-5wrk.vercel.app](https://fluxapay-5wrk.vercel.app)  
+> 🔍 **Preview Deployment:** [fluxapay-5wrk-2zmgi2d30-fitechs-projects.vercel.app](https://fluxapay-5wrk-2zmgi2d30-fitechs-projects.vercel.app) ([Vercel Build Details](https://vercel.com/fitechs-projects/fluxapay-5wrk/7JhsrthijnR2ZsdrhSmQ8wZEhN8z))
+
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started
