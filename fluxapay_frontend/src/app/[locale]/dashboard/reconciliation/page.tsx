@@ -13,7 +13,6 @@ import { DiscrepancyAlert } from '@/components/reconciliation/DiscrepancyAlert';
 import { useReconciliation } from '@/hooks/useReconciliation';
 import { exportSettlementReportPDF, exportToPDF } from '@/utils/exportHelpers';
 import { api, ApiError } from '@/lib/api';
-import { toast } from 'sonner';
 
 type AssetFilter = 'all' | 'USDC' | 'XLM';
 
