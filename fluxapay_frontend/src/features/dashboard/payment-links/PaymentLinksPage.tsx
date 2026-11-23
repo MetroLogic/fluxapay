@@ -376,6 +376,7 @@ export function PaymentLinksPage() {
           </p>
         </div>
       ) : (
+        <>
         <div className="mb-3 grid gap-3 md:hidden" data-testid="payment-links-mobile-list">
           {links.map((link) => (
             <article key={link.id} className={cn("min-w-0 rounded-lg border border-border bg-card p-4", !link.active && "opacity-60")}>
@@ -577,6 +578,7 @@ export function PaymentLinksPage() {
             </tbody>
           </table>
         </div>
+        </>
       )}
     </div>
   );
