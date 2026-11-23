@@ -54,7 +54,6 @@ function CheckoutBrandMark({
   );
 }
 
-import { useCheckoutDirection } from './useCheckoutDirection';
 
 /**
  * Hosted checkout wrapper: CSS variables for accent + optional merchant header.

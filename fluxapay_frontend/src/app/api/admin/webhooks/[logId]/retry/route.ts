@@ -6,7 +6,7 @@ const ADMIN_SECRET = process.env.ADMIN_SECRET;
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { logId: string } }
+  { params }: { params: Promise<{ logId: string }> }
 ) {
   try {
     const authHeader = req.headers.get("authorization");
@@ -14,7 +14,7 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { logId } = params;
+    const { logId } = await params;
 
     const response = await fetch(
       `${API_BASE_URL}/api/v1/webhooks/admin/logs/${encodeURIComponent(logId)}/retry`,
