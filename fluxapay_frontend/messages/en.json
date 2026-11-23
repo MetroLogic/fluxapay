@@ -372,7 +372,10 @@
     "requestNewLink": "Request New Link",
     "returnToSignIn": "Return to sign in",
     "validatingLink": "Validating reset link...",
-    "missingResetToken": "Missing reset token"
+    "missingResetToken": "Missing reset token",
+    "terms": "Terms of Service",
+    "and": "and",
+    "privacy": "Privacy Policy"
   },
   "settings": {
     "profile": "Profile",

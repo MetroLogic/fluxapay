@@ -17,7 +17,9 @@ function getApiBaseUrl(): string {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL;
 
   if (!apiUrl) {
-    if (process.env.NODE_ENV === "production") {
+    // Only throw in runtime production in the browser. During build-time static prerendering,
+    // fall back so page data collection can proceed.
+    if (process.env.NODE_ENV === "production" && typeof window !== "undefined") {
       throw new Error(
         "NEXT_PUBLIC_API_URL environment variable is not set. " +
         "This is a configuration error — the API URL must be explicitly configured in production. " +

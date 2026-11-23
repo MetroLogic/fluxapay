@@ -36,8 +36,9 @@ export const WebhookDetails = ({
             setLoading(true);
             try {
                 const res = await api.webhooks.logDetails(webhook.id);
-                const d = res?.data;
-                if (!d || cancelled) return;
+                if ("error" in res || cancelled) return;
+                const d = res.data as unknown as Record<string, unknown>;
+                if (!d) return;
 
                 const retryAttempts = Array.isArray(d.retry_attempts) ? d.retry_attempts : [];
 
@@ -45,7 +46,7 @@ export const WebhookDetails = ({
                     id: String(d.id),
                     paymentId: String(d.payment_id ?? ""),
                     eventType: String(d.event_type),
-                    status: d.status,
+                    status: d.status as WebhookStatus,
                     endpoint: String(d.endpoint_url),
                     attempts: Number(d.retry_count ?? 0) + 1,
                     lastAttempt: String(d.updated_at ?? d.created_at),
@@ -53,11 +54,11 @@ export const WebhookDetails = ({
                     payload: (d.request_payload ?? {}) as Record<string, unknown>,
                     response: {
                         status: Number(d.http_status ?? 0),
-                        body: d.response_body,
+                        body: d.response_body as string | undefined,
                     },
                     retryHistory: retryAttempts.map((a: Record<string, unknown>) => ({
                         timestamp: String(a.timestamp),
-                        status: d.status,
+                        status: d.status as WebhookStatus,
                         responseCode: Number(a.http_status ?? 0),
                     })),
                 });
@@ -220,9 +221,11 @@ export const WebhookDetails = ({
                                 await api.webhooks.retry(webhook.id);
                                 toast.success("Retry initiated.");
                                 const res = await api.webhooks.logDetails(webhook.id);
-                                const d = res?.data;
-                                if (d) {
-                                    setDetails((prev) => prev ? { ...prev, status: d.status } : prev);
+                                if (!("error" in res)) {
+                                    const d = res.data as Record<string, unknown>;
+                                    if (d) {
+                                        setDetails((prev) => prev ? { ...prev, status: d.status as WebhookStatus } : prev);
+                                    }
                                 }
                                 onRetried?.();
                             } catch (e) {

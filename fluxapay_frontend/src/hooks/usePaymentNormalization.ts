@@ -200,7 +200,7 @@ export function usePaymentNormalization(): UsePaymentNormalizationReturn {
         }
         return {
           ...prev,
-          status: data.status,
+          status: data.status ?? prev.status,
           ...(data.paidAmount !== undefined ? { paidAmount: data.paidAmount } : {}),
           ...(addressChanged ? { address: data.address as string } : {}),
         };

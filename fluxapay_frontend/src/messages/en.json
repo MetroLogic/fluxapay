@@ -2,19 +2,46 @@
   "whyFluxapay": {
     "title": "Why Fluxapay",
     "subtitle": "The best solution for your payments",
-    "instant": { "title": "Instant", "description": "Instant processing" },
-    "lowFees": { "title": "Low Fees", "description": "Low fees for all" },
-    "global": { "title": "Global", "description": "Global reach" }
+    "instant": {
+      "title": "Instant",
+      "description": "Instant processing"
+    },
+    "lowFees": {
+      "title": "Low Fees",
+      "description": "Low fees for all"
+    },
+    "global": {
+      "title": "Global",
+      "description": "Global reach"
+    }
   },
   "bridges": {
     "title": "Bridges",
     "subtitle": "Connect your world",
-    "crypto": { "title": "Crypto", "description": "Crypto bridges" },
-    "fiat": { "title": "Fiat", "description": "Fiat bridges" },
-    "settlement": { "title": "Settlement", "description": "Settlement bridges" },
-    "realtime": { "title": "Real-Time Confirmation", "description": "Instant payment verification on Stellar with live status updates via webhooks." },
-    "emerging": { "title": "Emerging Markets", "description": "Expand into emerging markets with low friction and compliance support." },
-    "stripe": { "title": "Stripe Integration", "description": "Seamlessly integrate with Stripe for unified payout management." }
+    "crypto": {
+      "title": "Crypto",
+      "description": "Crypto bridges"
+    },
+    "fiat": {
+      "title": "Fiat",
+      "description": "Fiat bridges"
+    },
+    "settlement": {
+      "title": "Settlement",
+      "description": "Settlement bridges"
+    },
+    "realtime": {
+      "title": "Real-Time Confirmation",
+      "description": "Instant payment verification on Stellar with live status updates via webhooks."
+    },
+    "emerging": {
+      "title": "Emerging Markets",
+      "description": "Expand into emerging markets with low friction and compliance support."
+    },
+    "stripe": {
+      "title": "Stripe Integration",
+      "description": "Seamlessly integrate with Stripe for unified payout management."
+    }
   },
   "globalReach": {
     "countries": "Worldwide",
@@ -23,9 +50,18 @@
   },
   "useCases": {
     "header": "Use Cases",
-    "business": { "title": "Business Transfers", "description": "Boss Moves? We've got your business transfers handled." },
-    "personal": { "title": "Personal Transfers", "description": "Send Love, Send Support, Send Smiles!" },
-    "exchange": { "title": "Currency exchange", "description": "Unlock the best exchange rates, and say hello to savings." },
+    "business": {
+      "title": "Business Transfers",
+      "description": "Boss Moves? We've got your business transfers handled."
+    },
+    "personal": {
+      "title": "Personal Transfers",
+      "description": "Send Love, Send Support, Send Smiles!"
+    },
+    "exchange": {
+      "title": "Currency exchange",
+      "description": "Unlock the best exchange rates, and say hello to savings."
+    },
     "cta": "Get onboarded"
   },
   "faq": {
@@ -53,9 +89,26 @@
   "features": {
     "sectionTitle": "Built for Global Commerce",
     "sectionDescription": "Everything you need to accept payments and scale your business internationally.",
-    "instant": { "title": "Instant", "description": "Instant processing" },
-    "globalReach": { "title": "Global Reach", "description": "Reach customers worldwide" },
-    "security": { "title": "Security", "description": "Secure transactions" },
-    "analytics": { "title": "Analytics", "description": "Powerful analytics" }
+    "instant": {
+      "title": "Instant",
+      "description": "Instant processing"
+    },
+    "globalReach": {
+      "title": "Global Reach",
+      "description": "Reach customers worldwide"
+    },
+    "security": {
+      "title": "Security",
+      "description": "Secure transactions"
+    },
+    "analytics": {
+      "title": "Analytics",
+      "description": "Powerful analytics"
+    }
+  },
+  "auth": {
+    "terms": "Terms of Service",
+    "and": "and",
+    "privacy": "Privacy Policy"
   }
 }

@@ -69,11 +69,13 @@ export const QuickActions = () => {
         format,
       });
 
+      if ("error" in result) throw result.error;
+
       if (format === "pdf") {
-        const pdfResult = result as { content: Parameters<typeof exportSettlementReportPDF>[0] };
+        const pdfResult = result.data as unknown as { content: Parameters<typeof exportSettlementReportPDF>[0] };
         exportSettlementReportPDF(pdfResult.content, `settlement_report_${fromDate}_${toDate}.pdf`);
       } else {
-        const blob = result as Blob;
+        const blob = result.data as unknown as Blob;
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
@@ -102,10 +104,12 @@ export const QuickActions = () => {
 
     setIsDownloadingPayments(true);
     try {
-      const blob = await api.payments.export({
+      const exportResult = await api.payments.export({
         date_from: paymentFromDate,
         date_to: paymentToDate,
       });
+      if ("error" in exportResult) throw exportResult.error;
+      const blob = exportResult.data as unknown as Blob;
 
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -129,13 +133,15 @@ export const QuickActions = () => {
   const handleExportWebhookLogs = async () => {
     setIsDownloadingWebhooks(true);
     try {
-      const blob = await api.webhooks.export({
+      const webhookExportResult = await api.webhooks.export({
         event_type: webhookEventType !== "all" ? webhookEventType : undefined,
         status: webhookStatus !== "all" ? webhookStatus : undefined,
         date_from: webhookFromDate,
         date_to: webhookToDate,
         search: webhookSearch || undefined,
       });
+      if ("error" in webhookExportResult) throw webhookExportResult.error;
+      const blob = webhookExportResult.data as unknown as Blob;
 
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");

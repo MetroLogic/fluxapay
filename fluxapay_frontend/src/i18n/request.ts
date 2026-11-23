@@ -12,5 +12,13 @@ export default getRequestConfig(async ({ requestLocale }) => {
   return {
     locale,
     messages: (await import(`../../messages/${locale}.json`)).default,
+    onError(error) {
+      if (process.env.NODE_ENV !== "production") {
+        console.error(error);
+      }
+    },
+    getMessageFallback({ key, namespace }) {
+      return namespace ? `${namespace}.${key}` : key;
+    },
   };
 });

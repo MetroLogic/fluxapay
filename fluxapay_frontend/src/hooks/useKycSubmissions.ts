@@ -84,7 +84,11 @@ export function useKycSubmissions(params: UseKycSubmissionsParams = {}) {
 
   const { data, error, isLoading, mutate } = useSWR<KycSubmissionsResponse>(
     key,
-    () => api.kyc.admin.getSubmissions(params) as Promise<KycSubmissionsResponse>
+    async () => {
+      const res = await api.kyc.admin.getSubmissions(params);
+      if ("error" in res) throw res.error;
+      return res.data as unknown as KycSubmissionsResponse;
+    }
   );
 
   const applications: KycApplicationShape[] = (data?.submissions ?? []).map(mapSubmission);
@@ -101,21 +105,26 @@ export function useKycSubmissions(params: UseKycSubmissionsParams = {}) {
 export function useKycDetails(merchantId: string | null) {
   const { data, error, isLoading, mutate } = useSWR(
     merchantId ? ["kyc-details", merchantId] : null,
-    () => api.kyc.admin.getByMerchantId(merchantId!)
+    async () => {
+      const res = await api.kyc.admin.getByMerchantId(merchantId!);
+      if ("error" in res) throw res.error;
+      return res.data as { kyc?: BackendSubmission & { merchantId?: string } };
+    }
   );
-  const application: KycApplicationShape | null = data?.kyc
+  const kyc = data?.kyc;
+  const application: KycApplicationShape | null = kyc
     ? mapSubmission({
-        ...data.kyc,
-        merchantId: data.kyc.merchantId ?? merchantId!,
-        merchant: data.kyc.merchant as BackendSubmission["merchant"],
-        documents: data.kyc.documents,
-        created_at: data.kyc.created_at,
-        kyc_status: data.kyc.kyc_status,
-        legal_business_name: data.kyc.legal_business_name,
-        business_registration_number: data.kyc.business_registration_number,
-        business_address: data.kyc.business_address,
-        business_type: data.kyc.business_type,
-        director_full_name: data.kyc.director_full_name,
+        ...kyc,
+        merchantId: kyc.merchantId ?? merchantId!,
+        merchant: kyc.merchant as BackendSubmission["merchant"],
+        documents: kyc.documents,
+        created_at: kyc.created_at,
+        kyc_status: kyc.kyc_status,
+        legal_business_name: kyc.legal_business_name,
+        business_registration_number: kyc.business_registration_number,
+        business_address: kyc.business_address,
+        business_type: kyc.business_type,
+        director_full_name: kyc.director_full_name,
       } as BackendSubmission)
     : null;
   return { application, error, isLoading, mutate };

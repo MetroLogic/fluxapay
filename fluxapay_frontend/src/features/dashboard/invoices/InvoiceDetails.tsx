@@ -34,7 +34,9 @@ export const InvoiceDetails = ({ invoice }: InvoiceDetailsProps) => {
   const handleDownloadPDF = async () => {
     setPdfLoading(true);
     try {
-      const blob = await api.invoices.export(invoice.id);
+      const invoiceExport = await api.invoices.export(invoice.id);
+      if ("error" in invoiceExport) throw invoiceExport.error;
+      const blob = invoiceExport.data as unknown as Blob;
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;

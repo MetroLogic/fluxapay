@@ -8,9 +8,8 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
-import RefundsPage, {
-  parsePageParam,
-} from "@/app/[locale]/dashboard/refunds/page";
+import RefundsPage from "@/app/[locale]/dashboard/refunds/page";
+import { parsePageParam } from "../parsePageParam";
 import { api } from "@/lib/api";
 
 const push = vi.fn();

@@ -56,12 +56,14 @@ export function SettlementReportsPage() {
   const handleDownloadCSV = async () => {
     try {
       setIsExporting(true);
-      const blob = (await api.settlements.exportRange({
+      const csvResult = await api.settlements.exportRange({
         date_from: dateFrom || undefined,
         date_to: dateTo || undefined,
         currency: currencyFilter !== "all" ? currencyFilter : undefined,
         format: "csv",
-      })) as Blob;
+      });
+      if ("error" in csvResult) throw csvResult.error;
+      const blob = csvResult.data as unknown as Blob;
 
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -89,8 +91,8 @@ export function SettlementReportsPage() {
         currency: currencyFilter !== "all" ? currencyFilter : undefined,
         format: "pdf",
       });
-
-      const pdfResult = result as { content: Parameters<typeof exportSettlementReportPDF>[0] };
+      if ("error" in result) throw result.error;
+      const pdfResult = result.data as unknown as { content: Parameters<typeof exportSettlementReportPDF>[0] };
       exportSettlementReportPDF(
         pdfResult.content,
         `settlements-report${dateFrom ? `-from-${dateFrom}` : ""}${dateTo ? `-to-${dateTo}` : ""}.pdf`,

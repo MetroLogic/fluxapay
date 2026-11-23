@@ -20,6 +20,7 @@ import {
   getRegistrationFormat,
   hasRegistrationValidation,
 } from "@/lib/businessRegistrationValidation";
+import { redactBankForDraft, maskBankDetail } from "./draftUtils";
 
 type Step = 1 | 2 | 3 | 4 | 5;
 
@@ -32,34 +33,6 @@ interface KycDraft {
 }
 
 const DRAFT_KEY = "fluxapay_kyc_draft";
-
-/**
- * Bank fields that must never reach localStorage (#777).
- *
- * localStorage is readable by any script on the origin and persists
- * indefinitely, so an account number left there outlives the session and is
- * exposed to any XSS. They are dropped on save, which means the bank step is
- * deliberately *not* restored — a merchant re-enters those four fields, and
- * that is the intended trade-off.
- */
-const SENSITIVE_BANK_FIELDS = ["accountNumber", "iban", "swift"] as const;
-
-/** Strip sensitive values from a bank slice before it is persisted. */
-export function redactBankForDraft(
-  bank: Record<string, unknown>,
-): Record<string, unknown> {
-  const safe: Record<string, unknown> = { ...bank };
-  for (const field of SENSITIVE_BANK_FIELDS) {
-    delete safe[field];
-  }
-  return safe;
-}
-
-/** Mask sensitive bank values in the review step while keeping the last four visible. */
-export function maskBankDetail(value: string): string {
-  if (!value) return "";
-  return "*".repeat(Math.max(4, value.length - 4)) + (value.length > 4 ? value.slice(-4) : "");
-}
 
 function loadDraft(): KycDraft | null {
   try {

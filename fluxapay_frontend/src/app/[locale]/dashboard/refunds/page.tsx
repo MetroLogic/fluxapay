@@ -17,15 +17,10 @@ import { RefundForm } from "@/features/dashboard/refunds/RefundForm";
 import { TablePaginationBar } from "@/components/data-table";
 import { Suspense, Fragment } from "react";
 import toast from "react-hot-toast";
+import { parsePageParam } from "./parsePageParam";
 
 /** Refunds requested per page. Matches the payments list for consistency. */
 const PAGE_SIZE = 20;
-
-/** Parse a `page` query param into a usable 1-based page number. */
-export function parsePageParam(raw: string | null): number {
-  const parsed = Number(raw);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : 1;
-}
 
 interface BackendRefund {
   id: string;

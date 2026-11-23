@@ -98,7 +98,8 @@ function SettingsContent() {
     const load = async () => {
       try {
         const response = await api.merchant.getMe();
-        const merchant = response.merchant as Record<string, unknown>;
+        if ("error" in response) throw response.error;
+        const merchant = (response.data as Record<string, unknown>)?.merchant as Record<string, unknown>;
 
         let currency = "";
         let country = "";
@@ -141,8 +142,11 @@ function SettingsContent() {
 
         try {
           const summary = await api.settlements.summary();
-          if (summary.next_settlement_date) {
-            nextData.nextSettlementDate = summary.next_settlement_date;
+          if (!("error" in summary)) {
+            const summaryData = summary.data as unknown as { next_settlement_date?: string };
+            if (summaryData.next_settlement_date) {
+              nextData.nextSettlementDate = summaryData.next_settlement_date;
+            }
           }
         } catch (err) {
           console.error("Failed to load settlement summary:", err);

@@ -79,7 +79,11 @@ export function useSettlements(params: UseSettlementsParams = {}) {
 
   const { data, error, isLoading, mutate } = useSWR<MerchantSettlementsResponse>(
     key,
-    () => api.settlements.list(params) as Promise<MerchantSettlementsResponse>
+    async () => {
+      const res = await api.settlements.list(params);
+      if ("error" in res) throw res.error;
+      return res.data as unknown as MerchantSettlementsResponse;
+    }
   );
 
   const settlements: MerchantSettlement[] = (data?.settlements ?? []).map(mapSettlement);
@@ -103,7 +107,11 @@ export interface SettlementSummary {
 export function useSettlementSummary() {
   const { data, error, isLoading, mutate } = useSWR<SettlementSummary>(
     "merchant-settlement-summary",
-    () => api.settlements.summary() as Promise<SettlementSummary>
+    async () => {
+      const res = await api.settlements.summary();
+      if ("error" in res) throw res.error;
+      return res.data as unknown as SettlementSummary;
+    }
   );
   return {
     summary: data,
@@ -152,7 +160,11 @@ export interface SettlementDetail {
 export function useSettlementDetails(settlementId: string | null) {
   const { data, error, isLoading, mutate } = useSWR<SettlementDetail>(
     settlementId ? ["settlement-detail", settlementId] : null,
-    () => api.settlements.getById(settlementId!) as Promise<SettlementDetail>,
+    async () => {
+      const res = await api.settlements.getById(settlementId!);
+      if ("error" in res) throw res.error;
+      return res.data as unknown as SettlementDetail;
+    },
   );
   return { detail: data ?? null, error, isLoading, mutate };
 }

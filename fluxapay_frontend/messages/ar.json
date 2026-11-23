@@ -372,7 +372,10 @@
     "requestNewLink": "طلب رابط جديد",
     "returnToSignIn": "العودة إلى تسجيل الدخول",
     "validatingLink": "جاري التحقق من رابط إعادة التعيين...",
-    "missingResetToken": "رمز إعادة التعيين غير موجود"
+    "missingResetToken": "رمز إعادة التعيين غير موجود",
+    "terms": "شروط الخدمة",
+    "and": "و",
+    "privacy": "سياسة الخصوصية"
   },
   "settings": {
     "profile": "الملف الشخصي",

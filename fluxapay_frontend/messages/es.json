@@ -372,7 +372,10 @@
     "requestNewLink": "Solicitar Nuevo Enlace",
     "returnToSignIn": "Volver al inicio de sesión",
     "validatingLink": "Validando enlace de restablecimiento...",
-    "missingResetToken": "Falta el token de restablecimiento"
+    "missingResetToken": "Falta el token de restablecimiento",
+    "terms": "Términos de servicio",
+    "and": "y",
+    "privacy": "Política de privacidad"
   },
   "settings": {
     "profile": "Perfil",

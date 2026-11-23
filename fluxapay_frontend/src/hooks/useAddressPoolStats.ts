@@ -13,7 +13,11 @@ export interface AddressPoolStats {
 export function useAddressPoolStats() {
   const { data, error, isLoading, mutate } = useSWR<AddressPoolStats>(
     "admin-address-pool-stats",
-    () => api.admin.addressPool.stats() as Promise<AddressPoolStats>,
+    async () => {
+      const res = await api.admin.addressPool.stats();
+      if ("error" in res) throw res.error;
+      return res.data as unknown as AddressPoolStats;
+    },
     {
       refreshInterval: 30000, // Poll every 30 seconds
     }

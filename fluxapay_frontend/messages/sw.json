@@ -372,7 +372,10 @@
     "requestNewLink": "Omba Kiungo Kipya",
     "returnToSignIn": "Kurudi kwenye ingia",
     "validatingLink": "Kuhakiki kiungo cha kuweka siri upya...",
-    "missingResetToken": "Kielekezi cha kuweka upya hakipo"
+    "missingResetToken": "Kielekezi cha kuweka upya hakipo",
+    "terms": "Sheria na Masharti",
+    "and": "na",
+    "privacy": "Sera ya Faragha"
   },
   "settings": {
     "profile": "Wasifu",

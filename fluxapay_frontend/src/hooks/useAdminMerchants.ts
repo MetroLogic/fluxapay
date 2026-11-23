@@ -38,7 +38,9 @@ export function useAdminMerchants(params: UseAdminMerchantsParams = {}) {
     key,
     async () => {
       try {
-        return await api.admin.merchants.list(params) as AdminMerchantsResponse;
+        const res = await api.admin.merchants.list(params);
+        if ("error" in res) throw res.error;
+        return res.data as unknown as AdminMerchantsResponse;
       } catch {
         return { merchants: [], pagination: { total: 0, page: 1, limit: 50, pages: 0 } };
       }

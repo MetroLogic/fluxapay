@@ -24,7 +24,8 @@ vi.mock("@/features/dashboard/payments/PaymentDetails", () => ({
   ),
 }));
 
-import PaymentDetailsPage, { mapBackendPayment } from "./page";
+import PaymentDetailsPage from "./page";
+import { mapBackendPayment } from "./mapBackendPayment";
 import { notFound } from "next/navigation";
 
 const fetchMock = vi.fn();

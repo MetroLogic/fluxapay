@@ -372,7 +372,10 @@
     "requestNewLink": "Demander un nouveau lien",
     "returnToSignIn": "Retourner à la connexion",
     "validatingLink": "Validation du lien de réinitialisation...",
-    "missingResetToken": "Jeton de réinitialisation manquant"
+    "missingResetToken": "Jeton de réinitialisation manquant",
+    "terms": "Conditions d'utilisation",
+    "and": "et",
+    "privacy": "Politique de confidentialité"
   },
   "settings": {
     "profile": "Profil",

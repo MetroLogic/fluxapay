@@ -1,7 +1,7 @@
 "use client";
 
 import { useLocale } from "next-intl";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { routing } from "@/i18n/routing";
 import { useState, useTransition, useEffect } from "react";
 
@@ -47,7 +47,6 @@ export default function LocaleSwitcher() {
   const locale = useLocale();
   const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
   const [isOpen, setIsOpen] = useState(false);
 
@@ -59,7 +58,7 @@ export default function LocaleSwitcher() {
 
   function onSelectChange(nextLocale: string) {
     startTransition(() => {
-      const search = typeof window !== "undefined" ? window.location.search : (searchParams?.toString() ? `?${searchParams.toString()}` : "");
+      const search = typeof window !== "undefined" ? window.location.search : "";
       const hash = typeof window !== "undefined" ? window.location.hash : "";
       const target = buildLocalizedPath(pathname, nextLocale, search, hash);
 

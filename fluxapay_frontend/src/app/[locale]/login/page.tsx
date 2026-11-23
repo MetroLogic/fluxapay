@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { Metadata } from "next";
 import { LoginForm } from "@/features/auth";
 import { generatePageMetadata } from "@/lib/seo";
@@ -15,5 +16,9 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
 }
 
 export default function LocalizedLoginPage() {
-  return <LoginForm />;
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
+  );
 }

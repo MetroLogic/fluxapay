@@ -32,7 +32,9 @@ export function useAdminUsers(params: UseAdminUsersParams = {}) {
     key,
     async () => {
       try {
-        return (await api.admin.users.list(params)) as AdminUsersResponse;
+        const res = await api.admin.users.list(params);
+        if ("error" in res) throw res.error;
+        return res.data as unknown as AdminUsersResponse;
       } catch {
         return {
           success: false,

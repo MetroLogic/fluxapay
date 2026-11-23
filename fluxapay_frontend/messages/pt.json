@@ -372,7 +372,10 @@
     "requestNewLink": "Solicitar Novo Link",
     "returnToSignIn": "Voltar para entrar",
     "validatingLink": "Validando link de redefinição...",
-    "missingResetToken": "Token de redefinição ausente"
+    "missingResetToken": "Token de redefinição ausente",
+    "terms": "Termos de Serviço",
+    "and": "e",
+    "privacy": "Política de Privacidade"
   },
   "settings": {
     "profile": "Perfil",

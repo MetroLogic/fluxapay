@@ -74,7 +74,7 @@ function VirtualizedTableInner<T>({
     // 1-based per the ARIA rowindex spec.
     const rowIndex = absoluteIndex + 1;
     return isValidElement(node)
-      ? cloneElement(node, { 'aria-rowindex': rowIndex, key: node.key ?? absoluteIndex })
+      ? cloneElement(node, { 'aria-rowindex': rowIndex, key: node.key ?? absoluteIndex } as any)
       : node;
   };
 

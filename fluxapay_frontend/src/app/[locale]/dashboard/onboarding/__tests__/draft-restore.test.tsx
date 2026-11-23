@@ -10,10 +10,11 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { act, render, screen, fireEvent, waitFor } from "@testing-library/react";
-import MerchantOnboardingPage, {
+import MerchantOnboardingPage from "@/app/[locale]/dashboard/onboarding/page";
+import {
   maskBankDetail,
   redactBankForDraft,
-} from "@/app/[locale]/dashboard/onboarding/page";
+} from "../draftUtils";
 
 vi.mock("react-hot-toast", () => ({
   default: { success: vi.fn(), error: vi.fn() },

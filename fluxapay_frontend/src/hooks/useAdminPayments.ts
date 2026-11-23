@@ -127,7 +127,9 @@ export function useAdminPayments(params: UseAdminPaymentsParams = {}) {
   const { data, error, isLoading, mutate } = useSWR<AdminPaymentsResponse>(
     key,
     async () => {
-      return (await api.admin.payments.list(params)) as AdminPaymentsResponse;
+      const res = await api.admin.payments.list(params);
+      if ("error" in res) throw res.error;
+      return res.data as unknown as AdminPaymentsResponse;
     },
     {
       refreshInterval: 30_000,

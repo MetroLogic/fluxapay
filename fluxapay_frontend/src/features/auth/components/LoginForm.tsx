@@ -71,9 +71,6 @@ const LoginForm = () => {
         window.location.href = redirectUrl;
         return;
       }
-      router.push("/dashboard");
-      // window.location.href rather than router.push: the path may carry a locale
-      // prefix that next-intl's router would double-prefix or strip.
       window.location.href = safeRedirectPath(searchParams.get("redirect"));
     } catch (err) {
       if (err instanceof ApiError) {

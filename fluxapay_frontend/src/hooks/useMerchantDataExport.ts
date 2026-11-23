@@ -217,7 +217,9 @@ export async function waitForExport(
   const startedAt = Date.now();
 
   for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt += 1) {
-    const job = await api.merchantExports.status(jobId);
+    const res = await api.merchantExports.status(jobId);
+    if ("error" in res) throw res.error;
+    const job = res.data;
     if (job.status === "completed") return job;
     if (job.status === "failed") {
       throw new Error(job.error || "Export job failed.");
@@ -244,20 +246,24 @@ export function useMerchantDataExport() {
     const toastId = toast.loading(`Preparing ${label} export...`);
 
     try {
-      const job = await api.merchantExports.request({
+      const jobRes = await api.merchantExports.request({
         resource: options.resource,
         format: options.format,
         filters: options.filters,
         page: options.page,
         limit: options.limit,
       });
+      if ("error" in jobRes) throw jobRes.error;
+      const job = jobRes.data;
 
       await waitForExport(job.jobId, (elapsedMs) => {
         // Keep the toast honest about the wait instead of an idle spinner.
         const seconds = Math.floor(elapsedMs / 1000);
         toast.loading(`Preparing ${label} export... (${seconds}s)`, { id: toastId });
       });
-      const payload = (await api.merchantExports.download(job.jobId)) as ExportPayload;
+      const downloadRes = await api.merchantExports.download(job.jobId);
+      if ("error" in downloadRes) throw downloadRes.error;
+      const payload = downloadRes.data as unknown as ExportPayload;
       const filteredRows = filterRows(
         rowsFromPayload(payload, options.resource, options.fallbackRows),
         options.resource,

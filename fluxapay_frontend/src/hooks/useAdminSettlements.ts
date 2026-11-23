@@ -40,7 +40,9 @@ export function useAdminSettlements(params: UseAdminSettlementsParams = {}) {
     key,
     async () => {
       try {
-        return await api.admin.settlements.list(params) as AdminSettlementsResponse;
+        const res = await api.admin.settlements.list(params);
+        if ("error" in res) throw res.error;
+        return res.data as unknown as AdminSettlementsResponse;
       } catch {
         return { settlements: [], pagination: { total: 0, page: 1, limit: 50, pages: 0 } };
       }

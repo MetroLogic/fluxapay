@@ -105,11 +105,12 @@ const SignUpForm = () => {
       const response = await api.auth.signup(validData);
 
       toast.success(tAuth("signupSuccess"));
-      
-      if (response.merchantId) {
-        router.push(
-          `/verify-otp?merchantId=${response.merchantId}&channel=email`,
-        );
+
+      if (!("error" in response)) {
+        const merchantId = (response.data as Record<string, unknown>)?.merchantId;
+        if (merchantId) {
+          router.push(`/verify-otp?merchantId=${merchantId}&channel=email`);
+        }
       }
     } catch (err) {
       if (err instanceof yup.ValidationError) {

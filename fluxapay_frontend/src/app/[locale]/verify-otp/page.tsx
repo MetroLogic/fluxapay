@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
 import { toastApiError } from "@/lib/toastApiError";
@@ -11,7 +11,7 @@ import { api, ApiError } from "@/lib/api";
 
 import { OtpInput } from "@/components/OtpInput";
 
-export default function VerifyOtpPage() {
+function VerifyOtpContent() {
   const router = useI18nRouter();
   const searchParams = useSearchParams();
 
@@ -309,5 +309,13 @@ export default function VerifyOtpPage() {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function VerifyOtpPage() {
+  return (
+    <Suspense fallback={null}>
+      <VerifyOtpContent />
+    </Suspense>
   );
 }

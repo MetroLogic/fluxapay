@@ -10,46 +10,7 @@ import { Button } from "@/components/Button";
 import DashboardNotFound from "../../not-found";
 import { ChevronLeft, Loader2, RefreshCw } from "lucide-react";
 import toast from "react-hot-toast";
-
-interface BackendPayment {
-  id: string;
-  amount: number;
-  currency: string;
-  status: Payment["status"];
-  merchantId: string;
-  customer_email: string;
-  order_id?: string;
-  createdAt: string;
-  depositAddress?: string;
-  transaction_hash?: string;
-  sweep_status?: string;
-  settlement_linkage?: unknown;
-  stellar_expert_url?: string;
-}
-
-export function mapBackendPayment(p: BackendPayment | null | undefined): Payment {
-  if (!p) {
-    notFound();
-  }
-
-  return {
-    id: p.id,
-    amount: p.amount,
-    currency: p.currency,
-    status: p.status,
-    merchantId: p.merchantId,
-    customerName: "", // Backend might not provide this directly
-    customerEmail: p.customer_email ?? "",
-    customerAddress: "",
-    orderId: p.order_id ?? "",
-    createdAt: p.createdAt,
-    depositAddress: p.depositAddress ?? "",
-    txHash: p.transaction_hash,
-    sweepStatus: p.sweep_status,
-    settlementLinkage: p.settlement_linkage,
-    stellarExpertUrl: p.stellar_expert_url,
-  };
-}
+import { mapBackendPayment, type BackendPayment } from "./mapBackendPayment";
 
 export default function PaymentDetailsPage() {
   const { id } = useParams();
@@ -67,18 +28,31 @@ export default function PaymentDetailsPage() {
     setLoading(true);
     setError(null);
     try {
-      const response = (await api.payments.getById(id as string)) as
-        | Record<string, unknown>
-        | null;
-      const data = response
-        ? ((response.payment || response.data || response) as BackendPayment)
+      const response = await api.payments.getById(id as string);
+      if ("error" in response) {
+        if (response.error.status === 404) {
+          setNotFoundError(true);
+          return;
+        }
+        if (response.error.status >= 500) {
+          setServerError(true);
+          return;
+        }
+        throw response.error;
+      }
+      const rawData = response.data as Record<string, unknown>;
+      const data = rawData
+        ? ((rawData.payment || rawData.data || rawData) as BackendPayment)
         : null;
       setPayment(mapBackendPayment(data));
       
       // Fetch refunds for this payment if available
       try {
-        const refundsResponse = (await api.refunds.list({ paymentId: id as string })) as Record<string, unknown>;
-        setRefunds((refundsResponse.data || refundsResponse.refunds || []) as RefundRecord[]);
+        const refundsResponse = await api.refunds.list({ paymentId: id as string });
+        if (!("error" in refundsResponse)) {
+          const rData = refundsResponse.data as Record<string, unknown>;
+          setRefunds((rData.data || rData.refunds || []) as RefundRecord[]);
+        }
       } catch (e) {
         console.error("Failed to fetch refunds", e);
       }

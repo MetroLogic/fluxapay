@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
 import { NextIntlClientProvider } from "next-intl";
+import { setRequestLocale } from "next-intl/server";
 import { notFound } from "next/navigation";
 import { routing } from "@/i18n/routing";
 import { baseMetadata, SITE_BASE_URL } from "@/lib/seo";
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
   const { locale } = await params;
+  setRequestLocale(locale);
 
   return {
     ...baseMetadata,
@@ -35,6 +37,8 @@ export default async function LocaleLayout({
   if (!(routing.locales as ReadonlyArray<string>).includes(locale)) {
     notFound();
   }
+
+  setRequestLocale(locale);
 
   const messages = (await import(`../../../messages/${locale}.json`)).default;
 
