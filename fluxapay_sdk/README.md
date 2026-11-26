@@ -67,8 +67,30 @@ Available factories are `createMockPayment`, `createMockPaymentLink`, and `creat
 const client = new FluxaPay({
   apiKey: string;      // Required: Your FluxaPay API key
   baseUrl?: string;    // Optional: API base URL (defaults to production)
+  maxRetries?: number; // Optional: automatic retries after the first attempt (default 2, 0 disables)
+  timeoutMs?: number;  // Optional: per-request timeout in ms (default 15000, 0 disables)
 });
 ```
+
+#### Retries
+
+Requests that fail with `429`, `502`, `503` or `504`, or with a network error, are retried up to
+`maxRetries` times with exponential backoff and full jitter. On `429` the SDK waits at least as long
+as the `Retry-After` header asks (seconds or an HTTP date). Other errors are thrown immediately as
+`FluxaPayError` (`error.retryable` tells you whether the status was transient).
+
+Only idempotent requests are retried automatically: `GET`, `PUT`, `DELETE`, `HEAD` and `OPTIONS`.
+A `POST` such as `payments.create` is retried only when you pass an idempotency key, which is sent as
+the `Idempotency-Key` header on every attempt so the backend can de-duplicate it:
+
+```typescript
+const payment = await client.payments.create(
+  { amount: 49.99, currency: 'USD', customer_email: 'buyer@example.com' },
+  { idempotencyKey: 'order_123' },
+);
+```
+
+`refunds.create` uses its `idempotency_key` field the same way.
 
 ### Payments
 

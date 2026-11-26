@@ -13,9 +13,14 @@ export interface FluxaPayConfig {
    */
   baseUrl?: string;
   /**
-   * Number of retries for transient 5xx errors and network failures.
-   * Defaults to 3. Set to 0 to disable retries.
+   * Maximum automatic retries after the first attempt (#1266), for 429,
+   * 502, 503 and 504 responses and network failures, with jittered
+   * exponential backoff and `Retry-After` honoured on 429. Defaults to 2;
+   * 0 disables retries. Only idempotent requests are retried: GET, PUT,
+   * DELETE, HEAD and OPTIONS, or a POST/PATCH sent with an idempotency key.
    */
+  maxRetries?: number;
+  /** @deprecated Use `maxRetries`. Used only when `maxRetries` isn't set. */
   retries?: number;
   /** Request timeout in ms (default 15000, 0 disables). Throws FluxaPayTimeoutError. */
   timeoutMs?: number;
@@ -438,6 +443,8 @@ const DEFAULT_BASE_URL = 'https://api.fluxapay.com';
 const API_VERSION = 'v1';
 const RETRYABLE_METHODS = new Set(['DELETE', 'GET', 'HEAD', 'OPTIONS', 'PUT']);
 const INITIAL_RETRY_DELAY_MS = 100;
+/** Default `maxRetries` (#1266). */
+const DEFAULT_MAX_RETRIES = 2;
 const MAX_RETRY_DELAY_MS = 30_000;
 
 function retryDelay(retryIndex: number): number {
@@ -455,26 +462,41 @@ function retryAfterDelay(header: string | null): number | undefined {
   return Number.isNaN(retryAt) ? undefined : Math.max(0, retryAt - Date.now());
 }
 
+/** Per-request options. */
+export interface RequestOptions {
+  /**
+   * Sent as the `Idempotency-Key` header. The backend then treats repeats of
+   * the request as the same operation, so the SDK may retry a POST safely
+   * (#1266). Without one, a POST is never retried automatically.
+   */
+  idempotencyKey?: string;
+}
+
 async function request<T>(
   baseUrl: string,
   apiKey: string,
   method: string,
   path: string,
   body?: unknown,
-  retries = 3,
+  retries = DEFAULT_MAX_RETRIES,
+  requestOptions: RequestOptions = {},
 ): Promise<T> {
   const url = `${baseUrl}${path}`;
+  const idempotencyKey = requestOptions.idempotencyKey?.trim() || undefined;
   const options: RequestInit = {
     method,
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`,
       'X-API-Version': API_VERSION,
+      ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),
     },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   };
   const retryLimit = Number.isFinite(retries) ? Math.max(0, Math.floor(retries)) : 0;
-  const canRetry = RETRYABLE_METHODS.has(method.toUpperCase());
+  // Non-idempotent requests are only retried when an idempotency key makes
+  // a repeat safe; otherwise a lost response could create a second payment.
+  const canRetry = RETRYABLE_METHODS.has(method.toUpperCase()) || idempotencyKey !== undefined;
   let retriesMade = 0;
 
   while (true) {
@@ -545,7 +567,7 @@ export class FluxaPay {
     if (!config.apiKey) throw new Error('FluxaPay: apiKey is required');
     this.apiKey = config.apiKey;
     this.baseUrl = (config.baseUrl ?? DEFAULT_BASE_URL).replace(/\/$/, '');
-    this.retries = config.retries ?? 3;
+    this.retries = config.maxRetries ?? config.retries ?? DEFAULT_MAX_RETRIES;
     registerTransport(this.baseUrl, this.apiKey, {
       timeoutMs: config.timeoutMs,
       onRequest: config.onRequest,
@@ -563,8 +585,8 @@ export class FluxaPay {
      * 
      * Canonical route: POST /api/payments
      */
-    create: (params: CreatePaymentParams): Promise<Payment> =>
-      request<Payment>(this.baseUrl, this.apiKey, 'POST', '/api/payments', params, this.retries),
+    create: (params: CreatePaymentParams, options: RequestOptions = {}): Promise<Payment> =>
+      request<Payment>(this.baseUrl, this.apiKey, 'POST', '/api/payments', params, this.retries, options),
 
     /**
      * Retrieve a payment by its ID.
@@ -649,7 +671,9 @@ export class FluxaPay {
   readonly refunds = {
     /** Create a refund for a payment. */
     create: (params: CreateRefundParams): Promise<RefundResponse> =>
-      request<RefundResponse>(this.baseUrl, this.apiKey, 'POST', '/api/v1/refunds', params, this.retries),
+      request<RefundResponse>(this.baseUrl, this.apiKey, 'POST', '/api/v1/refunds', params, this.retries, {
+        idempotencyKey: params.idempotency_key,
+      }),
 
     /** Retrieve a refund by ID. */
     get: (refundId: string): Promise<RefundResponse> =>
