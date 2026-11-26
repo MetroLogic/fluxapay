@@ -170,6 +170,98 @@ async function runRetryTests(): Promise<void> {
     assert(clientErrorAttempts === 1 && delays.length === 0, 'does not retry non-retryable 4xx responses');
   });
 
+  // #1266: default maxRetries is 2 (3 attempts in total).
+  let defaultAttempts = 0;
+  await withMockedNetwork(async () => {
+    defaultAttempts++;
+    return jsonResponse({ message: 'bad gateway' }, 502);
+  }, async () => {
+    const client = new FluxaPay({ apiKey: 'sk_test_123', baseUrl: 'http://localhost:3001', timeoutMs: 0 });
+    let thrown: unknown;
+    try {
+      await client.payments.get('pay_5');
+    } catch (error) {
+      thrown = error;
+    }
+    assert(thrown instanceof FluxaPayError && thrown.statusCode === 502, 'surfaces the last 502 once retries are used up');
+    assert(defaultAttempts === 3, 'defaults to maxRetries 2 (3 attempts)');
+  });
+
+  for (const status of [429, 502, 503, 504]) {
+    let n = 0;
+    await withMockedNetwork(async () => {
+      n++;
+      return n === 1 ? jsonResponse({ message: 'transient' }, status) : jsonResponse({ id: 'pay_s' });
+    }, async () => {
+      const client = new FluxaPay({ apiKey: 'sk_test_123', baseUrl: 'http://localhost:3001', maxRetries: 1, timeoutMs: 0 });
+      await client.payments.get('pay_s');
+      assert(n === 2, `retries a ${status} once with maxRetries: 1`);
+    });
+  }
+
+  let zeroAttempts = 0;
+  await withMockedNetwork(async () => {
+    zeroAttempts++;
+    return jsonResponse({ message: 'busy' }, 503);
+  }, async (delays) => {
+    const client = new FluxaPay({ apiKey: 'sk_test_123', baseUrl: 'http://localhost:3001', maxRetries: 0, timeoutMs: 0 });
+    await client.payments.get('pay_6').catch(() => undefined);
+    assert(zeroAttempts === 1 && delays.length === 0, 'maxRetries: 0 disables retries');
+  });
+
+  let httpDateDelays: number[] = [];
+  let httpDateAttempts = 0;
+  await withMockedNetwork(async () => {
+    httpDateAttempts++;
+    return httpDateAttempts === 1
+      ? jsonResponse({ message: 'rate limited' }, 429, { 'Retry-After': new Date(Date.now() + 5_000).toUTCString() })
+      : jsonResponse({ id: 'pay_7' });
+  }, async (delays) => {
+    const client = new FluxaPay({ apiKey: 'sk_test_123', baseUrl: 'http://localhost:3001', maxRetries: 1, timeoutMs: 0 });
+    await client.payments.get('pay_7');
+    httpDateDelays = delays;
+  });
+  assert(httpDateDelays.length === 1 && httpDateDelays[0] > 3_000 && httpDateDelays[0] <= 5_000, 'honors an HTTP-date Retry-After');
+
+  // POST without an idempotency key is never retried.
+  let postAttempts = 0;
+  await withMockedNetwork(async () => {
+    postAttempts++;
+    return jsonResponse({ message: 'busy' }, 503);
+  }, async (delays) => {
+    const client = new FluxaPay({ apiKey: 'sk_test_123', baseUrl: 'http://localhost:3001', maxRetries: 3, timeoutMs: 0 });
+    await client.payments
+      .create({ amount: 10, currency: 'USD', customer_email: 'a@b.test' })
+      .catch(() => undefined);
+    assert(postAttempts === 1 && delays.length === 0, 'does not retry POST /payments without an idempotency key');
+  });
+
+  // POST with an idempotency key is retried, with the same key every time.
+  const keys: Array<string | null> = [];
+  await withMockedNetwork(async (_input: unknown, init?: RequestInit) => {
+    keys.push(new Headers(init?.headers).get('Idempotency-Key'));
+    return keys.length < 3 ? jsonResponse({ message: 'busy' }, 503) : jsonResponse({ id: 'pay_8' });
+  }, async () => {
+    const client = new FluxaPay({ apiKey: 'sk_test_123', baseUrl: 'http://localhost:3001', timeoutMs: 0 });
+    const payment = await client.payments.create(
+      { amount: 10, currency: 'USD', customer_email: 'a@b.test' },
+      { idempotencyKey: 'order-123' },
+    );
+    assert(payment.id === 'pay_8', 'retries POST /payments that carries an idempotency key');
+    assert(keys.length === 3 && keys.every((k) => k === 'order-123'), 'sends the same Idempotency-Key on every attempt');
+  });
+
+  // The deprecated `retries` option still works when maxRetries isn't set.
+  let legacyAttempts = 0;
+  await withMockedNetwork(async () => {
+    legacyAttempts++;
+    return jsonResponse({ message: 'busy' }, 503);
+  }, async () => {
+    const client = new FluxaPay({ apiKey: 'sk_test_123', baseUrl: 'http://localhost:3001', retries: 1, timeoutMs: 0 });
+    await client.payments.get('pay_9').catch(() => undefined);
+    assert(legacyAttempts === 2, 'honors the deprecated retries option');
+  });
+
 }
 
 async function runResourceTests(): Promise<void> {
